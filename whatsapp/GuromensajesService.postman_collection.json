@@ -1,0 +1,828 @@
+{
+	"info": {
+		"_postman_id": "guromensajes-api-collection",
+		"name": "GuromensajesService API",
+		"description": "Colección completa para el microservicio de mensajes WhatsApp",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "WhatsApp",
+			"item": [
+				{
+					"name": "Get WhatsApp Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/whatsapp/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"whatsapp",
+								"status"
+							]
+						},
+						"description": "Obtiene el estado actual de la conexión con WhatsApp"
+					}
+				},
+				{
+					"name": "Get QR Code",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/whatsapp/qr",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"whatsapp",
+								"qr"
+							]
+						},
+						"description": "Obtiene el código QR para conectar WhatsApp"
+					}
+				},
+				{
+					"name": "Disconnect WhatsApp",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/whatsapp/disconnect",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"whatsapp",
+								"disconnect"
+							]
+						},
+						"description": "Desconecta WhatsApp"
+					}
+				},
+				{
+					"name": "Reconnect WhatsApp",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/whatsapp/reconnect",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"whatsapp",
+								"reconnect"
+							]
+						},
+						"description": "Intenta reconectar WhatsApp"
+					}
+				},
+				{
+					"name": "Validate Phone Number",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"3224137851\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/whatsapp/validate-phone",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"whatsapp",
+								"validate-phone"
+							]
+						},
+						"description": "Valida y formatea un número de teléfono"
+					}
+				},
+				{
+					"name": "Get Country Codes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/whatsapp/country-codes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"whatsapp",
+								"country-codes"
+							]
+						},
+						"description": "Obtiene códigos de país disponibles"
+					}
+				},
+				{
+					"name": "Set Country Code",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"countryCode\": \"57\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/whatsapp/set-country-code",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"whatsapp",
+								"set-country-code"
+							]
+						},
+						"description": "Configura el código de país por defecto"
+					}
+				},
+				{
+					"name": "Get Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/whatsapp/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"whatsapp",
+								"stats"
+							]
+						},
+						"description": "Obtiene estadísticas del servicio"
+					}
+				}
+			]
+		},
+		{
+			"name": "Contacts",
+			"item": [
+				{
+					"name": "List Contacts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/contacts?limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"contacts"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "phone",
+									"value": "1234567890",
+									"disabled": true
+								},
+								{
+									"key": "name",
+									"value": "Juan",
+									"disabled": true
+								},
+								{
+									"key": "tag",
+									"value": "cliente",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Lista todos los contactos con filtros opcionales"
+					}
+				},
+				{
+					"name": "Get Contact by Phone",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/contacts/1234567890",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"contacts",
+								"1234567890"
+							]
+						},
+						"description": "Obtiene un contacto específico por su número de teléfono"
+					}
+				},
+				{
+					"name": "Create Contact (Complete)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"1234567890\",\n    \"name\": \"Juan Pérez\",\n    \"email\": \"juan@example.com\",\n    \"tags\": [\"cliente\", \"vip\", \"activo\"],\n    \"custom_fields\": {\n        \"empresa\": \"ABC Corporation\",\n        \"cargo\": \"Gerente de Ventas\",\n        \"ciudad\": \"Bogotá\",\n        \"fecha_nacimiento\": \"1985-05-15\",\n        \"preferencias\": {\n            \"horario_contacto\": \"mañana\",\n            \"canal_preferido\": \"whatsapp\"\n        }\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/contacts",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"contacts"
+							]
+						},
+						"description": "Crea un nuevo contacto con todos los campos"
+					}
+				},
+				{
+					"name": "Create Contact (Minimal)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"0987654321\",\n    \"name\": \"María García\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/contacts",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"contacts"
+							]
+						},
+						"description": "Crea un contacto con datos mínimos"
+					}
+				},
+				{
+					"name": "Delete Contact",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/contacts/1234567890",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"contacts",
+								"1234567890"
+							]
+						},
+						"description": "Elimina un contacto por su número de teléfono"
+					}
+				}
+			]
+		},
+		{
+			"name": "Messages",
+			"item": [
+				{
+					"name": "List Messages",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/messages?limit=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"messages"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "phone",
+									"value": "1234567890",
+									"disabled": true
+								},
+								{
+									"key": "type",
+									"value": "sent",
+									"disabled": true
+								},
+								{
+									"key": "from_date",
+									"value": "2025-01-01T00:00:00Z",
+									"disabled": true
+								},
+								{
+									"key": "to_date",
+									"value": "2025-01-31T23:59:59Z",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Lista mensajes con filtros opcionales"
+					}
+				},
+				{
+					"name": "Get Conversation",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/messages/conversation/1234567890?limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"messages",
+								"conversation",
+								"1234567890"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						},
+						"description": "Obtiene la conversación con un contacto específico"
+					}
+				},
+				{
+					"name": "Send Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"1234567890\",\n    \"message\": \"¡Hola! Este es un mensaje de prueba desde Postman 📱\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/messages/send",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"messages",
+								"send"
+							]
+						},
+						"description": "Envía un mensaje individual"
+					}
+				},
+				{
+					"name": "Send Message with Media",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone\": \"1234567890\",\n    \"message\": \"Aquí tienes la imagen que solicitaste 📸\",\n    \"options\": {\n        \"media\": {\n            \"type\": \"image\",\n            \"url\": \"https://picsum.photos/300/200\"\n        }\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/messages/send",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"messages",
+								"send"
+							]
+						},
+						"description": "Envía un mensaje con media (imagen, video, etc.)"
+					}
+				},
+				{
+					"name": "Send Bulk Messages",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"contacts\": [\n        { \"phone\": \"1234567890\" },\n        { \"phone\": \"0987654321\" },\n        { \"phone\": \"5555555555\" }\n    ],\n    \"message\": \"¡Hola a todos! Este es un mensaje masivo de prueba 📢\",\n    \"options\": {}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/messages/send-bulk",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"messages",
+								"send-bulk"
+							]
+						},
+						"description": "Envía mensajes masivos a múltiples contactos"
+					}
+				}
+			]
+		},
+		{
+			"name": "Automations",
+			"item": [
+				{
+					"name": "List Automations",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/automations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations"
+							],
+							"query": [
+								{
+									"key": "active",
+									"value": "true",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Lista todas las automatizaciones"
+					}
+				},
+				{
+					"name": "Get Automation by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/automations/{{automation_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations",
+								"{{automation_id}}"
+							]
+						},
+						"description": "Obtiene una automatización específica por ID"
+					}
+				},
+				{
+					"name": "Create Keyword Automation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Respuesta Automática - Hola\",\n    \"trigger_type\": \"keyword\",\n    \"trigger_value\": \"hola\",\n    \"message_template\": \"¡Hola! Gracias por contactarnos. Te responderemos pronto en horario de {{time}} ⏰\",\n    \"active\": true,\n    \"conditions\": {\n        \"min_time_since_last_message\": 60\n    },\n    \"actions\": [\n        {\n            \"type\": \"add_tag\",\n            \"value\": \"contacto-automatico\"\n        },\n        {\n            \"type\": \"wait\",\n            \"value\": 5\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/automations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations"
+							]
+						},
+						"description": "Crea una automatización que se activa por palabra clave"
+					}
+				},
+				{
+					"name": "Create Schedule Automation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Saludo Matutino Diario\",\n    \"trigger_type\": \"schedule\",\n    \"trigger_value\": \"0 8 * * 1-5\",\n    \"message_template\": \"¡Buenos días! Hoy es {{date}} y esperamos que tengas un excelente día 🌅\",\n    \"active\": true,\n    \"conditions\": {},\n    \"actions\": [\n        {\n            \"type\": \"add_tag\",\n            \"value\": \"saludo-automatico\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/automations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations"
+							]
+						},
+						"description": "Crea una automatización programada (cron)"
+					}
+				},
+				{
+					"name": "Create Webhook Automation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Notificación Venta\",\n    \"trigger_type\": \"webhook\",\n    \"trigger_value\": \"webhook_ventas_123\",\n    \"message_template\": \"🎉 Nueva venta registrada: {{producto}} por {{cliente}}. Total: ${{total}}\",\n    \"active\": true,\n    \"conditions\": {},\n    \"actions\": [\n        {\n            \"type\": \"add_tag\",\n            \"value\": \"venta-notificada\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/automations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations"
+							]
+						},
+						"description": "Crea una automatización activada por webhook"
+					}
+				},
+				{
+					"name": "Create New Contact Automation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Bienvenida Nuevos Contactos\",\n    \"trigger_type\": \"new_contact\",\n    \"trigger_value\": \"\",\n    \"message_template\": \"¡Bienvenido! 👋 Gracias por contactarnos. Soy un asistente automático y pronto un humano te atenderá.\",\n    \"active\": true,\n    \"conditions\": {},\n    \"actions\": [\n        {\n            \"type\": \"add_tag\",\n            \"value\": \"nuevo-contacto\"\n        },\n        {\n            \"type\": \"wait\",\n            \"value\": 300\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/automations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations"
+							]
+						},
+						"description": "Crea automatización para nuevos contactos"
+					}
+				},
+				{
+					"name": "Update Automation",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Respuesta Automática - Hola (Actualizada)\",\n    \"trigger_type\": \"keyword\",\n    \"trigger_value\": \"hola\",\n    \"message_template\": \"¡Hola! Mensaje actualizado. Gracias por contactarnos 🚀\",\n    \"active\": true,\n    \"conditions\": {},\n    \"actions\": []\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/automations/{{automation_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations",
+								"{{automation_id}}"
+							]
+						},
+						"description": "Actualiza una automatización existente"
+					}
+				},
+				{
+					"name": "Toggle Automation",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/automations/{{automation_id}}/toggle",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations",
+								"{{automation_id}}",
+								"toggle"
+							]
+						},
+						"description": "Activa o desactiva una automatización"
+					}
+				},
+				{
+					"name": "Execute Automation Manually",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"context\": {\n        \"phone\": \"1234567890\",\n        \"cliente\": \"Juan Pérez\",\n        \"producto\": \"Servicio Premium\",\n        \"total\": \"299.99\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/automations/{{automation_id}}/execute",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations",
+								"{{automation_id}}",
+								"execute"
+							]
+						},
+						"description": "Ejecuta una automatización manualmente"
+					}
+				},
+				{
+					"name": "Trigger Webhook Automation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"cliente\": \"María García\",\n    \"producto\": \"Plan Basic\",\n    \"total\": \"99.99\",\n    \"fecha\": \"2025-01-31\",\n    \"vendedor\": \"Carlos López\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/automations/webhook/{{automation_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations",
+								"webhook",
+								"{{automation_id}}"
+							]
+						},
+						"description": "Dispara una automatización webhook con datos externos"
+					}
+				},
+				{
+					"name": "Delete Automation",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/automations/{{automation_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"automations",
+								"{{automation_id}}"
+							]
+						},
+						"description": "Elimina una automatización"
+					}
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"admin\",\n    \"password\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Inicia sesión (implementación básica)"
+					}
+				},
+				{
+					"name": "Verify Token",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer dummy-token"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/verify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"verify"
+							]
+						},
+						"description": "Verifica un token de autenticación"
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "automation_id",
+			"value": "uuid-automation-123",
+			"type": "string",
+			"description": "ID de una automatización para testing"
+		}
+	]
+}

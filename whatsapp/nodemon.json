@@ -1,0 +1,12 @@
+{
+  "ignore": [
+    "auth_info/*",
+    "*.sqlite",
+    "*.db",
+    "node_modules/*",
+    ".git",
+    "logs/*"
+  ],
+  "ext": "js,json",
+  "delay": "2000"
+}

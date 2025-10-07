@@ -1,0 +1,543 @@
+/* Estilos personalizados para el formulario de pólizas */
+
+/* Centrado mejorado para modales */
+.modal-content-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.modal-buttons-centered {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+/* Botones del formulario */
+.form-navigation-buttons {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.form-navigation-buttons .button-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.form-navigation-buttons .progress-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* Mejoras para dispositivos móviles */
+@media (max-width: 640px) {
+  .form-navigation-buttons {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .form-navigation-buttons .button-group {
+    order: 2;
+  }
+  
+  .form-navigation-buttons .progress-indicator {
+    order: 1;
+  }
+}
+
+/* Stepper mejorado */
+.stepper-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.stepper-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.stepper-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.stepper-step-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.stepper-step-button.active {
+  background-color: #3b82f6;
+  color: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transform: scale(1.1);
+}
+
+.stepper-step-button.inactive {
+  background-color: #e5e7eb;
+  color: #6b7280;
+}
+
+.stepper-step-button:hover:not(.active) {
+  background-color: #d1d5db;
+}
+
+.stepper-step-info {
+  text-align: center;
+  margin-top: 0.25rem;
+}
+
+.stepper-step-title {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.stepper-step-title.active {
+  color: #3b82f6;
+}
+
+.stepper-step-title.inactive {
+  color: #6b7280;
+}
+
+.stepper-step-description {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  line-height: 1.25;
+}
+
+.stepper-connector {
+  width: 3rem;
+  height: 0.125rem;
+  margin: 0 0.75rem;
+}
+
+.stepper-connector.active {
+  background-color: #3b82f6;
+}
+
+.stepper-connector.inactive {
+  background-color: #d1d5db;
+}
+
+/* Campos de formulario mejorados */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.form-field label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  border-radius: 0.625rem;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-field input.error,
+.form-field select.error,
+.form-field textarea.error {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.form-field .error-message {
+  color: #ef4444;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+/* Mejoras para el PDF preview */
+.pdf-preview-container {
+  position: sticky;
+  top: 1rem;
+}
+
+.pdf-preview-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.5rem;
+}
+
+.pdf-preview-controls button {
+  color: #3b82f6;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.pdf-preview-controls button:hover {
+  color: #2563eb;
+}
+
+/* Mejoras para el modal de eliminación */
+.delete-modal-content {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.delete-modal-icon {
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto 1rem;
+  background-color: #fee2e2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-modal-icon svg {
+  width: 2rem;
+  height: 2rem;
+  color: #ef4444;
+}
+
+.delete-modal-title {
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.delete-modal-subtitle {
+  font-size: 1rem;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.delete-modal-poliza-number {
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.delete-modal-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+.delete-modal-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.delete-modal-buttons .btn {
+  padding: 0.5rem 1.5rem;
+  border-radius: 0.625rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.delete-modal-buttons .btn-danger {
+  background-color: #dc2626;
+  color: white;
+  border: none;
+}
+
+.delete-modal-buttons .btn-danger:hover {
+  background-color: #b91c1c;
+}
+
+.delete-modal-buttons .btn-secondary {
+  background-color: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.delete-modal-buttons .btn-secondary:hover {
+  background-color: #e5e7eb;
+}
+
+/* Mejoras para modo oscuro */
+@media (prefers-color-scheme: dark) {
+  .form-field label {
+    color: #f9fafb;
+  }
+  
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+  
+  .form-field input:focus,
+  .form-field select:focus,
+  .form-field textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  
+  .delete-modal-title {
+    color: #f9fafb;
+  }
+  
+  .delete-modal-subtitle {
+    color: #d1d5db;
+  }
+  
+  .delete-modal-description {
+    color: #9ca3af;
+  }
+}
+
+/* Animaciones suaves */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-in-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Estilos específicos para formulario de pólizas con máxima especificidad */
+html.dark form select,
+html.dark form select:focus,
+html.dark form select:hover,
+.dark form select,
+.dark form select:focus,
+.dark form select:hover {
+  background-color: #374151 !important;
+  color: #ffffff !important;
+  border-color: #4b5563 !important;
+}
+
+html.dark form textarea,
+html.dark form textarea:focus,
+html.dark form textarea:hover,
+.dark form textarea,
+.dark form textarea:focus,
+.dark form textarea:hover {
+  background-color: #374151 !important;
+  color: #ffffff !important;
+  border-color: #4b5563 !important;
+}
+
+html.dark form input,
+html.dark form input:focus,
+html.dark form input:hover,
+.dark form input,
+.dark form input:focus,
+.dark form input:hover {
+  background-color: #374151 !important;
+  color: #ffffff !important;
+  border-color: #4b5563 !important;
+}
+
+html.dark form option,
+.dark form option {
+  background-color: #374151 !important;
+  color: #ffffff !important;
+}
+
+html form select,
+html form select:focus,
+html form select:hover,
+form select,
+form select:focus,
+form select:hover {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
+html form textarea,
+html form textarea:focus,
+html form textarea:hover,
+form textarea,
+form textarea:focus,
+form textarea:hover {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
+html form input,
+html form input:focus,
+html form input:hover,
+form input,
+form input:focus,
+form input:hover {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
+html form option,
+form option {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+/* Estilos específicos para inputs de solo lectura */
+html.dark form input[readonly],
+html.dark form input[readonly]:focus,
+.dark form input[readonly],
+.dark form input[readonly]:focus {
+  background-color: #4b5563 !important;
+  color: #d1d5db !important;
+  border-color: #6b7280 !important;
+}
+
+html form input[readonly],
+html form input[readonly]:focus,
+form input[readonly],
+form input[readonly]:focus {
+  background-color: #f9fafb !important;
+  color: #6b7280 !important;
+  border-color: #d1d5db !important;
+}
+
+/* Estilos específicos para labels en formularios de pólizas */
+html.dark form label,
+html.dark label,
+.dark form label,
+.dark label {
+  color: #ffffff !important;
+}
+
+html:not(.dark) form label,
+html:not(.dark) label,
+form label,
+label {
+  color: #111827 !important;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .stepper-steps {
+    gap: 0.5rem;
+  }
+  
+  .stepper-step-button {
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  .stepper-connector {
+    width: 2rem;
+    margin: 0 0.5rem;
+  }
+  
+  .stepper-step-title,
+  .stepper-step-description {
+    font-size: 0.625rem;
+  }
+}
+
+/* Mejoras para accesibilidad */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus styles mejorados */
+.form-field input:focus-visible,
+.form-field select:focus-visible,
+.form-field textarea:focus-visible,
+.stepper-step-button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Mejoras para el loading */
+.loading-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.loading-spinner .spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+} 

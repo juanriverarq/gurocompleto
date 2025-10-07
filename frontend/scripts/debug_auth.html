@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Debug Auth - Verificar Token Firebase</title>
+  </head>
+  <body>
+    <h1>🔍 Debug de Autenticación Firebase</h1>
+    <button onclick="debugAuth()">Verificar Estado de Auth</button>
+    <button onclick="forceRefreshToken()">Forzar Refresh Token</button>
+    <button onclick="clearStorage()">Limpiar localStorage</button>
+    <pre id="output"></pre>
+
+    <script type="module">
+      import { auth } from './src/config/firebase.js';
+
+      window.debugAuth = async function () {
+        const output = document.getElementById('output');
+        let debug = [];
+
+        // 1. Estado Firebase
+        debug.push('=== FIREBASE AUTH ===');
+        if (auth.currentUser) {
+          debug.push(`✅ Firebase User: ${auth.currentUser.email}`);
+          debug.push(`   UID: ${auth.currentUser.uid}`);
+          debug.push(`   Email Verified: ${auth.currentUser.emailVerified}`);
+
+          try {
+            const token = await auth.currentUser.getIdToken();
+            debug.push(`   Token Preview: ${token.substring(0, 30)}...`);
+
+            // Decodificar el token para ver su contenido
+            const tokenPayload = JSON.parse(atob(token.split('.')[1]));
+            debug.push(`   Token User ID: ${tokenPayload.user_id || tokenPayload.sub}`);
+            debug.push(`   Token Email: ${tokenPayload.email}`);
+            debug.push(`   Token Exp: ${new Date(tokenPayload.exp * 1000).toLocaleString()}`);
+          } catch (e) {
+            debug.push(`❌ Error obteniendo token: ${e.message}`);
+          }
+        } else {
+          debug.push('❌ No hay Firebase currentUser');
+        }
+
+        // 2. localStorage
+        debug.push('\n=== LOCAL STORAGE ===');
+        const saasToken = localStorage.getItem('saas_token');
+        if (saasToken) {
+          debug.push(`✅ saas_token: ${saasToken.substring(0, 30)}...`);
+        } else {
+          debug.push('❌ No hay saas_token en localStorage');
+        }
+
+        // 3. Test API call
+        debug.push('\n=== TEST API CALL ===');
+        try {
+          const token = auth.currentUser ? await auth.currentUser.getIdToken() : saasToken;
+          const response = await fetch('http://localhost:8081/api/user', {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          debug.push(`API Response Status: ${response.status}`);
+          if (response.ok) {
+            const data = await response.json();
+            debug.push(`API User: ${data.email || 'No email'}`);
+            debug.push(`API Broker ID: ${data.broker_id || 'No broker_id'}`);
+          } else {
+            const errorText = await response.text();
+            debug.push(`API Error: ${errorText.substring(0, 200)}`);
+          }
+        } catch (e) {
+          debug.push(`❌ API Error: ${e.message}`);
+        }
+
+        output.textContent = debug.join('\n');
+      };
+
+      window.forceRefreshToken = async function () {
+        if (auth.currentUser) {
+          try {
+            await auth.currentUser.getIdToken(true); // Force refresh
+            alert('✅ Token refreshed successfully');
+            debugAuth();
+          } catch (e) {
+            alert(`❌ Error refreshing token: ${e.message}`);
+          }
+        } else {
+          alert('❌ No Firebase user to refresh');
+        }
+      };
+
+      window.clearStorage = function () {
+        localStorage.removeItem('saas_token');
+        alert('✅ localStorage cleared');
+        debugAuth();
+      };
+    </script>
+  </body>
+</html>

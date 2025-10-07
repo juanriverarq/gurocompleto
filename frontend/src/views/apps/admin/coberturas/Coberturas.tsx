@@ -1,0 +1,200 @@
+import React, { useState } from 'react';
+import { Card, Button, Alert, Spinner, Table, Modal, TextInput, Label } from 'flowbite-react';
+import { Icon } from '@iconify/react';
+import { useCoberturas } from 'src/hooks/useAdminCrudApi';
+import type { Cobertura as CoberturaType, CoberturaCreate } from 'src/types/admin';
+
+const Coberturas = () => {
+  const { coberturas, loading, error, createCobertura, updateCobertura, deleteCobertura } = useCoberturas();
+  const [showModal, setShowModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<CoberturaType | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState<CoberturaCreate>({ nombre: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleCreate = () => {
+    setSelectedItem(null);
+    setIsEditing(false);
+    setFormData({ nombre: '' });
+    setShowModal(true);
+  };
+
+  const handleEdit = (item: CoberturaType) => {
+    setSelectedItem(item);
+    setIsEditing(true);
+    setFormData({ nombre: item.nombre });
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.nombre.trim()) return;
+
+    try {
+      setIsSubmitting(true);
+      if (isEditing && selectedItem) {
+        await updateCobertura(selectedItem.id, formData);
+      } else {
+        await createCobertura(formData);
+      }
+      setShowModal(false);
+    } catch (error) {
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('¿Estás seguro de que deseas eliminar esta cobertura?')) {
+      try {
+        await deleteCobertura(id);
+      } catch (error) {
+      }
+    }
+  };
+
+  return (
+    <>
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-dark dark:text-white mb-2">
+              Gestión de Coberturas
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Administra las coberturas disponibles para las pólizas.
+            </p>
+          </div>
+          <Button onClick={handleCreate} className="flex items-center">
+            <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
+            Nueva Cobertura
+          </Button>
+        </div>
+      </div>
+
+      {/* Contenido principal */}
+      {error && (
+        <Alert color="failure" className="mb-6">
+          <Icon icon="solar:danger-circle-bold" className="w-4 h-4 mr-2" />
+          {error}
+        </Alert>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <Spinner size="xl" />
+        </div>
+      ) : coberturas.length === 0 ? (
+        <Card>
+          <div className="text-center py-12 px-6">
+            <Icon icon="solar:shield-plus-bold-duotone" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              No hay coberturas definidas
+            </h3>
+            <p className="text-gray-500 mb-6 max-w-md mx-auto">
+              Comienza creando coberturas para organizar las pólizas.
+            </p>
+            <div className="flex justify-center">
+              <Button onClick={handleCreate}>
+                <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
+                Crear Primera Cobertura
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <div className="overflow-x-auto">
+            <Table striped>
+              <Table.Head>
+                <Table.HeadCell>Nombre de la Cobertura</Table.HeadCell>
+                <Table.HeadCell>Fecha de Creación</Table.HeadCell>
+                <Table.HeadCell>Acciones</Table.HeadCell>
+              </Table.Head>
+              <Table.Body className="divide-y">
+                {coberturas.map((item) => (
+                  <Table.Row key={item.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                    <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                      {item.nombre}
+                    </Table.Cell>
+                    <Table.Cell className="text-gray-500 dark:text-gray-400">
+                      {new Date(item.created_at).toLocaleDateString()}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          color="gray"
+                          onClick={() => handleEdit(item)}
+                        >
+                          <Icon icon="solar:pen-bold" className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="failure"
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table>
+          </div>
+        </Card>
+      )}
+
+      {/* Modal de formulario */}
+      <Modal show={showModal} onClose={() => setShowModal(false)} size="md">
+        <Modal.Header>
+          {isEditing ? 'Editar Cobertura' : 'Crear Cobertura.'}
+        </Modal.Header>
+        <form onSubmit={handleSubmit}>
+          <Modal.Body>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="nombre" value="Nombre *" />
+                <TextInput
+                  id="nombre"
+                  type="text"
+                  placeholder="Nombre cobertura"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <div className="flex gap-2 ml-auto">
+              <Button
+                color="gray"
+                onClick={() => setShowModal(false)}
+                disabled={isSubmitting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting || !formData.nombre.trim()}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Spinner size="sm" className="mr-2" />
+                    Guardando...
+                  </>
+                ) : (
+                  'Crear'
+                )}
+              </Button>
+            </div>
+          </Modal.Footer>
+        </form>
+      </Modal>
+    </>
+  );
+};
+
+export default Coberturas;
