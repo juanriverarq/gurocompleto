@@ -1,0 +1,213 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Card, Spinner, TextInput, Button, Table, Badge, Select, Dropdown, Tooltip } from 'flowbite-react';
+import { Icon } from '@iconify/react';
+import BreadcrumbComp from '../../../../layouts/full/shared/breadcrumb/BreadcrumbComp';
+import { polizaService } from 'src/services/polizaService';
+
+const BCrumb = [
+  { to: '/', title: 'Inicio' },
+  { title: 'Gestión Documental - Pólizas' },
+];
+
+const DocumentosPoliza: React.FC = () => {
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState<string>('');
+  const [type, setType] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const [perPage, setPerPage] = useState<number>(50);
+  const [items, setItems] = useState<any[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [lastPage, setLastPage] = useState<number>(1);
+  const [openingPath, setOpeningPath] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await polizaService.listarDocumentosGlobal({ search, type, per_page: perPage, page });
+      if (res?.success) {
+        const payload: any = res;
+        setItems(Array.isArray(payload?.data) ? payload.data : []);
+        setTotal(typeof payload?.total === 'number' ? payload.total : (payload?.data?.length || 0));
+        setLastPage(typeof payload?.last_page === 'number' ? payload.last_page : 1);
+      } else {
+        setItems([]);
+        setTotal(0);
+        setLastPage(1);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error desconocido');
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, perPage]);
+
+  const typesOptions = useMemo(() => {
+    const base = ['caratula', 'condiciones', 'recibo', 'soporte_pago', 'endoso', 'anexo', 'cotizacion', 'otro'];
+    const present = new Set<string>(items.map((d) => (d.type || 'otro')));
+    return [''].concat(Array.from(new Set([...base, ...present])));
+  }, [items]);
+
+  return (
+    <>
+      <BreadcrumbComp title="Gestión Documental - Pólizas" items={BCrumb} />
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12">
+          <Card>
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-12 gap-3 items-center">
+                <div className="col-span-12 md:col-span-5">
+                  <TextInput
+                    placeholder="Buscar por nombre, tipo o MIME"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                <div className="col-span-12 md:col-span-3">
+                  <Select value={type} onChange={(e) => setType(e.target.value)}>
+                    {typesOptions.map((t, i) => (
+                      <option key={i} value={t}>{t ? t.replace('_', ' ') : 'Todos los tipos'}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="col-span-12 md:col-span-4 flex items-center gap-2">
+                  <Button color="light" onClick={() => { setSearch(''); setType(''); setPage(1); }}>Limpiar</Button>
+                  <Button color="primary" onClick={() => { setPage(1); load(); }}>
+                    <span className="flex items-center gap-1">
+                      <Icon icon="solar:magnifer-bold" className="w-4 h-4" />
+                      <span>Buscar</span>
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="col-span-12">
+          <Card>
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3 text-sm text-gray-600">
+                <div>{total} documento(s)</div>
+                <div className="flex items-center gap-2">
+                  <span>Por página</span>
+                  <Select value={String(perPage)} onChange={(e) => { setPerPage(parseInt(e.target.value || '50', 10)); setPage(1); }}>
+                    {[25,50,100,200].map(n => <option key={n} value={n}>{n}</option>)}
+                  </Select>
+                  <Tooltip content="Actualizar">
+                    <Button color="light" size="sm" onClick={() => load()}>
+                      <Icon icon="solar:refresh-bold" className="w-5 h-5" />
+                    </Button>
+                  </Tooltip>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center py-6 text-gray-500">
+                  <Spinner />
+                  <span className="ml-2">Cargando...</span>
+                </div>
+              ) : items.length === 0 ? (
+                <div className="text-sm text-gray-500 py-4">No hay documentos para mostrar.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table hoverable>
+                    <Table.Head>
+                      <Table.HeadCell>Póliza</Table.HeadCell>
+                      <Table.HeadCell>Aseguradora</Table.HeadCell>
+                      <Table.HeadCell>Cliente</Table.HeadCell>
+                      <Table.HeadCell>Documento</Table.HeadCell>
+                      <Table.HeadCell>Tipo</Table.HeadCell>
+                      <Table.HeadCell>Tamaño</Table.HeadCell>
+                      <Table.HeadCell>Contenido</Table.HeadCell>
+                      <Table.HeadCell>Fecha</Table.HeadCell>
+                      <Table.HeadCell>Acciones</Table.HeadCell>
+                    </Table.Head>
+                    <Table.Body>
+                      {items.map((doc, idx) => (
+                        <Table.Row key={idx}>
+                          <Table.Cell title={doc.policy_number}>{doc.policy_number}</Table.Cell>
+                          <Table.Cell>{doc.insurance_company}</Table.Cell>
+                          <Table.Cell className="max-w-[220px] truncate" title={doc.client_name}>{doc.client_name}</Table.Cell>
+                          <Table.Cell className="max-w-[260px] truncate" title={doc.name}>{doc.name}</Table.Cell>
+                          <Table.Cell>
+                            <Badge color="info" className="rounded-[6px]">{(doc.type || 'otro').toString()}</Badge>
+                          </Table.Cell>
+                          <Table.Cell>{typeof doc.size === 'number' ? `${(doc.size/1024/1024).toFixed(doc.size < 10*1024*1024 ? 1 : 0)} MB` : '-'}</Table.Cell>
+                          <Table.Cell>{doc.contentType || '-'}</Table.Cell>
+                          <Table.Cell>{doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : '-'}</Table.Cell>
+                          <Table.Cell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                color="primary"
+                                size="xs"
+                                disabled={openingPath === doc.path}
+                                onClick={async () => {
+                                  try {
+                                    setOpeningPath(doc.path);
+                                    const url = await polizaService.getSignedUrl(String(doc.poliza_id), { path: doc.path, name: doc.name });
+                                    window.open(url, '_blank');
+                                  } catch {}
+                                  finally {
+                                    setOpeningPath(null);
+                                  }
+                                }}
+                              >
+                                {openingPath === doc.path ? (
+                                  <span className="flex items-center">
+                                    <Spinner size="sm" />
+                                    <span className="ml-1">Abriendo...</span>
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1">
+                                    <Icon icon="solar:eye-bold" className="w-4 h-4" />
+                                    <span>Ver</span>
+                                  </span>
+                                )}
+                              </Button>
+                              <Button color="failure" size="xs" onClick={async () => {
+                                try {
+                                  await polizaService.eliminarDocumento(String(doc.poliza_id), { path: doc.path });
+                                  await load();
+                                } catch {}
+                              }}>
+                                <span className="flex items-center gap-1">
+                                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+                                  <span>Eliminar</span>
+                                </span>
+                              </Button>
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table>
+                </div>
+              )}
+
+              {/* Paginación simple */}
+              <div className="flex items-center justify-between mt-4 text-sm text-gray-600">
+                <div>Página {page} de {lastPage}</div>
+                <div className="flex items-center gap-2">
+                  <Button color="light" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Anterior</Button>
+                  <Button color="light" size="sm" disabled={page >= lastPage} onClick={() => setPage((p) => Math.min(lastPage, p + 1))}>Siguiente</Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default DocumentosPoliza;
+
+

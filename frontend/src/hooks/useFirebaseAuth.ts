@@ -1,0 +1,314 @@
+import { useState, useEffect } from 'react';
+import {
+  User,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  onAuthStateChanged,
+  updateProfile,
+  AuthError
+} from 'firebase/auth';
+import { auth, googleProvider } from '../config/firebase';
+
+interface AuthState {
+  user: User | null;
+  loading: boolean;
+  error: string | null;
+}
+
+interface FirebaseAuthHook extends AuthState {
+  // Métodos de autenticación
+  loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; message: string; user?: User }>;
+  registerWithEmail: (email: string, password: string, name: string) => Promise<{ success: boolean; message: string; user?: User }>;
+  loginWithGoogle: () => Promise<{ success: boolean; message: string; user?: User }>;
+  logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ success: boolean; message: string }>;
+  updateUserProfile: (displayName: string, photoURL?: string) => Promise<{ success: boolean; message: string }>;
+  resendEmailVerification: () => Promise<{ success: boolean; message: string }>;
+  clearError: () => void;
+}
+
+// Función para sincronizar usuario con Laravel usando Firebase Admin SDK
+const syncUserWithLaravel = async (user: User, isNewUser: boolean = false) => {
+  try {
+    const token = await user.getIdToken();
+
+    // Ahora solo enviamos el token, el middleware se encarga del resto
+    const { API_URLS } = await import('../config/constants');
+    const response = await fetch(API_URLS.SYNC_FIREBASE_USER, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return false;
+    }
+
+    const result = await response.json();
+    
+    // Mostrar notificación de éxito
+    if (result.user && result.user.created_at === result.user.updated_at) {
+    } else {
+    }
+    
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+export const useFirebaseAuth = (): FirebaseAuthHook => {
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    loading: true,
+    error: null
+  });
+
+  // Escuchar cambios en el estado de autenticación
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Sincronizar usuario con Laravel cuando se autentica
+        await syncUserWithLaravel(user, false);
+      }
+      
+      setAuthState(prev => ({
+        ...prev,
+        user,
+        loading: false
+      }));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Manejar errores de Firebase
+  const handleFirebaseError = (error: AuthError): string => {
+    switch (error.code) {
+      case 'auth/user-not-found':
+        return 'Usuario no encontrado';
+      case 'auth/wrong-password':
+        return 'Contraseña incorrecta';
+      case 'auth/email-already-in-use':
+        return 'El email ya está en uso';
+      case 'auth/weak-password':
+        return 'La contraseña es muy débil';
+      case 'auth/invalid-email':
+        return 'Email inválido';
+      case 'auth/too-many-requests':
+        return 'Demasiados intentos. Intenta más tarde';
+      case 'auth/network-request-failed':
+        return 'Error de conexión. Verifica tu internet';
+      case 'auth/popup-closed-by-user':
+        return 'Ventana cerrada por el usuario';
+      case 'auth/cancelled-popup-request':
+        return 'Solicitud cancelada';
+      default:
+        return error.message || 'Error desconocido';
+    }
+  };
+
+  // Login con email y contraseña
+  const loginWithEmail = async (email: string, password: string) => {
+    try {
+      setAuthState(prev => ({ ...prev, loading: true, error: null }));
+      
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      return {
+        success: true,
+        message: 'Login exitoso',
+        user: userCredential.user
+      };
+    } catch (error) {
+      const errorMessage = handleFirebaseError(error as AuthError);
+      setAuthState(prev => ({ ...prev, error: errorMessage, loading: false }));
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  };
+
+  // Registro con email y contraseña
+  const registerWithEmail = async (email: string, password: string, name: string) => {
+    try {
+      setAuthState(prev => ({ ...prev, loading: true, error: null }));
+      
+      
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Actualizar el perfil con el nombre
+      await updateProfile(userCredential.user, {
+        displayName: name
+      });
+
+      // Sincronizar con Laravel como nuevo usuario
+      const syncSuccess = await syncUserWithLaravel(userCredential.user, true);
+      if (!syncSuccess) {
+      }
+
+      // Enviar verificación de email
+      await sendEmailVerification(userCredential.user);
+      
+      // Hacer logout inmediatamente después del registro para que el usuario no quede autenticado
+      await signOut(auth);
+      
+      return {
+        success: true,
+        message: 'Registro exitoso. Verifica tu email para continuar.',
+        user: userCredential.user
+      };
+    } catch (error) {
+      const errorMessage = handleFirebaseError(error as AuthError);
+      setAuthState(prev => ({ ...prev, error: errorMessage, loading: false }));
+      
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  };
+
+  // Login con Google
+  const loginWithGoogle = async () => {
+    try {
+      setAuthState(prev => ({ ...prev, loading: true, error: null }));
+      
+      
+      const result = await signInWithPopup(auth, googleProvider);
+      
+      // Verificar si es un usuario nuevo
+      const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
+      
+      // Sincronizar con Laravel
+      const syncSuccess = await syncUserWithLaravel(result.user, isNewUser);
+      if (!syncSuccess) {
+      }
+      
+      return {
+        success: true,
+        message: isNewUser ? 'Registro con Google exitoso' : 'Login con Google exitoso',
+        user: result.user
+      };
+    } catch (error) {
+      const errorMessage = handleFirebaseError(error as AuthError);
+      setAuthState(prev => ({ ...prev, error: errorMessage, loading: false }));
+      
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  };
+
+  // Logout
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+    }
+  };
+
+  // Restablecer contraseña
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      
+      return {
+        success: true,
+        message: 'Email de recuperación enviado'
+      };
+    } catch (error) {
+      const errorMessage = handleFirebaseError(error as AuthError);
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  };
+
+  // Actualizar perfil de usuario
+  const updateUserProfile = async (displayName: string, photoURL?: string) => {
+    try {
+      if (!authState.user) {
+        return {
+          success: false,
+          message: 'Usuario no autenticado'
+        };
+      }
+
+      await updateProfile(authState.user, {
+        displayName,
+        ...(photoURL && { photoURL })
+      });
+
+      return {
+        success: true,
+        message: 'Perfil actualizado exitosamente'
+      };
+    } catch (error) {
+      const errorMessage = handleFirebaseError(error as AuthError);
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  };
+
+  // Reenviar verificación de email
+  const resendEmailVerification = async () => {
+    try {
+      if (!authState.user) {
+        return {
+          success: false,
+          message: 'Usuario no autenticado'
+        };
+      }
+
+      await sendEmailVerification(authState.user);
+
+      return {
+        success: true,
+        message: 'Email de verificación reenviado'
+      };
+    } catch (error) {
+      const errorMessage = handleFirebaseError(error as AuthError);
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  };
+
+  // Limpiar error
+  const clearError = () => {
+    setAuthState(prev => ({ ...prev, error: null }));
+  };
+
+  return {
+    ...authState,
+    loginWithEmail,
+    registerWithEmail,
+    loginWithGoogle,
+    logout,
+    resetPassword,
+    updateUserProfile,
+    resendEmailVerification,
+    clearError
+  };
+}; 

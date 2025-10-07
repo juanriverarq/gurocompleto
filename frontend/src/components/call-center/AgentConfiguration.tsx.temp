@@ -1,0 +1,817 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from 'src/components/shadcn-ui/Default-Ui/card';
+import { Button } from 'src/components/shadcn-ui/Default-Ui/button';
+import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
+import { Badge } from 'src/components/shadcn-ui/Default-Ui/badge';
+import { Switch } from 'src/components/shadcn-ui/Default-Ui/switch';
+import { getVoiceList, testVoice, createPhoneCall, createConversationalAgent } from 'src/services/elevenLabsService';
+// Slider component not available
+import { 
+  Bot, 
+  Settings, 
+  Play, 
+  Save, 
+  Volume2, 
+  Mic, 
+  Zap,
+  User,
+  MessageSquare,
+  Clock,
+  Star,
+  Target,
+  Sliders,
+  VolumeX,
+  Volume1,
+  RefreshCw,
+  TestTube,
+  Check,
+  X
+} from 'lucide-react';
+// import { toast } from 'sonner'; // Removed - package not available
+
+interface AgentConfig {
+  id: string;
+  name: string;
+  type: 'sofia_insurance' | 'juan_ai' | 'generic';
+  description: string;
+  isActive: boolean;
+  voiceSettings: {
+    voiceId: string;
+    voiceName: string;
+    stability: number;
+    similarityBoost: number;
+    style: number;
+    speakerBoost: boolean;
+    speed: number;
+    pitch: number;
+  };
+  behaviorSettings: {
+    maxCallDuration: number;
+    maxRetries: number;
+    interruptionHandling: boolean;
+    silenceTimeout: number;
+    conversationStyle: 'formal' | 'casual' | 'friendly';
+    endCallKeywords: string[];
+  };
+  systemPrompt: string;
+  greeting: string;
+  goodbye: string;
+  statistics: {
+    callsHandled: number;
+    successRate: number;
+    avgDuration: number;
+    lastUsed: Date;
+  };
+}
+
+interface AgentConfigurationProps {
+  agent: AgentConfig;
+  onSave: (config: AgentConfig) => void;
+  onCancel: () => void;
+}
+
+const AgentConfiguration: React.FC<AgentConfigurationProps> = ({
+  agent,
+  onSave,
+  onCancel
+}) => {
+  const [config, setConfig] = useState<AgentConfig>(agent);
+  const [isTestingVoice, setIsTestingVoice] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('general');
+  const [isTestingCall, setIsTestingCall] = useState(false);
+  const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  const [testCallResult, setTestCallResult] = useState(null);
+  const [availableVoices, setAvailableVoices] = useState([
+    { id: '86V9x9hrQds83qf7zaGn', name: 'Marcela Colombia Girl', language: 'Spanish (Colombia)' },
+    { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel', language: 'English (US)' },
+    { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', language: 'English (US)' },
+    { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold', language: 'English (US)' },
+    { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', language: 'English (US)' },
+    { id: 'yoZ06aMxZJJ28mfd3POQ', name: 'Sam', language: 'English (US)' }
+  ]);
+
+  // Load ElevenLabs voices on component mount
+  useEffect(() => {
+    const loadVoices = async () => {
+      try {
+        const voiceData = await getVoiceList();
+        if (voiceData && voiceData.voices) {
+          setAvailableVoices(voiceData.voices.map(voice => ({
+            id: voice.voice_id,
+            name: voice.name,
+            language: voice.labels?.language || 'Unknown'
+          })));
+        }
+      } catch (error) {
+        console.error('Error loading ElevenLabs voices:', error);
+        // Keep default voices if API fails
+      }
+    };
+    loadVoices();
+  }, []);
+
+  const handleSave = () => {
+    onSave(config);
+    console.log('Configuración guardada exitosamente');
+    alert('Configuración guardada exitosamente');
+  };
+
+  const handleTestVoice = async () => {
+    setIsTestingVoice(true);
+    
+    try {
+      // Test voice with ElevenLabs
+      const testText = config.greeting || 'Hola, esta es una prueba de voz del agente';
+      const audioData = await testVoice(config.voiceSettings.voiceId, testText);
+      
+      // Play the audio
+      const audioBlob = new Blob([audioData], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.play().catch(error => {
+        console.error('Error playing audio:', error);
+        alert('Error reproduciendo el audio de prueba');
+      });
+      
+      // Clean up
+      audio.addEventListener('ended', () => {
+        URL.revokeObjectURL(audioUrl);
+      });
+      
+      console.log('Prueba de voz completada exitosamente');
+      alert('Prueba de voz completada exitosamente');
+    } catch (error) {
+      console.error('Error en la prueba de voz:', error);
+      alert('Error en la prueba de voz: ' + error.message);
+    } finally {
+      setIsTestingVoice(false);
+    }
+  };
+
+  const getAgentIcon = (type: string) => {
+    switch (type) {
+      case 'sofia_insurance': return <Bot className="w-8 h-8 text-purple-600" />;
+      case 'juan_ai': return <Zap className="w-8 h-8 text-blue-600" />;
+      case 'generic': return <User className="w-8 h-8 text-gray-600" />;
+      default: return <Bot className="w-8 h-8 text-gray-600" />;
+    }
+  };
+
+  const updateVoiceSettings = (key: string, value: any) => {
+    setConfig(prev => ({
+      ...prev,
+      voiceSettings: {
+        ...prev.voiceSettings,
+        [key]: value
+      }
+    }));
+  };
+
+  const updateBehaviorSettings = (key: string, value: any) => {
+    setConfig(prev => ({
+      ...prev,
+      behaviorSettings: {
+        ...prev.behaviorSettings,
+        [key]: value
+      }
+    }));
+  };
+
+  const handleTestCall = async () => {
+    setIsTestingCall(true);
+    setTestCallResult(null);
+
+    try {
+      // Initiate test call with ElevenLabs
+      const result = await createPhoneCall(testPhoneNumber, config.id);
+
+      setTestCallResult({
+        success: true,
+        message: 'Llamada completada'
+      });
+    } catch (error) {
+      console.error('Error durante la llamada de prueba:', error);
+      setTestCallResult({
+        success: false,
+        message: error.message
+      });
+    } finally {
+      setIsTestingCall(false);
+    }
+  };
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          {getAgentIcon(config.type)}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{config.name}</h1>
+            <p className="text-gray-600">{config.description}</p>
+          </div>
+          <Badge 
+            variant={config.isActive ? "default" : "secondary"}
+            className="ml-4"
+          >
+            {config.isActive ? 'Activo' : 'Inactivo'}
+          </Badge>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <Button variant="outline" onClick={onCancel}>
+            <X className="w-4 h-4 mr-2" />
+            Cancelar
+          </Button>
+          <Button onClick={handleSave}>
+            <Save className="w-4 h-4 mr-2" />
+            Guardar Cambios
+          </Button>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Llamadas Manejadas</p>
+                <p className="text-2xl font-bold">{config.statistics.callsHandled}</p>
+              </div>
+              <MessageSquare className="w-8 h-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Tasa de Éxito</p>
+                <p className="text-2xl font-bold text-green-600">{config.statistics.successRate}%</p>
+              </div>
+              <Target className="w-8 h-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Duración Promedio</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {Math.floor(config.statistics.avgDuration / 60)}:{(config.statistics.avgDuration % 60).toString().padStart(2, '0')}
+                </p>
+              </div>
+              <Clock className="w-8 h-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Último Uso</p>
+                <p className="text-lg font-bold text-orange-600">
+                  {config.statistics.lastUsed.toLocaleDateString()}
+                </p>
+              </div>
+              <Clock className="w-8 h-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Configuration Tabs */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar Navigation */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Configuración</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <button
+                onClick={() => setSelectedTab('general')}
+                className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                  selectedTab === 'general' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Settings className="w-4 h-4 inline mr-2" />
+                General
+              </button>
+              
+              <button
+                onClick={() => setSelectedTab('voice')}
+                className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                  selectedTab === 'voice' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Volume2 className="w-4 h-4 inline mr-2" />
+                Voz y Audio
+              </button>
+              
+              <button
+                onClick={() => setSelectedTab('behavior')}
+                className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                  selectedTab === 'behavior' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Sliders className="w-4 h-4 inline mr-2" />
+                Comportamiento
+              </button>
+              
+              <button
+                onClick={() => setSelectedTab('messages')}
+                className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                  selectedTab === 'messages' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <MessageSquare className="w-4 h-4 inline mr-2" />
+                Mensajes
+              </button>
+              
+              <button
+                onClick={() => setSelectedTab('testing')}
+                className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                  selectedTab === 'testing' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <TestTube className="w-4 h-4 inline mr-2" />
+                Pruebas
+              </button>
+              
+              <button
+                onClick={() => setSelectedTab('advanced')}
+                className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                  selectedTab === 'advanced' 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                <Settings className="w-4 h-4 inline mr-2" />
+                Avanzado
+              </button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Content */}
+        <div className="lg:col-span-3">
+          {/* General Settings */}
+          {selectedTab === 'general' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuración General</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Nombre del Agente</label>
+                    <Input
+                      value={config.name}
+                      onChange={(e) => setConfig(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Nombre del agente"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Estado</label>
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={config.isActive}
+                        onCheckedChange={(checked) => setConfig(prev => ({ ...prev, isActive: checked }))}
+                      />
+                      <span className="text-sm">
+                        {config.isActive ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Descripción</label>
+                  <textarea
+                    value={config.description}
+                    onChange={(e) => setConfig(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full p-2 border rounded-lg h-24 resize-none"
+                    placeholder="Descripción del agente y su propósito"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Tipo de Agente</label>
+                  <select
+                    value={config.type}
+                    onChange={(e) => setConfig(prev => ({ ...prev, type: e.target.value as any }))}
+                    className="w-full p-2 border rounded-lg"
+                  >
+                    <option value="generic">Agente Genérico</option>
+                    <option value="sofia_insurance">Agente de Seguros</option>
+                    <option value="juan_ai">Informador IA</option>
+                  </select>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Voice Settings */}
+          {selectedTab === 'voice' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuración de Voz</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Seleccionar Voz</label>
+                  <select
+                    value={config.voiceSettings.voiceId}
+                    onChange={(e) => {
+                      const selectedVoice = availableVoices.find(v => v.id === e.target.value);
+                      updateVoiceSettings('voiceId', e.target.value);
+                      updateVoiceSettings('voiceName', selectedVoice?.name || '');
+                    }}
+                    className="w-full p-2 border rounded-lg"
+                  >
+                    {availableVoices.map(voice => (
+                      <option key={voice.id} value={voice.id}>
+                        {voice.name} - {voice.language}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  <Button
+                    onClick={handleTestVoice}
+                    disabled={isTestingVoice}
+                    variant="outline"
+                  >
+                    {isTestingVoice ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Play className="w-4 h-4 mr-2" />
+                    )}
+                    {isTestingVoice ? 'Probando...' : 'Probar Voz'}
+                  </Button>
+                  
+                  <div className="text-sm text-gray-600">
+                    Voz actual: <span className="font-medium">{config.voiceSettings.voiceName}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Estabilidad: {config.voiceSettings.stability}
+                    </label>
+                    <input
+                      type="range"
+                      value={config.voiceSettings.stability}
+                      onChange={(e) => updateVoiceSettings('stability', parseFloat(e.target.value))}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Mayor estabilidad = menos variación en la voz
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Similitud: {config.voiceSettings.similarityBoost}
+                    </label>
+                    <input
+                      type="range"
+                      value={config.voiceSettings.similarityBoost}
+                      onChange={(e) => updateVoiceSettings('similarityBoost', parseFloat(e.target.value))}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Mayor similitud = más fiel a la voz original
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Estilo: {config.voiceSettings.style}
+                    </label>
+                    <input
+                      type="range"
+                      value={config.voiceSettings.style}
+                      onChange={(e) => updateVoiceSettings('style', parseFloat(e.target.value))}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Mayor estilo = más expresividad en la voz
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Velocidad: {config.voiceSettings.speed}
+                    </label>
+                    <input
+                      type="range"
+                      value={config.voiceSettings.speed}
+                      onChange={(e) => updateVoiceSettings('speed', parseFloat(e.target.value))}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Velocidad de habla del agente
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={config.voiceSettings.speakerBoost}
+                      onCheckedChange={(checked) => updateVoiceSettings('speakerBoost', checked)}
+                    />
+                    <span className="text-sm">Amplificador de altavoz</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Behavior Settings */}
+          {selectedTab === 'behavior' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuración de Comportamiento</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Duración máxima de llamada (segundos)
+                    </label>
+                    <Input
+                      type="number"
+                      value={config.behaviorSettings.maxCallDuration}
+                      onChange={(e) => updateBehaviorSettings('maxCallDuration', parseInt(e.target.value))}
+                      min="60"
+                      max="1800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Tiempo límite de silencio (segundos)
+                    </label>
+                    <Input
+                      type="number"
+                      value={config.behaviorSettings.silenceTimeout}
+                      onChange={(e) => updateBehaviorSettings('silenceTimeout', parseInt(e.target.value))}
+                      min="5"
+                      max="60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Máximo de reintentos
+                    </label>
+                    <Input
+                      type="number"
+                      value={config.behaviorSettings.maxRetries}
+                      onChange={(e) => updateBehaviorSettings('maxRetries', parseInt(e.target.value))}
+                      min="0"
+                      max="5"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Estilo de conversación
+                    </label>
+                    <select
+                      value={config.behaviorSettings.conversationStyle}
+                      onChange={(e) => updateBehaviorSettings('conversationStyle', e.target.value)}
+                      className="w-full p-2 border rounded-lg"
+                    >
+                      <option value="formal">Formal</option>
+                      <option value="casual">Casual</option>
+                      <option value="friendly">Amigable</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={config.behaviorSettings.interruptionHandling}
+                    onCheckedChange={(checked) => updateBehaviorSettings('interruptionHandling', checked)}
+                  />
+                  <span className="text-sm">Manejar interrupciones del usuario</span>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Palabras clave para finalizar llamada
+                  </label>
+                  <Input
+                    value={config.behaviorSettings.endCallKeywords.join(', ')}
+                    onChange={(e) => updateBehaviorSettings('endCallKeywords', e.target.value.split(', '))}
+                    placeholder="adiós, chao, colgar, terminar"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Separar palabras con comas
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Messages Settings */}
+          {selectedTab === 'messages' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuración de Mensajes</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Saludo inicial</label>
+                  <textarea
+                    value={config.greeting}
+                    onChange={(e) => setConfig(prev => ({ ...prev, greeting: e.target.value }))}
+                    className="w-full p-2 border rounded-lg h-24 resize-none"
+                    placeholder="Mensaje de saludo que usará el agente"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Mensaje de despedida</label>
+                  <textarea
+                    value={config.goodbye}
+                    onChange={(e) => setConfig(prev => ({ ...prev, goodbye: e.target.value }))}
+                    className="w-full p-2 border rounded-lg h-24 resize-none"
+                    placeholder="Mensaje de despedida que usará el agente"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Prompt del sistema</label>
+                  <textarea
+                    value={config.systemPrompt}
+                    onChange={(e) => setConfig(prev => ({ ...prev, systemPrompt: e.target.value }))}
+                    className="w-full p-2 border rounded-lg h-32 resize-none"
+                    placeholder="Instrucciones detalladas para el comportamiento del agente"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Define cómo debe comportarse el agente durante las conversaciones
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Testing Settings */}
+          {selectedTab === 'testing' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuración de Pruebas</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex flex-col space-y-4">
+                  <label className="block text-sm font-medium mb-2">Número de Teléfono para Prueba</label>
+                  <Input
+                    value={testPhoneNumber}
+                    onChange={(e) => setTestPhoneNumber(e.target.value)}
+                    placeholder="Ingresa un número de teléfono"
+                  />
+
+                  <Button
+                    onClick={handleTestCall}
+                    disabled={isTestingCall || !testPhoneNumber}
+                  >
+                    {isTestingCall ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Play className="w-4 h-4 mr-2" />
+                    )}
+                    {isTestingCall ? 'Llamando...' : 'Realizar Llamada de Prueba'}
+                  </Button>
+                  
+                  {testCallResult && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      Resultado de la llamada: {testCallResult.success ? 'Exitoso' : 'Fallido'}
+                      {testCallResult.message && ` - ${testCallResult.message}`}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Advanced Settings */}
+          {selectedTab === 'advanced' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuración Avanzada</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <TestTube className="w-5 h-5 text-yellow-600 mr-2" />
+                    <span className="text-sm font-medium text-yellow-800">
+                      Configuración Experimental
+                    </span>
+                  </div>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    Estas configuraciones están en fase experimental. Usar con precaución.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Modelo de IA
+                    </label>
+                    <select
+                      className="w-full p-2 border rounded-lg"
+                      defaultValue="llama3-70b-8192"
+                    >
+                      <option value="llama3-70b-8192">Llama 3 70B</option>
+                      <option value="llama3-8b-8192">Llama 3 8B</option>
+                      <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Temperatura del modelo
+                    </label>
+                    <input
+                      type="range"
+                      defaultValue={0.7}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Controla la creatividad de las respuestas
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Configuración de webhook
+                  </label>
+                  <Input
+                    placeholder="https://tu-webhook.com/callback"
+                    className="w-full"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    URL para recibir notificaciones de eventos
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Configuración JSON personalizada
+                  </label>
+                  <textarea
+                    className="w-full p-2 border rounded-lg h-32 resize-none font-mono text-sm"
+                    placeholder='{"custom_setting": "value"}'
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Configuración JSON adicional para funcionalidades específicas
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AgentConfiguration;

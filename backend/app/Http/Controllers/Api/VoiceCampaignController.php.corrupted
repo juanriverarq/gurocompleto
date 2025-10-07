@@ -1,0 +1,613 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\VoiceCampaign;
+use App\Models\VoiceCampaignExecution;
+use App\Models\VoiceCampaignCall;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Carbon\Carbon;
+use App\Traits\RequiresAuth;
+use App\Models\Broker;
+use App\Services\ElevenLabsClient;
+    use Illuminate\Support\Facades\Http as FacadesHttp;
+
+class VoiceCampaignController extends Controller
+{
+    use RequiresAuth;
+        /**
+         * Asegura que si WhatsApp post-call está habilitado pero sin instance_id, se asigne automáticamente
+         * la primera instancia conectada del microservicio y se persista en settings.
+         */
+        private function ensureWhatsappInstanceId(array $settings): array
+        {
+            try {
+                $tools = is_array($settings['post_call_tools'] ?? null) ? $settings['post_call_tools'] : [];
+                $wa = is_array($tools['whatsapp'] ?? null) ? $tools['whatsapp'] : [];
+                $enabled = (bool) ($wa['enabled'] ?? false);
+                $instanceId = $wa['instance_id'] ?? null;
+                if ($enabled && empty($instanceId)) {
+                    $waBase = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3000/api/v1'), '/');
+                    $resp = \Illuminate\Support\Facades\Http::retry(2, 500)->get($waBase . '/instances');
+                    if ($resp->ok() && ($resp->json('success'))) {
+                        $instances = $resp->json('instances') ?? [];
+                        $connected = collect($instances)->firstWhere('connected', true);
+                        if ($connected && !empty($connected['instanceId'])) {
+                            $settings['post_call_tools']['whatsapp']['instance_id'] = $connected['instanceId'];
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('⚠️ [VOICE CAMPAIGN] No se pudo auto-asignar instancia WA', [ 'error' => $e->getMessage() ]);
+            }
+            return $settings;
+        }
+
+    /**
+     * Obtener todas las campañas de voz
+     */
+    public function index(Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            Log::info('🔊 [VOICE CAMPAIGNS] Listing campaigns', [
+                'broker_id' => $brokerId,
+                'user_id' => $request->user()?->id
+            ]);
+
+            $query = VoiceCampaign::forBroker($brokerId);
+
+            // Aplicar filtros
+            if ($request->has('type')) {
+                $query->ofType($request->type);
+            }
+
+            if ($request->has('status')) {
+                $query->withStatus($request->status);
+            }
+
+            if ($request->has('active')) {
+                $query->where('is_active', $request->boolean('active'));
+            }
+
+            // Paginación
+            $limit = $request->get('limit', 15);
+            $offset = $request->get('offset', 0);
+
+            $campaigns = $query->orderBy('created_at', 'desc')
+                            ->skip($offset)
+                            ->take($limit)
+                            ->get()
+                            ->map(function ($campaign) {
+                                return array_merge($campaign->toArray(), [
+                                    'stats' => $campaign->getStats()
+                                ]);
+                            });
+
+            $total = $query->count();
+
+            return response()->json([
+                'success' => true,
+                'data' => $campaigns,
+                'total' => $total,
+                'limit' => $limit,
+                'offset' => $offset
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('🔊 [VOICE CAMPAIGNS] Error listing campaigns', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener campañas de voz',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener una campaña específica
+     */
+    public function show($id): JsonResponse
+    {
+        try {
+            $campaign = VoiceCampaign::with(['executions', 'calls'])
+                                   ->findOrFail($id);
+
+            return response()->json([
+                'success' => true,
+                'data' => array_merge($campaign->toArray(), [
+                    'stats' => $campaign->getStats()
+                ])
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Campaña de voz no encontrada',
+                'error' => $e->getMessage()
+            ], 404);
+        }
+    }
+
+    /**
+     * Crear campaña de voz inmediata
+     */
+    public function createImmediate(Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            Log::info('🔊 [VOICE CAMPAIGN] Creating immediate campaign', [
+                'broker_id' => $brokerId,
+                'request_data' => $request->all()
+            ]);
+
+            // Validación
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'voice_message_template' => 'required|string',
+                'contacts' => 'required|array|min:1',
+                'contacts.*.phone' => 'required|string',
+                'contacts.*.name' => 'nullable|string',
+                'elevenlabs_agent_id' => 'nullable|string',
+                'elevenlabs_phone_number_id' => 'nullable|string',
+                'elevenlabs_voice_id' => 'nullable|string',
+                'agent_name' => 'nullable|string|max:255',
+                'voice_settings' => 'nullable|array',
+                'settings' => 'nullable|array'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos de entrada inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            DB::beginTransaction();
+
+            // Normalizar settings: asignar instance_id si WhatsApp post-call está habilitado y no viene definido
+            $incomingSettings = $request->input('settings', []);
+            $normalizedSettings = $this->ensureWhatsappInstanceId($incomingSettings);
+
+            // Crear la campaña
+            $campaign = VoiceCampaign::create([
+                'broker_id' => $brokerId,
+                'name' => $request->name,
+                'description' => $request->description,
+                'campaign_type' => VoiceCampaign::TYPE_IMMEDIATE,
+                'voice_message_template' => $request->voice_message_template,
+                'contacts' => $request->contacts,
+                'status' => VoiceCampaign::STATUS_DRAFT,
+                'total_targets' => count($request->contacts),
+                'elevenlabs_agent_id' => $request->elevenlabs_agent_id ?: env('ELEVENLABS_AGENT_ID'),
+                'elevenlabs_phone_number_id' => $request->elevenlabs_phone_number_id ?: env('ELEVENLABS_PHONE_NUMBER_ID'),
+                'elevenlabs_voice_id' => $request->elevenlabs_voice_id,
+                'agent_name' => $request->agent_name,
+                'voice_settings' => $request->voice_settings,
+                'settings' => $normalizedSettings,
+                'created_by' => $request->user()?->id
+            ]);
+
+            // Si viene save_as_draft=true, NO ejecutar; devolver como borrador
+            $saveAsDraft = $request->boolean('save_as_draft', false);
+            if ($saveAsDraft) {
+                DB::commit();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Campaña de voz guardada como borrador',
+                    'data' => [
+                        'campaign' => $campaign,
+                        'stats' => $campaign->getStats()
+                    ]
+                ], 201);
+            }
+
+            // Ejecutar inmediatamente
+            $execution = $this->executeVoiceCampaign($campaign);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña de voz inmediata creada y ejecutada',
+                'data' => [
+                    'campaign' => $campaign,
+                    'execution' => $execution,
+                    'stats' => $campaign->getStats()
+                ]
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('🔊 [VOICE CAMPAIGN] Error creating immediate campaign', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear campaña inmediata de voz',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Crear campaña de voz programada
+     */
+    public function createScheduled(Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+
+            // Validación
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'voice_message_template' => 'required|string',
+                'contacts' => 'required|array|min:1',
+                'contacts.*.phone' => 'required|string',
+                'contacts.*.name' => 'nullable|string',
+                'scheduled_date' => 'required|date|after:now',
+                'elevenlabs_agent_id' => 'nullable|string',
+                'elevenlabs_phone_number_id' => 'nullable|string',
+                'voice_settings' => 'nullable|array',
+                'settings' => 'nullable|array'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos de entrada inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Normalizar settings: asignar instance_id si WhatsApp post-call está habilitado y no viene definido
+            $incomingSettings = $request->input('settings', []);
+            $normalizedSettings = $this->ensureWhatsappInstanceId($incomingSettings);
+
+            $campaign = VoiceCampaign::create([
+                'broker_id' => $brokerId,
+                'name' => $request->name,
+                'description' => $request->description,
+                'campaign_type' => VoiceCampaign::TYPE_SCHEDULED,
+                'voice_message_template' => $request->voice_message_template,
+                'contacts' => $request->contacts,
+                'scheduled_date' => $request->scheduled_date,
+                'status' => VoiceCampaign::STATUS_SCHEDULED,
+                'total_targets' => count($request->contacts),
+                'next_execution' => $request->scheduled_date,
+                'elevenlabs_agent_id' => $request->elevenlabs_agent_id ?: env('ELEVENLABS_AGENT_ID'),
+                'elevenlabs_phone_number_id' => $request->elevenlabs_phone_number_id ?: env('ELEVENLABS_PHONE_NUMBER_ID'),
+                'voice_settings' => $request->voice_settings,
+                'settings' => $normalizedSettings,
+                'created_by' => $request->user()?->id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña de voz programada creada exitosamente',
+                'data' => $campaign
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear campaña programada de voz',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Ejecutar una campaña de voz manualmente
+     */
+    public function execute($id, Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $campaign = VoiceCampaign::where('id', $id)
+                                   ->where('broker_id', $brokerId)
+                                   ->firstOrFail();
+
+            if (!$campaign->canBeExecuted()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La campaña no puede ejecutarse en su estado actual'
+                ], 422);
+            }
+
+            $execution = $this->executeVoiceCampaign($campaign);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña ejecutada exitosamente',
+                'data' => [
+                    'campaign' => $campaign->fresh(),
+                    'execution' => $execution
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('🔊 [VOICE CAMPAIGN] Error executing campaign', [
+                'campaign_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al ejecutar campaña de voz',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Pausar/Reanudar campaña
+     */
+    public function toggle($id, Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $campaign = VoiceCampaign::where('id', $id)
+                                   ->where('broker_id', $brokerId)
+                                   ->firstOrFail();
+
+            if ($campaign->isInProgress()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se puede cambiar el estado de una campaña en progreso'
+                ], 422);
+            }
+
+            $newStatus = $campaign->is_active ? 
+                VoiceCampaign::STATUS_PAUSED : 
+                VoiceCampaign::STATUS_ACTIVE;
+
+            $campaign->update([
+                'is_active' => !$campaign->is_active,
+                'status' => $newStatus
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $campaign->is_active ? 'Campaña activada' : 'Campaña pausada',
+                'data' => $campaign
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar estado de campaña',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener estadísticas de campañas de voz
+     */
+    public function getStats(Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+
+            // OPTIMIZACIÓN: Estadísticas de llamadas en una sola consulta
+            $callsStats = VoiceCampaignCall::forBroker($brokerId)
+                ->selectRaw('
+                    COUNT(*) as total_calls,
+                    COUNT(CASE WHEN status = "completed" OR call_result IN ("completed", "successful", "answered") THEN 1 END) as successful_calls,
+                    SUM(duration_seconds) as total_duration,
+                    AVG(duration_seconds) as avg_duration
+                ')
+                ->first();
+
+            $totalCallsFromRecords = (int) $callsStats->total_calls;
+            $successfulCallsFromRecords = (int) $callsStats->successful_calls;
+            $totalDurationFromRecords = (float) $callsStats->total_duration;
+            $avgDurationFromRecords = (float) $callsStats->avg_duration;
+
+            // OPTIMIZACIÓN: Estadísticas de campañas en una sola consulta
+            $campaignStats = VoiceCampaign::forBroker($brokerId)
+                ->selectRaw('
+                    SUM(calls_made) as total_calls_made,
+                    SUM(calls_successful) as total_successful_calls,
+                    SUM(calls_failed) as total_failed_calls,
+                    SUM(total_duration_seconds) as total_duration_campaigns,
+                    AVG(average_duration_seconds) as avg_duration_campaigns
+                ')
+                ->first();
+
+            $totalCallsFromCampaigns = (int) $campaignStats->total_calls_made;
+            $successfulCallsFromCampaigns = (int) $campaignStats->total_successful_calls;
+
+            $stats = [
+                'total_campaigns' => VoiceCampaign::forBroker($brokerId)->count(),
+                'active_campaigns' => VoiceCampaign::forBroker($brokerId)->active()->count(),
+                'completed_campaigns' => VoiceCampaign::forBroker($brokerId)->withStatus(VoiceCampaign::STATUS_COMPLETED)->count(),
+                
+                // Usar datos de llamadas reales cuando estén disponibles
+                'total_calls_made' => max($totalCallsFromRecords, $totalCallsFromCampaigns),
+                'total_successful_calls' => max($successfulCallsFromRecords, $successfulCallsFromCampaigns),
+                'total_failed_calls' => max($totalCallsFromRecords - $successfulCallsFromRecords, 
+                                          VoiceCampaign::forBroker($brokerId)->sum('calls_failed')),
+                
+                'total_duration_seconds' => max($totalDurationFromRecords, 
+                                              VoiceCampaign::forBroker($brokerId)->sum('total_duration_seconds')),
+                'average_duration_seconds' => max($avgDurationFromRecords,
+                                                VoiceCampaign::forBroker($brokerId)->avg('average_duration_seconds') ?? 0),
+                
+                'campaigns_by_type' => VoiceCampaign::forBroker($brokerId)
+                                                  ->selectRaw('campaign_type, count(*) as total')
+                                                  ->groupBy('campaign_type')
+                                                  ->pluck('total', 'campaign_type'),
+                'recent_executions' => VoiceCampaignExecution::forBroker($brokerId)
+                                                           ->with('voiceCampaign')
+                                                           ->orderBy('execution_date', 'desc')
+                                                           ->take(10)
+                                                           ->get()
+                                                           ->map(function ($execution) {
+                                                               return [
+                                                                   'campaign_name' => $execution->voiceCampaign->name,
+                                                                   'execution_date' => $execution->execution_date->toISOString(),
+                                                                   'calls_made' => $execution->calls_made,
+                                                                   'success_rate' => $execution->success_rate
+                                                               ];
+                                                           }),
+                
+                // Información adicional para debug
+                'debug_info' => [
+                    'calls_from_records' => $totalCallsFromRecords,
+                    'calls_from_campaigns' => $totalCallsFromCampaigns,
+                    'successful_from_records' => $successfulCallsFromRecords,
+                    'successful_from_campaigns' => $successfulCallsFromCampaigns,
+                    'avg_duration_from_records' => $avgDurationFromRecords
+                ]
+            ];
+
+            $stats['overall_success_rate'] = $stats['total_calls_made'] > 0 ? 
+                round(($stats['total_successful_calls'] / $stats['total_calls_made']) * 100, 2) : 0;
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener estadísticas',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener historial de llamadas
+     */
+    public function getCallHistory(Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $broker = Broker::find($brokerId);
+            $enrich = $request->boolean('enrich', false);
+            $eleven = $enrich ? new ElevenLabsClient() : null;
+
+            // OPTIMIZACIÓN: Eager loading selectivo para mejor rendimiento
+            $query = VoiceCampaignCall::forBroker($brokerId)
+                                     ->with([
+                                         'voiceCampaign:id,name,elevenlabs_agent_id,agent_name',
+                                         'execution:id,execution_date,calls_made,success_rate'
+                                     ]);
+
+            // Filtros opcionales
+            if ($request->has('campaign_id')) {
+                $query->where('voice_campaign_id', $request->campaign_id);
+            }
+
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            // Filtro por agente (elevenlabs_agent_id almacenado en llamada o en campaña)
+            if ($request->has('agent_id')) {
+                $agentId = $request->get('agent_id');
+                $query->where(function($q) use ($agentId) {
+                    $q->where('elevenlabs_agent_id', $agentId)
+                      ->orWhereHas('voiceCampaign', function($qc) use ($agentId) {
+                          $qc->where('elevenlabs_agent_id', $agentId);
+                      });
+                });
+            }
+
+            if ($request->has('phone')) {
+                $query->where('recipient_phone', 'LIKE', '%' . $request->phone . '%');
+            }
+
+            if ($request->has('date_from')) {
+                $query->whereDate('created_at', '>=', $request->date_from);
+            }
+
+            if ($request->has('date_to')) {
+                $query->whereDate('created_at', '<=', $request->date_to);
+            }
+
+            // Paginación
+            $limit = $request->get('limit', 15);
+            $offset = $request->get('offset', 0);
+
+            $calls = $query->orderBy('created_at', 'desc')
+                          ->skip($offset)
+                          ->take($limit)
+                          ->get()
+                          ->map(function ($call) use ($broker, $enrich, $eleven) {
+                              $data = $call->getStats();
+
+                              // Agregar información del agente (si existe en la campaña)
+                              $data['agent_name'] = $call->voiceCampaign->agent_name ?? null;
+                              $data['agent_id'] = $call->voiceCampaign->elevenlabs_agent_id
+                                  ?? $call->elevenlabs_agent_id
+                                  ?? null;
+                              $data['campaign_name'] = $call->voiceCampaign->name ?? null;
+
+                              // Campos ligeros siempre disponibles sin enriquecer
+                              $data['has_audio'] = !empty($call->call_recording_url) || !empty($call->elevenlabs_conversation_id);
+                              if (!empty($call->call_transcript) && empty($data['transcript_excerpt'])) {
+                                  $excerpt = mb_substr($call->call_transcript, 0, 240);
+                                  if (mb_strlen($call->call_transcript) > 240) { $excerpt .= '…'; }
+                                  $data['transcript_excerpt'] = $excerpt;
+                              }
+
+                              // Agregar datos recolectados al reporte
+                              if (is_array($call->call_metadata) && isset($call->call_metadata['collected_data'])) {
+                                  $data['collected_data'] = $call->call_metadata['collected_data'];
+                              }
+
+                              // Enriquecer desde ElevenLabs si se solicita y hay conversation_id
+                              if ($enrich && !empty($call->elevenlabs_conversation_id) && $eleven) {
+                                  $conversation = $eleven->getConversationDetails($call->elevenlabs_conversation_id);
+                                  if (is_array($conversation)) {
+                                      $data['elevenlabs'] = [ 'raw' => $conversation ];
+                                      // v1: duration puede estar en metadata.call_duration_secs o en conversation_initiation_client_data.dynamic_variables.system__call_duration_secs
+                                      $duration = data_get($conversation, 'metadata.call_duration_secs')
+                                          ?? data_get($conversation, 'conversation_initiation_client_data.dynamic_variables.system__call_duration_secs');
+                                      // Preferir siempre la duración de ElevenLabs si existe
+                                      if (is_numeric($duration) && (int)$duration > 0) {
+                                          $data['duration_seconds'] = (int) $duration;
+                                      }
+                                      // transcript es un array; guardar primeras líneas en texto corto
+                                      $transcriptArray = data_get($conversation, 'transcript');
+                                      if (is_array($transcriptArray) && empty($data['call_transcript'])) {
+                                          $firstLines = collect($transcriptArray)
+                                              ->take(5)
+                                              ->map(function($turn){
+                                                  $role = $turn['role'] ?? 'agent';
+                                                  $msg = $turn['message'] ?? '';
+                                                  return strtoupper(substr($role,0,1)).": ".$msg;
+                                              })->implode("\n");
+                                          $data['call_transcript'] = $firstLines;
+                                      }
+                                      // v1: metadata.cost es créditos; charging.llm_price/llm_charge/call_charge pueden existir
+                                      $elevenUsdMeta = data_get($conversation, 'metadata.cost_usd');
+                                      $elevenCredits = data_get($conversation, 'billing.credits');
+                                      // si metadata.cost existe (créditos), convertir
+                                      $elevenCre

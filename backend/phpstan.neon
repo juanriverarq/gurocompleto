@@ -1,0 +1,44 @@
+includes:
+    - ./vendor/nunomaduro/larastan/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - app
+        - routes
+        - config
+    tmpDir: storage/framework/cache/phpstan
+
+    # PHPStan generic checks
+    checkMissingIterableValueType: true
+    checkGenericClassInNonGenericObjectType: true
+    checkUninitializedProperties: true
+    checkUnusedPrivateElements: true
+    checkMissingVarTagTypehint: true
+    checkMissingTypehints: true
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true
+
+    # Bootstrap Laravel so Larastan understands the framework
+    bootstrapFiles:
+        - vendor/autoload.php
+        - bootstrap/app.php
+
+    # Ignore vendor/tests and generated files
+    excludePaths:
+        - vendor
+        - storage
+        - bootstrap/cache
+        - database/migrations
+        - database/seeders
+        - database/factories
+
+    # Larastan specific configuration
+    larastan:
+        container:
+            # Improves accuracy resolving bindings
+            useStaticReflection: true
+        respectModelProperties: true
+        checkModelProperties: true
+        checkGenericRelations: true
+        noUnnecessaryCollectionCall: true

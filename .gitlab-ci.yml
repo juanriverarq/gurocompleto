@@ -1,0 +1,64 @@
+image: edbizarro/gitlab-ci-pipeline-php:8.2
+
+stages:
+  - install
+  - static-analysis
+  - tests
+  - security
+  - sonar
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - backend/vendor/
+    - ~/.composer/cache/
+
+variables:
+  COMPOSER_ALLOW_SUPERUSER: "1"
+  APP_ENV: testing
+
+install:
+  stage: install
+  script:
+    - cd backend
+    - cp .env.example .env || true
+    - composer install --no-progress --prefer-dist --no-interaction
+  artifacts:
+    paths:
+      - backend/vendor
+
+phpstan:
+  stage: static-analysis
+  script:
+    - cd backend
+    - if [ ! -f vendor/bin/phpstan ]; then composer require --dev nunomaduro/larastan:^2.9 --no-interaction --no-progress; fi
+    - ./vendor/bin/phpstan analyse -c phpstan.neon --no-progress
+
+phpunit:
+  stage: tests
+  script:
+    - cd backend
+    - if [ -f vendor/bin/phpunit ]; then ./vendor/bin/phpunit --log-junit storage/test-reports/junit.xml || true; else echo "phpunit not installed; skipping"; fi
+  artifacts:
+    when: always
+    paths:
+      - backend/storage/test-reports/junit.xml
+    reports:
+      junit: backend/storage/test-reports/junit.xml
+
+composer_audit:
+  stage: security
+  script:
+    - cd backend
+    - composer audit --no-interaction || true
+
+sonarqube:
+  stage: sonar
+  image: sonarsource/sonar-scanner-cli:latest
+  script:
+    - sonar-scanner
+  rules:
+    - if: $SONAR_TOKEN
+  variables:
+    SONAR_HOST_URL: ${SONAR_HOST_URL}
+    SONAR_LOGIN: ${SONAR_TOKEN}

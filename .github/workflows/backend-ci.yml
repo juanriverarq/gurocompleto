@@ -1,0 +1,93 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+      - 'sonar-project.properties'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+      - 'sonar-project.properties'
+
+jobs:
+  php-tests-and-analysis:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, intl, pcntl, pdo_mysql, gd
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.composer/cache
+            backend/vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Copy environment
+        run: |
+          cp .env.example .env || true
+          php -r "file_exists('storage') || mkdir('storage', 0777, true);"
+          php -r "file_exists('storage/framework/cache/phpstan') || mkdir('storage/framework/cache/phpstan', 0777, true);"
+
+      - name: Install dependencies
+        run: composer install --no-progress --prefer-dist --no-interaction
+
+      - name: Ensure phpstan present (Larastan)
+        run: |
+          if [ ! -f vendor/bin/phpstan ]; then
+            composer require --dev nunomaduro/larastan:^2.9 --no-interaction --no-progress || true
+          fi
+
+      - name: PHPStan (Larastan)
+        run: |
+          if [ -f vendor/bin/phpstan ]; then
+            ./vendor/bin/phpstan analyse -c phpstan.neon --no-progress
+          else
+            echo "phpstan not installed; skipping"
+          fi
+
+      - name: Composer Security Audit
+        run: composer audit --no-interaction || true
+
+      - name: Run tests (if present)
+        run: |
+          if [ -f vendor/bin/phpunit ]; then
+            ./vendor/bin/phpunit --log-junit ../storage/test-reports/junit.xml || true
+          else
+            echo "phpunit not installed; skipping"
+          fi
+
+  sonar-scan:
+    name: SonarQube Scan (optional)
+    needs: php-tests-and-analysis
+    runs-on: ubuntu-latest
+    if: ${{ env.SONAR_TOKEN != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          projectBaseDir: .

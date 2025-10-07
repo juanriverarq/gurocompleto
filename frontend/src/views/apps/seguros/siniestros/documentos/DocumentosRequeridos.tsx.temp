@@ -1,0 +1,309 @@
+import React, { useState } from 'react';
+import { Card, Button, Badge, Table, Modal, TextInput, Select, Textarea } from 'flowbite-react';
+// import { HiPlus, HiSearch, HiEye, HiDownload, HiExclamationTriangle, HiCheckCircle, HiClock, HiDocumentText } from 'react-icons/hi';
+import { FaFileAlt, FaFilePdf, FaFileImage } from 'react-icons/fa';
+import BreadcrumbComp from '../../../../../layouts/full/shared/breadcrumb/BreadcrumbComp';
+
+const BCrumb = [
+  {
+    to: '/',
+    title: 'Inicio',
+  },
+  {
+    to: '/apps/seguros',
+    title: 'Seguros',
+  },
+  {
+    to: '/apps/seguros/siniestros',
+    title: 'Siniestros',
+  },
+  {
+    title: 'Documentos Requeridos',
+  },
+];
+
+interface DocumentoRequerido {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  tipoSiniestro: string;
+  obligatorio: boolean;
+  formato: string[];
+  tamaño_max: string;
+  estado: 'Activo' | 'Inactivo';
+  fechaCreacion: string;
+  observaciones: string;
+}
+
+const DocumentosRequeridos: React.FC = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [tipoFiltro, setTipoFiltro] = useState('todos');
+  const [modalAbierto, setModalAbierto] = useState(false);
+
+  // Datos mock de documentos requeridos
+  const documentosRequeridos: DocumentoRequerido[] = [
+    {
+      id: '1',
+      nombre: 'Formato Único de Reclamación',
+      descripcion: 'Documento oficial para reportar el siniestro',
+      tipoSiniestro: 'Automóvil',
+      obligatorio: true,
+      formato: ['PDF', 'JPG', 'PNG'],
+      tamaño_max: '5MB',
+      estado: 'Activo',
+      fechaCreacion: '2024-01-15',
+      observaciones: 'Debe estar firmado por el asegurado'
+    },
+    {
+      id: '2',
+      nombre: 'Copia de Cédula del Asegurado',
+      descripcion: 'Documento de identificación del titular de la póliza',
+      tipoSiniestro: 'Todos',
+      obligatorio: true,
+      formato: ['PDF', 'JPG', 'PNG'],
+      tamaño_max: '2MB',
+      estado: 'Activo',
+      fechaCreacion: '2024-01-15',
+      observaciones: 'Debe ser legible por ambas caras'
+    },
+    {
+      id: '3',
+      nombre: 'Informe Policial',
+      descripcion: 'Reporte oficial de las autoridades competentes',
+      tipoSiniestro: 'Automóvil',
+      obligatorio: true,
+      formato: ['PDF'],
+      tamaño_max: '10MB',
+      estado: 'Activo',
+      fechaCreacion: '2024-01-15',
+      observaciones: 'Solo en casos de accidentes de tránsito'
+    },
+    {
+      id: '4',
+      nombre: 'Certificado Médico',
+      descripcion: 'Diagnóstico y tratamiento médico',
+      tipoSiniestro: 'Vida',
+      obligatorio: true,
+      formato: ['PDF'],
+      tamaño_max: '3MB',
+      estado: 'Activo',
+      fechaCreacion: '2024-01-25',
+      observaciones: 'Debe estar firmado por médico tratante'
+    }
+  ];
+
+  const documentosFiltrados = documentosRequeridos.filter(doc => 
+    doc.nombre.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    (tipoFiltro === 'todos' || doc.tipoSiniestro === tipoFiltro)
+  );
+
+  const getIconoTipo = (formato: string[]) => {
+    if (formato.includes('PDF')) return <FaFilePdf className="text-red-500" />;
+    if (formato.includes('JPG') || formato.includes('PNG')) return <FaFileImage className="text-green-500" />;
+    return <FaFileAlt className="text-gray-500" />;
+  };
+
+  return (
+    <>
+      <BreadcrumbComp title="Documentos Requeridos Siniestros" items={BCrumb} />
+      
+      <div className="grid grid-cols-12 gap-6">
+        {/* Estadísticas */}
+        <div className="col-span-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 bg-blue-500 rounded flex items-center justify-center text-white font-bold">📄</div>
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">Total Documentos</p>
+                  <p className="text-2xl font-bold text-gray-900">{documentosRequeridos.length}</p>
+                </div>
+              </div>
+            </Card>
+            
+            <Card>
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <HiExclamationTriangle className="h-8 w-8 text-red-500" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">Obligatorios</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {documentosRequeridos.filter(d => d.obligatorio).length}
+                  </p>
+                </div>
+              </div>
+            </Card>
+            
+            <Card>
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <HiCheckCircle className="h-8 w-8 text-green-500" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">Activos</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {documentosRequeridos.filter(d => d.estado === 'Activo').length}
+                  </p>
+                </div>
+              </div>
+            </Card>
+            
+            <Card>
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <HiClock className="h-8 w-8 text-yellow-500" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">Tipos Siniestro</p>
+                  <p className="text-2xl font-bold text-gray-900">4</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        {/* Filtros y búsqueda */}
+        <div className="col-span-12">
+          <Card>
+            <div className="mb-6 flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <TextInput
+                  icon={HiSearch}
+                  placeholder="Buscar documentos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <Select value={tipoFiltro} onChange={(e) => setTipoFiltro(e.target.value)}>
+                <option value="todos">Todos los tipos</option>
+                <option value="Automóvil">Automóvil</option>
+                <option value="Vida">Vida</option>
+                <option value="Hogar">Hogar</option>
+                <option value="Comercial">Comercial</option>
+              </Select>
+              <Button onClick={() => setModalAbierto(true)}>
+                <HiPlus className="mr-2 h-4 w-4" />
+                Nuevo Documento
+              </Button>
+            </div>
+
+            {/* Tabla de documentos */}
+            <div className="overflow-x-auto">
+              <Table hoverable>
+                <Table.Head>
+                  <Table.HeadCell>Documento</Table.HeadCell>
+                  <Table.HeadCell>Tipo Siniestro</Table.HeadCell>
+                  <Table.HeadCell>Obligatorio</Table.HeadCell>
+                  <Table.HeadCell>Formato</Table.HeadCell>
+                  <Table.HeadCell>Tamaño Máx.</Table.HeadCell>
+                  <Table.HeadCell>Estado</Table.HeadCell>
+                  <Table.HeadCell>Acciones</Table.HeadCell>
+                </Table.Head>
+                <Table.Body className="divide-y">
+                  {documentosFiltrados.map((documento) => (
+                    <Table.Row key={documento.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                      <Table.Cell>
+                        <div className="flex items-center space-x-3">
+                          {getIconoTipo(documento.formato)}
+                          <div>
+                            <div className="text-base font-semibold">{documento.nombre}</div>
+                            <div className="text-sm text-gray-500">{documento.descripcion}</div>
+                          </div>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge color={documento.tipoSiniestro === 'Todos' ? 'info' : 'gray'}>
+                          {documento.tipoSiniestro}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {documento.obligatorio ? (
+                          <Badge color="failure">Obligatorio</Badge>
+                        ) : (
+                          <Badge color="gray">Opcional</Badge>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex flex-wrap gap-1">
+                          {documento.formato.map((fmt, index) => (
+                            <Badge key={index} color="light" size="xs">{fmt}</Badge>
+                          ))}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>{documento.tamaño_max}</Table.Cell>
+                      <Table.Cell>
+                        <Badge color={documento.estado === 'Activo' ? 'success' : 'gray'}>
+                          {documento.estado}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex space-x-2">
+                          <Button size="xs" color="light">
+                            <HiEye className="h-4 w-4" />
+                          </Button>
+                          <Button size="xs" color="light">
+                            <HiDownload className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Modal Nuevo Documento */}
+      <Modal show={modalAbierto} onClose={() => setModalAbierto(false)}>
+        <Modal.Header>Nuevo Documento Requerido</Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nombre del Documento
+              </label>
+              <TextInput placeholder="Ej: Formato de reclamación" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Descripción
+              </label>
+              <Textarea placeholder="Descripción detallada del documento" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tipo de Siniestro
+              </label>
+              <Select>
+                <option>Automóvil</option>
+                <option>Vida</option>
+                <option>Hogar</option>
+                <option>Comercial</option>
+                <option>Todos</option>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input type="checkbox" id="obligatorio" className="rounded" />
+              <label htmlFor="obligatorio" className="text-sm font-medium text-gray-700">
+                Documento obligatorio
+              </label>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button onClick={() => setModalAbierto(false)}>Guardar</Button>
+          <Button color="gray" onClick={() => setModalAbierto(false)}>
+            Cancelar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </>
+  );
+};
+
+export default DocumentosRequeridos;
