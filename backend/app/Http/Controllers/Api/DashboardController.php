@@ -266,8 +266,28 @@ class DashboardController extends Controller
     public function getPrimasChart(Request $request)
     {
         try {
-            $user = $request->user();
-            $broker = $user->getPrimaryBroker();
+            // Resolver broker para ambos tipos de sesión (Firebase User o Empleado)
+            $broker = null;
+            $authType = $request->get('auth_type');
+
+            if ($authType === 'empleado') {
+                $empleado = $request->get('authenticated_empleado');
+                $brokerId = $request->get('authenticated_broker_id') ?? $request->get('broker_id') ?? ($empleado->broker_id ?? null);
+                if ($brokerId) {
+                    $broker = \App\Models\Broker::find((int) $brokerId);
+                }
+            } else {
+                $user = $request->user() ?: $request->get('authenticated_user');
+                if ($user && method_exists($user, 'getPrimaryBroker')) {
+                    $broker = $user->getPrimaryBroker();
+                }
+                if (!$broker) {
+                    $brokerId = $request->get('authenticated_broker_id') ?? $request->get('broker_id');
+                    if ($brokerId) {
+                        $broker = \App\Models\Broker::find((int) $brokerId);
+                    }
+                }
+            }
 
             if (!$broker) {
                 return response()->json([

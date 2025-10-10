@@ -9,7 +9,7 @@
 # Requisitos:
 # - Acceso SSH como root por llave (recomendado) o como usuario con permisos equivalentes
 # - PHP 8.3 y Composer en el servidor (rutas típicas de cPanel autodetectadas)
-# - Subdominio api.guro.co apuntando a /home/guro/backend/current/public
+# - Subdominio app.guro.co apuntando a /home/guro/backend/current/public
 
 set -euo pipefail
 
@@ -28,7 +28,7 @@ REMOTE_BASE="${REMOTE_BASE:-/home/${REMOTE_USER}/backend/current}"
 REMOTE_TMP_DIR="${REMOTE_TMP_DIR:-/root/tmp}"
 REMOTE_TARBALL="${REMOTE_TARBALL:-${REMOTE_TMP_DIR}/backend_deploy.tar.gz}"
 
-# DocumentRoot recomendado para api.guro.co:
+# DocumentRoot recomendado para app.guro.co:
 SUBDOMAIN_DOCROOT="${REMOTE_BASE}/public"
 
 # ===== Rutas de binarios en cPanel (autodetección) =====
@@ -196,9 +196,9 @@ curl -sS -i "http://localhost:8081/api/test-simple" -H "Origin: https://guro.co"
 cat <<EOF
 
 Acciones en cPanel:
-1) Subdominios → DocumentRoot de api.guro.co debe apuntar a:
+1) Subdominios → DocumentRoot de app.guro.co debe apuntar a:
    ${SUBDOMAIN_DOCROOT}
-2) SSL/TLS → Verifica Let's Encrypt / AutoSSL para api.guro.co
+2) SSL/TLS → Verifica Let's Encrypt / AutoSSL para app.guro.co
 
 EOF
 

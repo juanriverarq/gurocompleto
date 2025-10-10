@@ -4,7 +4,7 @@
 #  - Acceso SSH habilitado al usuario cPanel
 #  - PHP 8.3 disponible en CLI (php)
 #  - Composer disponible en CLI (composer)
-#  - Subdominio api.guro.co creado en cPanel y DocumentRoot configurable
+#  - Subdominio app.guro.co creado en cPanel y DocumentRoot configurable
 #
 # Uso:
 #   chmod +x deploy/backend_rsync.sh
@@ -37,7 +37,7 @@ REMOTE_SUDO_USER="${REMOTE_SUDO_USER:-${REMOTE_USER}}"
 
 # Ruta destino del proyecto backend en el servidor (recomendado):
 REMOTE_BASE="/home/${REMOTE_USER}/backend/current"
-# DocumentRoot requerido para api.guro.co:
+# DocumentRoot requerido para app.guro.co:
 SUBDOMAIN_DOCROOT="${REMOTE_BASE}/public"
 
 # ===== Binaries =====
@@ -156,9 +156,9 @@ cat <<EOF
 ✅ Backend desplegado y optimizado.
 
 Acciones en cPanel:
-1) Subdominios → Editar DocumentRoot de api.guro.co para que apunte a:
+1) Subdominios → Editar DocumentRoot de app.guro.co para que apunte a:
    ${SUBDOMAIN_DOCROOT}
-2) SSL/TLS → Verifica que Let's Encrypt / AutoSSL esté activo para api.guro.co
+2) SSL/TLS → Verifica que Let's Encrypt / AutoSSL esté activo para app.guro.co
 3) Si cambiaste la versión PHP en cPanel (MultiPHP Manager), asegúrate que la CLI use PHP 8.3
    - Si usas otro binario, ejecuta el script así:
      PHP_BIN=/opt/cpanel/ea-php83/root/usr/bin/php ./deploy/backend_rsync.sh
