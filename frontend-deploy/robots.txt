@@ -1,0 +1,35 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://guro.com/sitemap.xml
+
+# Páginas públicas importantes para indexar
+Allow: /
+Allow: /terminos-condiciones
+Allow: /politica-privacidad
+Allow: /auth/auth1/login
+Allow: /auth/auth1/register
+Allow: /auth/login
+Allow: /auth/register
+Allow: /frontend-pages/
+Allow: /ayuda/faq
+Allow: /onboarding/create-broker
+
+# Páginas que requieren autenticación (no indexar)
+Disallow: /apps/
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /empleados/
+
+# Archivos estáticos
+Allow: /assets/
+Allow: /images/
+Allow: /css/
+Allow: /js/
+Allow: /favicon.png
+Allow: /sitemap.xml
+Allow: /robots.txt
+
+# Crawl-delay para ser respetuoso con los servidores
+Crawl-delay: 1

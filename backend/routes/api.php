@@ -72,19 +72,23 @@ Route::get('/health', function () {
     ]);
 });
 
-// ===== CORS preflight handler (dev/local) =====
-// Responde OPTIONS para cualquier ruta bajo /api/* con headers CORS válidos.
-// Evita bloqueos por CORS cuando middlewares aguas abajo rechazan OPTIONS.
-Route::options('/{any}', function (Request $request) {
-    $origin = $request->headers->get('Origin') ?: '*';
-    $reqHeaders = $request->header('Access-Control-Request-Headers') ?: '*';
+/**
+ * CORS preflight handler solo para entornos no productivos.
+ * Nota: En producción, el middleware de CORS (fruitcake/laravel-cors) ya maneja OPTIONS.
+ * Un catch-all de OPTIONS en producción puede provocar 405 para GET.
+ */
+if (app()->environment(['local','development','testing'])) {
+    Route::options('/{any}', function (Request $request) {
+        $origin = $request->headers->get('Origin') ?: '*';
+        $reqHeaders = $request->header('Access-Control-Request-Headers') ?: '*';
 
-    return response('', 204)
-        ->header('Access-Control-Allow-Origin', $origin)
-        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
-        ->header('Access-Control-Allow-Headers', $reqHeaders)
-        ->header('Access-Control-Allow-Credentials', 'true');
-})->where('any', '.*');
+        return response('', 204)
+            ->header('Access-Control-Allow-Origin', $origin)
+            ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+            ->header('Access-Control-Allow-Headers', $reqHeaders)
+            ->header('Access-Control-Allow-Credentials', 'true');
+    })->where('any', '.*');
+}
 
 
 // =============================================================

@@ -28,6 +28,7 @@ return [
         'http://127.0.0.1:3000',
         'https://guro.co',
         'https://www.guro.co',
+        'https://app.guro.co',
     ],
 
     // Permitir cualquier subdominio de guro.co (p. ej., app.guro.co, staging.guro.co)

@@ -1,0 +1,1 @@
+import{j as s,L as o}from"./index-6EesXYnk.js";import{B as r}from"./Logo-BMwLSRSl.js";const e=()=>s.jsx(o,{to:"/",className:"flex items-center",children:s.jsx("img",{src:r,alt:"Guro Logo",className:"h-10 w-auto"})});export{e as L};
