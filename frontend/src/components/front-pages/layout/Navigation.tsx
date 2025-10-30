@@ -13,8 +13,8 @@ const FrontNav = [
     badge: false,
   },
   {
-    menu: "Planes",
-    link: "#planes",
+    menu: "Precios",
+    link: "/frontend-pages/pricing-calculator",
     badge: false,
   },
   {

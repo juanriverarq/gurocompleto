@@ -48,7 +48,7 @@ const AsistenteDeepSeek = () => {
       
       if (!apiKey) {
         return {
-          respuesta: 'Error: API key de IA no configurada. Por favor, configura VITE_DEEPSEEK_API_KEY en tu archivo .env.local'
+          respuesta: 'Error: API key de IA no configurada. Por favor, configura la API key de IA en tu archivo de entorno'
         };
       }
 
@@ -87,10 +87,7 @@ const AsistenteDeepSeek = () => {
         acciones: generarAccionesContextuales(mensaje)
       };
     } catch (error) {
-      return {
-        respuesta: 'Error al conectar con el asistente IA. Usando respuesta local como respaldo.',
-        ...generarRespuestaDeepSeekLocal(mensaje)
-      };
+      return generarRespuestaIALocal(mensaje);
     }
   };
 
@@ -135,7 +132,7 @@ const AsistenteDeepSeek = () => {
   };
 
   // Simulador de respuestas específicas de IA (fallback)
-  const generarRespuestaDeepSeekLocal = (mensaje: string): { respuesta: string; acciones?: AccionType[] } => {
+  const generarRespuestaIALocal = (mensaje: string): { respuesta: string; acciones?: AccionType[] } => {
     const mensajeLower = mensaje.toLowerCase();
     
     if (mensajeLower.includes('ia') || mensajeLower.includes('inteligencia') || mensajeLower.includes('diferencia')) {
@@ -440,7 +437,7 @@ const AsistenteDeepSeek = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Sugerencias DeepSeek */}
+            {/* Sugerencias IA */}
             {mensajes.length === 1 && (
               <div className="mb-4">
                 <p className="text-sm text-gray-500 mb-2">Prueba las capacidades avanzadas de Guro AI:</p>

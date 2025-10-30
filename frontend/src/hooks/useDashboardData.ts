@@ -8,7 +8,12 @@ interface UseDashboardDataReturn {
   refetch: () => Promise<void>;
 }
 
-export const useDashboardData = (): UseDashboardDataReturn => {
+interface UseDashboardDataParams {
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+export const useDashboardData = (params?: UseDashboardDataParams): UseDashboardDataReturn => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +22,7 @@ export const useDashboardData = (): UseDashboardDataReturn => {
     try {
       setLoading(true);
       setError(null);
-      const dashboardData = await apiService.getDashboardData();
+      const dashboardData = await apiService.getDashboardData(params?.startDate, params?.endDate);
       setData(dashboardData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar datos');
@@ -28,7 +33,7 @@ export const useDashboardData = (): UseDashboardDataReturn => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [params?.startDate, params?.endDate]);
 
   return {
     data,

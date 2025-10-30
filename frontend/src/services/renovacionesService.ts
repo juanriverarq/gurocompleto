@@ -1,7 +1,7 @@
 import { auth } from '../config/firebase';
+import { API_BASE_URL } from 'src/config/api';
 
-// Configuración base de la API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+// API_BASE_URL proviene de config/api con soporte de override en runtime
 
 export interface RenovacionFilters {
   search?: string;
@@ -71,10 +71,13 @@ class RenovacionesService {
       token = localStorage.getItem('saas_token');
     }
 
-    return {
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
     };
+    if (token) {
+      (headers as any).Authorization = `Bearer ${token}`;
+    }
+    return headers;
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -196,45 +199,72 @@ class RenovacionesService {
   }
 
   /**
-   * Procesar renovación
-   */
-  async procesarRenovacion(
-    renovacionId: string,
-    datos: {
-      nuevaFechaVencimiento: string;
-      nuevoValorPrima: number;
-      observaciones: string;
-    },
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/saas/renovaciones/${renovacionId}/procesar`, {
-        method: 'POST',
-        headers: await this.getAuthHeaders(),
-        body: JSON.stringify(datos),
-      });
+    * Procesar renovación con validaciones adicionales
+    */
+   async procesarRenovacion(
+     renovacionId: string,
+     datos: {
+       nuevaFechaVencimiento: string;
+       nuevoValorPrima: number;
+       observaciones: string;
+       nuevoNumeroPoliza?: string;
+     },
+   ): Promise<{ success: boolean; message: string }> {
+     try {
+       // Validaciones del lado cliente
+       const fechaVencimiento = new Date(datos.nuevaFechaVencimiento);
+       const hoy = new Date();
+       const maxFecha = new Date();
+       maxFecha.setFullYear(maxFecha.getFullYear() + 2);
 
-      const data = await response.json();
+       // Validar fecha no pasada
+       if (fechaVencimiento <= hoy) {
+         throw new Error('La fecha de vencimiento debe ser futura');
+       }
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Error al procesar renovación');
-      }
+       // Validar fecha no demasiado lejana
+       if (fechaVencimiento > maxFecha) {
+         throw new Error('La fecha de vencimiento no puede ser superior a 2 años');
+       }
 
-      return {
-        success: true,
-        message: data.message || 'Renovación procesada exitosamente',
-      };
-    } catch (error) {
-      // Fallback simulado para desarrollo
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            success: true,
-            message: 'Renovación procesada exitosamente (modo desarrollo)',
-          });
-        }, 500);
-      });
-    }
-  }
+       // Validar prima en rango razonable
+       if (datos.nuevoValorPrima < 10000 || datos.nuevoValorPrima > 100000000) {
+         throw new Error('El valor de la prima debe estar entre $10,000 y $100,000,000');
+       }
+
+       // Validar formato de número de póliza si se proporciona
+       if (datos.nuevoNumeroPoliza && !/^[A-Z]{3}-\d{4}-\d{4}$/.test(datos.nuevoNumeroPoliza)) {
+         throw new Error('El formato del número de póliza debe ser AAA-0000-0000');
+       }
+
+       const response = await fetch(`${API_BASE_URL}/saas/renovaciones/${renovacionId}/procesar`, {
+         method: 'POST',
+         headers: await this.getAuthHeaders(),
+         body: JSON.stringify(datos),
+       });
+
+       const data = await response.json();
+
+       if (!response.ok) {
+         throw new Error(data.message || 'Error al procesar renovación');
+       }
+
+       return {
+         success: true,
+         message: data.message || 'Renovación procesada exitosamente',
+       };
+     } catch (error) {
+       // Fallback simulado para desarrollo
+       return new Promise((resolve) => {
+         setTimeout(() => {
+           resolve({
+             success: true,
+             message: 'Renovación procesada exitosamente (modo desarrollo)',
+           });
+         }, 500);
+       });
+     }
+   }
 
   /**
    * Exportar renovaciones

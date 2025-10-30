@@ -421,8 +421,10 @@ class Siniestro extends Model
               ->orWhere('proveedor_asignado', 'like', '%' . $search . '%')
               ->orWhere('aseguradora', 'like', '%' . $search . '%')
               ->orWhereHas('cliente', function ($clienteQuery) use ($search) {
-                  $clienteQuery->where('nombre', 'like', '%' . $search . '%')
-                              ->orWhere('email', 'like', '%' . $search . '%');
+                  $clienteQuery->where('first_name', 'like', '%' . $search . '%')
+                               ->orWhere('last_name', 'like', '%' . $search . '%')
+                               ->orWhere('email', 'like', '%' . $search . '%')
+                               ->orWhere('document_number', 'like', '%' . $search . '%');
               });
         });
     }

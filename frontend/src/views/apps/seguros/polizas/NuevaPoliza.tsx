@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { 
-  Textarea, 
-  Button, 
+import {
+  Textarea,
+  Button,
   Badge,
   Alert,
   Spinner,
@@ -433,6 +433,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     porcentajeIva: '19',
     iva: '',
     total: '',
+    gastosAdicionales: '',
+    gastosAdicionalesAplicaIva: false,
     porcentajeComision: '',
     comision: '',
     formaPago: '',
@@ -489,6 +491,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   const [showClientModal, setShowClientModal] = useState(false);
   const [clientModalMode, setClientModalMode] = useState<'new' | 'edit'>('new');
   const [clienteToEdit, setClienteToEdit] = useState<any | null>(null);
+  
 
   // Hooks adelantados para validación y notificaciones (requeridos por el autocompletado de placas)
   const { toast } = useToast();
@@ -721,10 +724,22 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   }, [sedesHook]);
 
   useEffect(() => {
+    // Mapear vendedores (tabla vendedores) para selector
     setVendedores((vendedoresHook || []).map((u: any) => ({ id: String(u.id), nombre: u.nombres || u.nombre || u.name })));
   }, [vendedoresHook]);
 
-  // (normalizeRamo) eliminado por no uso
+  // Preseleccionar vendedor en modo edición: buscar por nombre de la póliza (seller_name → 'vendedor')
+  useEffect(() => {
+    if (isEditMode && polizaToEdit && vendedores.length > 0) {
+      const nombreVendedor = (polizaToEdit as any).vendedor || '';
+      if (nombreVendedor) {
+        const match = vendedores.find(v => (v.nombre || '').toLowerCase().trim() === String(nombreVendedor).toLowerCase().trim());
+        if (match) {
+          setSelectedVendedorId(match.id);
+        }
+      }
+    }
+  }, [isEditMode, polizaToEdit, vendedores]);
 
   // Helpers de mapeo de estado entre UI (Paso 1) y backend
   const mapEstadoToUi = (estado?: string) => {
@@ -783,6 +798,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         porcentajeIva: polizaToEdit.porcentaje_iva?.toString() || '19',
         iva: polizaToEdit.iva?.toString() || '',
         total: polizaToEdit.total?.toString() || '',
+        gastosAdicionales: (polizaToEdit as any).gastos_adicionales?.toString() || '',
+        gastosAdicionalesAplicaIva: !!(polizaToEdit as any).gastos_adicionales_aplica_iva,
         porcentajeComision: polizaToEdit.porcentaje_comision?.toString() || '',
         comision: polizaToEdit.comision?.toString() || '',
         formaPago: polizaToEdit.forma_pago || '',
@@ -860,9 +877,15 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     const primaNeta = parseFloat(formData.primaNeta) || 0;
     const porcentajeIva = parseFloat(formData.porcentajeIva) || 0;
     const porcentajeComision = parseFloat(formData.porcentajeComision) || 0;
-    
-    const iva = Math.round((primaNeta * porcentajeIva) / 100);
-    const total = primaNeta + iva;
+    const gastosAdicionales = parseFloat(formData.gastosAdicionales) || 0;
+
+    // Calcular IVA: sobre prima neta + gastos adicionales si aplica
+    let baseIva = primaNeta;
+    if (formData.gastosAdicionalesAplicaIva) {
+      baseIva += gastosAdicionales;
+    }
+    const iva = Math.round((baseIva * porcentajeIva) / 100);
+    const total = primaNeta + iva + gastosAdicionales;
     const comision = Math.round((primaNeta * porcentajeComision) / 100);
 
     setFormData(prev => ({
@@ -871,7 +894,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
       total: total.toString(),
       comision: comision.toString()
     }));
-  }, [formData.primaNeta, formData.porcentajeIva, formData.porcentajeComision]);
+  }, [formData.primaNeta, formData.porcentajeIva, formData.porcentajeComision, formData.gastosAdicionales, formData.gastosAdicionalesAplicaIva]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -1226,12 +1249,14 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           total: formData.total ? parseFloat(formData.total) : undefined,
           porcentaje_comision: formData.porcentajeComision ? parseFloat(formData.porcentajeComision) : undefined,
           comision: formData.comision ? parseFloat(formData.comision) : undefined,
+          gastos_adicionales: formData.gastosAdicionales ? parseFloat(formData.gastosAdicionales) : undefined,
+          gastos_adicionales_aplica_iva: !!formData.gastosAdicionalesAplicaIva,
           forma_pago: formData.formaPago || undefined,
           periodicidad_pago: formData.periodicidadPago || undefined,
           medio_pago: formData.medioPago || undefined,
           
           // Información administrativa
-          vendedor: formData.vendedor || undefined,
+          vendedor_id: selectedVendedorId ? parseInt(selectedVendedorId) : undefined,
           observaciones: formData.observaciones || undefined,
           observaciones_internas: formData.observacionesInternas || undefined,
           fecha_expedicion: formData.fechaExpedicion,
@@ -1284,13 +1309,12 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         if (isEditMode && polizaToEdit?.id) {
           const payload = {
             ...polizaData,
-            vendedor: selectedVendedorId ? vendedores.find(v => v.id === selectedVendedorId)?.nombre : polizaData.vendedor,
+            vendedor_id: selectedVendedorId ? parseInt(selectedVendedorId) : undefined,
+            vendedor: selectedVendedorId ? (vendedores.find(v => v.id === selectedVendedorId)?.nombre || undefined) : undefined,
             // Enviar cliente_id si hay selección
             cliente_id: selectedClient?.id
               ? (typeof selectedClient.id === 'string' ? parseInt(selectedClient.id as any, 10) : (selectedClient.id as any))
               : undefined,
-            // Enviar vendedor_user_id si se seleccionó (consistencia con creación)
-            vendedor_user_id: selectedVendedorId ? parseInt(selectedVendedorId) : undefined,
             policy_holder_name: (formData as any).policy_holder_name || undefined,
             policy_holder_document: (formData as any).policy_holder_document || undefined,
             insured_name: (formData as any).insured_name || undefined,
@@ -1304,8 +1328,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           // Adjuntar vendedor si fue seleccionado
           const payload = {
             ...polizaData,
-            vendedor: selectedVendedorId ? vendedores.find(v => v.id === selectedVendedorId)?.nombre : polizaData.vendedor,
-            vendedor_user_id: selectedVendedorId ? parseInt(selectedVendedorId) : undefined,
+            vendedor_id: selectedVendedorId ? parseInt(selectedVendedorId) : undefined,
+            vendedor: selectedVendedorId ? (vendedores.find(v => v.id === selectedVendedorId)?.nombre || undefined) : undefined,
             cliente_id: selectedClient?.id
               ? (typeof selectedClient.id === 'string' ? parseInt(selectedClient.id as any, 10) : (selectedClient.id as any))
               : undefined,
@@ -1352,6 +1376,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
               porcentajeIva: '19',
               iva: '',
               total: '',
+              gastosAdicionales: '',
+              gastosAdicionalesAplicaIva: false,
               porcentajeComision: '',
               comision: '',
               formaPago: '',
@@ -1448,7 +1474,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                 {/* Paso 1: Información General y Cliente */}
                 {currentStep === 0 && (
                   <div className="space-y-4">
-        <TitleCard title="Información General de la Póliza">
+        <TitleCard title="Información General de la Póliza" className="overflow-visible">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <div className="col-span-full">
               <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Producto</h4>
@@ -1534,7 +1560,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
 
             {/* Placas de vehículos (visible para ramo Automóvil o SOAT) */}
             {(s => s.includes('auto') || s.includes('soat'))(String(formData.ramoPrincipal || '').toLowerCase()) && (
-              <div className="col-span-full">
+              <div className="col-span-full z-[100]">
                 <Label htmlFor="placa_input" className="text-sm font-medium text-gray-900 dark:text-white">Placas de vehículos</Label>
                 <div className="mt-1 relative">
                   <div className="flex gap-2">
@@ -1581,7 +1607,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
 
                   {/* Dropdown de sugerencias */}
                   {placaInput && (
-                    <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-56 overflow-auto">
+                    <div className="absolute z-[9999] mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-56 overflow-auto">
                       {placaLoading ? (
                         <div className="p-2 text-sm text-gray-500">Buscando placas...</div>
                       ) : (
@@ -1693,11 +1719,11 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
 
         {/** Paso 2: Cliente */}
         {currentStep === 1 && (
-          <TitleCard title="Cliente">
+          <TitleCard title="Cliente" className="overflow-visible">
           <div className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Combobox de clientes */}
-            <div className="relative lg:col-span-2">
+            <div className="relative lg:col-span-2 z-[100]">
               <Label className="text-sm font-medium text-gray-900 dark:text-white mb-1 block">Buscar y seleccionar cliente <span className="text-red-500">*</span></Label>
               <div className="flex gap-2">
                 <Input
@@ -1726,7 +1752,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                 <p className="text-xs text-red-500 mt-1">{errors['cliente_id'] as any}</p>
               )}
               {(!selectedClient && (clientQuery.length >= 2 || clientLoading)) && (
-                <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-64 overflow-auto">
+                <div className="absolute z-[9999] mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-64 overflow-auto">
                   {clientLoading ? (
                     <div className="p-3 text-sm text-gray-500">Buscando clientes...</div>
                   ) : clientResults.length === 0 ? (
@@ -1768,13 +1794,13 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
             {/* Asignación vendedor/sede */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
-                id="vendedor_user_id"
-                name="vendedor_user_id"
+                id="vendedor_id"
+                name="vendedor_id"
                 label="Asesor/Vendedor"
+                type="select"
                 value={selectedVendedorId}
                 onChange={(e) => setSelectedVendedorId((e.target as HTMLSelectElement).value)}
-                type="select"
-                options={[{ value: '', label: 'Seleccionar asesor' }, ...vendedores.map((u) => ({ value: u.id, label: u.nombre }))]}
+                options={[{ value: '', label: 'Sin asignar' }, ...vendedores.map((v) => ({ value: v.id, label: v.nombre }))]}
               />
               <FormField
                 id="sede"
@@ -1850,15 +1876,45 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                         </div>
 
                         <div>
-              <Label htmlFor="total" className="text-sm font-medium text-gray-900 dark:text-white">Total (Calculado)</Label>
+                          <Label htmlFor="gastosAdicionales" className="text-sm font-medium text-gray-900 dark:text-white">Gastos Adicionales</Label>
                           <Input
-                id="total"
-                name="total"
-                value={formatCurrencyDisplay(formData.total)}
-                            readOnly
-                            className="mt-1 font-semibold"
-              />
-            </div>
+                            id="gastosAdicionales"
+                            name="gastosAdicionales"
+                            value={formatCurrencyDisplay(formData.gastosAdicionales)}
+                            onChange={handleCurrencyChange('gastosAdicionales')}
+                            placeholder="0"
+                            className={`mt-1 ${errors.gastosAdicionales ? 'border-red-500' : ''}`}
+                          />
+                          {errors.gastosAdicionales && (
+                            <p className="text-red-500 text-xs mt-1">{errors.gastosAdicionales}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-2">
+                            <Checkbox
+                              id="gastosAdicionalesAplicaIva"
+                              checked={!!formData.gastosAdicionalesAplicaIva}
+                              onCheckedChange={(v) => setFormData(prev => ({...prev, gastosAdicionalesAplicaIva: !!v}))}
+                            />
+                            <Label htmlFor="gastosAdicionalesAplicaIva" className="text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
+                              Aplicar IVA a gastos adicionales
+                            </Label>
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-1">
+                            {formData.gastosAdicionalesAplicaIva
+                              ? 'Los gastos adicionales se incluyen en el cálculo del IVA'
+                              : 'Los gastos adicionales no se incluyen en el cálculo del IVA'}
+                          </p>
+                        </div>
+            
+                        <div>
+                          <Label htmlFor="total" className="text-sm font-medium text-gray-900 dark:text-white">Total (Calculado)</Label>
+                                       <Input
+                             id="total"
+                             name="total"
+                             value={formatCurrencyDisplay(formData.total)}
+                                         readOnly
+                                         className="mt-1 font-semibold"
+                           />
+                         </div>
             
             <FormField
               id="formaPago"
@@ -2244,7 +2300,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                     dniCliente: persona.cuit || prev.dniCliente,
                     celularCliente: persona.celular_principal || prev.celularCliente,
                     correoCliente: persona.email_principal || prev.correoCliente,
-                    domicilio: persona.domicilio_principal || prev.domicilio,
+                    domicilio: persona.direccion || prev.domicilio,
                     fechaNacimiento: persona.fecha_nacimiento || prev.fechaNacimiento,
                     // Normalizar género a UI (M/F/O o texto)
                     // Si llega 'M'/'F'/'O', mantener, si llega 'masculino'/'femenino'/'otro' convertir a minúsculas

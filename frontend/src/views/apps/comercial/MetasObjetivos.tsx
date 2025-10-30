@@ -4,8 +4,7 @@ import { Icon } from '@iconify/react';
 import { salesFunnelService } from 'src/services/salesFunnelService';
 import goalsService from 'src/services/goalsService';
 import salesTeamsService from 'src/services/salesTeamsService';
-
- 
+import { useVendedores, useEmpleadosBroker } from 'src/hooks/useAdminCrudApi';
 
 interface Meta {
   id: string;
@@ -37,16 +36,26 @@ const mockMetas: Meta[] = [];
 const mockObjetivos: ObjetivoEquipo[] = [];
 
 const MetasObjetivos = () => {
+  const { vendedores: vendedoresHook } = useVendedores();
+  const { empleados: empleadosHook } = useEmpleadosBroker();
   const [metas, setMetas] = useState<Meta[]>(mockMetas);
   const [objetivos, setObjetivos] = useState<ObjetivoEquipo[]>(mockObjetivos);
   const [loading, setLoading] = useState(false);
   const [showModalMeta, setShowModalMeta] = useState(false);
   const [showModalEditar, setShowModalEditar] = useState(false);
+  
+  const hoy = new Date();
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const finMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+  
   const [filtros, setFiltros] = useState({
     asesor: '',
     tipoMeta: '',
     estado: '',
-    periodo: '2024-06'
+    periodo: `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`,
+    rangoTipo: 'mes' as '7dias' | '15dias' | 'mes' | 'trimestre' | 'anual' | 'personalizado',
+    fechaInicio: inicioMes.toISOString().slice(0, 10),
+    fechaFin: finMes.toISOString().slice(0, 10)
   });
 
   const [nuevaMeta, setNuevaMeta] = useState({
@@ -57,11 +66,12 @@ const MetasObjetivos = () => {
     fechaFin: '',
     observaciones: ''
   });
-  const [assignType, setAssignType] = useState<'global' | 'equipo' | 'asesor'>('global');
+  const [assignType, setAssignType] = useState<'global' | 'equipo' | 'responsable'>('global');
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
-  const [teams, setTeams] = useState<Array<{ id: number; name: string }>>([]);
-  const [agents, setAgents] = useState<Array<{ id: number; first_name: string; last_name: string }>>([]);
+  const [selectedResponsableId, setSelectedResponsableId] = useState<string>('');
+  const [tipoResponsable, setTipoResponsable] = useState<'vendedor' | 'empleado'>('vendedor');
+  const [teams, setTeams] = useState<Array<{ id: number; name: string; members: any[] }>>([]);
+  const [usuarios, setUsuarios] = useState<Array<{ id: string; nombre: string; tipo: 'vendedor' | 'empleado' }>>([]);
 
   const [editarMeta, setEditarMeta] = useState({
     id: '',
@@ -87,7 +97,14 @@ const MetasObjetivos = () => {
     'Clientes': 'warning'
   };
 
-  const metasFiltradas = metas.filter(meta => {
+  // Metas individuales (solo responsables, no equipos)
+  const metasIndividuales = metas.filter(meta => {
+    // Excluir metas de equipos (que tienen nombre de equipo en asesor)
+    const esEquipo = teams.some(t => t.name === meta.asesor);
+    return !esEquipo;
+  });
+
+  const metasFiltradas = metasIndividuales.filter(meta => {
     return (
       (filtros.asesor === '' || meta.asesor === filtros.asesor) &&
       (filtros.tipoMeta === '' || meta.tipoMeta === filtros.tipoMeta) &&
@@ -264,29 +281,71 @@ const MetasObjetivos = () => {
     });
   };
 
-  // Cargar metas persistidas; si no hay, construir desde leads
+  // Cargar equipos, vendedores/empleados y metas
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
+        
+        // Cargar equipos
         try {
           const t = await salesTeamsService.list({ per_page: 100 });
-          setTeams((t?.data || []).map((x: any) => ({ id: x.id, name: x.name })));
+          const equiposData = (t?.data || []).map((x: any) => ({
+            id: x.id,
+            name: x.name,
+            members: x.members || []
+          }));
+          setTeams(equiposData);
+          
+          // Construir objetivos desde equipos
+          const objetivosEquipos: ObjetivoEquipo[] = equiposData.map((eq: any) => ({
+            id: String(eq.id),
+            equipo: eq.name,
+            descripcion: `Meta del equipo ${eq.name}`,
+            metaTotal: eq.members.reduce((s: number, m: any) => s + Number(m.monthly_goal || 0), 0),
+            avanceTotal: 0,
+            porcentajeEquipo: 0,
+            miembros: eq.members.length,
+            estado: 'Activo' as const
+          }));
+          setObjetivos(objetivosEquipos);
         } catch (_) {}
-        try {
-          const a = await salesFunnelService.getAvailableAgents();
-          setAgents(a || []);
-        } catch (_) {}
-        const start = new Date();
-        start.setDate(1);
-        const periodo = filtros.periodo || `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}`;
-        // Intentar metas desde API
+        
+        // Cargar vendedores y empleados como usuarios
+        const usuariosLista: Array<{ id: string; nombre: string; tipo: 'vendedor' | 'empleado' }> = [];
+        
+        // Vendedores
+        if (vendedoresHook && vendedoresHook.length > 0) {
+          vendedoresHook.forEach((v: any) => {
+            usuariosLista.push({
+              id: String(v.id),
+              nombre: v.nombres || v.nombre || v.name,
+              tipo: 'vendedor'
+            });
+          });
+        }
+        
+        // Empleados
+        if (empleadosHook && empleadosHook.length > 0) {
+          empleadosHook.forEach((e: any) => {
+            usuariosLista.push({
+              id: String(e.id),
+              nombre: e.nombre_completo || `${e.nombres} ${e.apellidos}` || e.nombre || e.name,
+              tipo: 'empleado'
+            });
+          });
+        }
+        
+        setUsuarios(usuariosLista);
+        
+        // Cargar metas del período
+        const periodo = filtros.periodo || `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
         try {
           const apiGoals = await goalsService.list({ period: periodo, per_page: 100 });
-          if (apiGoals?.data && apiGoals.data.length > 0) {
+          if (apiGoals?.data) {
             const metasApi: Meta[] = apiGoals.data.map((g: any) => ({
               id: String(g.id),
-              asesor: g.user?.name || (g.team ? g.team.name : 'Equipo'),
+              asesor: g.user?.name || (g.team ? g.team.name : 'Global'),
               periodo: g.period,
               tipoMeta: g.type,
               metaValor: Number(g.target_value || 0),
@@ -298,64 +357,16 @@ const MetasObjetivos = () => {
               observaciones: g.notes || ''
             }));
             setMetas(metasApi);
-            setObjetivos([{
-              id: 'goals-agg',
-              equipo: 'Objetivos Globales',
-              descripcion: 'Metas agregadas del periodo',
-              metaTotal: metasApi.reduce((s, m) => s + m.metaValor, 0),
-              avanceTotal: metasApi.reduce((s, m) => s + m.valorActual, 0),
-              porcentajeEquipo: (metasApi.reduce((s, m) => s + m.valorActual, 0) / Math.max(1, metasApi.reduce((s, m) => s + m.metaValor, 0))) * 100,
-              miembros: metasApi.length,
-              estado: 'Activo'
-            }]);
-            return;
           }
-        } catch (_) {}
-        const agents = await salesFunnelService.getAvailableAgents();
-        const created_from = start.toISOString().slice(0,10);
-        const end = new Date(start); end.setMonth(end.getMonth()+1); end.setDate(0);
-        const created_to = end.toISOString().slice(0,10);
-
-        const metasCalc: Meta[] = [];
-        for (const a of agents) {
-          try {
-            const res = await salesFunnelService.getLeads({ assigned_agent_id: a.id, per_page: 200, created_from, created_to });
-            const valorActual = (res.data || []).reduce((acc, l) => acc + (l.potential_value || 0), 0);
-            const metaValor = Math.max(valorActual * 1.2, 1);
-            const porcentajeCumplimiento = (valorActual / metaValor) * 100;
-            metasCalc.push({
-              id: String(a.id),
-              asesor: `${a.first_name} ${a.last_name}`,
-              periodo,
-              tipoMeta: 'Primas',
-              metaValor,
-              valorActual,
-              porcentajeCumplimiento,
-              estado: porcentajeCumplimiento >= 100 ? 'Cumplida' : 'En Progreso',
-              fechaInicio: created_from,
-              fechaFin: created_to,
-              observaciones: ''
-            });
-          } catch (_) {}
+        } catch (_) {
+          setMetas([]);
         }
-
-        setMetas(metasCalc);
-        setObjetivos([{
-          id: 'team-1',
-          equipo: 'Equipo Comercial',
-          descripcion: 'Metas agregadas del equipo basadas en pipeline mensual',
-          metaTotal: metasCalc.reduce((s, m) => s + m.metaValor, 0),
-          avanceTotal: metasCalc.reduce((s, m) => s + m.valorActual, 0),
-          porcentajeEquipo: (metasCalc.reduce((s, m) => s + m.valorActual, 0) / Math.max(1, metasCalc.reduce((s, m) => s + m.metaValor, 0))) * 100,
-          miembros: metasCalc.length,
-          estado: 'Activo'
-        }]);
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [filtros.periodo]);
+  }, [filtros.periodo, vendedoresHook]);
 
   if (loading) {
     return (
@@ -371,28 +382,6 @@ const MetasObjetivos = () => {
         {/* Estadísticas Generales */}
         <div className="col-span-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            {/* Selector de periodo */}
-            <Card>
-              <div className="p-3">
-                <p className="text-sm font-medium text-gray-600 mb-2">Período</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Select value={filtros.periodo.split('-')[1] || ''} onChange={(e) => {
-                    const month = e.target.value;
-                    const year = filtros.periodo.split('-')[0];
-                    setFiltros({ ...filtros, periodo: `${year}-${month}` });
-                  }}>
-                    {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </Select>
-                  <TextInput type="number" value={filtros.periodo.split('-')[0]} onChange={(e) => {
-                    const y = e.target.value || new Date().getFullYear();
-                    const m = filtros.periodo.split('-')[1] || '01';
-                    setFiltros({ ...filtros, periodo: `${y}-${m}` });
-                  }} />
-                </div>
-              </div>
-            </Card>
             <Card>
               <div className="flex items-center">
                 <div className="flex-shrink-0">
@@ -451,44 +440,82 @@ const MetasObjetivos = () => {
         <div className="col-span-12">
           <Card>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
-                <Select
-                  value={filtros.periodo}
-                  onChange={(e) => setFiltros({...filtros, periodo: e.target.value})}
-                >
-                  <option value="2024-06">Junio 2024</option>
-                  <option value="2024-05">Mayo 2024</option>
-                  <option value="2024-04">Abril 2024</option>
-                </Select>
-                <Select
-                  value={filtros.asesor}
-                  onChange={(e) => setFiltros({...filtros, asesor: e.target.value})}
-                >
-                  <option value="">Todos los asesores</option>
-                  <option value="María García">María García</option>
-                  <option value="Carlos López">Carlos López</option>
-                  <option value="Ana Rodríguez">Ana Rodríguez</option>
-                </Select>
-                <Select
-                  value={filtros.tipoMeta}
-                  onChange={(e) => setFiltros({...filtros, tipoMeta: e.target.value})}
-                >
-                  <option value="">Todos los tipos</option>
-                  <option value="Primas">Primas</option>
-                  <option value="Pólizas">Pólizas</option>
-                  <option value="Comisiones">Comisiones</option>
-                  <option value="Clientes">Clientes</option>
-                </Select>
-                <Select
-                  value={filtros.estado}
-                  onChange={(e) => setFiltros({...filtros, estado: e.target.value})}
-                >
-                  <option value="">Todos los estados</option>
-                  <option value="En Progreso">En Progreso</option>
-                  <option value="Cumplida">Cumplida</option>
-                  <option value="Vencida">Vencida</option>
-                  <option value="Pendiente">Pendiente</option>
-                </Select>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Período</label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={filtros.periodo.split('-')[1] || ''}
+                      onChange={(e) => {
+                        const month = e.target.value;
+                        const year = filtros.periodo.split('-')[0];
+                        setFiltros({ ...filtros, periodo: `${year}-${month}` });
+                      }}
+                      className="flex-1"
+                    >
+                      <option value="01">Ene</option>
+                      <option value="02">Feb</option>
+                      <option value="03">Mar</option>
+                      <option value="04">Abr</option>
+                      <option value="05">May</option>
+                      <option value="06">Jun</option>
+                      <option value="07">Jul</option>
+                      <option value="08">Ago</option>
+                      <option value="09">Sep</option>
+                      <option value="10">Oct</option>
+                      <option value="11">Nov</option>
+                      <option value="12">Dic</option>
+                    </Select>
+                    <TextInput
+                      type="number"
+                      value={filtros.periodo.split('-')[0]}
+                      onChange={(e) => {
+                        const y = e.target.value || new Date().getFullYear();
+                        const m = filtros.periodo.split('-')[1] || '01';
+                        setFiltros({ ...filtros, periodo: `${y}-${m}` });
+                      }}
+                      className="w-20"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Usuario</label>
+                  <Select
+                    value={filtros.asesor}
+                    onChange={(e) => setFiltros({...filtros, asesor: e.target.value})}
+                  >
+                    <option value="">Todos</option>
+                    {usuarios.map(u => (
+                      <option key={u.id} value={u.nombre}>{u.nombre}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
+                  <Select
+                    value={filtros.tipoMeta}
+                    onChange={(e) => setFiltros({...filtros, tipoMeta: e.target.value})}
+                  >
+                    <option value="">Todos</option>
+                    <option value="Primas">Primas</option>
+                    <option value="Pólizas">Pólizas</option>
+                    <option value="Comisiones">Comisiones</option>
+                    <option value="Clientes">Clientes</option>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
+                  <Select
+                    value={filtros.estado}
+                    onChange={(e) => setFiltros({...filtros, estado: e.target.value})}
+                  >
+                    <option value="">Todos</option>
+                    <option value="En Progreso">En Progreso</option>
+                    <option value="Cumplida">Cumplida</option>
+                    <option value="Vencida">Vencida</option>
+                    <option value="Pendiente">Pendiente</option>
+                  </Select>
+                </div>
               </div>
               <Button onClick={() => setShowModalMeta(true)} data-testid="btn-nueva-meta">
                 <Icon icon="solar:add-circle-bold-duotone" className="mr-2 h-4 w-4" />
@@ -498,27 +525,6 @@ const MetasObjetivos = () => {
           </Card>
         </div>
 
-        {/* Resumen por asignación */}
-        <div className="col-span-12">
-          <Card>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-              {resumenAsignacion.map(item => (
-                <Card key={item.asignacion}>
-                  <div className="p-4">
-                    <p className="text-sm text-gray-600">{item.asignacion}</p>
-                    <p className="text-xl font-bold text-dark dark:text-white">{formatCurrency(item.actual)} / {formatCurrency(item.meta)}</p>
-                    <div className="mt-2">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-primary h-2 rounded-full" style={{ width: `${Math.min(100, item.progreso).toFixed(1)}%` }} />
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">{item.progreso.toFixed(1)}% de la meta</p>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </Card>
-        </div>
 
         {/* Objetivos de Equipo */}
         <div className="col-span-12">
@@ -562,7 +568,7 @@ const MetasObjetivos = () => {
           <Card>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Metas Individuales
+                Metas por Responsable
               </h3>
               <div className="flex gap-2">
                 <Button color="light" size="sm" onClick={exportMetasCsv}>
@@ -587,7 +593,7 @@ const MetasObjetivos = () => {
             <div className="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-b-[10px]">
               <Table striped>
                 <Table.Head className="sticky top-0 z-10 bg-gray-50 shadow-sm">
-                  <Table.HeadCell>Asesor</Table.HeadCell>
+                  <Table.HeadCell>Responsable</Table.HeadCell>
                   <Table.HeadCell>Tipo Meta</Table.HeadCell>
                   <Table.HeadCell>Meta</Table.HeadCell>
                   <Table.HeadCell>Actual</Table.HeadCell>
@@ -703,10 +709,10 @@ const MetasObjetivos = () => {
               <Label>Asignación</Label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
                 <div>
-                  <Select value={assignType} onChange={(e) => { const v = e.target.value as any; setAssignType(v); setSelectedTeamId(''); setSelectedAgentId(''); }}>
+                  <Select value={assignType} onChange={(e) => { const v = e.target.value as any; setAssignType(v); setSelectedTeamId(''); setSelectedResponsableId(''); }}>
                     <option value="global">Global</option>
                     <option value="equipo">Equipo</option>
-                    <option value="asesor">Asesor</option>
+                    <option value="responsable">Responsable</option>
                   </Select>
                 </div>
                 {assignType === 'equipo' && (
@@ -719,15 +725,23 @@ const MetasObjetivos = () => {
                     </Select>
                   </div>
                 )}
-                {assignType === 'asesor' && (
-                  <div className="md:col-span-2">
-                    <Select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)}>
-                      <option value="">Seleccionar asesor</option>
-                      {agents.map(a => (
-                        <option key={a.id} value={String(a.id)}>{`${a.first_name} ${a.last_name}`}</option>
-                      ))}
-                    </Select>
-                  </div>
+                {assignType === 'responsable' && (
+                  <>
+                    <div>
+                      <Select value={tipoResponsable} onChange={(e) => { setTipoResponsable(e.target.value as any); setSelectedResponsableId(''); }}>
+                        <option value="vendedor">Vendedor</option>
+                        <option value="empleado">Empleado</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <Select value={selectedResponsableId} onChange={(e) => setSelectedResponsableId(e.target.value)}>
+                        <option value="">Seleccionar {tipoResponsable}</option>
+                        {usuarios.filter(u => u.tipo === tipoResponsable).map(u => (
+                          <option key={u.id} value={u.id}>{u.nombre}</option>
+                        ))}
+                      </Select>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -788,24 +802,48 @@ const MetasObjetivos = () => {
         <Modal.Footer>
           <Button onClick={async () => {
             try {
-              const start = new Date(nuevaMeta.fechaInicio || (filtros.periodo + '-01'));
+              // Validaciones
+              if (!nuevaMeta.metaValor || parseFloat(nuevaMeta.metaValor) <= 0) {
+                alert('Debe ingresar un valor de meta válido');
+                return;
+              }
+              if (!nuevaMeta.fechaInicio || !nuevaMeta.fechaFin) {
+                alert('Debe seleccionar fechas de inicio y fin');
+                return;
+              }
+              if (new Date(nuevaMeta.fechaFin) < new Date(nuevaMeta.fechaInicio)) {
+                alert('La fecha de fin debe ser posterior a la fecha de inicio');
+                return;
+              }
+              if (assignType === 'equipo' && !selectedTeamId) {
+                alert('Debe seleccionar un equipo');
+                return;
+              }
+              if (assignType === 'responsable' && !selectedResponsableId) {
+                alert('Debe seleccionar un responsable');
+                return;
+              }
+
+              const start = new Date(nuevaMeta.fechaInicio);
               const periodo = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}`;
+              
               await goalsService.create({
                 period: periodo,
                 type: nuevaMeta.tipoMeta as any,
-                target_value: parseFloat(nuevaMeta.metaValor || '0'),
+                target_value: parseFloat(nuevaMeta.metaValor),
                 current_value: 0,
                 notes: nuevaMeta.observaciones,
-                starts_at: nuevaMeta.fechaInicio || undefined,
-                ends_at: nuevaMeta.fechaFin || undefined,
+                starts_at: nuevaMeta.fechaInicio,
+                ends_at: nuevaMeta.fechaFin,
                 status: 'En Progreso',
                 team_id: assignType === 'equipo' && selectedTeamId ? Number(selectedTeamId) : undefined,
-                user_id: assignType === 'asesor' && selectedAgentId ? Number(selectedAgentId) : undefined,
+                user_id: assignType === 'responsable' && selectedResponsableId ? Number(selectedResponsableId) : undefined,
               });
-              const apiGoals = await goalsService.list({ period: periodo, per_page: 100 });
+              
+              const apiGoals = await goalsService.list({ period: filtros.periodo, per_page: 100 });
               const metasApi: Meta[] = (apiGoals.data || []).map((g: any) => ({
                 id: String(g.id),
-                asesor: g.user?.name || (g.team ? g.team.name : 'Equipo'),
+                asesor: g.user?.name || (g.team ? g.team.name : 'Global'),
                 periodo: g.period,
                 tipoMeta: g.type,
                 metaValor: Number(g.target_value || 0),
@@ -818,7 +856,21 @@ const MetasObjetivos = () => {
               }));
               setMetas(metasApi);
               setShowModalMeta(false);
-            } catch (_) {}
+              setNuevaMeta({
+                asesor: '',
+                tipoMeta: 'Primas',
+                metaValor: '',
+                fechaInicio: '',
+                fechaFin: '',
+                observaciones: ''
+              });
+              setAssignType('global');
+              setSelectedTeamId('');
+              setSelectedResponsableId('');
+              setTipoResponsable('vendedor');
+            } catch (err: any) {
+              alert(err?.response?.data?.message || 'Error al crear meta');
+            }
           }}>Crear Meta</Button>
           <Button color="gray" onClick={() => setShowModalMeta(false)}>
             Cancelar

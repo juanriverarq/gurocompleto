@@ -33,6 +33,8 @@ import {
   FileText,
   Send
 } from 'lucide-react';
+import voiceCampaignService, { VoiceCampaignTriggerInput } from 'src/services/voiceCampaignService';
+import { getCustomAgents } from 'src/services/voiceAgentsService';
 
 interface Campaign {
   id: string;
@@ -99,8 +101,22 @@ const CampaignsManagement: React.FC = () => {
     simultaneousCalls: 5
   });
 
+  // UI local para Disparadores
+  const [triggersConfig, setTriggersConfig] = useState({
+    types: {
+      new_client: false,
+      new_policy: false,
+      policy_expiry: false,
+      new_lead: false,
+      new_siniestro: false,
+    },
+    window: { start: '08:00', end: '18:00', tz: 'America/Bogota', days: 'mon,tue,wed,thu,fri' },
+    limits: { daily_quota: 100, dedup_days: 7 },
+    expiry: { before_days: '7,3,1', after_days: '1' }, // solo aplica a policy_expiry
+    mapping: { phone_field: 'celular_principal' }
+  });
+
   // Agentes personalizados centralizados
-  import { getCustomAgents } from '../../../services/voiceAgentsService';
   const [availableAgents, setAvailableAgents] = useState<{ id: string; name: string; type: string }[]>([]);
 
   // Cargar datos iniciales
@@ -136,44 +152,101 @@ const CampaignsManagement: React.FC = () => {
         .map(num => num.trim())
         .filter(num => num.length > 0);
 
-      const newCampaign: Campaign = {
-        id: `campaign-${Date.now()}`,
-        name: formData.name,
-        description: formData.description,
-        agentId: formData.agentId,
-        agentName: availableAgents.find(a => a.id === formData.agentId)?.name || '',
-        status: 'draft',
-        priority: formData.priority,
-        phoneNumbers: phoneNumbersArray,
-        scheduledAt: new Date(formData.scheduledAt),
-        settings: {
-          maxRetries: formData.maxRetries,
-          retryDelay: 300,
-          callTimeout: 600,
-          simultaneousCalls: formData.simultaneousCalls,
-          workingHours: {
-            start: '09:00',
-            end: '18:00',
-            days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-          }
+      if (!formData.name || !formData.agentId || phoneNumbersArray.length === 0) {
+        alert('Completa nombre, agente y al menos un número de teléfono');
+        return;
+      }
+
+      // Construir contacts para backend (usa "phone")
+      const contacts = phoneNumbersArray.map((p, idx) => ({
+        name: `Contacto ${idx + 1}`,
+        phone: p
+      }));
+
+      // Construir triggers desde la UI
+      const parseCsvNums = (s: string): number[] =>
+        (s || '')
+          .split(',')
+          .map(x => x.trim())
+          .filter(x => x !== '')
+          .map(x => parseInt(x, 10))
+          .filter(n => !Number.isNaN(n));
+
+      const windowDays = (triggersConfig.window.days || '')
+        .split(',')
+        .map(d => d.trim().toLowerCase())
+        .filter(Boolean);
+
+      const baseTrigger: Omit<VoiceCampaignTriggerInput, 'type'> = {
+        enabled: true,
+        window_config: {
+          start: triggersConfig.window.start,
+          end: triggersConfig.window.end,
+          tz: triggersConfig.window.tz,
+          days: windowDays.length ? windowDays : ['mon','tue','wed','thu','fri']
         },
-        statistics: {
-          totalCalls: 0,
-          completedCalls: 0,
-          failedCalls: 0,
-          successRate: 0,
-          avgDuration: 0,
-          totalCost: 0
+        limits: {
+          daily_quota: Number(triggersConfig.limits.daily_quota) || 0,
+          dedup_days: Number(triggersConfig.limits.dedup_days) || 0
         },
-        createdAt: new Date(),
-        updatedAt: new Date()
+        mapping: {
+          phone_field: triggersConfig.mapping.phone_field || 'celular_principal'
+        }
       };
 
-      setCampaigns(prev => [...prev, newCampaign]);
-      setIsCreateModalOpen(false);
-      resetForm();
-    } catch (error) {
-      alert('Error al crear la campaña');
+      const triggers: VoiceCampaignTriggerInput[] = [];
+      (Object.keys(triggersConfig.types) as Array<keyof typeof triggersConfig.types>).forEach((key) => {
+        if (triggersConfig.types[key]) {
+          if (key === 'policy_expiry') {
+            triggers.push({
+              type: 'policy_expiry',
+              ...baseTrigger,
+              expiry_offsets: {
+                before_days: parseCsvNums(triggersConfig.expiry.before_days),
+                after_days: parseCsvNums(triggersConfig.expiry.after_days)
+              }
+            });
+          } else {
+            triggers.push({ type: key as any, ...baseTrigger });
+          }
+        }
+      });
+
+      const payload: any = {
+        name: formData.name,
+        description: formData.description,
+        voice_message_template: `Hola {{customer_name}}, te llama tu asesora sobre ${formData.name}.`,
+        contacts,
+        agent_name: availableAgents.find(a => a.id === formData.agentId)?.name || undefined,
+        elevenlabs_agent_id: formData.agentId,
+        settings: {
+          working_hours: {
+            start: '09:00',
+            end: '18:00',
+            days: ['monday','tuesday','wednesday','thursday','friday']
+          },
+          post_call_tools: {
+            collect: {},
+            whatsapp: { enabled: true }
+          }
+        },
+        // Enviar triggers si hay alguno habilitado
+        ...(triggers.length > 0 ? { triggers } : {})
+      };
+
+      const result = await voiceCampaignService.createImmediateVoiceCampaign(payload);
+
+      if (result.success) {
+        // Refrescar UI local (opcional, hasta que el listado real esté integrado)
+        setIsCreateModalOpen(false);
+        resetForm();
+        // Opcional: feedback visual
+        alert('Campaña creada. Si configuraste disparadores, quedaron guardados en la campaña.');
+      } else {
+        alert(result.message || 'Error al crear campaña');
+      }
+    } catch (error: any) {
+      alert(`Error al crear la campaña: ${error?.message || 'desconocido'}`);
     }
   };
 
@@ -603,6 +676,126 @@ const CampaignsManagement: React.FC = () => {
                   value={formData.simultaneousCalls}
                   onChange={(e) => setFormData({...formData, simultaneousCalls: parseInt(e.target.value)})}
                 />
+              </div>
+            </div>
+
+            {/* Disparadores (Triggers) */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-3">Disparadores (Opcional)</h3>
+
+              {/* Tipos */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                {[
+                  { key: 'new_client', label: 'Nuevo Cliente' },
+                  { key: 'new_policy', label: 'Nueva Póliza' },
+                  { key: 'policy_expiry', label: 'Vencimiento de Póliza' },
+                  { key: 'new_lead', label: 'Nuevo Lead' },
+                  { key: 'new_siniestro', label: 'Nuevo Siniestro' },
+                ].map(t => (
+                  <label key={t.key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={(triggersConfig.types as any)[t.key]}
+                      onChange={(e) =>
+                        setTriggersConfig(prev => ({
+                          ...prev,
+                          types: { ...prev.types, [t.key]: e.target.checked }
+                        }))
+                      }
+                    />
+                    {t.label}
+                  </label>
+                ))}
+              </div>
+
+              {/* Ventana / Límites */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Inicio (HH:mm)</label>
+                  <Input
+                    value={triggersConfig.window.start}
+                    onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, start: e.target.value } }))}
+                    placeholder="08:00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Fin (HH:mm)</label>
+                  <Input
+                    value={triggersConfig.window.end}
+                    onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, end: e.target.value } }))}
+                    placeholder="18:00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Zona Horaria</label>
+                  <Input
+                    value={triggersConfig.window.tz}
+                    onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, tz: e.target.value } }))}
+                    placeholder="America/Bogota"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Días activos (CSV mon,tue,...)</label>
+                  <Input
+                    value={triggersConfig.window.days}
+                    onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, days: e.target.value } }))}
+                    placeholder="mon,tue,wed,thu,fri"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Cupo diario</label>
+                  <Input
+                    type="number"
+                    value={Number(triggersConfig.limits.daily_quota)}
+                    onChange={(e) => setTriggersConfig(prev => ({ ...prev, limits: { ...prev.limits, daily_quota: Number(e.target.value) } }))}
+                    placeholder="100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Deduplicación (días)</label>
+                  <Input
+                    type="number"
+                    value={Number(triggersConfig.limits.dedup_days)}
+                    onChange={(e) => setTriggersConfig(prev => ({ ...prev, limits: { ...prev.limits, dedup_days: Number(e.target.value) } }))}
+                    placeholder="7"
+                  />
+                </div>
+              </div>
+
+              {/* Solo policy_expiry */}
+              {triggersConfig.types.policy_expiry && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Antes de vencer (días CSV)</label>
+                    <Input
+                      value={triggersConfig.expiry.before_days}
+                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, expiry: { ...prev.expiry, before_days: e.target.value } }))}
+                      placeholder="7,3,1,0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Después de vencer (días CSV)</label>
+                    <Input
+                      value={triggersConfig.expiry.after_days}
+                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, expiry: { ...prev.expiry, after_days: e.target.value } }))}
+                      placeholder="1"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Campo de teléfono principal</label>
+                  <Input
+                    value={triggersConfig.mapping.phone_field}
+                    onChange={(e) => setTriggersConfig(prev => ({ ...prev, mapping: { ...prev.mapping, phone_field: e.target.value } }))}
+                    placeholder="celular_principal"
+                  />
+                </div>
               </div>
             </div>
 

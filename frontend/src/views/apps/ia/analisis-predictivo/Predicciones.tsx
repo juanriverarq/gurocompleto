@@ -189,6 +189,7 @@ const getTendenciaIcon = (tendencia: string) => {
 };
 
 const Predicciones = () => {
+
   const [predicciones] = useState<PrediccionType[]>(prediccionesData);
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
   const [modalOpen, setModalOpen] = useState<boolean>(false);
@@ -208,6 +209,7 @@ const Predicciones = () => {
   return (
     <>
       <BreadcrumbComp title="Predicciones de venta" items={BCrumb} />
+
       
       {/* Estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">

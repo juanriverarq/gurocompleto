@@ -18,11 +18,11 @@ const Renovaciones: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [estadisticas, setEstadisticas] = useState<any>(null);
   const [pagination, setPagination] = useState<any>(null);
-  const [usingMockData, setUsingMockData] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [selectedRenovacion, setSelectedRenovacion] = useState<Renovacion | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showRenovarModal, setShowRenovarModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'todas' | 'pendientes' | 'renovadas' | 'vencidas'>('pendientes');
 
   // Estados para filtros y columnas
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
@@ -74,83 +74,7 @@ const Renovaciones: React.FC = () => {
     { value: 'CRITICA', label: 'Crítica', color: 'failure' }
   ];
 
-  // Datos mock para renovaciones (mantener por compatibilidad durante desarrollo)
-  const renovacionesMock: Renovacion[] = [
-    {
-      id: '1',
-      numeroPoliza: 'POL-2024-001',
-      cliente: 'Juan Carlos Pérez',
-      dni_cliente: '12345678',
-      aseguradora: 'Seguros Bolívar',
-      tipoSeguro: 'automovil',
-      fechaVencimiento: '2024-08-15',
-      diasVencimiento: 25,
-      valorPrima: 1250000,
-      estado: 'PENDIENTE',
-      prioridad: 'ALTA',
-      agente: 'María González',
-      ultimoContacto: '2024-07-10',
-      intentosContacto: 2,
-      observaciones: 'Cliente interesado, pendiente documentación',
-      poliza_id: 1
-    },
-    {
-      id: '2',
-      numeroPoliza: 'POL-2024-002',
-      cliente: 'Empresa Logística ABC',
-      dni_cliente: '900123456',
-      aseguradora: 'Mapfre',
-      tipoSeguro: 'empresarial',
-      fechaVencimiento: '2024-07-30',
-      diasVencimiento: 8,
-      valorPrima: 3500000,
-      estado: 'CRITICO',
-      prioridad: 'CRITICA',
-      agente: 'Carlos Rodríguez',
-      ultimoContacto: '2024-07-20',
-      intentosContacto: 5,
-      observaciones: 'Urgente: Cliente no responde llamadas',
-      poliza_id: 2
-    },
-    {
-      id: '3',
-      numeroPoliza: 'POL-2024-003',
-      cliente: 'Ana María Torres',
-      dni_cliente: '87654321',
-      aseguradora: 'Sura',
-      tipoSeguro: 'hogar',
-      fechaVencimiento: '2024-09-10',
-      diasVencimiento: 50,
-      valorPrima: 850000,
-      estado: 'EN_PROCESO',
-      prioridad: 'MEDIA',
-      agente: 'Luis Hernández',
-      ultimoContacto: '2024-07-18',
-      intentosContacto: 1,
-      observaciones: 'Documentos enviados, esperando respuesta',
-      poliza_id: 3
-    },
-    {
-      id: '4',
-      numeroPoliza: 'POL-2024-004',
-      cliente: 'Constructora del Norte',
-      dni_cliente: '800987654',
-      aseguradora: 'Liberty',
-      tipoSeguro: 'empresarial',
-      fechaVencimiento: '2024-08-05',
-      diasVencimiento: 15,
-      valorPrima: 5200000,
-      estado: 'RENOVADO',
-      prioridad: 'ALTA',
-      agente: 'Patricia Morales',
-      ultimoContacto: '2024-07-19',
-      intentosContacto: 3,
-      observaciones: 'Renovación completada exitosamente',
-      poliza_id: 4
-    }
-  ];
-
-  // Cargar renovaciones desde el backend
+  // Cargar renovaciones desde el backend (sin fallback a mock)
   const loadRenovaciones = async (currentFilters = filters) => {
     try {
       setLoading(true);
@@ -166,46 +90,12 @@ const Renovaciones: React.FC = () => {
         from: response.from || 0,
         to: response.to || 0
       });
-      setUsingMockData(false);
       
     } catch (error) {
       console.error('Error cargando renovaciones:', error);
-      
-      // Determinar el tipo de error para mostrar mensaje más específico
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      let description = "Se están mostrando datos de ejemplo mientras se soluciona el problema.";
-      
-      if (errorMessage.includes('Token') || errorMessage.includes('authorization') || errorMessage.includes('401')) {
-        description = "Problema de autenticación. Inicia sesión nuevamente. " + description;
-      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-        description = "Sin conexión al servidor. " + description;
-      }
-      
-      toast ({
-        title: "⚠️ Renovaciones (Modo Demo)",
-        description: description,
-        variant: "destructive",
-      });
-      
-      // Fallback a datos mock en caso de error
-      const filteredData = renovacionesMock.filter(r => {
-        return (!currentFilters.search || 
-                r.cliente.toLowerCase().includes(currentFilters.search.toLowerCase()) ||
-                r.numeroPoliza.toLowerCase().includes(currentFilters.search.toLowerCase())) &&
-               (!currentFilters.estado || r.estado === currentFilters.estado) &&
-               (!currentFilters.prioridad || r.prioridad === currentFilters.prioridad);
-      });
-      
-      setRenovaciones(filteredData);
-      setPagination({
-        current_page: 1,
-        last_page: 1,
-        per_page: currentFilters.per_page || 15,
-        total: filteredData.length,
-        from: 1,
-        to: filteredData.length
-      });
-      setUsingMockData(true);
+      setRenovaciones([]);
+      setPagination(null);
+      toast({ title: 'Error', description: 'No se pudieron cargar las renovaciones. Intenta nuevamente.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -216,30 +106,12 @@ const Renovaciones: React.FC = () => {
     try {
       const stats = await renovacionesService.getEstadisticas();
       setEstadisticas(stats);
-      // No cambiar usingMockData aquí ya que las estadísticas pueden cargarse independientemente
     } catch (error) {
       console.error('Error cargando estadísticas:', error);
-      
       toast({
-        title: "⚠️ Estadísticas (Modo Demo)",
-        description: "Se están mostrando estadísticas de ejemplo.",
+        title: "Error",
+        description: "No se pudieron cargar las estadísticas. Intenta nuevamente.",
         variant: "destructive",
-      });
-      
-      // Fallback a datos mock en caso de error
-      const total = renovacionesMock.length;
-      const criticas = renovacionesMock.filter(r => r.estado === 'CRITICO').length;
-      const pendientes = renovacionesMock.filter(r => r.estado === 'PENDIENTE').length;
-      const renovadas = renovacionesMock.filter(r => r.estado === 'RENOVADO').length;
-      const valorTotal = renovacionesMock.reduce((sum, r) => sum + r.valorPrima, 0);
-      
-      setEstadisticas({
-        total_renovaciones: total,
-        renovaciones_criticas: criticas,
-        renovaciones_pendientes: pendientes,
-        renovaciones_completadas: renovadas,
-        valor_total_primas: valorTotal,
-        renovaciones_vencidas: 0
       });
     }
   };
@@ -258,6 +130,64 @@ const Renovaciones: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [filters]);
+
+  // Efecto para recargar estadísticas periódicamente (cada 5 minutos)
+  useEffect(() => {
+    const statsTimer = setInterval(() => {
+      loadEstadisticas();
+    }, 5 * 60 * 1000); // 5 minutos
+
+    return () => clearInterval(statsTimer);
+  }, []);
+
+  // Efecto para cambiar filtros cuando cambia el tab activo
+  useEffect(() => {
+    let nuevoEstado = '';
+    let nuevoDiasV: string | undefined = undefined;
+    switch (activeTab) {
+      case 'pendientes':
+        // Pendientes = próximas a vencer (0..30) incluyendo críticas (0..7)
+        nuevoEstado = 'PENDIENTE,EN_PROCESO,CRITICO';
+        nuevoDiasV = 'proximo';
+        break;
+      case 'renovadas':
+        // Renovadas no dependen de ventana de días
+        nuevoEstado = 'RENOVADO';
+        nuevoDiasV = 'all';
+        break;
+      case 'vencidas':
+        // Vencidas no dependen de ventana de días
+        nuevoEstado = 'VENCIDO';
+        nuevoDiasV = 'all';
+        break;
+      case 'todas':
+      default:
+        // Todas: ventana explícita de 2 meses (-30..60) para consistencia con backend
+        nuevoEstado = '';
+        nuevoDiasV = 'proximo_2m';
+        break;
+    }
+
+    setFilters(prev => ({
+      ...prev,
+      estado: nuevoEstado,
+      diasVencimiento: nuevoDiasV,
+      page: 1,
+    }));
+  }, [activeTab]);
+
+  // Calcular contadores para los tabs
+  const getTabCounts = () => {
+    if (!estadisticas) return { todas: 0, pendientes: 0, renovadas: 0, vencidas: 0 };
+    return {
+      todas: estadisticas.total_renovaciones || 0,
+      pendientes: (estadisticas.renovaciones_pendientes || 0) + (estadisticas.renovaciones_criticas || 0),
+      renovadas: estadisticas.renovaciones_completadas || 0,
+      vencidas: estadisticas.renovaciones_vencidas || 0
+    };
+  };
+
+  const tabCounts = getTabCounts();
 
   // Handlers
   const handleFilterChange = (key: keyof RenovacionFilters, value: any) => {
@@ -285,25 +215,33 @@ const Renovaciones: React.FC = () => {
 
   const handleExportRenovaciones = async () => {
     try {
+      // Mostrar indicador de carga
+      toast({
+        title: "Exportando...",
+        description: "Generando archivo de renovaciones",
+        variant: "default",
+      });
+
       const blob = await renovacionesService.exportarRenovaciones(filters);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `renovaciones_${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `renovaciones_${new Date().toISOString().split('T')[0]}_${Date.now()}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
+
       toast({
         title: "Éxito",
         description: "Renovaciones exportadas exitosamente",
         variant: "default",
       });
     } catch (error) {
+      console.error('Error exportando renovaciones:', error);
       toast({
         title: "Error",
-        description: "Error al exportar renovaciones",
+        description: "Error al exportar renovaciones. Intente nuevamente.",
         variant: "destructive",
       });
     }
@@ -322,14 +260,38 @@ const Renovaciones: React.FC = () => {
         proximoContacto: formData.get('proximo_contacto') as string || undefined,
       };
 
+      // Validaciones del lado cliente
+      if (!contactoData.tipo || !contactoData.resultado || !contactoData.observaciones.trim()) {
+        toast({
+          title: "Error de validación",
+          description: "Todos los campos son obligatorios",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validar fecha futura si se proporciona
+      if (contactoData.proximoContacto) {
+        const fechaProxima = new Date(contactoData.proximoContacto);
+        const ahora = new Date();
+        if (fechaProxima <= ahora) {
+          toast({
+            title: "Error de validación",
+            description: "La fecha del próximo contacto debe ser futura",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       await renovacionesService.registrarContacto(selectedRenovacion.id, contactoData);
-      
+
       toast({
         title: "Éxito",
         description: "Contacto registrado exitosamente",
         variant: "default",
       });
-      
+
       // Notificar al historial de la póliza para refrescarse
       try {
         if (selectedRenovacion.poliza_id) {
@@ -340,6 +302,7 @@ const Renovaciones: React.FC = () => {
       setShowContactModal(false);
       setSelectedRenovacion(null);
       loadRenovaciones();
+      loadEstadisticas(); // Recargar estadísticas después del contacto
     } catch (error) {
       toast({
         title: "Error",
@@ -355,19 +318,80 @@ const Renovaciones: React.FC = () => {
 
     try {
       const formData = new FormData(e.target as HTMLFormElement);
+
+      // Validaciones del lado cliente
+      const nuevaFechaV = formData.get('nueva_fecha') as string;
+      const nuevoValorPrima = parseFloat(formData.get('nuevo_valor') as string);
+      const nuevoNumero = (formData.get('nuevo_numero_poliza') as string || '').trim();
+
+      // Validar fecha requerida
+      if (!nuevaFechaV) {
+        toast({
+          title: "Error de validación",
+          description: "La fecha de vencimiento es obligatoria",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validar fecha futura
+      const fechaSeleccionada = new Date(nuevaFechaV);
+      const hoy = new Date();
+      if (fechaSeleccionada <= hoy) {
+        toast({
+          title: "Error de validación",
+          description: "La fecha de vencimiento debe ser futura",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validar fecha no demasiado lejana (máximo 2 años)
+      const maxFecha = new Date();
+      maxFecha.setFullYear(maxFecha.getFullYear() + 2);
+      if (fechaSeleccionada > maxFecha) {
+        toast({
+          title: "Error de validación",
+          description: "La fecha de vencimiento no puede ser superior a 2 años",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validar prima requerida y en rango
+      if (!nuevoValorPrima || nuevoValorPrima < 10000 || nuevoValorPrima > 100000000) {
+        toast({
+          title: "Error de validación",
+          description: "El valor de la prima debe estar entre $10,000 y $100,000,000",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validar formato de número de póliza si se proporciona
+      if (nuevoNumero && !/^[A-Z]{3}-\d{4}-\d{4}$/.test(nuevoNumero)) {
+        toast({
+          title: "Error de validación",
+          description: "El formato del número de póliza debe ser AAA-0000-0000",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Fallback: si no tocan la fecha, usar la que se muestra por defecto (vencimiento + 1 año)
       const fallbackNuevaFecha = selectedRenovacion
         ? new Date(new Date(selectedRenovacion.fechaVencimiento).getTime() + 365 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0]
         : '';
-      const nuevaFechaV = (formData.get('nueva_fecha') as string) || fallbackNuevaFecha;
+      const fechaFinal = nuevaFechaV || fallbackNuevaFecha;
+
       const renovacionData = {
-        nuevaFechaVencimiento: nuevaFechaV,
-        nuevoValorPrima: parseFloat(formData.get('nuevo_valor') as string),
+        nuevaFechaVencimiento: fechaFinal,
+        nuevoValorPrima: nuevoValorPrima,
         observaciones: formData.get('observaciones_renovacion') as string,
+        nuevoNumeroPoliza: nuevoNumero || undefined,
       };
-      const nuevoNumero = (formData.get('nuevo_numero_poliza') as string || '').trim();
       const caratulaFile = formData.get('caratula') as File | null;
 
       await renovacionesService.procesarRenovacion(selectedRenovacion.id, renovacionData);
@@ -420,7 +444,7 @@ const Renovaciones: React.FC = () => {
   };
 
   const handleViewPoliza = (renovacion: Renovacion) => {
-    navigate(`/apps/seguros/polizas/${renovacion.poliza_id}`);
+    window.open(`/apps/seguros/polizas/editar/${renovacion.poliza_id}`, '_blank');
   };
 
   const getTipoIcon = (tipo?: string) => {
@@ -468,17 +492,6 @@ const Renovaciones: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* Indicador de modo demo */}
-      {usingMockData && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
-          <Icon icon="solar:info-circle-bold-duotone" className="w-5 h-5 text-yellow-600" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-yellow-800">Modo Demostración</p>
-            <p className="text-xs text-yellow-700">Se están mostrando datos de ejemplo. Verifica tu conexión o autenticación.</p>
-          </div>
-        </div>
-      )}
-      
       {/* Estadísticas */}
       {estadisticas && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
@@ -540,8 +553,97 @@ const Renovaciones: React.FC = () => {
         </div>
       )}
 
-      {/* Controles */}
+      {/* Tabs de navegación por estado */}
       <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
+        <div className="border-b border-gray-200 dark:border-gray-700">
+          <nav className="flex space-x-2 px-6 pt-4" aria-label="Tabs">
+            <button
+              onClick={() => setActiveTab('pendientes')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'pendientes'
+                  ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border-b-2 border-orange-500'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon icon="solar:clock-circle-bold-duotone" className="w-4 h-4" />
+                <span>Pendientes</span>
+                <span className={`px-2 py-0.5 text-xs rounded-full ${
+                  activeTab === 'pendientes'
+                    ? 'bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {tabCounts.pendientes}
+                </span>
+              </div>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('renovadas')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'renovadas'
+                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-b-2 border-green-500'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon icon="solar:check-circle-bold-duotone" className="w-4 h-4" />
+                <span>Renovadas</span>
+                <span className={`px-2 py-0.5 text-xs rounded-full ${
+                  activeTab === 'renovadas'
+                    ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {tabCounts.renovadas}
+                </span>
+              </div>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('vencidas')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'vencidas'
+                  ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-b-2 border-red-500'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon icon="solar:close-circle-bold-duotone" className="w-4 h-4" />
+                <span>Vencidas</span>
+                <span className={`px-2 py-0.5 text-xs rounded-full ${
+                  activeTab === 'vencidas'
+                    ? 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {tabCounts.vencidas}
+                </span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('todas')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'todas'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon icon="solar:list-bold-duotone" className="w-4 h-4" />
+                <span>Todas</span>
+                <span className={`px-2 py-0.5 text-xs rounded-full ${
+                  activeTab === 'todas'
+                    ? 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {tabCounts.todas}
+                </span>
+              </div>
+            </button>
+          </nav>
+        </div>
+
+        {/* Controles */}
         <div className="p-6 border-b border-gray-100 dark:border-gray-700">
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
@@ -585,15 +687,7 @@ const Renovaciones: React.FC = () => {
                 <span className="hidden sm:inline">Exportar</span>
               </Button>
               
-              <Button 
-                color="primary" 
-                className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                onClick={() => navigate('/apps/seguros/polizas/create')}
-              >
-                <Icon icon="solar:calendar-add-bold-duotone" className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Nueva Póliza</span>
-                <span className="sm:hidden">Nueva</span>
-              </Button>
+              {/* Botón Nueva Póliza removido según solicitud del usuario */}
             </div>
           </div>
         </div>
@@ -625,7 +719,7 @@ const Renovaciones: React.FC = () => {
                   <Table.HeadCell className="text-sm font-semibold py-2">Número</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Cliente</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Aseguradora</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Tipo</Table.HeadCell>
+                  <Table.HeadCell className="text-sm font-semibold py-2">Ramo</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Vencimiento</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Estado</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Prioridad</Table.HeadCell>
@@ -648,9 +742,9 @@ const Renovaciones: React.FC = () => {
                         <p className="text-bodytext text-sm">{renovacion.aseguradora}</p>
                       </Table.Cell>
                       <Table.Cell className="whitespace-nowrap">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           {getTipoIcon(renovacion.tipoSeguro)}
-                          <span className="uppercase text-sm">{tiposSeguro.find(t => t.value === renovacion.tipoSeguro)?.label || renovacion.tipoSeguro}</span>
+                          <span className="text-sm font-medium">{tiposSeguro.find(t => t.value === renovacion.tipoSeguro)?.label || renovacion.tipoSeguro}</span>
                         </div>
                       </Table.Cell>
                       <Table.Cell className="whitespace-nowrap">
@@ -851,104 +945,91 @@ const Renovaciones: React.FC = () => {
         </Modal.Footer>
       </Modal>
 
-      {/* Modal de personalización de columnas */}
-      <Modal show={showColumnsModal} onClose={() => setShowColumnsModal(false)} size="md">
-        <Modal.Header>Personalizar Columnas</Modal.Header>
-        <Modal.Body>
-          <div className="space-y-3">
-            <p className="text-sm text-gray-600 mb-4">Selecciona las columnas que deseas mostrar en la tabla:</p>
-            
-            {[
-              { key: 'numero_poliza', label: 'Número de Póliza' },
-              { key: 'cliente', label: 'Cliente' },
-              { key: 'aseguradora', label: 'Aseguradora' },
-              { key: 'tipo_seguro', label: 'Tipo de Seguro' },
-              { key: 'vencimiento', label: 'Vencimiento' },
-              { key: 'estado', label: 'Estado' },
-              { key: 'prioridad', label: 'Prioridad' },
-              { key: 'prima', label: 'Prima' },
-            ].map((column) => (
-              <div key={column.key} className="flex items-center">
-                                 <Checkbox
-                   id={`column-${column.key}`}
-                   checked={visibleColumns.includes(column.key)}
-                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                     if (e.target.checked) {
-                       setVisibleColumns([...visibleColumns, column.key]);
-                     } else {
-                       setVisibleColumns(visibleColumns.filter(col => col !== column.key));
-                     }
-                   }}
-                 />
-                <Label htmlFor={`column-${column.key}`} className="ml-2 text-gray-900 dark:text-white">
-                  {column.label}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button color="primary" onClick={() => setShowColumnsModal(false)}>
-            Guardar
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
+      {/* Modal de personalización de columnas oculto temporalmente por no aplicar cambios */}
       {/* Modal Registrar Contacto */}
       <Modal show={showContactModal} onClose={() => setShowContactModal(false)}>
         <Modal.Header>Registrar Contacto - {selectedRenovacion?.numeroPoliza}</Modal.Header>
         <Modal.Body>
           <form onSubmit={handleRegistrarContactoSubmit} id="contact-form">
             <div className="space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+                <div className="flex">
+                  <Icon icon="solar:info-circle-bold-duotone" className="w-5 h-5 text-amber-600 mr-2 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      <strong>Información del último contacto:</strong><br/>
+                      {selectedRenovacion?.ultimoContacto ?
+                        `Fecha: ${new Date(selectedRenovacion.ultimoContacto).toLocaleDateString('es-CO')} | Intentos: ${selectedRenovacion.intentosContacto}` :
+                        'Sin contactos previos registrados'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
               <div>
-                <Label htmlFor="tipo_contacto" className="mb-2 block text-gray-900 dark:text-white">Tipo de Contacto</Label>
+                <Label htmlFor="tipo_contacto" className="mb-2 block text-gray-900 dark:text-white">
+                  Tipo de Contacto <span className="text-red-500">*</span>
+                </Label>
                 <select
                   id="tipo_contacto"
                   name="tipo_contacto"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
                   required
                 >
-                  <option value="llamada">Llamada telefónica</option>
-                  <option value="email">Correo electrónico</option>
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="presencial">Visita presencial</option>
-                  <option value="sms">SMS</option>
+                  <option value="">Seleccionar tipo...</option>
+                  <option value="llamada">📞 Llamada telefónica</option>
+                  <option value="email">📧 Correo electrónico</option>
+                  <option value="whatsapp">💬 WhatsApp</option>
+                  <option value="presencial">🏢 Visita presencial</option>
+                  <option value="sms">📱 SMS</option>
                 </select>
               </div>
               <div>
-                <Label htmlFor="resultado_contacto" className="mb-2 block text-gray-900 dark:text-white">Resultado del Contacto</Label>
+                <Label htmlFor="resultado_contacto" className="mb-2 block text-gray-900 dark:text-white">
+                  Resultado del Contacto <span className="text-red-500">*</span>
+                </Label>
                 <select
                   id="resultado_contacto"
                   name="resultado_contacto"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
                   required
                 >
-                  <option value="exitoso">Cliente contactado exitosamente</option>
-                  <option value="no_disponible">Cliente no disponible</option>
-                  <option value="no_contesta">Número no contesta</option>
-                  <option value="rebotado">Correo rebotado</option>
-                  <option value="solicita_info">Cliente solicita información</option>
-                  <option value="no_interesado">Cliente no interesado</option>
+                  <option value="">Seleccionar resultado...</option>
+                  <option value="exitoso">✅ Cliente contactado exitosamente</option>
+                  <option value="no_disponible">⏰ Cliente no disponible</option>
+                  <option value="no_contesta">📵 Número no contesta</option>
+                  <option value="rebotado">📧 Correo rebotado</option>
+                  <option value="solicita_info">ℹ️ Cliente solicita información</option>
+                  <option value="no_interesado">❌ Cliente no interesado</option>
                 </select>
               </div>
               <div>
-                <Label htmlFor="observaciones_contacto" className="mb-2 block text-gray-900 dark:text-white">Observaciones</Label>
-                <textarea 
+                <Label htmlFor="observaciones_contacto" className="mb-2 block text-gray-900 dark:text-white">
+                  Observaciones <span className="text-red-500">*</span>
+                  <span className="text-xs text-gray-500 ml-2">Mínimo 10 caracteres</span>
+                </Label>
+                <textarea
                   id="observaciones_contacto"
                   name="observaciones_contacto"
                   className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
                   rows={3}
                   placeholder="Detalles del contacto realizado..."
+                  minLength={10}
+                  maxLength={1000}
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="proximo_contacto" className="mb-2 block text-gray-900 dark:text-white">Próximo Contacto</Label>
-                <TextInput 
-                  type="datetime-local" 
-                  id="proximo_contacto" 
+                <Label htmlFor="proximo_contacto" className="mb-2 block text-gray-900 dark:text-white">
+                  Próximo Contacto
+                  <span className="text-xs text-gray-500 ml-2">Opcional - Fecha futura</span>
+                </Label>
+                <TextInput
+                  type="datetime-local"
+                  id="proximo_contacto"
                   name="proximo_contacto"
                   className="bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                  min={new Date().toISOString().slice(0, 16)}
                 />
               </div>
             </div>
@@ -975,46 +1056,68 @@ const Renovaciones: React.FC = () => {
                   <Icon icon="solar:info-circle-bold-duotone" className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
                   <div>
                     <p className="text-sm text-blue-800 dark:text-blue-200"><strong>Información:</strong> Estás a punto de procesar la renovación de esta póliza.</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                      • La nueva fecha debe ser al menos 6 meses mayor<br/>
+                      • El cambio de prima no puede superar el 50%<br/>
+                      • La póliza debe tener mínimo 30 días de vigencia
+                    </p>
                   </div>
                 </div>
               </div>
               <div>
-                <Label htmlFor="nuevo_numero_poliza" className="mb-2 block text-gray-900 dark:text-white">Nuevo número de póliza (opcional)</Label>
-                <TextInput 
-                  type="text" 
-                  id="nuevo_numero_poliza" 
+                <Label htmlFor="nuevo_numero_poliza" className="mb-2 block text-gray-900 dark:text-white">
+                  Nuevo número de póliza (opcional)
+                  <span className="text-xs text-gray-500 ml-2">Formato: AAA-0000-0000</span>
+                </Label>
+                <TextInput
+                  type="text"
+                  id="nuevo_numero_poliza"
                   name="nuevo_numero_poliza"
                   placeholder="Ej: POL-2025-0001"
                   className="bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                  pattern="^[A-Z]{3}-\d{4}-\d{4}$"
+                  title="Formato requerido: AAA-0000-0000"
                 />
               </div>
               <div>
-                <Label htmlFor="nueva_fecha" className="mb-2 block text-gray-900 dark:text-white">Nueva Fecha de Vencimiento</Label>
-                <TextInput 
-                  type="date" 
-                  id="nueva_fecha" 
+                <Label htmlFor="nueva_fecha" className="mb-2 block text-gray-900 dark:text-white">
+                  Nueva Fecha de Vencimiento <span className="text-red-500">*</span>
+                  <span className="text-xs text-gray-500 ml-2">Máximo 2 años</span>
+                </Label>
+                <TextInput
+                  type="date"
+                  id="nueva_fecha"
                   name="nueva_fecha"
                   className="bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
                   defaultValue={selectedRenovacion ? new Date(new Date(selectedRenovacion.fechaVencimiento).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : ''}
+                  min={new Date().toISOString().split('T')[0]}
+                  max={new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString().split('T')[0]}
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="nuevo_valor" className="mb-2 block text-gray-900 dark:text-white">Nuevo Valor Prima</Label>
-                <TextInput 
-                  type="number" 
-                  id="nuevo_valor" 
+                <Label htmlFor="nuevo_valor" className="mb-2 block text-gray-900 dark:text-white">
+                  Nuevo Valor Prima <span className="text-red-500">*</span>
+                  <span className="text-xs text-gray-500 ml-2">$10,000 - $100,000,000</span>
+                </Label>
+                <TextInput
+                  type="number"
+                  id="nuevo_valor"
                   name="nuevo_valor"
-                  placeholder="Valor de la prima" 
+                  placeholder="Valor de la prima"
                   className="bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
                   defaultValue={selectedRenovacion?.valorPrima}
                   step="0.01"
-                  min="0"
+                  min="10000"
+                  max="100000000"
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="caratula" className="mb-2 block text-gray-900 dark:text-white">Carátula (PDF, opcional)</Label>
+                <Label htmlFor="caratula" className="mb-2 block text-gray-900 dark:text-white">
+                  Carátula (PDF, opcional)
+                  <span className="text-xs text-gray-500 ml-2">Máximo 10MB</span>
+                </Label>
                 <input
                   type="file"
                   id="caratula"
@@ -1024,13 +1127,17 @@ const Renovaciones: React.FC = () => {
                 />
               </div>
               <div>
-                <Label htmlFor="observaciones_renovacion" className="mb-2 block text-gray-900 dark:text-white">Observaciones de Renovación</Label>
-                <textarea 
+                <Label htmlFor="observaciones_renovacion" className="mb-2 block text-gray-900 dark:text-white">
+                  Observaciones de Renovación
+                  <span className="text-xs text-gray-500 ml-2">Máximo 1000 caracteres</span>
+                </Label>
+                <textarea
                   id="observaciones_renovacion"
                   name="observaciones_renovacion"
                   className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
                   rows={2}
                   placeholder="Notas sobre la renovación..."
+                  maxLength={1000}
                 />
               </div>
             </div>

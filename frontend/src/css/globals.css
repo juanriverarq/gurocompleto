@@ -576,15 +576,31 @@ label {
   z-index: 9999 !important;
 }
 
+/* Fix para tooltips del mini sidebar - máxima prioridad */
+[data-testid="flowbite-tooltip"],
+[role="tooltip"],
+.tippy-box {
+  /* Máximo z-index para que el tooltip del mini menú quede por delante de todo */
+  z-index: 2147483647 !important;
+}
+
+[data-testid="flowbite-tooltip-arrow"] {
+  z-index: 2147483647 !important;
+}
+
 /* Asegurar que los dropdowns se muestren correctamente en tablas con poco contenido */
 [data-testid="flowbite-dropdown-target"] {
   position: relative;
   z-index: 1;
 }
 
-[data-testid="flowbite-dropdown"] {
-  position: absolute;
-  z-index: 9999;
+.table-container-with-dropdowns [data-testid="flowbite-dropdown"],
+.overflow-x-auto [data-testid="flowbite-dropdown"] {
+  /* Anclar el menú al trigger para que no “flote” al hacer scroll */
+  position: absolute !important;
+  z-index: 10050 !important; /* debajo de modales (100000+) pero por encima del contenido de tabla */
+
+  /* Mantener estilos visuales existentes */
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
@@ -593,10 +609,18 @@ label {
 }
 
 /* Dark mode para dropdowns */
-.dark [data-testid="flowbite-dropdown"] {
-  background: #374151;
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+.dark .table-container-with-dropdowns [data-testid="flowbite-dropdown"],
+.dark .overflow-x-auto [data-testid="flowbite-dropdown"] {
+  /* Anclar el menú al trigger en modo oscuro también */
+  position: absolute !important;
+  z-index: 10050 !important;
+
+  /* Mantener estilos visuales existentes */
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: white;
+  min-width: 160px;
 }
 
 /* Mejorar contenedor de tabla para dropdowns */
@@ -692,3 +716,201 @@ input[type='radio']:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 /* ==== END GLOBAL FIX ==== */
+/* ==== Dynamic Primary Color Overrides (bind Tailwind-like utility classes to CSS var) ==== */
+/* Fallback default to avoid undefined var before auth context applies branding */
+:root {
+  --color-primary: #635BFF;
+}
+
+/* Map common utility classes to use --color-primary so changes reflect across the UI */
+.text-primary { color: var(--color-primary) !important; }
+.bg-primary { background-color: var(--color-primary) !important; }
+.border-primary { border-color: var(--color-primary) !important; }
+
+/* Hover/Focus variants frequently used across components */
+.hover\:text-primary:hover { color: var(--color-primary) !important; }
+.hover\:bg-primary:hover {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+}
+.focus\:border-primary:focus { border-color: var(--color-primary) !important; }
+
+/* Ring utilities need the CSS variable too */
+.ring-primary { --tw-ring-color: var(--color-primary) !important; }
+.focus\:ring-primary:focus { --tw-ring-color: var(--color-primary) !important; }
+
+/* Badge/Link helpers that often depend on the "primary" token */
+a.text-primary, .text-primary-ld:hover { color: var(--color-primary) !important; }
+
+/* Light tints used in several backgrounds (if referenced) */
+.bg-lightprimary { background-color: color-mix(in srgb, var(--color-primary) 15%, transparent) !important; }
+.hover\:bg-lightprimary:hover { background-color: color-mix(in srgb, var(--color-primary) 15%, transparent) !important; }
+
+/* Form focus states already reference border-primary via utilities; ensure override takes effect */
+.form-control input:focus,
+.form-control-input:focus,
+.form-control-textarea:focus,
+.select-md select:focus {
+  border-color: var(--color-primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent) !important;
+}
+
+/* Sidebar active links already use var(--color-primary); ensure consistency on other menu items */
+.sidebar-dropdown li a.active { color: var(--color-primary) !important; }
+/* ==== END Dynamic Primary Color Overrides ==== */
+/* === GLOBAL TABLE DROPDOWN FIX (Shadcn/Radix, HeadlessUI, Flowbite) === */
+/* 1) Evitar que los wrappers de tablas recorten los menús */
+.table-container-with-dropdowns,
+.overflow-x-auto {
+  overflow-y: visible !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* Asegurar que celdas/filas no recorten los menús emergentes */
+.table-container-with-dropdowns table,
+.table-container-with-dropdowns thead,
+.table-container-with-dropdowns tbody,
+.table-container-with-dropdowns tr,
+.table-container-with-dropdowns th,
+.table-container-with-dropdowns td,
+.overflow-x-auto table,
+.overflow-x-auto thead,
+.overflow-x-auto tbody,
+.overflow-x-auto tr,
+.overflow-x-auto th,
+.overflow-x-auto td {
+  overflow: visible !important;
+}
+
+/* 2) Elevar z-index de contenidos de dropdown/popover (Radix/Shadcn, HeadlessUI, Flowbite) */
+[data-radix-popper-content-wrapper],
+.radix-dropdown-content,
+.radix-select-content,
+.radix-popover-content,
+.DropdownMenuContent,
+.SelectContent,
+.PopoverContent,
+.ContextMenuContent,
+[data-testid="flowbite-dropdown"],
+.flowbite-dropdown [role="menu"],
+.overflow-x-auto [role="menu"],
+.table-container-with-dropdowns [role="menu"] {
+  z-index: 9999 !important;
+}
+
+/* Forzar posicionamiento absoluto para menús genéricos dentro de tablas (HeadlessUI/otros) */
+.overflow-x-auto [role="menu"],
+.table-container-with-dropdowns [role="menu"] {
+  position: absolute !important;
+}
+
+/* 3) Asegurar que el trigger tenga stacking context por encima de filas */
+.table-container-with-dropdowns .relative,
+.overflow-x-auto .relative,
+[data-testid="flowbite-dropdown-target"] {
+  position: relative;
+  z-index: 2;
+}
+/* === GLOBAL FRONT-LAYER DROPDOWNS (solo dentro de contenedores de tabla) === */
+/* Forzar menús en tablas por delante, pero anclados al trigger (scroll-safe) */
+.overflow-x-auto [role="menu"],
+.table-container-with-dropdowns [role="menu"] {
+  position: absolute !important;
+  z-index: 10050 !important; /* suficiente en tablas, por debajo de modales */
+}
+
+/* Flowbite: menú flotante (limitado a tablas), anclado (no fijo) */
+.table-container-with-dropdowns .flowbite-dropdown [role="menu"],
+.table-container-with-dropdowns [data-testid="flowbite-dropdown"],
+.overflow-x-auto .flowbite-dropdown [role="menu"],
+.overflow-x-auto [data-testid="flowbite-dropdown"] {
+  position: absolute !important;
+  z-index: 10050 !important;
+}
+
+/* Shadcn/Radix: contenidos popper (limitado a tablas) */
+.table-container-with-dropdowns [data-radix-popper-content-wrapper],
+.table-container-with-dropdowns .DropdownMenuContent,
+.table-container-with-dropdowns .SelectContent,
+.table-container-with-dropdowns .PopoverContent,
+.table-container-with-dropdowns .ContextMenuContent,
+.overflow-x-auto [data-radix-popper-content-wrapper],
+.overflow-x-auto .DropdownMenuContent,
+.overflow-x-auto .SelectContent,
+.overflow-x-auto .PopoverContent,
+.overflow-x-auto .ContextMenuContent {
+  position: fixed !important;
+  z-index: 10050 !important;
+}
+
+/* Headless UI genérico dentro de tablas: garantizar capa superior */
+.table-container-with-dropdowns .ui-dropdown,
+.overflow-x-auto .ui-dropdown {
+  position: fixed !important;
+  z-index: 2147483647 !important;
+}
+/* === MINI MENU TOOLTIP FRONT-LAYER (Clientes/Stats/Table) === */
+/* Forzar tooltips al frente absoluto y fuera de cualquier stacking context */
+[data-testid="flowbite-tooltip"],
+[role="tooltip"],
+.tippy-box {
+  position: fixed !important;
+  z-index: 2147483647 !important; /* Max safe z-index */
+  pointer-events: auto !important;
+}
+
+/* Asegurar hijos hereden el z-index máximo */
+[data-testid="flowbite-tooltip"] *,
+[role="tooltip"] * {
+  z-index: inherit !important;
+}
+/* ==== Fix: asegurar altura mínima cuando hay un solo resultado en tablas (evita clipping del dropdown) ==== */
+/* Flowbite usa class "group/body" en tbody; aplicamos la altura solicitada */
+tbody.group\/body {
+  height: 150px !important;
+}
+/* ==== End Fix ==== */
+/* ===== Modal stacking hardening =====
+    Forzar que TODOS los portales de Radix (shadcn-ui) queden por encima del header y dropdowns.
+    Evita que botones del top bar se monten sobre modales como:
+    - Nueva Instancia WhatsApp
+    - Crear Campaña de Email (y demás Dialogs shadcn)
+*/
+[data-radix-portal] {
+  position: relative;
+  z-index: 50 !important; /* por encima de cualquier header/dropdown */
+}
+
+/* Asegurar que el contenido/overlay dentro del portal quede aún más arriba */
+[data-radix-portal] .fixed,
+[data-radix-portal] [role="dialog"] {
+  z-index: 51 !important;
+}
+
+/* Fix para header sticky: cuando hay modales abiertas, el header debe quedar detrás */
+header.sticky,
+header.top-0,
+header[class*="z-"],
+nav.sticky,
+nav[class*="sticky"] {
+  z-index: 10 !important; /* Menor que las modales (9998) */
+}
+
+/* Force header z-index lower than modals */
+header {
+  z-index: 10 !important;
+}
+
+/* Forzar que las modales siempre estén por encima del header sticky */
+.fixed.inset-0.bg-black,
+.fixed.inset-0[class*="bg-black"] {
+  z-index: 50 !important;
+}
+
+/* Forzar contenido de modales por encima de todo */
+.fixed.inset-0 > div[class*="bg-white"],
+.fixed.inset-0 > div[class*="bg-darkgray"] {
+  z-index: 51 !important;
+}

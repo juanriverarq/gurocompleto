@@ -306,6 +306,18 @@ const Clientes: React.FC = () => {
     }
   }, [saasLoading, user, navigate]);
 
+  // Detectar query param para abrir modal automáticamente desde el buscador global
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openId = params.get('open_client_id');
+    if (openId) {
+      if (!showModal || selectedCliente?.id !== String(openId)) {
+        openClienteById(String(openId));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   useEffect(() => {
     // Inicializar deleteEnabled desde runtime config (window.__ENV__), luego env, query param y localStorage
     const init = () => {
@@ -490,20 +502,8 @@ const Clientes: React.FC = () => {
       setPagination(meta);
       setCurrentPage(meta.current_page);
 
-      // Establecer estadísticas totales solo cuando no hay filtros activos (primera carga)
-      const hasActiveFilters = filters.search || filters.tipo || filters.estado || filters.departamento || filters.agente;
-      if (!hasActiveFilters && !estadisticasTotales) {
-        setEstadisticasTotales({
-          total: meta.total,
-          activos: clientesConvertidos.filter(c => c.estado === 'activo').length,
-          prospectos: clientesConvertidos.filter(c => c.estado === 'prospecto').length,
-          inactivos: clientesConvertidos.filter(c => c.estado === 'inactivo').length,
-          personas: clientesConvertidos.filter(c => c.tipoCliente === 'persona').length,
-          empresas: clientesConvertidos.filter(c => c.tipoCliente === 'empresa').length,
-          valorTotal: clientesConvertidos.reduce((sum, c) => sum + c.valorCartera, 0),
-          polizasTotal: clientesConvertidos.reduce((sum, c) => sum + c.polizasActivas, 0)
-        });
-      }
+      // Las estadísticas se cargan una sola vez al montar el componente
+      // No se recalculan aquí para evitar inconsistencias
     } catch (err: any) {
       // Manejar errores de autenticación (alineado con Pólizas)
       const msg = String(err?.message || '').toLowerCase();
@@ -540,16 +540,56 @@ const Clientes: React.FC = () => {
     polizasTotal: number;
   } | null>(null);
 
-  // Cargar estadísticas (función para compatibilidad con Polizas)
+  // Cargar estadísticas totales (se ejecuta una sola vez al montar)
   const loadEstadisticas = async () => {
-    // Esta función existe para mantener la misma arquitectura que Polizas
-    // Las estadísticas se calculan a partir de los datos cuando no hay filtros
+    try {
+      console.log('[Clientes] Cargando estadísticas desde el backend...');
+      const response = await saasApi.getClientesEstadisticas();
+      
+      if (response.success && response.data) {
+        console.log('[Clientes] Estadísticas recibidas del backend:', response.data);
+        
+        // El backend devuelve las estadísticas calculadas
+        const stats = {
+          total: response.data.total_clientes || 0,
+          activos: response.data.clientes_activos || 0,
+          prospectos: response.data.clientes_prospectos || 0,
+          inactivos: response.data.clientes_inactivos || 0,
+          personas: response.data.clientes_personas || 0,
+          empresas: response.data.clientes_empresas || 0,
+          valorTotal: response.data.valor_total_cartera || 0,
+          polizasTotal: response.data.total_polizas_activas || 0
+        };
+        
+        console.log('[Clientes] Estadísticas procesadas:', stats);
+        setEstadisticasTotales(stats);
+      } else {
+        throw new Error('No se pudieron obtener las estadísticas');
+      }
+    } catch (error) {
+      console.error('[Clientes] Error cargando estadísticas:', error);
+      // Fallback: establecer vacías
+      setEstadisticasTotales({
+        total: 0,
+        activos: 0,
+        prospectos: 0,
+        inactivos: 0,
+        personas: 0,
+        empresas: 0,
+        valorTotal: 0,
+        polizasTotal: 0
+      });
+    }
   };
 
   // Efectos
   useEffect(() => {
     cargarClientes();
   }, [filters]);
+
+  useEffect(() => {
+    loadEstadisticas();
+  }, []);
 
 
   // Ordenamiento: mapa de columnas a campos del backend
@@ -640,6 +680,24 @@ const Clientes: React.FC = () => {
     ]);
   };
 
+  // Abrir detalle desde deep-link (?open_client_id=ID)
+  const openClienteById = async (clienteId: string) => {
+    try {
+      const res = await saasApi.getCliente(clienteId);
+      const data: any = res?.data || null;
+      if (!data) return;
+      const adapted = convertirClienteAPI(data);
+      setSelectedCliente(adapted);
+      setShowModal(true);
+      await Promise.all([
+        loadClienteFullData(clienteId),
+        loadClienteRelatedData(clienteId),
+      ]);
+    } catch (_e) {
+      // ignorar errores silenciosamente para no romper UI
+    }
+  };
+
   // Datos adicionales para modal
   const [polizasCliente, setPolizasCliente] = useState<any[]>([]);
   const [tareasCliente, setTareasCliente] = useState<any[]>([]);
@@ -688,6 +746,16 @@ const Clientes: React.FC = () => {
   const handleCloseDetailsModal = () => {
     setShowModal(false);
     setFullCliente(null);
+    try {
+      const params = new URLSearchParams(location.search);
+      if (params.has('open_client_id')) {
+        params.delete('open_client_id');
+        navigate(
+          `${location.pathname}${params.toString() ? `?${params.toString()}` : ''}`,
+          { replace: true }
+        );
+      }
+    } catch {}
   };
   
   const handleDeleteCliente = async (cliente: Cliente) => {
@@ -1306,14 +1374,15 @@ const Clientes: React.FC = () => {
                           dismissOnClick={false}
                           placement="left-start"
                           className="z-50"
+                          style={{ minWidth: '300px' }}
                           renderTrigger={() => (
                             <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
                               <IconDots size={22} />
                             </span>
                           )}
                         >
-                          <Dropdown.Item 
-                            className="flex gap-3 w-full justify-start text-left"
+                          <Dropdown.Item
+                            className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
                             onClick={() => handleViewCliente(cliente)}
                           >
                             <Icon icon="solar:eye-bold-duotone" height={18} />
@@ -1833,7 +1902,14 @@ const Clientes: React.FC = () => {
                         </Table.Head>
                         <Table.Body>
                           {polizasCliente.map((p:any) => (
-                            <Table.Row key={p.id}>
+                            <Table.Row
+                              key={p.id}
+                              className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                              onClick={() => {
+                                handleCloseDetailsModal();
+                                navigate(`/apps/seguros/polizas?open_poliza_id=${p.id}`);
+                              }}
+                            >
                               <Table.Cell>{p.numero_poliza || p.policy_number}</Table.Cell>
                               <Table.Cell>{(p as any).aseguradora_nombre || p.aseguradora || p.insurance_company}</Table.Cell>
                               <Table.Cell>{(p as any).ramo_nombre || p.ramo_principal || p.type}</Table.Cell>

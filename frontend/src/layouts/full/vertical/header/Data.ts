@@ -204,7 +204,7 @@ const SearchLinks: SearchType[] = [
   },
   {
     title: "Mi Perfil",
-    href: "/apps/user-profile/profile",
+    href: "/apps/account/perfil",
   },
   {
     title: "Configuración de Cuenta",
@@ -338,7 +338,7 @@ interface ProfileType {
 const profileDD: ProfileType[] = [
   {
     title: "Mi Perfil",
-    url: "/apps/user-profile/profile",
+    url: "/apps/account/perfil",
     icon: "solar:user-bold-duotone",
   },
   {

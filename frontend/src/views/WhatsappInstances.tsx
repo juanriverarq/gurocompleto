@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import whatsappMicroserviceDirect from '@/services/whatsappMicroserviceDirect';
+import { createPortal } from 'react-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/shadcn-ui/Default-Ui/dialog';
+import whatsappMicroserviceDirect from 'src/services/whatsappMicroserviceDirect';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/shadcn-ui/Default-Ui/card';
+import { Button } from '../components/shadcn-ui/Default-Ui/button';
+import { Input } from '../components/shadcn-ui/Default-Ui/input';
+import { Label } from '../components/shadcn-ui/Default-Ui/label';
+import { Alert, AlertDescription } from '../components/shadcn-ui/Default-Ui/alert';
+import { Plus, Smartphone, RefreshCw, Activity, Power, PowerOff, QrCode, Trash2, X } from 'lucide-react';
 
 const WhatsAppInstances: React.FC = () => {
   const [instances, setInstances] = useState<any[]>([]);
@@ -18,8 +26,13 @@ const WhatsAppInstances: React.FC = () => {
     error_instances: 0,
   });
 
-  // Estados para crear nueva instancia
-  const [newInstance, setNewInstance] = useState<any>({
+  // Estados para crear nueva instancia (tipado explícito para evitar implicit any)
+  interface NewInstance {
+    phone_number: string;
+    webhook_url: string;
+    settings: Record<string, any>;
+  }
+  const [newInstance, setNewInstance] = useState<NewInstance>({
     phone_number: '',
     webhook_url: '',
     settings: {}
@@ -109,6 +122,12 @@ const WhatsAppInstances: React.FC = () => {
 
     setCreating(true);
     try {
+      // Forzar header detrás de la modal
+      const header = document.querySelector('header');
+      if (header) {
+        header.style.zIndex = '0';
+      }
+
       // Por ahora solo simularemos la creación
       alert('Instancia creada correctamente (simulado)');
       setIsCreateModalOpen(false);
@@ -119,12 +138,23 @@ const WhatsAppInstances: React.FC = () => {
       alert('Error de conexión');
     } finally {
       setCreating(false);
+      // Restaurar z-index del header
+      const header = document.querySelector('header');
+      if (header) {
+        header.style.zIndex = '10';
+      }
     }
   };
 
   const handleShowQR = async (instance: any) => {
     if (!instance.id) return;
-    
+
+    // Forzar header detrás de la modal antes de abrir
+    const header = document.querySelector('header');
+    if (header) {
+      header.style.zIndex = '0';
+    }
+
     setSelectedInstance(instance);
     setQrCode('');
     setIsQRModalOpen(true);
@@ -133,7 +163,7 @@ const WhatsAppInstances: React.FC = () => {
       const response = await whatsappMicroserviceDirect.getQRCode();
       if (response.success && response.qr) {
         setQrCode(response.qr);
-        setQrExpiry(response.expires_at || '');
+        setQrExpiry(''); // El servicio no retorna expires_at
       } else {
         alert(response.message || 'Error al obtener código QR');
       }
@@ -148,10 +178,13 @@ const WhatsAppInstances: React.FC = () => {
     try {
       const response = await whatsappMicroserviceDirect.getConnectionStatus();
       if (response.success) {
-        // Actualizar el estado de la instancia específica
-        setInstances(prev => prev.map(instance => 
-          instance.id === instanceId 
-            ? { ...instance, status: response.status }
+        // Mapear a un string de estado
+        const newStatus = response.connected
+          ? 'connected'
+          : (response.connecting ? 'connecting' : 'disconnected');
+        setInstances(prev => prev.map(instance =>
+          instance.id === instanceId
+            ? { ...instance, status: newStatus }
             : instance
         ));
         alert('Estado actualizado');
@@ -167,7 +200,7 @@ const WhatsAppInstances: React.FC = () => {
 
   const handleRestartInstance = async (instanceId: number) => {
     try {
-      const response = await whatsappMicroserviceDirect.restartInstance(instanceId);
+      const response = await whatsappMicroserviceDirect.reconnect();
       if (response.success) {
         alert(response.message);
         loadInstances();
@@ -181,7 +214,7 @@ const WhatsAppInstances: React.FC = () => {
 
   const handleDisconnectInstance = async (instanceId: number) => {
     try {
-      const response = await whatsappMicroserviceDirect.disconnectInstance(instanceId);
+      const response = await whatsappMicroserviceDirect.disconnect();
       if (response.success) {
         alert(response.message);
         loadInstances();
@@ -199,31 +232,20 @@ const WhatsAppInstances: React.FC = () => {
     }
 
     try {
-      const response = await whatsappMicroserviceDirect.deleteInstance(instanceId);
+      // No existe deleteInstance en el servicio directo; usamos resetConnection como "eliminar sesión"
+      const response = await whatsappMicroserviceDirect.resetConnection();
       if (response.success) {
         alert(response.message);
         loadInstances();
         loadStats();
       } else {
-        alert(response.message || 'Error al eliminar instancia');
+        alert(response.message || 'Error al resetear la instancia');
       }
     } catch (error) {
       alert('Error de conexión');
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const badge = whatsappInstanceService.getStatusBadge(status);
-    return (
-      <Badge variant={badge.variant as any} className={`bg-${badge.color}-100 text-${badge.color}-800`}>
-        {badge.text}
-      </Badge>
-    );
-  };
-
-  const formatLastActivity = (date?: string) => {
-    return whatsappInstanceService.formatLastActivity(date);
-  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -301,7 +323,7 @@ const WhatsAppInstances: React.FC = () => {
           <div className="flex justify-between items-center">
             <div>
               <CardTitle>Mis Instancias</CardTitle>
-              <CardDescription>Administra tus conexiones de WhatsApp</CardDescription>
+              <p className="text-sm text-muted-foreground">Administra tus conexiones de WhatsApp</p>
             </div>
             <Button 
               variant="outline" 
@@ -444,14 +466,12 @@ const WhatsAppInstances: React.FC = () => {
 
       {/* Modal para crear nueva instancia */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Nueva Instancia WhatsApp</DialogTitle>
-            <DialogDescription>
-              Crea una nueva instancia de WhatsApp para tu cuenta.
-            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Número de Teléfono</Label>
               <Input
@@ -471,7 +491,8 @@ const WhatsAppInstances: React.FC = () => {
               />
             </div>
           </div>
-          <DialogFooter>
+
+          <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
               Cancelar
             </Button>
@@ -485,31 +506,29 @@ const WhatsAppInstances: React.FC = () => {
                 'Crear Instancia'
               )}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Modal para mostrar QR */}
       <Dialog open={isQRModalOpen} onOpenChange={setIsQRModalOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Código QR - WhatsApp</DialogTitle>
-            <DialogDescription>
-              Escanea este código QR con WhatsApp Web en tu teléfono
-            </DialogDescription>
           </DialogHeader>
+
           <div className="flex flex-col items-center space-y-4 py-4">
             {qrCode ? (
               <>
                 <div className="bg-white p-4 rounded-lg border">
-                  <img 
-                    src={qrCode} 
-                    alt="Código QR de WhatsApp" 
+                  <img
+                    src={qrCode}
+                    alt="Código QR de WhatsApp"
                     className="w-64 h-64 mx-auto"
                   />
                 </div>
                 {qrExpiry && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Expira: {new Date(qrExpiry).toLocaleString()}
                   </p>
                 )}
@@ -529,7 +548,8 @@ const WhatsAppInstances: React.FC = () => {
               </div>
             )}
           </div>
-          <DialogFooter>
+
+          <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setIsQRModalOpen(false)}>
               Cerrar
             </Button>
@@ -539,7 +559,7 @@ const WhatsAppInstances: React.FC = () => {
                 Actualizar QR
               </Button>
             )}
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

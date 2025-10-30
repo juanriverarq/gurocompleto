@@ -3,7 +3,7 @@ const customTheme = {
     base: "group relative flex items-stretch justify-center text-center p-0.5 text-center font-medium rounded-md",
     fullSized: "w-full",
     color: {
-      primary: "bg-primary text-white hover:bg-primaryemphasis",
+      primary: "bg-primary text-white hover:bg-primaryemphasis hover:text-white",
       secondary: "bg-secondary text-white ",
       error: "bg-error text-white ",
       warning: "bg-warning text-white ",
@@ -167,7 +167,7 @@ const customTheme = {
         },
         placement: "-4px",
       },
-      base: "z-10 w-fit  items-center focus:outline-none  shadow-md dark:shadow-dark-md text-start rounded-sm overflow-hidden",
+      base: "z-10 min-w-[250px]  items-center focus:outline-none  shadow-md dark:shadow-dark-md text-start rounded-sm overflow-hidden",
       content: "py-2 text-sm text-bodytext focus:outline-none",
       header: "block px-4 py-2 text-ld",
       item: {

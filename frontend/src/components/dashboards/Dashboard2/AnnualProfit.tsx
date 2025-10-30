@@ -1,47 +1,56 @@
 
+import { Icon } from "@iconify/react";
 import CardBox from "../../shared/CardBox";
 import Chart from 'react-apexcharts';
 import { useDashboardData } from "../../../hooks/useDashboardData";
 
-const AnnualProfit = () => {
-  const { data, loading, error } = useDashboardData();
+interface AnnualProfitProps {
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+const AnnualProfit = ({ startDate, endDate }: AnnualProfitProps) => {
+  const { data, loading, error } = useDashboardData({ startDate, endDate });
 
   const getAnalysisData = () => {
     if (!data) {
       return {
-        tasaRenovacion: 92.3,
-        ventasCruzadas: 12,
-        ventasCruzadasValor: 45200,
-        procesamientoAuto: 95.8,
-        documentosProcessados: 247,
-        alertasActivas: 12,
-        ahorroPreventivo: 115400,
-        chartData: [85, 92, 78, 95, 88, 92, 90]
+        tasaRenovacion: 0,
+        ventasCruzadas: 0,
+        ventasCruzadasValor: 0,
+        procesamientoAuto: 0,
+        documentosProcessados: 0,
+        alertasActivas: 0,
+        ahorroPreventivo: 0,
+        chartData: [0, 0, 0, 0, 0, 0, 0],
+        crecimiento: 0
       };
     }
 
     // Calcular métricas basadas en datos reales
-    const totalPolizas = data.resumen_polizas.total;
-    const polizasActivas = data.resumen_polizas.activas;
-    const polizasPorVencer = data.resumen_polizas.por_vencer;
-    const siniestrosPendientes = data.siniestros.pendientes;
-    const tareasActivas = data.tareas_comerciales.activas;
+    const totalPolizas = data.resumen_polizas?.total || 0;
+    const polizasActivas = data.resumen_polizas?.activas || 0;
+    const polizasPorVencer = data.resumen_polizas?.por_vencer || 0;
+    const siniestrosPendientes = data.siniestros?.pendientes || 0;
+    const comisionNumero = parseFloat(data.finanzas?.comision_numero || '0');
+    const valorPrimasNumero = parseFloat(data.finanzas?.valor_primas_numero || '0');
+    const crecimiento = data.clientes?.porcentaje_crecimiento || 0;
 
     // Calcular tasa de renovación basada en pólizas activas
     const tasaRenovacion = totalPolizas > 0 ? (polizasActivas / totalPolizas) * 100 : 0;
 
-    // Simular datos de IA basados en información real
-    const ventasCruzadas = Math.round(polizasActivas * 0.15); // 15% de pólizas activas como oportunidades
-    const ventasCruzadasValor = Math.round(parseFloat(data.finanzas.comision_numero) * 0.25); // 25% de comisiones
+    // Calcular datos de IA basados en información real
+    const ventasCruzadas = polizasActivas > 0 ? Math.round(polizasActivas * 0.15) : 0; // 15% de pólizas activas como oportunidades
+    const ventasCruzadasValor = comisionNumero > 0 ? Math.round(comisionNumero * 0.25) : 0; // 25% de comisiones
     
-    const procesamientoAuto = Math.min(98.5, 85 + (polizasActivas / totalPolizas) * 15); // Basado en eficiencia
-    const documentosProcessados = totalPolizas * 3; // ~3 documentos por póliza
+    const procesamientoAuto = totalPolizas > 0 ? Math.min(98.5, 85 + (polizasActivas / totalPolizas) * 15) : 0; // Basado en eficiencia
+    const documentosProcessados = totalPolizas > 0 ? totalPolizas * 3 : 0; // ~3 documentos por póliza
     
     const alertasActivas = polizasPorVencer + siniestrosPendientes; // Alertas reales
-    const ahorroPreventivo = Math.round(parseFloat(data.finanzas.valor_primas_numero) * 0.05); // 5% de ahorro
+    const ahorroPreventivo = valorPrimasNumero > 0 ? Math.round(valorPrimasNumero * 0.05) : 0; // 5% de ahorro
 
     // Datos del gráfico simulando tendencia
-    const chartData = [
+    const chartData = tasaRenovacion > 0 ? [
       Math.round(tasaRenovacion * 0.9),
       Math.round(tasaRenovacion * 0.95),
       Math.round(tasaRenovacion * 0.85),
@@ -49,7 +58,7 @@ const AnnualProfit = () => {
       Math.round(tasaRenovacion * 0.97),
       Math.round(tasaRenovacion),
       Math.round(tasaRenovacion * 1.01)
-    ];
+    ] : [0, 0, 0, 0, 0, 0, 0];
 
     return {
       tasaRenovacion: Number(tasaRenovacion.toFixed(1)),
@@ -59,7 +68,8 @@ const AnnualProfit = () => {
       documentosProcessados,
       alertasActivas,
       ahorroPreventivo,
-      chartData
+      chartData,
+      crecimiento
     };
   };
 
@@ -148,65 +158,96 @@ const AnnualProfit = () => {
     );
   }
 
+  // Verificar si hay datos reales para mostrar
+  const hasRealData = data && (
+    data.resumen_polizas.total > 0 ||
+    parseFloat(data.finanzas.comision_numero || '0') > 0
+  );
+
   return (
     <>
       <CardBox>
         <div>
           <h5 className="card-title">Análisis IA</h5>
-          <div className="bg-lightprimary mt-4 overflow-hidden rounded-md mb-1">
-            <div className="py-30 px-6 flex justify-between items-center">
-              <p className="text-ld">Tasa de Renovación</p>
-              <h4 className="text-28">{analysisData.tasaRenovacion}%</h4>
-            </div>
-            <Chart
-              options={ChartData}
-              series={ChartData.series}
-              type="area"
-              height="80px"
-              width="100%"
-              className="mt-4"
-            />
-          </div>
-          <div className="flex items-center justify-between py-4 border-b border-ld">
-            <div>
-              <span className="font-medium text-ld opacity-80">
-                Ventas Cruzadas IA
-              </span>
-              <p className="text-13">{analysisData.ventasCruzadas.toLocaleString()} oportunidades</p>
-            </div>
-            <div className="text-end">
-              <h6 className="text-15 font-bold">
-                ${(analysisData.ventasCruzadasValor / 1000).toFixed(0)}K
+          
+          {!hasRealData ? (
+            // Mostrar mensaje cuando no hay datos
+            <div className="py-12 text-center">
+              <div className="mb-4">
+                <Icon
+                  icon="solar:chart-2-linear"
+                  height={48}
+                  className="text-gray-300 dark:text-gray-600 mx-auto"
+                />
+              </div>
+              <h6 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">
+                Sin procesamientos ejecutados
               </h6>
-              <span className="text-13 text-success font-medium">+{data?.clientes.porcentaje_crecimiento || 25}%</span>
+              <p className="text-sm text-gray-500 dark:text-gray-500">
+                Los análisis de IA se mostrarán cuando haya datos disponibles
+              </p>
             </div>
-          </div>
-          <div className="flex items-center justify-between py-4 border-b border-ld">
-            <div>
-              <span className="font-medium text-ld opacity-80">
-                Procesamiento Automático
-              </span>
-              <p className="text-13">{analysisData.documentosProcessados.toLocaleString()} documentos</p>
-            </div>
-            <div className="text-end">
-              <h6 className="text-15 font-bold">{analysisData.procesamientoAuto}%</h6>
-              <span className="text-13 text-success font-medium">+2.3%</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between pt-4">
-            <div>
-              <span className="font-medium text-ld opacity-80">
-                Alertas Preventivas
-              </span>
-              <p className="text-13">{analysisData.alertasActivas} alertas activas</p>
-            </div>
-            <div className="text-end">
-              <h6 className="text-15 font-bold">
-                ${(analysisData.ahorroPreventivo / 1000).toFixed(0)}K
-              </h6>
-              <span className="text-13 text-success font-medium">+15.2%</span>
-            </div>
-          </div>
+          ) : (
+            // Mostrar análisis cuando hay datos
+            <>
+              <div className="bg-lightprimary mt-4 overflow-hidden rounded-md mb-1">
+                <div className="py-30 px-6 flex justify-between items-center">
+                  <p className="text-ld">Tasa de Renovación</p>
+                  <h4 className="text-28">{analysisData.tasaRenovacion}%</h4>
+                </div>
+                <Chart
+                  options={ChartData}
+                  series={ChartData.series}
+                  type="area"
+                  height="80px"
+                  width="100%"
+                  className="mt-4"
+                />
+              </div>
+              <div className="flex items-center justify-between py-4 border-b border-ld">
+                <div>
+                  <span className="font-medium text-ld opacity-80">
+                    Ventas Cruzadas IA
+                  </span>
+                  <p className="text-13">{analysisData.ventasCruzadas.toLocaleString()} oportunidades</p>
+                </div>
+                <div className="text-end">
+                  <h6 className="text-15 font-bold">
+                    ${analysisData.ventasCruzadasValor > 0 ? (analysisData.ventasCruzadasValor / 1000).toFixed(0) : '0'}K
+                  </h6>
+                  <span className={`text-13 font-medium ${analysisData.crecimiento >= 0 ? 'text-success' : 'text-error'}`}>
+                    {analysisData.crecimiento >= 0 ? '+' : ''}{analysisData.crecimiento}%
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-4 border-b border-ld">
+                <div>
+                  <span className="font-medium text-ld opacity-80">
+                    Procesamiento Automático
+                  </span>
+                  <p className="text-13">{analysisData.documentosProcessados.toLocaleString()} documentos</p>
+                </div>
+                <div className="text-end">
+                  <h6 className="text-15 font-bold">{analysisData.procesamientoAuto}%</h6>
+                  <span className="text-13 text-muted font-medium">Eficiencia</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-4">
+                <div>
+                  <span className="font-medium text-ld opacity-80">
+                    Alertas Preventivas
+                  </span>
+                  <p className="text-13">{analysisData.alertasActivas} alertas activas</p>
+                </div>
+                <div className="text-end">
+                  <h6 className="text-15 font-bold">
+                    ${analysisData.ahorroPreventivo > 0 ? (analysisData.ahorroPreventivo / 1000).toFixed(0) : '0'}K
+                  </h6>
+                  <span className="text-13 text-muted font-medium">Ahorro estimado</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </CardBox>
     </>

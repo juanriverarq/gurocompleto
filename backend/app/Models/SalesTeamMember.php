@@ -28,6 +28,11 @@ class SalesTeamMember extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+
+    public function vendedor()
+    {
+        return $this->belongsTo(Vendedor::class, 'user_id');
+    }
 }
 
 

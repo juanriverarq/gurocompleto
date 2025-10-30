@@ -43,6 +43,24 @@ interface PolizaCartera {
   comisionCobrada: number;
   estadoPago: 'Al día' | 'Pendiente' | 'Vencido' | 'Parcial';
   diasMora: number;
+    // Nuevos campos para tipos de recaudo
+    recaudo_oficina?: {
+      recaudado: number;
+      pendiente: number;
+      total: number;
+      pago_id?: string;
+    };
+    recaudo_aseguradora?: {
+      pagado: number;
+      pendiente: number;
+      total: number;
+      pago_id?: string;
+    };
+    cobro_comision?: {
+      cobrada: number;
+      pendiente: number;
+      total: number;
+    };
 }
 
 interface EstadisticasCartera {
@@ -79,43 +97,33 @@ const CarteraClientes = () => {
     ordenDireccion: 'asc' as 'asc' | 'desc',
   });
 
-  const [tabActivo, setTabActivo] = useState<'general' | 'porCobrar' | 'clientes'>('general');
+  const [tabActivo, setTabActivo] = useState<'general' | 'porCobrar' | 'porPagar' | 'recaudosCompletados'>('general');
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [polizaSeleccionada, setPolizaSeleccionada] = useState<PolizaCartera | null>(null);
 
-  const cargarTodasLasPolizas = async () => {
+  // Estados para modales de pagos
+  const [showPagoOficinaModal, setShowPagoOficinaModal] = useState(false);
+  const [showPagoAseguradoraModal, setShowPagoAseguradoraModal] = useState(false);
+  const [showCobroComisionModal, setShowCobroComisionModal] = useState(false);
+  const [montoPago, setMontoPago] = useState('');
+  const [metodoPago, setMetodoPago] = useState('');
+  const [referenciaPago, setReferenciaPago] = useState('');
+  const [fechaPago, setFechaPago] = useState('');
+  const [observacionesPago, setObservacionesPago] = useState('');
+  const [procesandoPago, setProcesandoPago] = useState(false);
+
+  const cargarDatosCartera = async () => {
     try {
-      let todasLasPolizas: any[] = [];
-      let paginaActual = 1;
-      let hayMasPaginas = true;
+      // OPTIMIZACIÓN: Usar endpoint específico para cartera - mucho más eficiente
+      const carteraRes = await polizaService.getCarteraPolizas();
 
-      while (hayMasPaginas) {
-        const polizasRes = await polizaService.getPolizas({
-          per_page: 100,
-          page: paginaActual,
-          sort_field: 'fecha_fin',
-          sort_direction: 'asc'
-        });
-
-        if (polizasRes.success && polizasRes.data) {
-          const datos = polizasRes.data;
-          const polizasPagina = Array.isArray(datos) ? datos : (datos.data || []);
-          todasLasPolizas = [...todasLasPolizas, ...polizasPagina];
-
-          if (!Array.isArray(datos) && datos.current_page && datos.last_page) {
-            hayMasPaginas = datos.current_page < datos.last_page;
-            paginaActual++;
-          } else {
-            hayMasPaginas = false;
-          }
-        } else {
-          hayMasPaginas = false;
-        }
+      if (carteraRes.success && carteraRes.data) {
+        return Array.isArray(carteraRes.data) ? carteraRes.data : [];
       }
 
-      return todasLasPolizas;
+      return [];
     } catch (error) {
-      console.error('Error cargando todas las pólizas:', error);
+      console.error('Error cargando cartera:', error);
       return [];
     }
   };
@@ -123,95 +131,240 @@ const CarteraClientes = () => {
   const cargarCartera = async () => {
     try {
       setLoading(true);
-      const polizasData = await cargarTodasLasPolizas();
+      const polizasData = await cargarDatosCartera();
       setTotalPolizas(polizasData.length);
 
+      // OPTIMIZACIÓN: Procesamiento simplificado ya que los datos vienen optimizados del backend
       const carteraPolizas: PolizaCartera[] = polizasData.map((poliza: any) => {
-        const primaNeta = Number(poliza.prima_neta || 0);
-        const porcentajeIva = Number(poliza.porcentaje_iva || 19);
-        const iva = primaNeta * (porcentajeIva / 100);
-        const total = primaNeta + iva;
-        
-        const comisionReal = Number(poliza.comision || 0);
-        const porcentajeComision = Number(poliza.comision_agencia || poliza.porcentaje_comision || 15);
-        const comision = comisionReal > 0 ? comisionReal : (primaNeta * porcentajeComision / 100);
+        // Calcular valores financieros basados en datos del backend
+        const primaNeta = poliza.prima_neta;
+        const iva = poliza.iva;
+        const total = poliza.total;
+        const comision = poliza.comision;
 
-        const fechaVenc = new Date(poliza.fecha_fin || poliza.end_date);
-        const hoy = new Date();
-        const diasVencimiento = Math.ceil((fechaVenc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
-
-        const estado = (poliza.estado || 'ACTIVA').toUpperCase();
-        
-        let estadoPago: 'Al día' | 'Pendiente' | 'Vencido' | 'Parcial' = 'Al día';
+        // Calcular estado de pago basado en datos del backend
+        let estadoPago: 'Al día' | 'Pendiente' | 'Vencido' | 'Parcial' = poliza.estado_pago || 'Al día';
         let valorRecaudado = total;
         let valorPendienteCliente = 0;
         let valorPagadoAseguradora = primaNeta;
         let valorPendienteAseguradora = 0;
         let diasMora = 0;
 
-        if (estado === 'ACTIVA' || estado === 'POR_VENCER') {
-          const random = Math.random();
-          if (random < 0.2) {
-            estadoPago = 'Pendiente';
+        // Ajustar valores según estado de pago
+        switch (estadoPago) {
+          case 'Pendiente':
             valorRecaudado = 0;
             valorPendienteCliente = total;
             valorPagadoAseguradora = 0;
             valorPendienteAseguradora = primaNeta;
-          } else if (random < 0.3) {
-            estadoPago = 'Parcial';
+            break;
+          case 'Parcial':
             valorRecaudado = total * 0.5;
             valorPendienteCliente = total * 0.5;
             valorPagadoAseguradora = primaNeta * 0.5;
             valorPendienteAseguradora = primaNeta * 0.5;
-          }
+            break;
+          case 'Vencido':
+            valorRecaudado = 0;
+            valorPendienteCliente = total;
+            valorPagadoAseguradora = 0;
+            valorPendienteAseguradora = primaNeta;
+            diasMora = Math.max(0, -poliza.dias_vencimiento);
+            break;
         }
-
-        const nombreCliente = poliza.nombres_cliente && poliza.apellidos_cliente
-          ? `${poliza.nombres_cliente} ${poliza.apellidos_cliente}`.trim()
-          : poliza.policy_holder_name || 'Sin nombre';
 
         return {
           id: String(poliza.id),
           numeroPoliza: poliza.numero_poliza || poliza.policy_number || '',
-          cliente: nombreCliente,
-          clienteId: String(poliza.client_id || poliza.cliente_id || ''),
-          documento: poliza.dni_cliente || poliza.policy_holder_document || '',
-          aseguradora: poliza.aseguradora_nombre || poliza.aseguradora || '',
-          ramo: poliza.ramo_nombre || poliza.ramo_principal || '',
-          estado,
-          fechaInicio: poliza.fecha_inicio || poliza.start_date || '',
-          fechaVencimiento: poliza.fecha_fin || poliza.end_date || '',
-          diasVencimiento,
+          cliente: poliza.cliente,
+          clienteId: String(poliza.cliente_id),
+          documento: poliza.documento,
+          aseguradora: poliza.aseguradora,
+          ramo: poliza.ramo,
+          estado: poliza.estado,
+          fechaInicio: poliza.fecha_inicio,
+          fechaVencimiento: poliza.fecha_vencimiento,
+          diasVencimiento: poliza.dias_vencimiento,
           primaNeta,
           iva,
           total,
           comision,
-          formaPago: poliza.forma_pago || poliza.payment_method || 'Contado',
+          formaPago: poliza.forma_pago,
           valorPendienteCliente,
           valorPendienteAseguradora,
           valorRecaudado,
           valorPagadoAseguradora,
-          comisionReal,
-          comisionPendiente: estado === 'ACTIVA' && Math.random() < 0.3 ? comision : 0,
-          comisionCobrada: estado === 'ACTIVA' && Math.random() >= 0.3 ? comision : 0,
+          comisionReal: comision,
+          comisionPendiente: estadoPago !== 'Al día' ? comision * 0.5 : 0,
+          comisionCobrada: estadoPago === 'Al día' ? comision : 0,
           estadoPago,
           diasMora,
+          // Nuevos campos de tipos de recaudo
+          recaudo_oficina: poliza.recaudo_oficina,
+          recaudo_aseguradora: poliza.recaudo_aseguradora,
+          cobro_comision: poliza.cobro_comision,
         };
       });
 
-      const polizasEnCartera = carteraPolizas.filter(p => {
-        const estado = p.estado.toUpperCase();
-        return estado === 'ACTIVA' || estado === 'POR_VENCER';
-      });
-
-      setPolizas(polizasEnCartera);
-      calcularEstadisticas(polizasEnCartera);
+      // OPTIMIZACIÓN: Ya no necesitamos filtrar en frontend porque el backend filtra por estado ACTIVA
+      setPolizas(carteraPolizas);
+      calcularEstadisticas(carteraPolizas);
 
     } catch (error: any) {
       console.error('Error cargando cartera:', error);
       toast({
         title: 'Error',
         description: 'No se pudo cargar la información de cartera',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funciones para manejar pagos
+  const abrirModalPagoOficina = (poliza: PolizaCartera) => {
+    setPolizaSeleccionada(poliza);
+    setMontoPago((poliza.recaudo_oficina?.pendiente || 0).toString());
+    setMetodoPago('');
+    setReferenciaPago('');
+    setFechaPago(new Date().toISOString().split('T')[0]);
+    setObservacionesPago('');
+    setShowPagoOficinaModal(true);
+  };
+
+  const abrirModalPagoAseguradora = (poliza: PolizaCartera) => {
+    setPolizaSeleccionada(poliza);
+    setMontoPago((poliza.recaudo_aseguradora?.pendiente || 0).toString());
+    setMetodoPago('');
+    setReferenciaPago('');
+    setFechaPago(new Date().toISOString().split('T')[0]);
+    setObservacionesPago('');
+    setShowPagoAseguradoraModal(true);
+  };
+
+  const abrirModalCobroComision = (poliza: PolizaCartera) => {
+    setPolizaSeleccionada(poliza);
+    setMontoPago((poliza.cobro_comision?.pendiente || 0).toString());
+    setReferenciaPago('');
+    setFechaPago(new Date().toISOString().split('T')[0]);
+    setObservacionesPago('');
+    setShowCobroComisionModal(true);
+  };
+
+  const registrarPagoOficina = async () => {
+    if (!polizaSeleccionada || !montoPago) return;
+
+    try {
+      setProcesandoPago(true);
+      const response = await polizaService.registrarPagoPoliza(
+        polizaSeleccionada.id,
+        'oficina',
+        parseFloat(montoPago),
+        metodoPago,
+        referenciaPago,
+        observacionesPago,
+        fechaPago
+      );
+
+      if (response.success) {
+        toast({
+          title: 'Recaudo registrado',
+          description: 'El recaudo por oficina ha sido registrado exitosamente',
+        });
+        setShowPagoOficinaModal(false);
+        // Recargar datos
+        await cargarCartera();
+      }
+    } catch (error) {
+      console.error('Error registrando recaudo oficina:', error);
+    } finally {
+      setProcesandoPago(false);
+    }
+  };
+
+  const registrarPagoAseguradora = async () => {
+    if (!polizaSeleccionada || !montoPago) return;
+
+    try {
+      setProcesandoPago(true);
+      const response = await polizaService.registrarPagoPoliza(
+        polizaSeleccionada.id,
+        'aseguradora',
+        parseFloat(montoPago),
+        metodoPago,
+        referenciaPago,
+        observacionesPago,
+        fechaPago
+      );
+
+      if (response.success) {
+        toast({
+          title: 'Pago registrado',
+          description: 'El pago a la aseguradora ha sido registrado exitosamente',
+        });
+        setShowPagoAseguradoraModal(false);
+        // Recargar datos
+        await cargarCartera();
+      }
+    } catch (error) {
+      console.error('Error registrando pago aseguradora:', error);
+    } finally {
+      setProcesandoPago(false);
+    }
+  };
+
+  const registrarCobroComision = async () => {
+    if (!polizaSeleccionada || !montoPago) return;
+
+    try {
+      setProcesandoPago(true);
+      const response = await polizaService.registrarCobroComision(
+        polizaSeleccionada.id,
+        parseFloat(montoPago),
+        referenciaPago,
+        observacionesPago,
+        fechaPago
+      );
+
+      if (response.success) {
+        toast({
+          title: 'Cobro registrado',
+          description: 'El cobro de comisión ha sido registrado exitosamente',
+        });
+        setShowCobroComisionModal(false);
+        // Recargar datos
+        await cargarCartera();
+      }
+    } catch (error) {
+      console.error('Error registrando cobro comisión:', error);
+    } finally {
+      setProcesandoPago(false);
+    }
+  };
+
+  const revertirPago = async (poliza: PolizaCartera, pagoId: string) => {
+    if (!confirm('¿Está seguro de revertir este pago? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await polizaService.revertirPago(poliza.id, pagoId);
+
+      if (response.success) {
+        toast({
+          title: 'Pago revertido',
+          description: 'El pago ha sido revertido exitosamente',
+        });
+        // Recargar datos
+        await cargarCartera();
+      }
+    } catch (error) {
+      console.error('Error revirtiendo pago:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo revertir el pago',
         variant: 'destructive',
       });
     } finally {
@@ -256,12 +409,27 @@ const CarteraClientes = () => {
 
     if (filtros.busqueda) {
       const busqueda = filtros.busqueda.toLowerCase();
-      resultado = resultado.filter(p =>
-        p.numeroPoliza.toLowerCase().includes(busqueda) ||
-        p.cliente.toLowerCase().includes(busqueda) ||
-        p.documento.includes(busqueda) ||
-        p.aseguradora.toLowerCase().includes(busqueda)
-      );
+      resultado = resultado.filter((p) => {
+        const num = (p.numeroPoliza || '').toLowerCase();
+        const cli = (p.cliente || '').toLowerCase();
+        const doc = (p.documento || '').toLowerCase();
+        const aseg = (p.aseguradora || '').toLowerCase();
+        const ramo = (p.ramo || '').toLowerCase();
+        const estado = (p.estado || '').toLowerCase();
+        const estadoPago = (p.estadoPago || '').toLowerCase();
+        const clienteId = (p.clienteId || '').toLowerCase();
+
+        return (
+          num.includes(busqueda) ||
+          cli.includes(busqueda) ||
+          doc.includes(busqueda) ||
+          aseg.includes(busqueda) ||
+          ramo.includes(busqueda) ||
+          estado.includes(busqueda) ||
+          estadoPago.includes(busqueda) ||
+          clienteId.includes(busqueda)
+        );
+      });
     }
 
     if (filtros.estado) {
@@ -314,8 +482,23 @@ const CarteraClientes = () => {
   }, [filtros]);
 
   const polizasPorCobrar = useMemo(() =>
-    polizas.filter(p => p.valorPendienteCliente > 0),
-    [polizas]
+    polizasFiltradas.filter(p => {
+      const recaudadoOficina = (p.recaudo_oficina?.recaudado || 0);
+      const pendienteOficina = (p.recaudo_oficina?.pendiente || 0);
+      const pagadoAseguradora = (p.recaudo_aseguradora?.pagado || 0);
+      const pendienteAseguradora = (p.recaudo_aseguradora?.pendiente || 0);
+      
+      // NO mostrar si:
+      // - Ya tiene recaudo por oficina (está en "Por Pagar" o "Recaudos Completados")
+      // - Ya tiene pago a aseguradora completado (está en "Recaudos Completados")
+      if (recaudadoOficina > 0 || pagadoAseguradora > 0) {
+        return false;
+      }
+      
+      // Solo mostrar si tiene algo pendiente
+      return pendienteOficina > 0 || pendienteAseguradora > 0;
+    }),
+    [polizasFiltradas]
   );
 
   const polizasPorCobrarPaginadas = useMemo(() => {
@@ -328,7 +511,7 @@ const CarteraClientes = () => {
 
   const clientesConsolidados = useMemo(() => {
     return Object.entries(
-      polizas.reduce((acc, p) => {
+      polizasFiltradas.reduce((acc, p) => {
         if (!acc[p.clienteId]) {
           acc[p.clienteId] = {
             cliente: p.cliente,
@@ -353,7 +536,7 @@ const CarteraClientes = () => {
         return acc;
       }, {} as Record<string, any>)
     ).map(([id, data]) => ({ id, ...data }));
-  }, [polizas]);
+  }, [polizasFiltradas]);
 
   const clientesPaginados = useMemo(() => {
     const inicio = (paginaActual - 1) * elementosPorPagina;
@@ -464,7 +647,7 @@ const CarteraClientes = () => {
         </div>
       )}
 
-      {/* Header de Controles */}
+      {/* Header de Controles - Fuera de las tabs para que funcione globalmente */}
       <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
         <div className="p-6 border-b border-gray-100 dark:border-gray-700">
           <div className="flex flex-col lg:flex-row gap-4">
@@ -506,322 +689,11 @@ const CarteraClientes = () => {
       {/* Tabs de Cartera */}
       <Card>
         <Tabs>
-          <Tabs.Item 
-            active={tabActivo === 'general'} 
-            title="Cartera General"
-            icon={() => <Icon icon="solar:shield-check-bold-duotone" />}
-            onClick={() => setTabActivo('general')}
-          >
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Póliza</Table.HeadCell>
-                  <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell>Aseguradora</Table.HeadCell>
-                  <Table.HeadCell>Ramo</Table.HeadCell>
-                  <Table.HeadCell>Estado</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Prima</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Comisión</Table.HeadCell>
-                  <Table.HeadCell>Vencimiento</Table.HeadCell>
-                  <Table.HeadCell>Estado Pago</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
-                  {polizasPaginadas.map((poliza) => (
-                    <Table.Row key={poliza.id}>
-                      <Table.Cell className="font-medium">{poliza.numeroPoliza}</Table.Cell>
-                      <Table.Cell>
-                        <div>
-                          <div className="font-medium">{poliza.cliente}</div>
-                          <div className="text-xs text-gray-500">{poliza.documento}</div>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>{poliza.aseguradora}</Table.Cell>
-                      <Table.Cell>{poliza.ramo}</Table.Cell>
-                      <Table.Cell>
-                        <Badge color={getEstadoColor(poliza.estado)} size="sm">
-                          {poliza.estado}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
-                        {formatCurrency(poliza.primaNeta)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-green-600">
-                        {formatCurrency(poliza.comision)}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div>
-                          <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
-                          <div className={`text-xs ${poliza.diasVencimiento < 0 ? 'text-red-600' : poliza.diasVencimiento <= 30 ? 'text-orange-600' : 'text-gray-500'}`}>
-                            {poliza.diasVencimiento < 0 ? `${Math.abs(poliza.diasVencimiento)} días vencida` : `${poliza.diasVencimiento} días`}
-                          </div>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge color={getEstadoPagoColor(poliza.estadoPago)} size="sm">
-                          {poliza.estadoPago}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item
-                              className="flex gap-3 w-full justify-start text-left"
-                              onClick={() => {
-                                setPolizaSeleccionada(poliza);
-                                setShowDetalleModal(true);
-                              }}
-                            >
-                              <Icon icon="solar:eye-bold-duotone" height={18} />
-                              <span>Ver Detalle</span>
-                            </Dropdown.Item>
-                            <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
-                              <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                                <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
-                                <span>Editar Póliza</span>
-                              </Dropdown.Item>
-                            </Link>
-                          </Dropdown>
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table>
-
-              {polizasPaginadas.length === 0 && (
-                <div className="text-center py-12">
-                  <Icon icon="solar:shield-check-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No se encontraron pólizas</p>
-                </div>
-              )}
-            </div>
-
-            {/* Paginación */}
-            {totalPaginas > 1 && (
-              <div className="flex items-center justify-between p-4 border-t">
-                <div className="text-sm text-gray-600">
-                  Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, polizasFiltradas.length)} de {polizasFiltradas.length} pólizas
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span>Por página:</span>
-                    <select
-                      className="border rounded-md px-2 py-1 text-sm dark:bg-darkgray"
-                      value={elementosPorPagina}
-                      onChange={(e) => {
-                        setElementosPorPagina(Number(e.target.value));
-                        setPaginaActual(1);
-                      }}
-                    >
-                      <option value={15}>15</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </div>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={paginaActual === 1}
-                    onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
-                    className="rounded-[10px]"
-                  >
-                    <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm text-gray-600">
-                    Página {paginaActual} de {totalPaginas}
-                  </span>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={paginaActual === totalPaginas}
-                    onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
-                    className="rounded-[10px]"
-                  >
-                    <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </Tabs.Item>
-
-          <Tabs.Item 
-            title={`Por Cobrar (${polizasPorCobrar.length})`}
-            icon={() => <Icon icon="solar:wallet-money-bold-duotone" />}
-            onClick={() => setTabActivo('porCobrar')}
-          >
-            <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Total Por Cobrar</p>
-                  <p className="text-2xl font-bold text-orange-600">
-                    {formatCurrency(estadisticas?.porCobrarTotal || 0)}
-                  </p>
-                </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Vencido</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {formatCurrency(estadisticas?.porCobrarVencido || 0)}
-                  </p>
-                </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Recaudado</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(estadisticas?.recaudadoTotal || 0)}
-                  </p>
-                  <div className="mt-2">
-                    <Progress 
-                      progress={estadisticas?.tasaRecaudo || 0} 
-                      size="sm" 
-                      color="green"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      {estadisticas?.tasaRecaudo.toFixed(1)}% recaudado
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Póliza</Table.HeadCell>
-                  <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell>Aseguradora</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Total</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Recaudado</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Pendiente</Table.HeadCell>
-                  <Table.HeadCell>Vencimiento</Table.HeadCell>
-                  <Table.HeadCell>Estado</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
-                  {polizasPorCobrarPaginadas.map((poliza) => (
-                    <Table.Row key={poliza.id}>
-                      <Table.Cell className="font-medium">{poliza.numeroPoliza}</Table.Cell>
-                      <Table.Cell>
-                        <div>
-                          <div className="font-medium">{poliza.cliente}</div>
-                          <div className="text-xs text-gray-500">{poliza.documento}</div>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>{poliza.aseguradora}</Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
-                        {formatCurrency(poliza.total)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right text-green-600">
-                        {formatCurrency(poliza.valorRecaudado)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-orange-600">
-                        {formatCurrency(poliza.valorPendienteCliente)}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
-                        {poliza.diasMora > 0 && (
-                          <div className="text-xs text-red-600">{poliza.diasMora} días mora</div>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge color={getEstadoPagoColor(poliza.estadoPago)} size="sm">
-                          {poliza.estadoPago}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                              <Icon icon="solar:eye-bold-duotone" height={18} />
-                              <span>Ver Detalle</span>
-                            </Dropdown.Item>
-                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left text-green-600">
-                              <Icon icon="solar:dollar-minimalistic-bold-duotone" height={18} />
-                              <span>Registrar Pago</span>
-                            </Dropdown.Item>
-                            <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
-                              <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                                <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
-                                <span>Editar Póliza</span>
-                              </Dropdown.Item>
-                            </Link>
-                          </Dropdown>
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table>
-
-              {polizasPorCobrar.length === 0 && (
-                <div className="text-center py-12">
-                  <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No hay cuentas por cobrar pendientes</p>
-                </div>
-              )}
-            </div>
-
-            {/* Paginación Por Cobrar */}
-            {totalPaginasPorCobrar > 1 && (
-              <div className="flex items-center justify-between p-4 border-t">
-                <div className="text-sm text-gray-600">
-                  Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, polizasPorCobrar.length)} de {polizasPorCobrar.length} pólizas
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={paginaActual === 1}
-                    onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
-                    className="rounded-[10px]"
-                  >
-                    <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm text-gray-600">
-                    Página {paginaActual} de {totalPaginasPorCobrar}
-                  </span>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={paginaActual === totalPaginasPorCobrar}
-                    onClick={() => setPaginaActual(p => Math.min(totalPaginasPorCobrar, p + 1))}
-                    className="rounded-[10px]"
-                  >
-                    <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </Tabs.Item>
-
           <Tabs.Item
-            title="Por Clientes"
+            active={tabActivo === 'general'}
+            title={`Cartera General (${clientesConsolidados.length})`}
             icon={() => <Icon icon="solar:users-group-rounded-bold-duotone" />}
-            onClick={() => setTabActivo('clientes')}
+            onClick={() => setTabActivo('general')}
           >
             <div className="overflow-x-auto">
               <Table hoverable>
@@ -925,6 +797,460 @@ const CarteraClientes = () => {
               </div>
             )}
           </Tabs.Item>
+
+          <Tabs.Item
+            active={tabActivo === 'porCobrar'}
+            title={`Por Cobrar (${polizasPorCobrar.length})`}
+            icon={() => <Icon icon="solar:wallet-money-bold-duotone" />}
+            onClick={() => setTabActivo('porCobrar')}
+          >
+            {/* Estadísticas de Cobros por Tipo */}
+            <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Total Por Cobrar</p>
+                  <p className="text-2xl font-bold text-orange-600">
+                    {formatCurrency(estadisticas?.porCobrarTotal || 0)}
+                  </p>
+                </div>
+              </Card>
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Recaudo Oficina</p>
+                  <p className="text-lg font-bold text-blue-600">
+                    {formatCurrency(polizasFiltradas.reduce((sum, p) => sum + (p.recaudo_oficina?.pendiente || 0), 0))}
+                  </p>
+                  <p className="text-xs text-green-600">
+                    Recaudado: {formatCurrency(polizasFiltradas.reduce((sum, p) => sum + (p.recaudo_oficina?.recaudado || 0), 0))}
+                  </p>
+                </div>
+              </Card>
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Pago Pendiente</p>
+                  <p className="text-lg font-bold text-purple-600">
+                    {formatCurrency(polizasFiltradas.reduce((sum, p) => sum + (p.recaudo_aseguradora?.pendiente || 0), 0))}
+                  </p>
+                  <p className="text-xs text-green-600">
+                    Pagado: {formatCurrency(polizasFiltradas.reduce((sum, p) => sum + (p.recaudo_aseguradora?.pagado || 0), 0))}
+                  </p>
+                </div>
+              </Card>
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Cobro Comisión</p>
+                  <p className="text-lg font-bold text-indigo-600">
+                    {formatCurrency(polizasFiltradas.reduce((sum, p) => sum + (p.cobro_comision?.pendiente || 0), 0))}
+                  </p>
+                  <p className="text-xs text-green-600">
+                    Cobrado: {formatCurrency(polizasFiltradas.reduce((sum, p) => sum + (p.cobro_comision?.cobrada || 0), 0))}
+                  </p>
+                </div>
+              </Card>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table hoverable>
+                <Table.Head>
+                  <Table.HeadCell>Póliza</Table.HeadCell>
+                  <Table.HeadCell>Cliente</Table.HeadCell>
+                  <Table.HeadCell>Aseguradora</Table.HeadCell>
+                  <Table.HeadCell className="text-center">Pago Pendiente</Table.HeadCell>
+                  <Table.HeadCell className="text-center">Cobro Comisión</Table.HeadCell>
+                  <Table.HeadCell>Vencimiento</Table.HeadCell>
+                  <Table.HeadCell>Estado</Table.HeadCell>
+                  <Table.HeadCell>Acciones</Table.HeadCell>
+                </Table.Head>
+                <Table.Body className="divide-y">
+                  {polizasPorCobrarPaginadas.map((poliza) => (
+                    <Table.Row key={poliza.id}>
+                      <Table.Cell className="font-medium">{poliza.numeroPoliza}</Table.Cell>
+                      <Table.Cell>
+                        <div>
+                          <div className="font-medium">{poliza.cliente}</div>
+                          <div className="text-xs text-gray-500">{poliza.documento}</div>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>{poliza.aseguradora}</Table.Cell>
+                      <Table.Cell className="text-center">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold text-purple-600">
+                            Pend: {formatCurrency(poliza.recaudo_aseguradora?.pendiente || 0)}
+                          </div>
+                          <div className="text-xs text-green-600">
+                            Pag: {formatCurrency(poliza.recaudo_aseguradora?.pagado || 0)}
+                          </div>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell className="text-center">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold text-indigo-600">
+                            Pend: {formatCurrency(poliza.cobro_comision?.pendiente || 0)}
+                          </div>
+                          <div className="text-xs text-green-600">
+                            Cob: {formatCurrency(poliza.cobro_comision?.cobrada || 0)}
+                          </div>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
+                        {poliza.diasMora > 0 && (
+                          <div className="text-xs text-red-600">{poliza.diasMora} días mora</div>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge color={getEstadoPagoColor(poliza.estadoPago)} size="sm">
+                          {poliza.estadoPago}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="relative inline-block">
+                          <Dropdown
+                            label=""
+                            dismissOnClick={false}
+                            placement="left-start"
+                            className="z-50"
+                            renderTrigger={() => (
+                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
+                                <IconDots size={22} />
+                              </span>
+                            )}
+                          >
+                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
+                              <Icon icon="solar:eye-bold-duotone" height={18} />
+                              <span>Ver Detalle</span>
+                            </Dropdown.Item>
+                            <Dropdown.Item
+                              className="flex gap-3 w-full justify-start text-left text-blue-600"
+                              onClick={() => abrirModalPagoOficina(poliza)}
+                            >
+                              <Icon icon="solar:dollar-minimalistic-bold-duotone" height={18} />
+                              <span>Registrar Pago Oficina</span>
+                            </Dropdown.Item>
+                            <Dropdown.Item
+                              className="flex gap-3 w-full justify-start text-left text-purple-600"
+                              onClick={() => abrirModalPagoAseguradora(poliza)}
+                            >
+                              <Icon icon="solar:card-transfer-bold-duotone" height={18} />
+                              <span>Registrar Pago Aseguradora</span>
+                            </Dropdown.Item>
+                            <Dropdown.Item
+                              className="flex gap-3 w-full justify-start text-left text-indigo-600"
+                              onClick={() => abrirModalCobroComision(poliza)}
+                            >
+                              <Icon icon="solar:money-bag-bold-duotone" height={18} />
+                              <span>Registrar Cobro Comisión</span>
+                            </Dropdown.Item>
+                            <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
+                              <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
+                                <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
+                                <span>Editar Póliza</span>
+                              </Dropdown.Item>
+                            </Link>
+                          </Dropdown>
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
+
+              {polizasPorCobrar.length === 0 && (
+                <div className="text-center py-12">
+                  <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No hay cuentas por cobrar pendientes</p>
+                </div>
+              )}
+            </div>
+
+            {/* Paginación Por Cobrar */}
+            {totalPaginasPorCobrar > 1 && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <div className="text-sm text-gray-600">
+                  Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, polizasPorCobrar.length)} de {polizasPorCobrar.length} pólizas
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    size="sm"
+                    color="gray"
+                    disabled={paginaActual === 1}
+                    onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
+                    className="rounded-[10px]"
+                  >
+                    <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm text-gray-600">
+                    Página {paginaActual} de {totalPaginasPorCobrar}
+                  </span>
+                  <Button
+                    size="sm"
+                    color="gray"
+                    disabled={paginaActual === totalPaginasPorCobrar}
+                    onClick={() => setPaginaActual(p => Math.min(totalPaginasPorCobrar, p + 1))}
+                    className="rounded-[10px]"
+                  >
+                    <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Tabs.Item>
+
+          <Tabs.Item
+            active={tabActivo === 'porPagar'}
+            title={`Por Pagar (${polizasFiltradas.filter(p =>
+              (p.recaudo_oficina?.recaudado || 0) > 0 &&
+              (p.recaudo_aseguradora?.pendiente || 0) > 0 &&
+              (p.recaudo_aseguradora?.pagado || 0) === 0
+            ).length})`}
+            icon={() => <Icon icon="solar:card-transfer-bold-duotone" />}
+            onClick={() => setTabActivo('porPagar')}
+          >
+            {/* Estadísticas de Por Pagar */}
+            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Total Por Pagar</p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {formatCurrency(polizasFiltradas.filter(p =>
+                      (p.recaudo_oficina?.recaudado || 0) > 0 &&
+                      (p.recaudo_aseguradora?.pagado || 0) === 0
+                    ).reduce((sum, p) => sum + (p.recaudo_aseguradora?.pendiente || 0), 0))}
+                  </p>
+                </div>
+              </Card>
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Pólizas Pendientes</p>
+                  <p className="text-2xl font-bold text-orange-600">
+                    {polizasFiltradas.filter(p =>
+                      (p.recaudo_oficina?.recaudado || 0) > 0 &&
+                      (p.recaudo_aseguradora?.pendiente || 0) > 0 &&
+                      (p.recaudo_aseguradora?.pagado || 0) === 0
+                    ).length}
+                  </p>
+                </div>
+              </Card>
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Recaudado en Oficina</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {formatCurrency(polizasFiltradas.filter(p =>
+                      (p.recaudo_oficina?.recaudado || 0) > 0 &&
+                      (p.recaudo_aseguradora?.pagado || 0) === 0
+                    ).reduce((sum, p) => sum + (p.recaudo_oficina?.recaudado || 0), 0))}
+                  </p>
+                </div>
+              </Card>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table hoverable>
+                <Table.Head>
+                  <Table.HeadCell>Póliza</Table.HeadCell>
+                  <Table.HeadCell>Cliente</Table.HeadCell>
+                  <Table.HeadCell>Aseguradora</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Prima Neta</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Recaudado Oficina</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Por Pagar</Table.HeadCell>
+                  <Table.HeadCell>Vencimiento</Table.HeadCell>
+                  <Table.HeadCell>Acciones</Table.HeadCell>
+                </Table.Head>
+                <Table.Body className="divide-y">
+                  {polizasFiltradas.filter(p =>
+                    (p.recaudo_oficina?.recaudado || 0) > 0 &&
+                    (p.recaudo_aseguradora?.pendiente || 0) > 0 &&
+                    (p.recaudo_aseguradora?.pagado || 0) === 0
+                  ).map((poliza) => (
+                    <Table.Row key={poliza.id}>
+                      <Table.Cell className="font-medium">{poliza.numeroPoliza}</Table.Cell>
+                      <Table.Cell>
+                        <div>
+                          <div className="font-medium">{poliza.cliente}</div>
+                          <div className="text-xs text-gray-500">{poliza.documento}</div>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>{poliza.aseguradora}</Table.Cell>
+                      <Table.Cell className="text-right font-semibold">
+                        {formatCurrency(poliza.primaNeta)}
+                      </Table.Cell>
+                      <Table.Cell className="text-right font-semibold text-blue-600">
+                        {formatCurrency(poliza.recaudo_oficina?.recaudado || 0)}
+                      </Table.Cell>
+                      <Table.Cell className="text-right font-semibold text-purple-600">
+                        {formatCurrency(poliza.recaudo_aseguradora?.pendiente || 0)}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            color="purple"
+                            onClick={() => abrirModalPagoAseguradora(poliza)}
+                          >
+                            <Icon icon="solar:card-transfer-bold-duotone" className="w-4 h-4 mr-2" />
+                            Pagar
+                          </Button>
+                          {poliza.recaudo_oficina?.pago_id && (
+                            <Button
+                              size="sm"
+                              color="gray"
+                              onClick={() => revertirPago(poliza, poliza.recaudo_oficina!.pago_id!)}
+                              title="Revertir recaudo"
+                            >
+                              <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
+
+              {polizasFiltradas.filter(p =>
+                (p.recaudo_oficina?.recaudado || 0) > 0 &&
+                (p.recaudo_aseguradora?.pendiente || 0) > 0 &&
+                (p.recaudo_aseguradora?.pagado || 0) === 0
+              ).length === 0 && (
+                <div className="text-center py-12">
+                  <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No hay pagos pendientes a compañías</p>
+                  <p className="text-xs text-gray-400 mt-2">Los pagos pendientes aparecen cuando se registra un recaudo por oficina</p>
+                </div>
+              )}
+            </div>
+          </Tabs.Item>
+
+          <Tabs.Item
+            active={tabActivo === 'recaudosCompletados'}
+            title={`Recaudos Completados (${polizasFiltradas.filter(p => (p.recaudo_aseguradora?.pagado || 0) > 0).length})`}
+            icon={() => <Icon icon="solar:check-circle-bold-duotone" />}
+            onClick={() => setTabActivo('recaudosCompletados')}
+          >
+            {/* Estadísticas de Recaudos Completados */}
+            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Total Recaudado</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {formatCurrency(polizasFiltradas.filter(p => (p.recaudo_aseguradora?.pagado || 0) > 0).reduce((sum, p) => sum + (p.recaudo_aseguradora?.pagado || 0), 0))}
+                  </p>
+                </div>
+              </Card>
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Pólizas Completadas</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {polizasFiltradas.filter(p => (p.recaudo_aseguradora?.pagado || 0) > 0).length}
+                  </p>
+                </div>
+              </Card>
+              <Card>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Comisiones Generadas</p>
+                  <p className="text-2xl font-bold text-indigo-600">
+                    {formatCurrency(polizasFiltradas.filter(p => (p.recaudo_aseguradora?.pagado || 0) > 0).reduce((sum, p) => sum + p.comision, 0))}
+                  </p>
+                </div>
+              </Card>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table hoverable>
+                <Table.Head>
+                  <Table.HeadCell>Póliza</Table.HeadCell>
+                  <Table.HeadCell>Cliente</Table.HeadCell>
+                  <Table.HeadCell>Aseguradora</Table.HeadCell>
+                  <Table.HeadCell>Tipo Recaudo</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Prima Neta</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Recaudado</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Comisión</Table.HeadCell>
+                  <Table.HeadCell>Fecha</Table.HeadCell>
+                  <Table.HeadCell>Estado</Table.HeadCell>
+                  <Table.HeadCell>Acciones</Table.HeadCell>
+                </Table.Head>
+                <Table.Body className="divide-y">
+                  {polizasFiltradas.filter(p => (p.recaudo_aseguradora?.pagado || 0) > 0).map((poliza) => {
+                    // Determinar tipo de recaudo
+                    const tipoRecaudo = (poliza.recaudo_oficina?.recaudado || 0) > 0 ? 'Oficina' : 'Aseguradora';
+                    const colorTipo = tipoRecaudo === 'Oficina' ? 'blue' : 'purple';
+                    
+                    return (
+                      <Table.Row key={poliza.id}>
+                        <Table.Cell className="font-medium">{poliza.numeroPoliza}</Table.Cell>
+                        <Table.Cell>
+                          <div>
+                            <div className="font-medium">{poliza.cliente}</div>
+                            <div className="text-xs text-gray-500">{poliza.documento}</div>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>{poliza.aseguradora}</Table.Cell>
+                        <Table.Cell>
+                          <Badge color={colorTipo} size="sm">
+                            {tipoRecaudo}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell className="text-right font-semibold">
+                          {formatCurrency(poliza.primaNeta)}
+                        </Table.Cell>
+                        <Table.Cell className="text-right font-semibold text-green-600">
+                          {formatCurrency(poliza.recaudo_aseguradora?.pagado || 0)}
+                        </Table.Cell>
+                        <Table.Cell className="text-right font-semibold text-indigo-600">
+                          {formatCurrency(poliza.comision)}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex items-center gap-2">
+                            <Badge color="success" size="sm">
+                              Completado
+                            </Badge>
+                            {poliza.recaudo_aseguradora?.pago_id && (
+                              <Button
+                                size="xs"
+                                color="gray"
+                                onClick={() => revertirPago(poliza, poliza.recaudo_aseguradora!.pago_id!)}
+                                title="Revertir pago"
+                              >
+                                <Icon icon="solar:undo-left-bold-duotone" className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex gap-2">
+                            <Link to={`/apps/cartera/recibo-caja/${poliza.id}`}>
+                              <Button
+                                size="sm"
+                                color="blue"
+                                title="Ver Recibo de Caja"
+                              >
+                                <Icon icon="solar:document-text-bold-duotone" className="w-4 h-4 mr-2" />
+                                Recibo de Caja
+                              </Button>
+                            </Link>
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table>
+
+              {polizasFiltradas.filter(p => (p.recaudo_aseguradora?.pagado || 0) > 0).length === 0 && (
+                <div className="text-center py-12">
+                  <Icon icon="solar:inbox-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No hay recaudos completados</p>
+                  <p className="text-xs text-gray-400 mt-2">Aquí aparecen las pólizas con pagos completados (por oficina o aseguradora)</p>
+                </div>
+              )}
+            </div>
+          </Tabs.Item>
         </Tabs>
       </Card>
 
@@ -988,7 +1314,7 @@ const CarteraClientes = () => {
 
               <Card>
                 <h4 className="font-semibold text-gray-900 mb-3">Cuentas por Cobrar</h4>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Recaudado:</span>
                     <span className="font-semibold text-green-600">{formatCurrency(polizaSeleccionada.valorRecaudado)}</span>
@@ -1002,6 +1328,37 @@ const CarteraClientes = () => {
                     <Badge color={getEstadoPagoColor(polizaSeleccionada.estadoPago)}>
                       {polizaSeleccionada.estadoPago}
                     </Badge>
+                  </div>
+
+                  {/* Detalle por tipos de recaudo */}
+                  <div className="border-t pt-3 mt-3">
+                    <h5 className="font-medium text-gray-800 mb-2">Detalle por Tipo de Recaudo</h5>
+
+                    <div className="grid grid-cols-1 gap-2">
+                      <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                        <span className="text-blue-800 font-medium">Recaudo Oficina:</span>
+                        <div className="text-right">
+                          <div className="text-sm text-blue-600">Recaudado: {formatCurrency(polizaSeleccionada.recaudo_oficina?.recaudado || 0)}</div>
+                          <div className="text-sm text-orange-600">Pendiente: {formatCurrency(polizaSeleccionada.recaudo_oficina?.pendiente || 0)}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center p-2 bg-purple-50 rounded">
+                        <span className="text-purple-800 font-medium">Pago Pendiente:</span>
+                        <div className="text-right">
+                          <div className="text-sm text-purple-600">Pagado: {formatCurrency(polizaSeleccionada.recaudo_aseguradora?.pagado || 0)}</div>
+                          <div className="text-sm text-orange-600">Pendiente: {formatCurrency(polizaSeleccionada.recaudo_aseguradora?.pendiente || 0)}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center p-2 bg-indigo-50 rounded">
+                        <span className="text-indigo-800 font-medium">Cobro Comisión:</span>
+                        <div className="text-right">
+                          <div className="text-sm text-indigo-600">Cobrado: {formatCurrency(polizaSeleccionada.cobro_comision?.cobrada || 0)}</div>
+                          <div className="text-sm text-orange-600">Pendiente: {formatCurrency(polizaSeleccionada.cobro_comision?.pendiente || 0)}</div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -1017,6 +1374,259 @@ const CarteraClientes = () => {
           </Link>
           <Button color="gray" onClick={() => setShowDetalleModal(false)}>
             Cerrar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal Pago Oficina */}
+      <Modal show={showPagoOficinaModal} onClose={() => setShowPagoOficinaModal(false)} size="md">
+        <Modal.Header>
+          Registrar Pago por Oficina - {polizaSeleccionada?.numeroPoliza}
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Monto a Pagar
+              </label>
+              <Input
+                type="number"
+                value={montoPago}
+                onChange={(e) => setMontoPago(e.target.value)}
+                placeholder="Monto del pago"
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Método de Pago
+              </label>
+              <select
+                value={metodoPago}
+                onChange={(e) => setMetodoPago(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+              >
+                <option value="">Seleccionar método</option>
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="cheque">Cheque</option>
+                <option value="tarjeta">Tarjeta</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fecha de Pago
+              </label>
+              <Input
+                type="date"
+                value={fechaPago}
+                onChange={(e) => setFechaPago(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Referencia de Pago
+              </label>
+              <Input
+                value={referenciaPago}
+                onChange={(e) => setReferenciaPago(e.target.value)}
+                placeholder="Número de recibo, comprobante, etc."
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Observaciones
+              </label>
+              <textarea
+                value={observacionesPago}
+                onChange={(e) => setObservacionesPago(e.target.value)}
+                placeholder="Observaciones adicionales"
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                rows={3}
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="gray"
+            onClick={() => setShowPagoOficinaModal(false)}
+            disabled={procesandoPago}
+          >
+            Cancelar
+          </Button>
+          <Button
+            color="blue"
+            onClick={registrarPagoOficina}
+            disabled={procesandoPago || !montoPago}
+          >
+            {procesandoPago ? <Spinner size="sm" className="mr-2" /> : null}
+            Registrar Pago
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal Pago Aseguradora */}
+      <Modal show={showPagoAseguradoraModal} onClose={() => setShowPagoAseguradoraModal(false)} size="md">
+        <Modal.Header>
+          Registrar Pago por Aseguradora - {polizaSeleccionada?.numeroPoliza}
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Monto Pagado por Aseguradora
+              </label>
+              <Input
+                type="number"
+                value={montoPago}
+                onChange={(e) => setMontoPago(e.target.value)}
+                placeholder="Monto pagado por la aseguradora"
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Método de Pago
+              </label>
+              <select
+                value={metodoPago}
+                onChange={(e) => setMetodoPago(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+              >
+                <option value="">Seleccionar método</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="cheque">Cheque</option>
+                <option value="debito_automatico">Débito Automático</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fecha de Pago
+              </label>
+              <Input
+                type="date"
+                value={fechaPago}
+                onChange={(e) => setFechaPago(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Referencia de Pago
+              </label>
+              <Input
+                value={referenciaPago}
+                onChange={(e) => setReferenciaPago(e.target.value)}
+                placeholder="Número de póliza aseguradora, recibo, etc."
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Observaciones
+              </label>
+              <textarea
+                value={observacionesPago}
+                onChange={(e) => setObservacionesPago(e.target.value)}
+                placeholder="Observaciones adicionales"
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                rows={3}
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="gray"
+            onClick={() => setShowPagoAseguradoraModal(false)}
+            disabled={procesandoPago}
+          >
+            Cancelar
+          </Button>
+          <Button
+            color="purple"
+            onClick={registrarPagoAseguradora}
+            disabled={procesandoPago || !montoPago}
+          >
+            {procesandoPago ? <Spinner size="sm" className="mr-2" /> : null}
+            Registrar Pago
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal Cobro Comisión */}
+      <Modal show={showCobroComisionModal} onClose={() => setShowCobroComisionModal(false)} size="md">
+        <Modal.Header>
+          Registrar Cobro de Comisión - {polizaSeleccionada?.numeroPoliza}
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Monto a Cobrar
+              </label>
+              <Input
+                type="number"
+                value={montoPago}
+                onChange={(e) => setMontoPago(e.target.value)}
+                placeholder="Monto de la comisión a cobrar"
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fecha de Cobro
+              </label>
+              <Input
+                type="date"
+                value={fechaPago}
+                onChange={(e) => setFechaPago(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Referencia de Cobro
+              </label>
+              <Input
+                value={referenciaPago}
+                onChange={(e) => setReferenciaPago(e.target.value)}
+                placeholder="Número de recibo, comprobante, etc."
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Observaciones
+              </label>
+              <textarea
+                value={observacionesPago}
+                onChange={(e) => setObservacionesPago(e.target.value)}
+                placeholder="Observaciones adicionales del cobro"
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                rows={3}
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="gray"
+            onClick={() => setShowCobroComisionModal(false)}
+            disabled={procesandoPago}
+          >
+            Cancelar
+          </Button>
+          <Button
+            color="green"
+            onClick={registrarCobroComision}
+            disabled={procesandoPago || !montoPago}
+          >
+            {procesandoPago ? <Spinner size="sm" className="mr-2" /> : null}
+            Registrar Cobro
           </Button>
         </Modal.Footer>
       </Modal>

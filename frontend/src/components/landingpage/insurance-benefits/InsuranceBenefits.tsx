@@ -143,7 +143,7 @@ const InsuranceBenefits = () => {
                   </div>
                 </div>
                 <p className="text-ld text-lg">
-                  Más de 50 clientes ya transformaron su negocio con Guro
+                  Más de 150 clientes ya transformaron su negocio con Guro
                 </p>
               </div>
               <h3 

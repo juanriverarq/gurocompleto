@@ -9,56 +9,18 @@ import {
   Select,
   ToggleSwitch,
   Spinner,
+  Tabs,
 } from 'flowbite-react';
 import { Icon } from '@iconify/react';
-import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import enlacesService from 'src/services/enlacesCotizacionService';
+import { miniWebService } from 'src/services/miniWebService';
+import { INSURANCE_PRODUCTS, FIELDS_BY_TIPO } from 'src/data/insuranceProducts';
+import CotizacionesRecibidas from './CotizacionesRecibidas';
 
-const BCrumb = [
-  {
-    to: '/',
-    title: 'Dashboard',
-  },
-  {
-    to: '/apps/marketing',
-    title: 'Marketing',
-  },
-  {
-    title: 'Enlaces',
-  },
-  {
-    title: 'Crear Enlaces',
-  },
-];
 
 const enlacesData: any[] = [];
 
-const tiposSeguro = [
-  {
-    value: 'vida',
-    label: 'Seguro de Vida',
-    icon: 'solar:heart-bold-duotone',
-    color: 'text-red-500',
-  },
-  {
-    value: 'autos',
-    label: 'Seguro de Autos',
-    icon: 'solar:car-bold-duotone',
-    color: 'text-blue-500',
-  },
-  {
-    value: 'hogar',
-    label: 'Seguro Hogar',
-    icon: 'solar:home-bold-duotone',
-    color: 'text-green-500',
-  },
-  {
-    value: 'empresarial',
-    label: 'Empresarial',
-    icon: 'solar:buildings-bold-duotone',
-    color: 'text-purple-500',
-  },
-];
+const tiposSeguro = INSURANCE_PRODUCTS;
 
 const getTipoInfo = (tipo: string) => {
   return tiposSeguro.find((t) => t.value === tipo) || tiposSeguro[0];
@@ -75,25 +37,39 @@ const EnlacesCotizacion = () => {
     descripcion: '',
     mensaje_bienvenida: '',
   });
+  const [agencySlug, setAgencySlug] = useState<string>('');
+  const [analytics, setAnalytics] = useState<Record<string, { visits: number; quotes: number; conversion_rate: number }>>({});
+  const [quotesByKey, setQuotesByKey] = useState<Record<string, number>>({});
+  const [visitsByKey, setVisitsByKey] = useState<Record<string, number>>({});
+  // Fallbacks por tipo (sin depender del slug) para cuando aún no hay slug de agencia
+  const [visitsByTipo, setVisitsByTipo] = useState<Record<string, number>>({});
+  const [quotesByTipo, setQuotesByTipo] = useState<Record<string, number>>({});
 
   const enlacesFiltrados =
     filtroTipo === 'todos' ? enlaces : enlaces.filter((e) => e.tipo === filtroTipo);
 
   const totalEnlaces = enlaces.length;
   const enlacesActivos = enlaces.filter((e) => e.activo).length;
-  const totalVisitas = enlaces.reduce((acc, e) => acc + e.visitas, 0);
-  const totalCotizaciones = enlaces.reduce((acc, e) => acc + e.cotizaciones, 0);
+  const baseSlug = agencySlug || 'mi-agencia';
+  const totalVisitas = enlaces.reduce((acc, e) => {
+    const key = `${baseSlug}:${e.tipo}`;
+    const v = (visitsByKey[key] ?? visitsByTipo[e.tipo] ?? e.visitas ?? analytics[e.tipo]?.visits ?? 0) as number;
+    return acc + v;
+  }, 0);
+  const totalCotizaciones = enlaces.reduce((acc, e) => {
+    const key = `${baseSlug}:${e.tipo}`;
+    const q = (quotesByKey[key] ?? quotesByTipo[e.tipo] ?? e.cotizaciones ?? analytics[e.tipo]?.quotes ?? 0) as number;
+    return acc + q;
+  }, 0);
 
   const copiarEnlace = (enlace: string) => {
-    navigator.clipboard.writeText(`https://${enlace}`);
+    navigator.clipboard.writeText(enlace);
   };
 
-  const generarEnlace = (tipo: string, nombre: string) => {
-    const slug = nombre
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-    return `fgr.link/latamseguros/co/${tipo}/${slug}`;
+  const generarEnlace = (tipo: string, _nombre: string) => {
+    const base = typeof window !== 'undefined' ? window.location.origin : '';
+    const slugAgencia = agencySlug || 'mi-agencia';
+    return `${base}/web/${slugAgencia}/${tipo}`;
   };
 
   useEffect(() => {
@@ -103,26 +79,95 @@ const EnlacesCotizacion = () => {
         const res = await enlacesService.list({ per_page: 100 });
         const rows = (res?.data || res?.data?.data || res || []).data || res?.data || [];
         setEnlaces(rows);
+
+        // Cargar analíticas y conteos reales usando localStorage (fallback sin backend)
+        const baseSlugLocal = agencySlug || 'mi-agencia';
+
+        // Visitas por enlace (slug:tipo) y por tipo (sin slug)
+        const analyticsData: Record<string, any> = {};
+        const visitsMap: Record<string, number> = {};
+        const visitsTipoMap: Record<string, number> = {};
+        try {
+          const rawVisits = localStorage.getItem('visits_log');
+          if (rawVisits) {
+            const visits = JSON.parse(rawVisits) as Array<{ slug: string; tipo?: string }>;
+            for (const v of visits) {
+              if (!v.tipo) continue;
+              const kTipo = v.tipo;
+              visitsTipoMap[kTipo] = (visitsTipoMap[kTipo] || 0) + 1;
+              if (v.slug === baseSlugLocal) {
+                const k = `${baseSlugLocal}:${v.tipo}`;
+                visitsMap[k] = (visitsMap[k] || 0) + 1;
+              }
+            }
+          }
+        } catch {}
+
+        for (const enlace of rows) {
+          const k = `${baseSlugLocal}:${enlace.tipo}`;
+          const visits = (visitsMap[k] ?? enlace.visitas ?? 0) as number;
+          analyticsData[enlace.tipo] = {
+            visits,
+            quotes: 0,
+            conversion_rate: 0,
+          };
+        }
+        setAnalytics(analyticsData);
+        setVisitsByKey(visitsMap);
+        setVisitsByTipo(visitsTipoMap);
+
+        // Cotizaciones reales por enlace (slug:tipo) y por tipo (sin slug)
+        const quotesMap: Record<string, number> = {};
+        const quotesTipoMap: Record<string, number> = {};
+        try {
+          const raw = localStorage.getItem('quotes_submissions');
+          if (raw) {
+            const subs = JSON.parse(raw) as Array<{ slug: string; tipo: string }>;
+            for (const s of subs) {
+              quotesTipoMap[s.tipo] = (quotesTipoMap[s.tipo] || 0) + 1;
+              if (s.slug === baseSlugLocal) {
+                const key = `${baseSlugLocal}:${s.tipo}`;
+                quotesMap[key] = (quotesMap[key] || 0) + 1;
+              }
+            }
+          }
+        } catch {}
+        setQuotesByKey(quotesMap);
+        setQuotesByTipo(quotesTipoMap);
       } catch (_) {
       } finally {
         setLoading(false);
       }
     };
     load();
+  }, [agencySlug]);
+  
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const cfg = await miniWebService.getConfig();
+        if (mounted && cfg.success && cfg.data?.slug) {
+          setAgencySlug(cfg.data.slug);
+        }
+      } catch {}
+    })();
+    return () => { mounted = false; };
   }, []);
 
   return (
     <>
-      <BreadcrumbComp title="Crear Enlaces de Cotización" items={BCrumb} />
-
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-dark dark:text-white mb-2">
-          Crear Enlaces de Cotización
+          Enlaces de Cotización
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          Crea y administra enlaces personalizados de cotización para tus productos.
+          Crea enlaces personalizados de cotización y gestiona las cotizaciones recibidas.
         </p>
       </div>
+
+      <Tabs aria-label="Enlaces de cotización tabs" className="mb-6">
+        <Tabs.Item active title="Enlaces" icon={() => <Icon icon="solar:link-bold" width={16} />}>
 
       {/* Estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
@@ -175,14 +220,6 @@ const EnlacesCotizacion = () => {
         </Card>
       </div>
 
-      {/* Alerta informativa */}
-      <Alert color="info" className="mb-6">
-        <Icon icon="solar:info-circle-bold" className="mr-2" width={16} />
-        <span>
-          <strong>Enlaces Personalizados:</strong> Crea enlaces únicos para cada tipo de seguro. Los
-          clientes podrán cotizar directamente desde estos enlaces.
-        </span>
-      </Alert>
 
       {/* Sección Enlaces Activos */}
       <Card className="mb-6">
@@ -204,9 +241,7 @@ const EnlacesCotizacion = () => {
 
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {enlacesFiltrados
-              .filter((e) => e.activo)
-              .map((enlace) => {
+            {enlacesFiltrados.map((enlace) => {
                 const tipoInfo = getTipoInfo(enlace.tipo);
                 return (
                   <div
@@ -238,16 +273,21 @@ const EnlacesCotizacion = () => {
                           } catch (_) {}
                         }}
                       />
+                      <span className="text-xs text-gray-500 ml-2">
+                        {enlace.activo ? 'Activo' : 'Inactivo'}
+                      </span>
                     </div>
 
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-3">
                       <div className="flex items-center gap-2 text-sm">
                         <Icon icon="solar:link-bold" className="text-gray-500" width={16} />
-                        <code className="text-primary font-mono">{enlace.enlace}</code>
+                        <code className="text-primary font-mono">
+                          {agencySlug ? `${window.location.origin}/web/${agencySlug}/${enlace.tipo}` : (enlace.enlace || '')}
+                        </code>
                         <Button
                           size="xs"
                           color="light"
-                          onClick={() => copiarEnlace(enlace.enlace)}
+                          onClick={() => copiarEnlace(agencySlug ? `${window.location.origin}/web/${agencySlug}/${enlace.tipo}` : (enlace.enlace || ''))}
                           title="Copiar enlace"
                         >
                           <Icon icon="solar:copy-bold" width={14} />
@@ -259,15 +299,23 @@ const EnlacesCotizacion = () => {
                       <div>
                         <span className="text-gray-500">Visitas:</span>
                         <span className="font-medium text-dark dark:text-white ml-1">
-                          {enlace.visitas}
+                          {(visitsByKey[`${baseSlug}:${enlace.tipo}`] ?? visitsByTipo[enlace.tipo] ?? enlace.visitas ?? analytics[enlace.tipo]?.visits ?? 0) as number}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-500">Cotizaciones:</span>
                         <span className="font-medium text-dark dark:text-white ml-1">
-                          {enlace.cotizaciones}
+                          {(quotesByKey[`${baseSlug}:${enlace.tipo}`] ?? quotesByTipo[enlace.tipo] ?? enlace.cotizaciones ?? analytics[enlace.tipo]?.quotes ?? 0) as number}
                         </span>
                       </div>
+                    </div>
+                    <div className="text-xs text-gray-500 mb-3">
+                      Tasa de conversión:{' '}
+                      {(() => {
+                        const v = (visitsByKey[`${baseSlug}:${enlace.tipo}`] ?? visitsByTipo[enlace.tipo] ?? enlace.visitas ?? analytics[enlace.tipo]?.visits ?? 0) as number;
+                        const q = (quotesByKey[`${baseSlug}:${enlace.tipo}`] ?? quotesByTipo[enlace.tipo] ?? enlace.cotizaciones ?? analytics[enlace.tipo]?.quotes ?? 0) as number;
+                        return v > 0 ? Math.round((q / v) * 100) : 0;
+                      })()}%
                     </div>
 
                     <div className="flex gap-2">
@@ -280,19 +328,34 @@ const EnlacesCotizacion = () => {
                       </Button>
                       <Button
                         size="xs"
-                        color="light"
-                        className="!text-gray-500"
+                        color="failure"
                         onClick={async () => {
-                          try {
-                            await enlacesService.remove(Number(enlace.id));
-                            const res = await enlacesService.list({ per_page: 100 });
-                            const rows =
-                              (res?.data || res?.data?.data || res || []).data || res?.data || [];
-                            setEnlaces(rows);
-                          } catch (_) {}
+                          // Verificar si hay cotizaciones para este enlace
+                          const cotizacionesRaw = localStorage.getItem('quotes_submissions');
+                          let cotizacionesCount = 0;
+                          if (cotizacionesRaw) {
+                            try {
+                              const cotizaciones = JSON.parse(cotizacionesRaw);
+                              cotizacionesCount = cotizaciones.filter((c: any) => c.tipo === enlace.tipo).length;
+                            } catch {}
+                          }
+
+                          const confirmMessage = cotizacionesCount > 0
+                            ? `¿Estás seguro de eliminar este enlace? Se perderán ${cotizacionesCount} cotización(es) asociada(s). Esta acción no se puede deshacer.`
+                            : '¿Estás seguro de eliminar este enlace?';
+
+                          if (window.confirm(confirmMessage)) {
+                            try {
+                              await enlacesService.remove(Number(enlace.id));
+                              const res = await enlacesService.list({ per_page: 100 });
+                              const rows =
+                                (res?.data || res?.data?.data || res || []).data || res?.data || [];
+                              setEnlaces(rows);
+                            } catch (_) {}
+                          }
                         }}
                       >
-                        <Icon icon="solar:settings-bold" width={12} />
+                        <Icon icon="solar:trash-bin-minimalistic-2-bold" width={12} />
                       </Button>
                     </div>
                   </div>
@@ -352,11 +415,29 @@ const EnlacesCotizacion = () => {
                 </label>
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
                   <code className="text-primary font-mono text-sm">
-                    https://{generarEnlace(nuevoEnlace.tipo, nuevoEnlace.nombre)}
+                    {generarEnlace(nuevoEnlace.tipo, nuevoEnlace.nombre)}
                   </code>
                 </div>
               </div>
             )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Campos predefinidos para {getTipoInfo(nuevoEnlace.tipo).label}
+              </label>
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                <ul className="text-sm grid md:grid-cols-2 gap-2">
+                  {(FIELDS_BY_TIPO[nuevoEnlace.tipo] || []).map((f) => (
+                    <li key={f.key} className="flex items-center gap-2">
+                      <Badge color="light">{f.type}</Badge>
+                      <span className="text-dark dark:text-white">{f.label}</span>
+                      {f.type === 'select' && f.options?.length ? (
+                        <span className="text-xs text-gray-500">({f.options.length} opciones)</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
@@ -374,6 +455,10 @@ const EnlacesCotizacion = () => {
                   tipo: nuevoEnlace.tipo,
                   descripcion: nuevoEnlace.descripcion,
                   mensaje_bienvenida: nuevoEnlace.mensaje_bienvenida,
+                  // Configuración de campos para el formulario público
+                  config_campos: FIELDS_BY_TIPO[nuevoEnlace.tipo] || [],
+                  // URL sugerida (el backend puede ignorarla si construye su propia URL)
+                  enlace_sugerido: generarEnlace(nuevoEnlace.tipo, nuevoEnlace.nombre),
                 });
                 const res = await enlacesService.list({ per_page: 100 });
                 const rows = (res?.data || res?.data?.data || res || []).data || res?.data || [];
@@ -396,6 +481,13 @@ const EnlacesCotizacion = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+        </Tabs.Item>
+
+        <Tabs.Item title="Cotizaciones" icon={() => <Icon icon="solar:document-text-bold" width={16} />}>
+          <CotizacionesRecibidas />
+        </Tabs.Item>
+      </Tabs>
 
       {loading && (
         <div className="fixed inset-0 bg-black/10 flex items-center justify-center">

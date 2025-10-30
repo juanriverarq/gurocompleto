@@ -10,9 +10,20 @@ import {
   getAgentTemplatesByCategory
 } from '../../data/campaignAgentTemplates';
 import { clienteService, Cliente } from '../../services/clienteService';
-import voiceCampaignService from '../../services/voiceCampaignService';
+import voiceCampaignService, { VoiceCampaignTriggerInput } from '../../services/voiceCampaignService';
 import whatsappInstanceService from '../../services/whatsappInstanceService';
 import { getVoiceList, testVoice } from '../../services/elevenLabsService';
+import { createPortal } from 'react-dom';
+import { useSaas } from '../../contexts/SaasContext';
+
+// Importar imágenes de perfil para que funcionen en producción
+import real1 from '../../assets/images/profile/real1.jpg';
+import real2 from '../../assets/images/profile/real2.jpg';
+import real3 from '../../assets/images/profile/real3.jpg';
+import real4 from '../../assets/images/profile/real4.jpg';
+import real5 from '../../assets/images/profile/real5.jpg';
+import real6 from '../../assets/images/profile/real6.jpg';
+import real7 from '../../assets/images/profile/real7.jpg';
 
 interface ElevenLabsVoice {
   voice_id: string;
@@ -161,14 +172,24 @@ const STEPS = [
   { id: 1, title: 'Agente', icon: 'solar:user-id-bold-duotone', description: 'Seleccionar agente especializado' },
   { id: 2, title: 'Voz', icon: 'solar:soundwave-bold-duotone', description: 'Configurar voz del agente' },
   { id: 3, title: 'Presentación', icon: 'solar:user-speak-bold-duotone', description: 'Definir nombre del agente' },
-  { id: 4, title: 'Clientes', icon: 'solar:users-group-two-rounded-bold-duotone', description: 'Seleccionar audiencia' },
-  { id: 5, title: 'Herramientas', icon: 'solar:tools-bold-duotone', description: 'Datos a recolectar y WhatsApp' },
+  { id: 4, title: 'Herramientas', icon: 'solar:settings-minimalistic-bold-duotone', description: 'Disparadores y configuración' },
+  { id: 5, title: 'Clientes', icon: 'solar:users-group-two-rounded-bold-duotone', description: 'Audiencia (opcional con triggers)' },
   { id: 6, title: 'Ejecutar', icon: 'solar:play-circle-bold-duotone', description: 'Lanzar campaña' }
 ];
 
 
 
 export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onComplete, onCancel }) => {
+  // Usar contexto SaaS de forma segura (puede no estar disponible en todos los contextos)
+  let tenant: any = null;
+  try {
+    const saasContext = useSaas();
+    tenant = saasContext?.tenant;
+  } catch (e) {
+    // Si no está dentro de SaasProvider, tenant será null
+    console.warn('[CampaignWizard] SaasContext no disponible, usando fallback para nombre de empresa');
+  }
+  
   const [currentStep, setCurrentStep] = useState(1);
   const [campaignData, setCampaignData] = useState<CampaignData>(INITIAL_CAMPAIGN_DATA);
   const tabsRef = useRef<TabsRef>(null);
@@ -182,7 +203,23 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onComplete, onCa
   const [loadingVoices, setLoadingVoices] = useState(false);
   const [selectedRealVoice, setSelectedRealVoice] = useState<string>('86V9x9hrQds83qf7zaGn'); // Voz por defecto
   const [waInstances, setWaInstances] = useState<Array<{ id?: number; instance_id: string; status?: string }>>([]);
-  
+
+  const [triggersConfig, setTriggersConfig] = useState({
+    types: {
+      new_client: false,
+      new_policy: false,
+      policy_expiry: false,
+      new_lead: false,
+      new_siniestro: false,
+    },
+    selectedType: 'none' as string, // Tipo seleccionado: 'none' o uno de los tipos
+    window: { start: '08:00', end: '18:00', tz: 'America/Bogota', days: 'mon,tue,wed,thu,fri' },
+    limits: { daily_quota: 100, dedup_days: 7 },
+    expiry: { before_days: '7,3,1', after_days: '1' }, // solo aplica para policy_expiry
+    mapping: { phone_field: 'client.mobile_phone' }
+  });
+
+
 // Lista filtrada (memo) con null-safety para búsqueda rápida y sin errores en toLowerCase
 const brokerClientsFiltered = React.useMemo(() => {
   if (!clientSearch.trim()) return brokerClients;
@@ -551,9 +588,18 @@ const brokerClientsFiltered = React.useMemo(() => {
       case 1: return !!campaignData.selectedTemplate;
       case 2: return !!campaignData.selectedTemplate && !!selectedRealVoice;
       case 3: return !!campaignData.agentName.trim();
-      case 4: return campaignData.selectedContacts.length > 0;
-      case 5: return true; // Herramientas (opcional)
-      case 6: return campaignData.selectedContacts.length > 0 && !!campaignData.selectedTemplate && !!campaignData.agentName.trim() && !!selectedRealVoice;
+      case 4: return true; // Herramientas (opcional)
+      case 5: {
+        // Clientes: opcional si hay triggers configurados
+        const triggers = buildTriggersPayload();
+        return triggers.length > 0 || campaignData.selectedContacts.length > 0;
+      }
+      case 6: {
+        const triggers = buildTriggersPayload();
+        const hasBasicConfig = !!campaignData.selectedTemplate && !!campaignData.agentName.trim() && !!selectedRealVoice;
+        // Si hay triggers, no requiere clientes. Si no hay triggers, sí requiere clientes.
+        return hasBasicConfig && (triggers.length > 0 || campaignData.selectedContacts.length > 0);
+      }
       default: return false;
     }
   };
@@ -573,14 +619,24 @@ const brokerClientsFiltered = React.useMemo(() => {
         if (!campaignData.agentName.trim()) return "Define el nombre con el que se presentará el agente";
         return "";
       case 4:
-        if (campaignData.selectedContacts.length === 0) return "Selecciona al menos un cliente";
+        return ""; // Herramientas es opcional
+      case 5: {
+        const triggers = buildTriggersPayload();
+        if (triggers.length === 0 && campaignData.selectedContacts.length === 0) {
+          return "Selecciona clientes o configura disparadores automáticos";
+        }
         return "";
-      case 5:
+      }
+      case 6: {
+        if (!campaignData.selectedTemplate || !campaignData.agentName.trim() || !selectedRealVoice) {
+          return "Completa la configuración del agente y voz";
+        }
+        const triggers = buildTriggersPayload();
+        if (triggers.length === 0 && campaignData.selectedContacts.length === 0) {
+          return "Selecciona clientes o configura disparadores";
+        }
         return "";
-      case 6:
-        if (!campaignData.selectedTemplate || !campaignData.agentName.trim() || !selectedRealVoice) return "Completa la configuración del agente y voz";
-        if (campaignData.selectedContacts.length === 0) return "Selecciona la audiencia";
-        return "";
+      }
       default: return "";
     }
   };
@@ -747,14 +803,14 @@ const brokerClientsFiltered = React.useMemo(() => {
                 };
                 const items = elevenLabsVoices.map((voice) => {
                   const displayName = toDisplay(voice.name);
-                  let photoSrc = `/src/assets/images/profile/real1.jpg`;
-                  if (displayName === 'Andrea') photoSrc = '/src/assets/images/profile/real5.jpg';
-                  else if (displayName === 'Juan Restrepo') photoSrc = '/src/assets/images/profile/real6.jpg';
-                  else if (displayName === 'Mariana') photoSrc = '/src/assets/images/profile/real7.jpg';
-                  else if (displayName === 'Cristián Sánchez') photoSrc = '/src/assets/images/profile/real1.jpg';
-                  else if (displayName === 'Marcela') photoSrc = '/src/assets/images/profile/real2.jpg';
-                  else if (displayName === 'Claudia') photoSrc = '/src/assets/images/profile/real3.jpg';
-                  else if (displayName === 'Sofía') photoSrc = '/src/assets/images/profile/real4.jpg';
+                  let photoSrc = real1;
+                  if (displayName === 'Andrea') photoSrc = real5;
+                  else if (displayName === 'Juan Restrepo') photoSrc = real6;
+                  else if (displayName === 'Mariana') photoSrc = real7;
+                  else if (displayName === 'Cristián Sánchez') photoSrc = real1;
+                  else if (displayName === 'Marcela') photoSrc = real2;
+                  else if (displayName === 'Claudia') photoSrc = real3;
+                  else if (displayName === 'Sofía') photoSrc = real4;
                   return {
                     voice,
                     displayName,
@@ -1346,6 +1402,63 @@ const brokerClientsFiltered = React.useMemo(() => {
     return `Campaña ${campaignData.selectedTemplate.category} - ${timestamp}`;
   };
 
+  const buildTriggersPayload = (): VoiceCampaignTriggerInput[] => {
+    // Si selectedType es 'none' o vacío, retornar array vacío
+    if (triggersConfig.selectedType === 'none' || triggersConfig.selectedType === '') {
+      return [];
+    }
+
+    const parseCsvNums = (s: string): number[] =>
+      (s || '')
+        .split(',')
+        .map(x => x.trim())
+        .filter(x => x !== '')
+        .map(x => parseInt(x, 10))
+        .filter(n => !Number.isNaN(n));
+
+    const windowDays = (triggersConfig.window.days || '')
+      .split(',')
+      .map(d => d.trim().toLowerCase())
+      .filter(Boolean);
+
+    const baseTrigger: Omit<VoiceCampaignTriggerInput, 'type'> = {
+      enabled: true,
+      window_config: {
+        start: triggersConfig.window.start,
+        end: triggersConfig.window.end,
+        tz: triggersConfig.window.tz,
+        days: windowDays.length ? windowDays : ['mon','tue','wed','thu','fri']
+      },
+      limits: {
+        daily_quota: Number(triggersConfig.limits.daily_quota) || 0,
+        dedup_days: Number(triggersConfig.limits.dedup_days) || 0
+      },
+      mapping: {
+        phone_field: triggersConfig.mapping.phone_field || 'client.mobile_phone'
+      }
+    };
+
+    const triggers: VoiceCampaignTriggerInput[] = [];
+    (Object.keys(triggersConfig.types) as Array<keyof typeof triggersConfig.types>).forEach((key) => {
+      if (triggersConfig.types[key]) {
+        if (key === 'policy_expiry') {
+          triggers.push({
+            type: 'policy_expiry',
+            ...baseTrigger,
+            expiry_offsets: {
+              before_days: parseCsvNums(triggersConfig.expiry.before_days),
+              after_days: parseCsvNums(triggersConfig.expiry.after_days)
+            }
+          });
+        } else {
+          triggers.push({ type: key as any, ...baseTrigger });
+        }
+      }
+    });
+
+    return triggers;
+  };
+
   // Función para ejecutar campaña (movida para ser accesible globalmente)
   const handleExecuteCampaign = async () => {
       const currentTime = Date.now();
@@ -1384,9 +1497,9 @@ const brokerClientsFiltered = React.useMemo(() => {
         // Requisitos: phone_number y opcionalmente custom_data
         const contacts = campaignData.selectedContacts.map(client => {
           const fullName = `${client.nombre} ${client.apellidos}`.trim();
-          const companyName = (campaignData.customVariables?.company_name || 'GURO Seguros');
-          const policyNumber = (campaignData.customVariables?.policy_number || 'N/A');
-          const debtAmount = Number(campaignData.customVariables?.debt_amount) || 0;
+          const companyName = (campaignData.customVariables?.company_name || tenant?.branding?.nombre_comercial || tenant?.nombre || 'POSITIVA SEGUROS');
+          const policyNumber = (campaignData.customVariables?.policy_number || 'uno, dos, veinticinco,catorce, once');
+          const debtAmount = Number(campaignData.customVariables?.debt_amount) || 'Ciento cincuenta mil pesos';
           const dueDate =
             campaignData.customVariables?.payment_due_date ||
             new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -1416,6 +1529,7 @@ const brokerClientsFiltered = React.useMemo(() => {
           const agentMapping: Record<string, string> = {
             // Cobranzas - usar Marcela
             'payment_reminder': 'agent_01k02pehqgfywb54fz2z8ts74h',
+            'debt_collection': 'agent_01k02pehqgfywb54fz2z8ts74h', // Recuperación de Cartera
             'claim_support': 'agent_01k02pehqgfywb54fz2z8ts74h',
             
             // Ventas - usar Sofia
@@ -1439,13 +1553,24 @@ const brokerClientsFiltered = React.useMemo(() => {
         const voiceId = selectedRealVoice;
         
         // Preparar datos de la campaña en el formato esperado por el backend Laravel
+        const triggers = buildTriggersPayload();
+        
+        // 🔥 LÓGICA CLAVE: Si hay triggers configurados, NO ejecutar inmediatamente
+        // La campaña queda en draft esperando que los triggers se activen con eventos reales
+        const hasTriggers = triggers.length > 0;
+        
         const campaignRequest = {
           name: campaignName,
-          description: campaignData.campaignDescription || `Campaña automática de ${campaignData.selectedTemplate.category} ejecutada inmediatamente`,
+          description: campaignData.campaignDescription || (hasTriggers
+            ? `Campaña con disparadores automáticos de ${campaignData.selectedTemplate.category}`
+            : `Campaña automática de ${campaignData.selectedTemplate.category} ejecutada inmediatamente`),
           elevenlabs_agent_id: realAgentId,      // id del agente en ElevenLabs
-          type: 'immediate',                     // inmediata por diseño
+          type: 'immediate',                     // tipo de campaña
           priority: 'medium',
           contacts,                              // con phone_number y custom_data
+          ...(triggers.length > 0 ? { triggers } : {}),
+          // 🔥 Si hay triggers, guardar como draft (no ejecutar inmediatamente)
+          save_as_draft: hasTriggers,
           // Extras útiles que el backend puede registrar
           agent_name: campaignData.agentName || campaignData.selectedTemplate.agentPersona.name,
           voice_message_template: campaignData.customFirstMessage || campaignData.selectedTemplate.firstMessageTemplate,
@@ -1504,13 +1629,20 @@ const brokerClientsFiltered = React.useMemo(() => {
             campaign_id: response.campaign?.id,
             timestamp: new Date().toISOString(),
             execution_time: Date.now() - currentTime,
-            contacts_count: contacts.length
+            contacts_count: contacts.length,
+            has_triggers: hasTriggers,
+            saved_as_draft: hasTriggers
           });
           setExecutionStarted(true);
           
           // Notificar al padre sin reintentar crear (evitar doble POST)
           if (onComplete) {
-            onComplete({ created_by_wizard: true, campaign: response.campaign, type: 'immediate' } as any);
+            onComplete({
+              created_by_wizard: true,
+              campaign: response.campaign,
+              type: hasTriggers ? 'triggered' : 'immediate',
+              has_triggers: hasTriggers
+            } as any);
           }
         } else {
           console.error('❌ [CampaignWizard] Error al crear campaña de voz:', response.message);
@@ -1529,19 +1661,42 @@ const brokerClientsFiltered = React.useMemo(() => {
   // Componente Paso 4: Ejecutar Campaña
   const renderExecuteCampaign = () => {
     if (executionStarted) {
+      const triggers = buildTriggersPayload();
+      const hasTriggers = triggers.length > 0;
+      
       return (
         <div className="space-y-6">
-          <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+          <Card className={hasTriggers ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800" : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"}>
             <div className="p-8 text-center">
-              <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Icon icon="solar:check-circle-bold" className="w-8 h-8 text-white" />
+              <div className={`w-16 h-16 ${hasTriggers ? 'bg-blue-500' : 'bg-green-500'} rounded-full flex items-center justify-center mx-auto mb-4`}>
+                <Icon icon={hasTriggers ? "solar:alarm-bell-bold" : "solar:check-circle-bold"} className="w-8 h-8 text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-green-800 dark:text-green-300 mb-2">
-                ¡Campaña Iniciada!
+              <h2 className={`text-2xl font-bold ${hasTriggers ? 'text-blue-800 dark:text-blue-300' : 'text-green-800 dark:text-green-300'} mb-2`}>
+                {hasTriggers ? '¡Campaña Configurada con Disparadores!' : '¡Campaña Iniciada!'}
               </h2>
               <p className="text-gray-600 dark:text-gray-400">
-                Las llamadas están procesándose en segundo plano
+                {hasTriggers
+                  ? 'La campaña está lista y se activará automáticamente cuando se cumplan las condiciones configuradas'
+                  : 'Las llamadas están procesándose en segundo plano'}
               </p>
+              {hasTriggers && (
+                <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                    <strong>Disparadores activos:</strong>
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {triggers.map((t, idx) => (
+                      <Badge key={idx} color="info" size="sm">
+                        {t.type === 'new_client' ? 'Nuevo Cliente' :
+                         t.type === 'new_policy' ? 'Nueva Póliza' :
+                         t.type === 'policy_expiry' ? 'Vencimiento de Póliza' :
+                         t.type === 'new_lead' ? 'Nuevo Lead' :
+                         t.type === 'new_siniestro' ? 'Nuevo Siniestro' : t.type}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
           
@@ -1785,32 +1940,75 @@ const brokerClientsFiltered = React.useMemo(() => {
             </div>
           </Card>
         ) : (
-          <Card className="bg-primary/5 border-primary/20">
-            <div className="p-6 text-center">
-              <Icon icon="solar:rocket-outline" className="w-16 h-16 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                Campaña Lista para Ejecutar
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Se realizarán <strong>{campaignData.selectedContacts.length}</strong> llamadas automáticas con el agente <strong>{campaignData.selectedTemplate?.agentPersona.name}</strong>
-              </p>
-              <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-6 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Icon icon="solar:lightning-outline" className="w-4 h-4" />
-                  <span>Ejecución inmediata</span>
-              </div>
-                <div className="flex items-center gap-2">
-                  <Icon icon="solar:robot-bold" className="w-4 h-4" />
-                  <span>Agente IA</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Icon icon="solar:phone-outline" className="w-4 h-4" />
-                  <span>Llamadas automáticas</span>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Usa los botones de abajo para probar, guardar o ejecutar la campaña</p>
-            </div>
-          </Card>
+          <>
+            {(() => {
+              const triggers = buildTriggersPayload();
+              const hasTriggers = triggers.length > 0;
+              
+              return (
+                <Card className="bg-primary/5 border-primary/20">
+                  <div className="p-6 text-center">
+                    <Icon icon={hasTriggers ? "solar:alarm-bell-outline" : "solar:rocket-outline"} className="w-16 h-16 text-primary mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                      {hasTriggers ? 'Campaña con Disparadores Configurada' : 'Campaña Lista para Ejecutar'}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                      {hasTriggers ? (
+                        <>
+                          Esta campaña se activará <strong>automáticamente</strong> cuando se cumplan las condiciones configuradas.
+                          <br />
+                          <span className="text-sm">No se ejecutará inmediatamente al guardar.</span>
+                        </>
+                      ) : (
+                        <>
+                          Se realizarán <strong>{campaignData.selectedContacts.length}</strong> llamadas automáticas con el agente <strong>{campaignData.selectedTemplate?.agentPersona.name}</strong>
+                        </>
+                      )}
+                    </p>
+                    
+                    {hasTriggers ? (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                        <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                          Disparadores activos:
+                        </p>
+                        <div className="flex flex-wrap gap-2 justify-center">
+                          {triggers.map((t, idx) => (
+                            <Badge key={idx} color="info" size="sm">
+                              {t.type === 'new_client' ? 'Nuevo Cliente' :
+                               t.type === 'new_policy' ? 'Nueva Póliza' :
+                               t.type === 'policy_expiry' ? 'Vencimiento de Póliza' :
+                               t.type === 'new_lead' ? 'Nuevo Lead' :
+                               t.type === 'new_siniestro' ? 'Nuevo Siniestro' : t.type}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-6 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <Icon icon="solar:lightning-outline" className="w-4 h-4" />
+                          <span>Ejecución inmediata</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Icon icon="solar:robot-bold" className="w-4 h-4" />
+                          <span>Agente IA</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Icon icon="solar:phone-outline" className="w-4 h-4" />
+                          <span>Llamadas automáticas</span>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                      {hasTriggers
+                        ? 'Usa "Guardar" para activar los disparadores. Las llamadas se ejecutarán cuando ocurran los eventos configurados.'
+                        : 'Usa los botones de abajo para probar, guardar o ejecutar la campaña'}
+                    </p>
+                  </div>
+                </Card>
+              );
+            })()}
+          </>
         )}
       </div>
     );
@@ -1820,10 +2018,10 @@ const brokerClientsFiltered = React.useMemo(() => {
 
 
 
-  return (
-    <div 
-      className="fixed inset-0 z-50 bg-black/60 overscroll-none"
-      style={{ 
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9998] bg-black/60 overscroll-none"
+      style={{
         margin: 0,
         padding: 0,
         display: 'flex',
@@ -1838,7 +2036,7 @@ const brokerClientsFiltered = React.useMemo(() => {
         height: '100vh'
       } as React.CSSProperties}
     >
-      <div className="w-full h-full p-0 flex items-center justify-center">
+      <div className="w-full h-full p-0 flex items-center justify-center relative z-[9999]">
       <div 
         className="w-full max-w-7xl h-[90vh] bg-white dark:bg-gray-900 rounded-lg shadow-xl flex flex-col overflow-hidden"
         style={{ 
@@ -1932,8 +2130,7 @@ const brokerClientsFiltered = React.useMemo(() => {
                   {isActive && step.id === 1 && renderAgentSelection()}
                   {isActive && step.id === 2 && renderVoiceConfiguration()}
                   {isActive && step.id === 3 && renderAgentPresentation()}
-                  {isActive && step.id === 4 && renderClientSelection()}
-                  {isActive && step.id === 5 && (
+                  {isActive && step.id === 4 && (
                     <div className="space-y-6">
                       <Card>
                         <div className="p-6">
@@ -1943,24 +2140,228 @@ const brokerClientsFiltered = React.useMemo(() => {
                           </h4>
                           
                           <Tabs aria-label="Herramientas avanzadas" variant="underline">
-                            <Tabs.Item title="Recolección de Datos" icon={() => <Icon icon="solar:database-bold" height={16} />}>
-                              <div className="mt-4">
-                                <DynamicFieldsConfig
-                                  collectConfig={campaignData.postCallTools.collect}
-                                  customFields={campaignData.postCallTools.customFields}
-                                  onCollectConfigChange={(config) => setCampaignData(prev => ({
-                                    ...prev,
-                                    postCallTools: { ...prev.postCallTools, collect: config }
-                                  }))}
-                                  onCustomFieldsChange={(fields) => setCampaignData(prev => ({
-                                    ...prev,
-                                    postCallTools: { ...prev.postCallTools, customFields: fields }
-                                  }))}
-                                />
+                            <Tabs.Item
+                              title="Disparadores"
+                              icon={() => <Icon icon="solar:alarm-bell-bold-duotone" className="w-4 h-4" />}
+                            >
+                              <div className="mt-4 space-y-6">
+                                {/* Tipo de disparador - Select único */}
+                                <div>
+                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 block">
+                                    Tipo de Disparador
+                                  </label>
+                                  <ShadSelect
+                                    value={triggersConfig.selectedType}
+                                    onValueChange={(value) => {
+                                      // Reset all types to false, then set selected one to true
+                                      const newTypes = {
+                                        new_client: false,
+                                        new_policy: false,
+                                        policy_expiry: false,
+                                        new_lead: false,
+                                        new_siniestro: false,
+                                      };
+                                      if (value && value !== 'none') {
+                                        (newTypes as any)[value] = true;
+                                      }
+                                      setTriggersConfig(prev => ({
+                                        ...prev,
+                                        selectedType: value,
+                                        types: newTypes
+                                      }));
+                                    }}
+                                  >
+                                    <ShadSelectTrigger className="w-full">
+                                      <ShadSelectValue placeholder="Selecciona un tipo de disparador" />
+                                    </ShadSelectTrigger>
+                                    <ShadSelectContent>
+                                      <ShadSelectItem value="none">Sin disparador</ShadSelectItem>
+                                      <ShadSelectItem value="new_client">Nuevo Cliente</ShadSelectItem>
+                                      <ShadSelectItem value="new_policy">Nueva Póliza</ShadSelectItem>
+                                      <ShadSelectItem value="policy_expiry">Vencimiento de Póliza</ShadSelectItem>
+                                      <ShadSelectItem value="new_lead">Nuevo Lead</ShadSelectItem>
+                                      <ShadSelectItem value="new_siniestro">Nuevo Siniestro</ShadSelectItem>
+                                    </ShadSelectContent>
+                                  </ShadSelect>
+                                </div>
+
+                                {/* Días de la semana - Checkboxes visuales */}
+                                <div>
+                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 block">
+                                    Días de la Semana
+                                  </label>
+                                  <div className="grid grid-cols-7 gap-2">
+                                    {[
+                                      { key: 'mon', label: 'Lun' },
+                                      { key: 'tue', label: 'Mar' },
+                                      { key: 'wed', label: 'Mié' },
+                                      { key: 'thu', label: 'Jue' },
+                                      { key: 'fri', label: 'Vie' },
+                                      { key: 'sat', label: 'Sáb' },
+                                      { key: 'sun', label: 'Dom' },
+                                    ].map(day => (
+                                      <label key={day.key} className="flex flex-col items-center gap-1 cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          className="sr-only"
+                                          checked={triggersConfig.window.days.includes(day.key)}
+                                          onChange={(e) => {
+                                            const currentDays = triggersConfig.window.days.split(',').map(d => d.trim()).filter(Boolean);
+                                            let newDays: string[];
+                                            if (e.target.checked) {
+                                              newDays = [...currentDays, day.key];
+                                            } else {
+                                              newDays = currentDays.filter(d => d !== day.key);
+                                            }
+                                            setTriggersConfig(prev => ({
+                                              ...prev,
+                                              window: { ...prev.window, days: newDays.join(',') }
+                                            }));
+                                          }}
+                                        />
+                                        <div className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-sm font-medium transition-colors ${
+                                          triggersConfig.window.days.includes(day.key)
+                                            ? 'bg-primary border-primary text-white'
+                                            : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-primary/50'
+                                        }`}>
+                                          {day.label}
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Horarios y zona horaria */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                                      Hora Inicio
+                                    </label>
+                                    <input
+                                      type="time"
+                                      className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                      value={triggersConfig.window.start}
+                                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, start: e.target.value } }))}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                                      Hora Fin
+                                    </label>
+                                    <input
+                                      type="time"
+                                      className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                      value={triggersConfig.window.end}
+                                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, end: e.target.value } }))}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                                      Zona Horaria
+                                    </label>
+                                    <ShadSelect
+                                      value={triggersConfig.window.tz}
+                                      onValueChange={(value) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, tz: value } }))}
+                                    >
+                                      <ShadSelectTrigger className="w-full">
+                                        <ShadSelectValue />
+                                      </ShadSelectTrigger>
+                                      <ShadSelectContent>
+                                        <ShadSelectItem value="America/Bogota">Colombia (GMT-5)</ShadSelectItem>
+                                        <ShadSelectItem value="America/Mexico_City">México (GMT-6)</ShadSelectItem>
+                                        <ShadSelectItem value="America/Lima">Perú (GMT-5)</ShadSelectItem>
+                                        <ShadSelectItem value="America/Santiago">Chile (GMT-4)</ShadSelectItem>
+                                        <ShadSelectItem value="America/Argentina/Buenos_Aires">Argentina (GMT-3)</ShadSelectItem>
+                                        <ShadSelectItem value="America/New_York">Nueva York (GMT-5)</ShadSelectItem>
+                                        <ShadSelectItem value="Europe/Madrid">Madrid (GMT+1)</ShadSelectItem>
+                                        <ShadSelectItem value="Europe/London">Londres (GMT+0)</ShadSelectItem>
+                                      </ShadSelectContent>
+                                    </ShadSelect>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  <div>
+                                    <label className="text-xs text-gray-600 dark:text-gray-400">Días activos (CSV mon,tue,...)</label>
+                                    <input
+                                      type="text"
+                                      className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                      value={triggersConfig.window.days}
+                                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, days: e.target.value } }))}
+                                      placeholder="mon,tue,wed,thu,fri"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-600 dark:text-gray-400">Cupo diario</label>
+                                    <input
+                                      type="number"
+                                      className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                      value={Number(triggersConfig.limits.daily_quota)}
+                                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, limits: { ...prev.limits, daily_quota: Number(e.target.value) } }))}
+                                      placeholder="100"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-600 dark:text-gray-400">Deduplicación (días)</label>
+                                    <input
+                                      type="number"
+                                      className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                      value={Number(triggersConfig.limits.dedup_days)}
+                                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, limits: { ...prev.limits, dedup_days: Number(e.target.value) } }))}
+                                      placeholder="7"
+                                    />
+                                  </div>
+                                </div>
+
+                                {triggersConfig.types.policy_expiry && (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="text-xs text-gray-600 dark:text-gray-400">Antes de vencer (días CSV)</label>
+                                      <input
+                                        type="text"
+                                        className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                        value={triggersConfig.expiry.before_days}
+                                        onChange={(e) => setTriggersConfig(prev => ({ ...prev, expiry: { ...prev.expiry, before_days: e.target.value } }))}
+                                        placeholder="7,3,1,0"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs text-gray-600 dark:text-gray-400">Después de vencer (días CSV)</label>
+                                      <input
+                                        type="text"
+                                        className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                        value={triggersConfig.expiry.after_days}
+                                        onChange={(e) => setTriggersConfig(prev => ({ ...prev, expiry: { ...prev.expiry, after_days: e.target.value } }))}
+                                        placeholder="1"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Campo de teléfono */}
+                                <div>
+                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                                    Campo de Teléfono
+                                  </label>
+                                  <ShadSelect
+                                    value={triggersConfig.mapping.phone_field}
+                                    onValueChange={(value) => setTriggersConfig(prev => ({ ...prev, mapping: { ...prev.mapping, phone_field: value } }))}
+                                  >
+                                    <ShadSelectTrigger className="w-full">
+                                      <ShadSelectValue />
+                                    </ShadSelectTrigger>
+                                    <ShadSelectContent>
+                                      <ShadSelectItem value="client.mobile_phone">Teléfono del cliente asociado</ShadSelectItem>
+                                    </ShadSelectContent>
+                                  </ShadSelect>
+                                </div>
                               </div>
                             </Tabs.Item>
-                            
-                            <Tabs.Item title="Reglas de Decisión" icon={() => <Icon icon="solar:settings-bold" height={16} />}>
+
+                            <Tabs.Item
+                              title="Reglas de Decisión"
+                              icon={() => <Icon icon="solar:settings-bold-duotone" className="w-4 h-4" />}
+                            >
                               <div className="mt-4">
                                 <DecisionPoliciesConfig
                                   policies={campaignData.postCallTools.decisionPolicies}
@@ -1971,8 +2372,11 @@ const brokerClientsFiltered = React.useMemo(() => {
                                 />
                               </div>
                             </Tabs.Item>
-                            
-                            <Tabs.Item title="WhatsApp" icon={() => <Icon icon="solar:chat-round-bold" height={16} />}>
+
+                            <Tabs.Item
+                              title="WhatsApp"
+                              icon={() => <Icon icon="solar:chat-round-bold-duotone" className="w-4 h-4" />}
+                            >
                               <div className="mt-4 space-y-4">
                                 <div className="flex items-center justify-between">
                                   <span className="text-sm font-medium">Activar envío de enlace de pago</span>
@@ -2048,10 +2452,83 @@ const brokerClientsFiltered = React.useMemo(() => {
                                 </div>
                               )}
                             </Tabs.Item>
+
+                            <Tabs.Item
+                              title="Recolección de Datos"
+                              icon={() => <Icon icon="solar:database-bold-duotone" className="w-4 h-4" />}
+                            >
+                              <div className="mt-4">
+                                <DynamicFieldsConfig
+                                  collectConfig={campaignData.postCallTools.collect}
+                                  customFields={campaignData.postCallTools.customFields}
+                                  onCollectConfigChange={(config) => setCampaignData(prev => ({
+                                    ...prev,
+                                    postCallTools: { ...prev.postCallTools, collect: config }
+                                  }))}
+                                  onCustomFieldsChange={(fields) => setCampaignData(prev => ({
+                                    ...prev,
+                                    postCallTools: { ...prev.postCallTools, customFields: fields }
+                                  }))}
+                                />
+                              </div>
+                            </Tabs.Item>
                           </Tabs>
                         </div>
                       </Card>
                     </div>
+                  )}
+                  {isActive && step.id === 5 && (
+                    <>
+                      {(() => {
+                        const triggers = buildTriggersPayload();
+                        const hasTriggers = triggers.length > 0;
+                        
+                        if (hasTriggers) {
+                          // Si hay triggers, mostrar mensaje explicativo en lugar de lista de clientes
+                          return (
+                            <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                              <div className="p-8 text-center">
+                                <Icon icon="solar:alarm-bell-outline" className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+                                <h3 className="text-xl font-bold text-blue-800 dark:text-blue-300 mb-2">
+                                  Campaña con Disparadores Automáticos
+                                </h3>
+                                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                                  Has configurado disparadores automáticos. Esta campaña se activará cuando ocurran los siguientes eventos:
+                                </p>
+                                <div className="flex flex-wrap gap-2 justify-center mb-4">
+                                  {triggers.map((t, idx) => (
+                                    <Badge key={idx} color="info" size="lg">
+                                      {t.type === 'new_client' ? '🆕 Nuevo Cliente' :
+                                       t.type === 'new_policy' ? '📋 Nueva Póliza' :
+                                       t.type === 'policy_expiry' ? '⏰ Vencimiento de Póliza' :
+                                       t.type === 'new_lead' ? '🎯 Nuevo Lead' :
+                                       t.type === 'new_siniestro' ? '🚨 Nuevo Siniestro' : t.type}
+                                    </Badge>
+                                  ))}
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 text-left">
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                    <strong>¿Cómo funciona?</strong>
+                                  </p>
+                                  <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 list-disc list-inside">
+                                    <li>No necesitas seleccionar clientes específicos</li>
+                                    <li>El sistema llamará automáticamente cuando ocurran los eventos configurados</li>
+                                    <li>Respeta ventanas horarias, límites diarios y deduplicación</li>
+                                    <li>Puedes ver los resultados en el historial de llamadas</li>
+                                  </ul>
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+                                  Puedes continuar al siguiente paso para finalizar la configuración
+                                </p>
+                              </div>
+                            </Card>
+                          );
+                        }
+                        
+                        // Si no hay triggers, mostrar selección normal de clientes
+                        return renderClientSelection();
+                      })()}
+                    </>
                   )}
                   {isActive && step.id === 6 && renderExecuteCampaign()}
                 </div>
@@ -2119,6 +2596,7 @@ const brokerClientsFiltered = React.useMemo(() => {
                         const realAgentId = (function(templateId: string){
                           const map: Record<string, string> = {
                             payment_reminder: 'agent_01k02pehqgfywb54fz2z8ts74h',
+                            debt_collection: 'agent_01k02pehqgfywb54fz2z8ts74h',
                             claim_support: 'agent_01k02pehqgfywb54fz2z8ts74h',
                             lead_followup: 'agent_6301k1m98143epst5bf9qxch742q',
                             cross_sell: 'agent_6301k1m98143epst5bf9qxch742q',
@@ -2132,9 +2610,9 @@ const brokerClientsFiltered = React.useMemo(() => {
                         const voiceId = selectedRealVoice;
                         const contacts = campaignData.selectedContacts.map(c => {
                           const fullName = `${c.nombre} ${c.apellidos}`.trim();
-                          const companyName = (campaignData.customVariables?.company_name || 'GURO Seguros');
-                          const policyNumber = (campaignData.customVariables?.policy_number || 'N/A');
-                          const debtAmount = Number(campaignData.customVariables?.debt_amount) || 0;
+                          const companyName = (campaignData.customVariables?.company_name || tenant?.branding?.nombre_comercial || tenant?.nombre || 'Tu Compañía de Seguros');
+                          const policyNumber = (campaignData.customVariables?.policy_number || 'uno, dos, cuatro,catorce,veinti tres');
+                          const debtAmount = Number(campaignData.customVariables?.debt_amount) || 'Dos millones de pesos';
                           const dueDate =
                             campaignData.customVariables?.payment_due_date ||
                             new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -2158,6 +2636,7 @@ const brokerClientsFiltered = React.useMemo(() => {
                           };
                         });
                         const draftName = campaignData.campaignName || generateCampaignName();
+                        const triggers = buildTriggersPayload();
                         const campaignRequest = {
                           name: draftName,
                           description: campaignData.campaignDescription || `Campaña automática de ${campaignData.selectedTemplate.category} (borrador)`,
@@ -2165,6 +2644,7 @@ const brokerClientsFiltered = React.useMemo(() => {
                           type: 'immediate',
                           priority: 'medium',
                           contacts,
+                          ...(triggers.length > 0 ? { triggers } : {}),
                           agent_name: campaignData.agentName || campaignData.selectedTemplate.agentPersona.name,
                           voice_message_template: campaignData.customFirstMessage || campaignData.selectedTemplate.firstMessageTemplate,
                           elevenlabs_voice_id: voiceId,
@@ -2201,12 +2681,12 @@ const brokerClientsFiltered = React.useMemo(() => {
                     {isExecuting ? (
                       <>
                         <Icon icon="solar:refresh-circle-outline" className="w-4 h-4 mr-2 animate-spin" />
-                        Enviando...
+                        {buildTriggersPayload().length > 0 ? 'Guardando...' : 'Enviando...'}
                       </>
                     ) : (
                       <>
-                        <Icon icon="solar:rocket-outline" className="w-4 h-4 mr-2" />
-                        Guardar y Enviar
+                        <Icon icon={buildTriggersPayload().length > 0 ? "solar:bookmark-check-outline" : "solar:rocket-outline"} className="w-4 h-4 mr-2" />
+                        {buildTriggersPayload().length > 0 ? 'Guardar y Activar Disparadores' : 'Guardar y Enviar'}
                       </>
                     )}
                   </Button>
@@ -2218,7 +2698,8 @@ const brokerClientsFiltered = React.useMemo(() => {
         </div>
       </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

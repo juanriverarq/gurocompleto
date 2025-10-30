@@ -1,0 +1,83 @@
+{
+  "type": "webhook",
+  "name": "collect_customer_data",
+  "description": "Recolecta datos del cliente durante la llamada. Usa este tool cuando el cliente proporcione información como email, teléfono, calificaciones o feedback. Puedes llamar este tool múltiples veces durante la conversación para ir guardando datos a medida que los obtienes. Solo envía los campos que realmente obtuviste del cliente, no inventes datos.",
+  "api_schema": {
+    "url": "https://tu-backend.com/api/saas/voice-campaigns/tools/collect-data/{conversation_id}",
+    "method": "POST",
+    "path_params_schema": [
+      {
+        "name": "conversation_id",
+        "type": "string",
+        "description": "ID de la conversación de ElevenLabs",
+        "required": true
+      }
+    ],
+    "query_params_schema": [],
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Email del cliente. Formato: usuario@dominio.com"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Número de teléfono del cliente. Formato: 3001234567 o +573001234567"
+        },
+        "debt_amount": {
+          "type": "number",
+          "description": "Monto de deuda en pesos colombianos (solo para recordatorios de pago)"
+        },
+        "payment_commitment_date": {
+          "type": "string",
+          "description": "Fecha en que el cliente se compromete a pagar. Formato: YYYY-MM-DD"
+        },
+        "satisfaction_rating": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Calificación de satisfacción del 1 al 10 (solo para encuestas)"
+        },
+        "recommendation_score": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Probabilidad de recomendar (NPS) del 1 al 10 (solo para encuestas)"
+        },
+        "feedback": {
+          "type": "string",
+          "description": "Comentarios generales o feedback del cliente"
+        },
+        "improvement_suggestions": {
+          "type": "string",
+          "description": "Sugerencias de mejora mencionadas por el cliente"
+        },
+        "positive_aspects": {
+          "type": "string",
+          "description": "Aspectos positivos que el cliente mencionó"
+        },
+        "preferred_contact_method": {
+          "type": "string",
+          "enum": ["whatsapp", "email", "phone"],
+          "description": "Método de contacto preferido del cliente"
+        }
+      },
+      "required": []
+    },
+    "request_headers": [
+      {
+        "name": "Content-Type",
+        "value": "application/json"
+      }
+    ],
+    "auth_connection": null
+  },
+  "response_timeout_secs": 20,
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {}
+  },
+  "assignments": [],
+  "disable_interruptions": false,
+  "force_pre_tool_speech": "auto"
+}

@@ -113,12 +113,17 @@ export const pageMetadata: Record<string, PageMetadata> = {
     keywords: 'modelos IA, configuración, análisis, machine learning'
   },
 
-  // Marketing
-  'marketing-enlaces': {
-    title: 'Enlaces de Cotización',
-    description: 'Crea y gestiona enlaces personalizados para cotizaciones online con seguimiento de conversiones.',
-    keywords: 'enlaces, cotización online, conversiones, marketing digital'
-  },
+   // Marketing
+    'marketing-enlaces': {
+      title: 'Enlaces de Cotización',
+      description: 'Crea y gestiona enlaces personalizados para cotizaciones online con seguimiento de conversiones.',
+      keywords: 'enlaces, cotización online, conversiones, marketing digital'
+    },
+    'marketing-miniweb': {
+      title: 'Mini Web',
+      description: 'Creador de mini sitios estilo link-in-bio con enlaces, contacto y colores personalizables. Se publica en /web/<slug>.',
+      keywords: 'mini web, link in bio, link my bio, perfil público, enlaces, contacto, colores'
+    },
   
   'marketing-recordatorios': {
     title: 'Recordatorios',

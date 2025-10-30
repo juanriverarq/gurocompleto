@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Button, Spinner, Badge, Table, Tabs, Progress, Dropdown } from 'flowbite-react';
+import { Card, Button, Spinner, Badge, Table, Tabs, Progress, Dropdown, Modal } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { IconDots } from '@tabler/icons-react';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
@@ -17,33 +17,63 @@ const ComisionesPorPoliza = () => {
   });
   const { toast } = useToast();
 
-  // Filtrar comisiones por cobrar (pendientes)
+  // Estados para modal de cobro
+  const [showCobroModal, setShowCobroModal] = useState(false);
+  const [polizaSeleccionada, setPolizaSeleccionada] = useState<any>(null);
+  const [montoCobro, setMontoCobro] = useState('');
+  const [fechaCobro, setFechaCobro] = useState('');
+  const [referenciaCobro, setReferenciaCobro] = useState('');
+  const [observacionesCobro, setObservacionesCobro] = useState('');
+  const [procesandoCobro, setProcesandoCobro] = useState(false);
+
+  // Filtrar comisiones por cobrar (pendientes) - solo las que tienen comisión pendiente
   const comisionesPorCobrar = useMemo(() =>
-    polizasComisiones.filter(p => p.comisionPendiente > 0),
+    polizasComisiones.filter(p => {
+      const pendiente = Number(p.comisionPendiente || 0);
+      return pendiente > 0;
+    }),
     [polizasComisiones]
   );
 
-  // Filtrar comisiones cobradas
+  // Filtrar comisiones cobradas - solo las que tienen algo cobrado
   const comisionesCobradas = useMemo(() =>
-    polizasComisiones.filter(p => p.comisionCobrada > 0),
+    polizasComisiones.filter(p => {
+      const cobrada = Number(p.comisionCobrada || 0);
+      return cobrada > 0;
+    }),
     [polizasComisiones]
   );
 
   const estadisticasComisiones = useMemo(() => {
-    const pendiente = comisionesPorCobrar.reduce((sum, p) => sum + p.comisionPendiente, 0);
-    const cobradas = comisionesCobradas.reduce((sum, p) => sum + p.comisionCobrada, 0);
+    // Aplicar el mismo filtro de búsqueda a las estadísticas
+    const aplicaFiltro = (arr: any[]) => {
+      if (!filtros.busqueda) return arr;
+      const busqueda = filtros.busqueda.toLowerCase();
+      return arr.filter(p =>
+        (p.numero_poliza || '').toLowerCase().includes(busqueda) ||
+        (p.nombres_cliente || '').toLowerCase().includes(busqueda) ||
+        (p.apellidos_cliente || '').toLowerCase().includes(busqueda) ||
+        (p.aseguradora_nombre || '').toLowerCase().includes(busqueda)
+      );
+    };
+ 
+    const porCobrarFiltradas = aplicaFiltro(comisionesPorCobrar);
+    const cobradasFiltradas = aplicaFiltro(comisionesCobradas);
+ 
+    const pendiente = porCobrarFiltradas.reduce((sum, p) => sum + (p.comisionPendiente || 0), 0);
+    const cobradas = cobradasFiltradas.reduce((sum, p) => sum + (p.comisionCobrada || 0), 0);
     const totalComisiones = pendiente + cobradas;
     const tasaCobro = totalComisiones > 0 ? (cobradas / totalComisiones) * 100 : 0;
-
+ 
     return {
       pendiente,
       cobradas,
       tasaCobro,
-      cantidadPorCobrar: comisionesPorCobrar.length,
-      cantidadCobradas: comisionesCobradas.length,
+      cantidadPorCobrar: porCobrarFiltradas.length,
+      cantidadCobradas: cobradasFiltradas.length,
       totalComisiones
     };
-  }, [comisionesPorCobrar, comisionesCobradas]);
+  }, [comisionesPorCobrar, comisionesCobradas, filtros.busqueda]);
 
   useEffect(() => {
     loadPolizasComisiones();
@@ -52,65 +82,106 @@ const ComisionesPorPoliza = () => {
   const loadPolizasComisiones = async () => {
     try {
       setLoading(true);
-      let todasLasPolizas: any[] = [];
-      let paginaActual = 1;
-      let hayMasPaginas = true;
 
-      while (hayMasPaginas) {
-        const polizasRes = await polizaService.getPolizas({
-          per_page: 100,
-          page: paginaActual,
-          sort_field: 'fecha_fin',
-          sort_direction: 'asc'
+      // OPTIMIZACIÓN: Usar endpoint específico que incluye información real de pagos y comisiones
+      const response = await polizaService.getComisionesPolizas();
+
+      if (response.success && response.data) {
+        setPolizasComisiones(response.data);
+      } else {
+        setPolizasComisiones([]);
+        toast({
+          title: 'Sin datos',
+          description: 'No se encontraron pólizas con pagos registrados',
+          variant: 'default',
         });
-
-        if (polizasRes.success && polizasRes.data) {
-          const datos = polizasRes.data;
-          const polizasPagina = Array.isArray(datos) ? datos : (datos.data || []);
-          todasLasPolizas = [...todasLasPolizas, ...polizasPagina];
-
-          if (!Array.isArray(datos) && datos.current_page && datos.last_page) {
-            hayMasPaginas = datos.current_page < datos.last_page;
-            paginaActual++;
-          } else {
-            hayMasPaginas = false;
-          }
-        } else {
-          hayMasPaginas = false;
-        }
       }
-
-      // Procesar pólizas para comisiones
-      const polizasConComisiones = todasLasPolizas.map((poliza: any) => {
-        const primaNeta = Number(poliza.prima_neta || 0);
-        const comisionReal = Number(poliza.comision || 0);
-        const porcentajeComision = Number(poliza.comision_agencia || poliza.porcentaje_comision || 15);
-        const comision = comisionReal > 0 ? comisionReal : (primaNeta * porcentajeComision / 100);
-        const estado = (poliza.estado || 'ACTIVA').toUpperCase();
-
-        // Simular estado de cobro de comisiones
-        const random = Math.random();
-        const comisionPendiente = estado === 'ACTIVA' && random < 0.3 ? comision : 0;
-        const comisionCobrada = estado === 'ACTIVA' && random >= 0.3 ? comision : 0;
-
-        return {
-          ...poliza,
-          comision,
-          comisionPendiente,
-          comisionCobrada,
-          estadoComision: comisionPendiente > 0 ? 'Pendiente' : 'Cobrada'
-        };
-      }).filter((p: any) => {
-        const estado = (p.estado || '').toUpperCase();
-        return estado === 'ACTIVA' || estado === 'POR_VENCER';
-      });
-
-      setPolizasComisiones(polizasConComisiones);
     } catch (error) {
       console.error('Error loading polizas comisiones:', error);
       toast({
         title: 'Error',
         description: 'No se pudieron cargar las comisiones',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const abrirModalCobro = (poliza: any) => {
+    setPolizaSeleccionada(poliza);
+    setMontoCobro((poliza.comisionPendiente || 0).toString());
+    setFechaCobro(new Date().toISOString().split('T')[0]);
+    setReferenciaCobro('');
+    setObservacionesCobro('');
+    setShowCobroModal(true);
+  };
+
+  const registrarCobro = async () => {
+    if (!polizaSeleccionada || !montoCobro) return;
+
+    try {
+      setProcesandoCobro(true);
+      const response = await polizaService.registrarCobroComision(
+        polizaSeleccionada.id,
+        parseFloat(montoCobro),
+        referenciaCobro,
+        observacionesCobro,
+        fechaCobro
+      );
+
+      if (response.success) {
+        toast({
+          title: 'Cobro registrado',
+          description: 'El cobro de comisión ha sido registrado exitosamente',
+        });
+        setShowCobroModal(false);
+        // Recargar datos
+        await loadPolizasComisiones();
+      }
+    } catch (error) {
+      console.error('Error registrando cobro:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo registrar el cobro de comisión',
+        variant: 'destructive',
+      });
+    } finally {
+      setProcesandoCobro(false);
+    }
+  };
+
+  const revertirCobro = async (poliza: any) => {
+    if (!poliza.cobro_id) {
+      toast({
+        title: 'Error',
+        description: 'No se puede revertir este cobro',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!confirm('¿Está seguro de revertir este cobro de comisión? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await polizaService.revertirCobroComision(poliza.id, poliza.cobro_id);
+
+      if (response.success) {
+        toast({
+          title: 'Cobro revertido',
+          description: 'El cobro de comisión ha sido revertido exitosamente',
+        });
+        // Recargar datos
+        await loadPolizasComisiones();
+      }
+    } catch (error) {
+      console.error('Error revirtiendo cobro:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo revertir el cobro',
         variant: 'destructive',
       });
     } finally {
@@ -395,11 +466,10 @@ const ComisionesPorPoliza = () => {
                                   </span>
                                 )}
                               >
-                                <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                                  <Icon icon="solar:eye-bold-duotone" height={18} />
-                                  <span>Ver Detalle</span>
-                                </Dropdown.Item>
-                                <Dropdown.Item className="flex gap-3 w-full justify-start text-left text-green-600">
+                                <Dropdown.Item
+                                  className="flex gap-3 w-full justify-start text-left text-green-600"
+                                  onClick={() => abrirModalCobro(poliza)}
+                                >
                                   <Icon icon="solar:hand-money-bold-duotone" height={18} />
                                   <span>Registrar Cobro</span>
                                 </Dropdown.Item>
@@ -555,9 +625,21 @@ const ComisionesPorPoliza = () => {
                             {formatDate(poliza.fecha_fin)}
                           </Table.Cell>
                           <Table.Cell>
-                            <Badge color="success" size="sm">
-                              Cobrada
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge color="success" size="sm">
+                                Cobrada
+                              </Badge>
+                              {poliza.cobro_id && (
+                                <Button
+                                  size="xs"
+                                  color="gray"
+                                  onClick={() => revertirCobro(poliza)}
+                                  title="Revertir cobro"
+                                >
+                                  <Icon icon="solar:undo-left-bold-duotone" className="w-3 h-3" />
+                                </Button>
+                              )}
+                            </div>
                           </Table.Cell>
                         </Table.Row>
                       );
@@ -623,6 +705,72 @@ const ComisionesPorPoliza = () => {
             </Tabs.Item>
           </Tabs>
         </Card>
+
+        {/* Modal Registrar Cobro de Comisión */}
+        <Modal show={showCobroModal} onClose={() => setShowCobroModal(false)} size="md">
+          <Modal.Header>
+            Registrar Cobro de Comisión - {polizaSeleccionada?.numero_poliza}
+          </Modal.Header>
+          <Modal.Body>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Monto a Cobrar
+                </label>
+                <Input
+                  type="number"
+                  value={montoCobro}
+                  onChange={(e) => setMontoCobro(e.target.value)}
+                  placeholder="Monto de la comisión a cobrar"
+                  className="w-full"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Comisión pendiente: {formatCurrency(polizaSeleccionada?.comisionPendiente || 0)}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Referencia de Cobro
+                </label>
+                <Input
+                  value={referenciaCobro}
+                  onChange={(e) => setReferenciaCobro(e.target.value)}
+                  placeholder="Número de recibo, comprobante, etc."
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Observaciones
+                </label>
+                <textarea
+                  value={observacionesCobro}
+                  onChange={(e) => setObservacionesCobro(e.target.value)}
+                  placeholder="Observaciones adicionales del cobro"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  rows={3}
+                />
+              </div>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              color="gray"
+              onClick={() => setShowCobroModal(false)}
+              disabled={procesandoCobro}
+            >
+              Cancelar
+            </Button>
+            <Button
+              color="green"
+              onClick={registrarCobro}
+              disabled={procesandoCobro || !montoCobro}
+            >
+              {procesandoCobro ? <Spinner size="sm" className="mr-2" /> : null}
+              Registrar Cobro
+            </Button>
+          </Modal.Footer>
+        </Modal>
       </div>
   );
 };

@@ -117,16 +117,16 @@ const WalletWidget: React.FC = () => {
 
   return (
     <div
-      className="bg-lightprimary hover:bg-primary hover:text-white text-primary px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md group"
+      className="bg-lightprimary hover:bg-primary text-primary hover:text-white px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md group"
       onClick={handleWalletClick}
       title="Ver detalles del wallet"
     >
-      <Icon icon="solar:wallet-bold-duotone" width="20" />
+      <Icon icon="solar:wallet-bold-duotone" width="20" className="group-hover:text-white" />
       <div className="flex flex-col text-left">
-        <span className="font-medium text-xs opacity-70 group-hover:opacity-90">
+        <span className="font-medium text-xs opacity-70 group-hover:opacity-100 group-hover:text-white">
           Mi Wallet
         </span>
-        <span className="font-bold text-sm whitespace-nowrap">
+        <span className="font-bold text-sm whitespace-nowrap group-hover:text-white">
           {walletData
             ? `${formatBalance(
                 walletData.display_balance ?? walletData.balance_cop,

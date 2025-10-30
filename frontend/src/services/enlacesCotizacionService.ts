@@ -5,6 +5,8 @@ export interface EnlacePayload {
   tipo: string;
   descripcion?: string;
   mensaje_bienvenida?: string;
+  config_campos?: any[];
+  enlace_sugerido?: string;
 }
 
 export default {

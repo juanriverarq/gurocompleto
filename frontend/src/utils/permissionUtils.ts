@@ -30,13 +30,15 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/comercial/equipos-ventas': 'equipos_ventas',
   '/apps/comercial/rendimiento': 'analisis_rendimiento',
 
-  // Marketing Digital
-  '/apps/marketing/sms': 'sms_marketing',
-  '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
-  '/apps/marketing/plantillas': 'plantillas_campana',
-  '/apps/saas/configuracion-masiva': 'configuracion_masiva',
+   // Marketing Digital
+    '/apps/marketing/sms': 'sms_marketing',
+    '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
+    '/apps/marketing/plantillas': 'plantillas_campana',
+    '/apps/marketing/mini-web': 'mini_web',
+    '/apps/saas/configuracion-masiva': 'configuracion_masiva',
 
   // Inteligencia Artificial
+  '/apps/ia/asistente': 'asistentes_ia',
   '/apps/ia/asistente/deepseek': 'asistentes_ia',
   '/apps/voice-ai/dashboard': 'voice_ai',
   '/apps/ia/analisis-predictivo/predicciones': 'analytics_predictivo',

@@ -34,46 +34,52 @@ const parseTimeToSeconds = (value: number | string): number => {
 const OnboardingTutorialModal: React.FC<OnboardingTutorialModalProps> = ({
   isOpen,
   onClose,
-  videoId,
+  videoId = 'jP9d9fq-9_A',
   title = 'Tutorial: Guro',
   subtitle = 'Aprende a utilizar Guro en menos de 15 minutos',
-  sections,
+  sections = [
+    { label: 'Aseguradoras', seconds: '0:00' },
+    { label: 'Ramos', seconds: '0:00' },
+    { label: 'Clientes', seconds: '0:00' },
+  ],
 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [videoSrc, setVideoSrc] = useState('');
 
+  // Videos tutoriales en el orden especificado
+  const tutorialVideos = [
+    { id: 'jP9d9fq-9_A', title: 'Aseguradoras', duration: '1:45' },
+    { id: 'KNasyaCDbxA', title: 'Ramos', duration: '1:44' },
+    { id: 'JQqMV4r2TF4', title: 'Clientes', duration: '2:03' },
+  ];
+
   const baseEmbedUrl = useMemo(() => {
+    const currentVideoId = tutorialVideos[activeIndex]?.id || videoId;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return `https://www.youtube.com/embed/jP9d9fq-9_A?rel=0&controls=1&modestbranding=1&origin=${encodeURIComponent(
+    return `https://www.youtube.com/embed/${currentVideoId}?rel=0&controls=1&modestbranding=1&origin=${encodeURIComponent(
       origin,
     )}`;
-  }, [videoId]);
+  }, [activeIndex, videoId]);
 
   const normalizedSections = useMemo(
-    () => (sections || []).map(s => ({ label: s.label, seconds: parseTimeToSeconds(s.seconds) })),
-    [sections]
+    () => tutorialVideos.map(video => ({ label: video.title, seconds: parseTimeToSeconds(video.duration) })),
+    []
   );
 
   useEffect(() => {
-    if (!normalizedSections?.length) {
-      setVideoSrc(baseEmbedUrl);
-      return;
-    }
-    const start = normalizedSections[activeIndex]?.seconds ?? 0;
-    // Forzar autoplay al saltar a una sección
-    setVideoSrc(`${baseEmbedUrl}&start=${start}&autoplay=1`);
-  }, [activeIndex, baseEmbedUrl, normalizedSections]);
+    setVideoSrc(`${baseEmbedUrl}&start=0&autoplay=1`);
+  }, [baseEmbedUrl]);
 
   useEffect(() => {
     // Reiniciar al abrir
     if (isOpen) {
       setActiveIndex(0);
-      setVideoSrc(`${baseEmbedUrl}&start=0`);
     }
-  }, [isOpen, baseEmbedUrl]);
+  }, [isOpen]);
 
   const handleSelectSection = (idx: number) => {
     setActiveIndex(idx);
+    // El video se actualizará automáticamente por el useEffect
   };
 
   const onKeyDownSelect = (e: React.KeyboardEvent<HTMLButtonElement>, idx: number) => {

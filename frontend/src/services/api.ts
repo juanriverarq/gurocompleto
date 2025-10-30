@@ -65,9 +65,19 @@ export interface ApiResponse<T> {
 }
 
 class ApiService {
-  async getDashboardData(): Promise<DashboardData> {
+  async getDashboardData(startDate?: string | null, endDate?: string | null): Promise<DashboardData> {
     try {
-      const response = await api.get('/dashboard-data');
+      const params = new URLSearchParams();
+      
+      if (startDate) {
+        params.append('start_date', startDate);
+      }
+      if (endDate) {
+        params.append('end_date', endDate);
+      }
+      
+      const url = params.toString() ? `/dashboard-data?${params.toString()}` : '/dashboard-data';
+      const response = await api.get(url);
       
       const result: ApiResponse<DashboardData> = response.data;
       

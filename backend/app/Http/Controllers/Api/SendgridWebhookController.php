@@ -49,8 +49,18 @@ class SendgridWebhookController extends Controller
                 // Datos personalizados enviados en el correo
                 $customArgs = $evt['custom_args'] ?? ($evt['unique_args'] ?? []);
 
-                $campaignId = (int) ($customArgs['campaign_id'] ?? 0);
-                $recipientId = (int) ($customArgs['recipient_id'] ?? 0);
+                // SendGrid puede enviar custom_args como strings, convertir a int
+                $campaignId = isset($customArgs['campaign_id']) ? (int) $customArgs['campaign_id'] : 0;
+                $recipientId = isset($customArgs['recipient_id']) ? (int) $customArgs['recipient_id'] : 0;
+                
+                // Log para debugging
+                \Log::info('SendGrid webhook event received', [
+                    'event' => $eventType,
+                    'email' => $email,
+                    'campaign_id' => $campaignId,
+                    'recipient_id' => $recipientId,
+                    'sg_message_id' => $sgMessageId,
+                ]);
 
                 $mapped = $this->mapStatus($eventType);
                 if (!$mapped) {

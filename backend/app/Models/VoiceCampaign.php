@@ -166,11 +166,14 @@ class VoiceCampaign extends Model
      */
     public function getSuccessRateAttribute(): float
     {
-        if ($this->calls_made === 0) {
+        $callsMade = (int) ($this->calls_made ?? 0);
+        $callsSuccessful = (int) ($this->calls_successful ?? 0);
+        
+        if ($callsMade === 0 || $callsMade <= 0) {
             return 0.0;
         }
 
-        return round(($this->calls_successful / $this->calls_made) * 100, 2);
+        return round(($callsSuccessful / $callsMade) * 100, 2);
     }
 
     /**
@@ -178,11 +181,14 @@ class VoiceCampaign extends Model
      */
     public function getProgressPercentageAttribute(): float
     {
-        if ($this->total_targets === 0) {
+        $totalTargets = (int) ($this->total_targets ?? 0);
+        $callsMade = (int) ($this->calls_made ?? 0);
+        
+        if ($totalTargets === 0 || $totalTargets <= 0) {
             return 0.0;
         }
 
-        return round(($this->calls_made / $this->total_targets) * 100, 2);
+        return round(($callsMade / $totalTargets) * 100, 2);
     }
 
     /**

@@ -8,10 +8,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\BrokerScoped;
+use App\Models\PagoPoliza;
+use App\Models\CobroComision;
+use App\Events\PolizaCreated;
 
 class Poliza extends Model
 {
     use HasFactory, SoftDeletes, BrokerScoped;
+
+    /**
+     * The event map for the model.
+     *
+     * @var array
+     */
+    protected $dispatchesEvents = [
+        'created' => PolizaCreated::class,
+    ];
 
     /**
      * The attributes that are mass assignable.
@@ -44,6 +56,8 @@ class Poliza extends Model
         'vat_percentage',
         'vat_amount',
         'total_amount',
+        'gastos_adicionales',
+        'gastos_adicionales_aplica_iva',
         'payment_frequency',
         'payment_method',
         'bank_name',
@@ -112,6 +126,8 @@ class Poliza extends Model
         'vat_percentage' => 'decimal:2',
         'vat_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'gastos_adicionales' => 'decimal:2',
+        'gastos_adicionales_aplica_iva' => 'boolean',
         'custom_fields' => 'array',
         'documents' => 'array',
         'vehicle_plates' => 'array',
@@ -165,6 +181,22 @@ class Poliza extends Model
     public function automoviles(): HasMany
     {
         return $this->hasMany(Automovil::class, 'poliza_id');
+    }
+
+    /**
+     * Relación con pagos de póliza
+     */
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(PagoPoliza::class, 'poliza_id');
+    }
+
+    /**
+     * Relación con cobros de comisión
+     */
+    public function cobrosComision(): HasMany
+    {
+        return $this->hasMany(CobroComision::class, 'poliza_id');
     }
 
     /**
@@ -444,7 +476,7 @@ class Poliza extends Model
             return 0;
         }
         
-        return max(0, now()->diffInDays($this->end_date, false));
+        return (int) round(max(0, now()->diffInDays($this->end_date, false)));
     }
 
     /**
@@ -456,7 +488,7 @@ class Poliza extends Model
             return 0;
         }
         
-        return max(0, now()->diffInDays($this->renewal_date, false));
+        return (int) round(max(0, now()->diffInDays($this->renewal_date, false)));
     }
 
     /**
@@ -468,7 +500,7 @@ class Poliza extends Model
             return 0;
         }
         
-        return max(0, now()->diffInDays($this->payment_due_date, false));
+        return (int) round(max(0, now()->diffInDays($this->payment_due_date, false)));
     }
 
     /**

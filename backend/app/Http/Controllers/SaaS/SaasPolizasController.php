@@ -10,6 +10,7 @@ use App\Models\Cliente;
 use App\Models\RenewalHistory;
 use App\Models\Aseguradora;
 use App\Models\Ramo;
+use App\Models\Vendedor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -649,6 +650,241 @@ class SaasPolizasController extends Controller
     }
 
     /**
+     * Get cartera data - optimized endpoint for portfolio view with real payment data
+     */
+    public function carteraDev(Request $request)
+    {
+        try {
+            // Obtener broker_id dinámicamente
+            $brokerId = $this->getBrokerId($request);
+
+            // OPTIMIZACIÓN: Query específica para cartera - solo pólizas activas con datos necesarios
+            $query = Poliza::where('broker_id', $brokerId)
+                ->where('status', 'active')
+                ->with([
+                    'client:id,first_name,last_name,email,phone,mobile_phone',
+                    'aseguradora:id,nombre',
+                    'ramo:id,nombre'
+                ]);
+
+            // Solo cargar relaciones de pagos si las tablas existen
+            if (\Schema::hasTable('pagos_polizas')) {
+                $query->with(['pagos' => function($q) {
+                    $q->select([
+                        'id', 'poliza_id', 'monto_total', 'monto_pagado', 'monto_pendiente',
+                        'tipo_recaudo', 'estado', 'fecha_pago'
+                    ])->orderBy('fecha_pago', 'desc');
+                }]);
+            }
+
+            if (\Schema::hasTable('cobros_comisiones')) {
+                $query->with(['cobrosComision' => function($q) {
+                    $q->select([
+                        'id', 'poliza_id', 'monto_comision', 'monto_cobrado', 'monto_pendiente',
+                        'estado', 'fecha_cobro'
+                    ])->orderBy('fecha_cobro', 'desc');
+                }]);
+            }
+
+            $query->select([
+                'id',
+                'policy_number',
+                'client_id',
+                'insurance_company',
+                'aseguradora_id',
+                'type',
+                'ramo_id',
+                'premium_amount',
+                'commission_amount',
+                'commission_percentage',
+                'vat_percentage',
+                'vat_amount',
+                'total_amount',
+                'start_date',
+                'end_date',
+                'status',
+                'payment_method',
+                'payment_status',
+                'created_at'
+            ]);
+
+            // Aplicar filtros adicionales si se especifican
+            if ($request->has('search') && !empty($request->search)) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('policy_number', 'like', "%{$search}%")
+                      ->orWhere('client_name', 'like', "%{$search}%")
+                      ->orWhere('client_document', 'like', "%{$search}%")
+                      ->orWhere('insurance_company', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->has('aseguradora') && !empty($request->aseguradora)) {
+                $query->where('insurance_company', $request->aseguradora);
+            }
+
+            if ($request->has('estado_pago') && !empty($request->estado_pago)) {
+                // Filtrar por estado de pago basado en pagos reales
+                $estadoPago = $request->estado_pago;
+                $query->whereHas('pagos', function($q) use ($estadoPago) {
+                    if ($estadoPago === 'Al día') {
+                        $q->where('tipo_recaudo', 'oficina')
+                          ->where('estado', 'pagado')
+                          ->havingRaw('SUM(monto_pagado) >= polizas.total_amount');
+                    } elseif ($estadoPago === 'Pendiente') {
+                        $q->where('tipo_recaudo', 'oficina')
+                          ->whereIn('estado', ['pendiente', 'parcial'])
+                          ->havingRaw('SUM(monto_pagado) = 0');
+                    } elseif ($estadoPago === 'Parcial') {
+                        $q->where('tipo_recaudo', 'oficina')
+                          ->where('estado', 'parcial')
+                          ->havingRaw('SUM(monto_pagado) > 0 AND SUM(monto_pagado) < polizas.total_amount');
+                    } elseif ($estadoPago === 'Vencido') {
+                        $q->where('tipo_recaudo', 'oficina')
+                          ->where('estado', 'vencido');
+                    }
+                });
+            }
+
+            // Aplicar ordenamiento por fecha de vencimiento por defecto
+            $query->orderBy('end_date', 'asc');
+
+            // OPTIMIZACIÓN: Sin paginación para cartera completa (considerar implementar paginación si hay muchas pólizas)
+            $polizas = $query->get();
+
+            // Transformar datos optimizados para cartera
+            $carteraData = $polizas->map(function ($poliza) {
+                $endDate = Carbon::parse($poliza->end_date);
+                $diasVencimiento = (int) round(Carbon::now()->diffInDays($endDate, false));
+
+                $totalPoliza = (float) ($poliza->total_amount ?? ($poliza->premium_amount + ($poliza->vat_amount ?? ($poliza->premium_amount * ($poliza->vat_percentage ?? 19) / 100))));
+
+                // Calcular información de pagos reales desde las relaciones
+                $pagosOficina = $poliza->relationLoaded('pagos') ? $poliza->pagos->where('tipo_recaudo', 'oficina') : collect([]);
+                $pagosAseguradora = $poliza->relationLoaded('pagos') ? $poliza->pagos->where('tipo_recaudo', 'aseguradora') : collect([]);
+                $cobrosComision = $poliza->relationLoaded('cobrosComision') ? $poliza->cobrosComision : collect([]);
+
+                // Recaudo oficina (pagos del cliente a la agencia)
+                $recaudadoOficina = (float) $pagosOficina->where('estado', 'pagado')->sum('monto_pagado');
+                $pendienteOficinaRegistrado = (float) $pagosOficina->whereIn('estado', ['pendiente', 'parcial'])->sum('monto_pendiente');
+                
+                // Si no hay pagos registrados, el total de la póliza está pendiente
+                $pendienteOficina = $pagosOficina->count() > 0
+                    ? $pendienteOficinaRegistrado
+                    : $totalPoliza;
+
+                // Recaudo aseguradora (pagos de agencia a aseguradora)
+                $pagadoAseguradora = (float) $pagosAseguradora->where('estado', 'pagado')->sum('monto_pagado');
+                $pendienteAseguradoraRegistrado = (float) $pagosAseguradora->whereIn('estado', ['pendiente', 'parcial'])->sum('monto_pendiente');
+                
+                // Si no hay pagos a aseguradora registrados, la prima neta está pendiente
+                $primaNeta = (float) $poliza->premium_amount;
+                $pendienteAseguradora = $pagosAseguradora->count() > 0
+                    ? $pendienteAseguradoraRegistrado
+                    : $primaNeta;
+
+                // Cobros de comisión (lo que la agencia cobra a la aseguradora)
+                $comisionTotal = (float) ($poliza->commission_amount ?? ($poliza->premium_amount * ($poliza->commission_percentage ?? 15) / 100));
+                $comisionCobrada = (float) $cobrosComision->where('estado', 'cobrado')->sum('monto_cobrado');
+                $comisionPendienteRegistrada = (float) $cobrosComision->whereIn('estado', ['pendiente', 'parcial'])->sum('monto_pendiente');
+                
+                // Si no hay cobros registrados, toda la comisión está pendiente
+                $comisionPendiente = $cobrosComision->count() > 0
+                    ? $comisionPendienteRegistrada
+                    : $comisionTotal;
+
+                // Determinar estado de pago general basado en pagos reales
+                $totalRecaudado = $recaudadoOficina;
+                $totalPendiente = $totalPoliza - $totalRecaudado;
+                $estadoPago = $this->determinarEstadoPago($totalRecaudado, $totalPoliza);
+
+                // Calcular días de mora si hay pagos pendientes
+                $diasMora = 0;
+                if ($totalPendiente > 0 && $pagosOficina->where('estado', 'vencido')->count() > 0) {
+                    $ultimoPagoVencido = $pagosOficina->where('estado', 'vencido')->sortByDesc('fecha_pago')->first();
+                    if ($ultimoPagoVencido) {
+                        $diasMora = Carbon::now()->diffInDays(Carbon::parse($ultimoPagoVencido->fecha_pago), false);
+                    }
+                }
+
+                // Obtener fechas e IDs de los pagos
+                $pagoOficinaObj = $pagosOficina->where('estado', 'pagado')->sortByDesc('fecha_pago')->first();
+                $pagoAseguradoraObj = $pagosAseguradora->sortByDesc('fecha_pago')->first();
+                $cobroComisionObj = $cobrosComision->where('estado', 'cobrado')->sortByDesc('fecha_cobro')->first();
+                
+                $fechaRecaudoOficina = $pagoOficinaObj?->fecha_pago;
+                $fechaPagoAseguradora = $pagoAseguradoraObj?->fecha_pago;
+                $fechaCobroComision = $cobroComisionObj?->fecha_cobro;
+
+                return [
+                    'id' => $poliza->id,
+                    'numero_poliza' => $poliza->policy_number,
+                    'cliente' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'Sin nombre',
+                    'cliente_id' => $poliza->client_id,
+                    'documento' => $poliza->client?->document_number ?? '',
+                    'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company,
+                    'ramo' => $poliza->ramo?->nombre ?? $poliza->type,
+                    'estado' => 'ACTIVA',
+                    'fecha_inicio' => $poliza->start_date?->format('Y-m-d'),
+                    'fecha_vencimiento' => $poliza->end_date?->format('Y-m-d'),
+                    'dias_vencimiento' => (int) $diasVencimiento,
+                    'prima_neta' => (float) $poliza->premium_amount,
+                    'iva' => (float) ($poliza->vat_amount ?? ($poliza->premium_amount * ($poliza->vat_percentage ?? 19) / 100)),
+                    'total' => $totalPoliza,
+                    'comision' => (float) ($poliza->commission_amount ?? ($poliza->premium_amount * ($poliza->commission_percentage ?? 15) / 100)),
+                    'forma_pago' => $poliza->payment_method ?? 'Contado',
+                    'estado_pago' => $estadoPago,
+
+                    // Información detallada de cobros con fechas e IDs
+                    'recaudo_oficina' => [
+                        'recaudado' => $recaudadoOficina,
+                        'pendiente' => $pendienteOficina,
+                        'total' => $recaudadoOficina + $pendienteOficina,
+                        'fecha' => $fechaRecaudoOficina ? $fechaRecaudoOficina->format('Y-m-d') : null,
+                        'pago_id' => $pagoOficinaObj?->id,
+                    ],
+                    'recaudo_aseguradora' => [
+                        'pagado' => $pagadoAseguradora,
+                        'pendiente' => $pendienteAseguradora,
+                        'total' => $pagadoAseguradora + $pendienteAseguradora,
+                        'fecha' => $fechaPagoAseguradora ? $fechaPagoAseguradora->format('Y-m-d') : null,
+                        'pago_id' => $pagoAseguradoraObj?->id,
+                    ],
+                    'cobro_comision' => [
+                        'cobrada' => $comisionCobrada,
+                        'pendiente' => $comisionPendiente,
+                        'total' => $comisionCobrada + $comisionPendiente,
+                        'fecha' => $fechaCobroComision ? $fechaCobroComision->format('Y-m-d') : null,
+                        'cobro_id' => $cobroComisionObj?->id,
+                    ],
+
+                    // Campos legacy para compatibilidad
+                    'valorRecaudado' => $totalRecaudado,
+                    'valorPendienteCliente' => $totalPendiente,
+                    'valorPagadoAseguradora' => $pagadoAseguradora,
+                    'valorPendienteAseguradora' => $pendienteAseguradora,
+                    'comisionReal' => (float) ($poliza->commission_amount ?? ($poliza->premium_amount * ($poliza->commission_percentage ?? 15) / 100)),
+                    'comisionPendiente' => $comisionPendiente,
+                    'comisionCobrada' => $comisionCobrada,
+                    'diasMora' => $diasMora,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Datos de cartera obtenidos exitosamente',
+                'data' => $carteraData
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener datos de cartera: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Get polizas statistics (Development version without auth) - OPTIMIZED
      */
     public function estadisticasDev(Request $request)
@@ -841,6 +1077,7 @@ class SaasPolizasController extends Controller
             'porcentaje_iva' => $poliza->vat_percentage ?? 19.00,
             'iva' => (int) round((float) ($poliza->vat_amount ?? ($poliza->premium_amount * (($poliza->vat_percentage ?? 19.00) / 100)))),
             'total' => (int) round((float) ($poliza->total_amount ?? ($poliza->premium_amount + ($poliza->vat_amount ?? ($poliza->premium_amount * (($poliza->vat_percentage ?? 19.00) / 100)))))),
+            'gastos_adicionales' => (int) round((float) ($poliza->gastos_adicionales ?? 0)),
             'porcentaje_comision' => (float) $poliza->commission_percentage,
             'comision' => (int) round((float) $poliza->commission_amount),
             // Forma de pago (UI: contado/credito/financiado) derivada del método
@@ -865,7 +1102,9 @@ class SaasPolizasController extends Controller
             'insured_document' => ($poliza->insured_document ?? ($poliza->custom_fields['insured_document'] ?? null)),
             
             // Información administrativa
-            'vendedor' => $poliza->assignedUser?->name ?? 'Sin asignar',
+            'vendedor' => ($poliza->seller_name
+                ?: ($poliza->assignedUser?->name ?? 'Sin asignar')
+            ),
             'observaciones' => $poliza->notes,
             'observaciones_internas' => $poliza->status_notes,
             'fecha_expedicion' => $poliza->issue_date?->format('Y-m-d'),
@@ -943,37 +1182,34 @@ class SaasPolizasController extends Controller
             if ($request->has('status') && !empty($request->status)) {
                 $query->where('status', $request->status);
             }
-            // Filtro de ventana de vencimiento si se especifica
-            if ($request->has('dias_vencimiento')) {
-                $filtro = $request->get('dias_vencimiento');
-                $today = Carbon::now();
-                $diasCritico = 7; $diasProximo = 30; $diasAdelantado = 60;
-                if ($filtro === 'critico') {
-                    $query->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasCritico]);
-                } elseif ($filtro === 'proximo') {
-                    $query->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasProximo]);
-                } elseif ($filtro === 'proximo_2m') {
-                    $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
-                        [$today->toDateString(), $diasAdelantado, $today->toDateString(), -30]);
-                }
-            }
 
-            // Filtrar por días de vencimiento
+            // Filtrar por días de vencimiento - lógica corregida
             if ($request->has('dias_vencimiento') && !empty($request->dias_vencimiento)) {
                 $filtro = $request->dias_vencimiento;
                 $today = Carbon::now();
-                
+
                 if ($filtro === 'critico') {
                     // Crítico: vencen en 7 días o menos
                     $query->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasCritico]);
                 } elseif ($filtro === 'proximo') {
                     // Próximo: vencen en 30 días o menos
                     $query->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasProximo]);
+                } elseif ($filtro === 'proximo_2m') {
+                    // Próximos 2 meses: vencen en 60 días o menos
+                    $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
+                        [$today->toDateString(), $diasAdelantado, $today->toDateString(), -30]);
+                } elseif ($filtro === 'all') {
+                    // No aplicar ventana de días
+                } else {
+                    // Por defecto, mostrar solo las que vencen en los próximos 2 meses (60 días)
+                    // Incluir también las vencidas recientemente (hasta 30 días atrás) para seguimiento
+                    $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
+                        [Carbon::now()->toDateString(), $diasAdelantado, Carbon::now()->toDateString(), -30]);
                 }
             } else {
                 // Por defecto, mostrar solo las que vencen en los próximos 2 meses (60 días)
                 // Incluir también las vencidas recientemente (hasta 30 días atrás) para seguimiento
-                $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?', 
+                $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
                     [Carbon::now()->toDateString(), $diasAdelantado, Carbon::now()->toDateString(), -30]);
             }
 
@@ -988,41 +1224,6 @@ class SaasPolizasController extends Controller
                 });
             }
 
-            if ($request->has('estado') && !empty($request->estado)) {
-                // Los estados de renovación se calculan dinámicamente
-                $estado = $request->estado;
-                $today = Carbon::now();
-                
-                if ($estado === 'CRITICO') {
-                    $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= 0', 
-                        [$today->toDateString(), $diasCritico, $today->toDateString()]);
-                } elseif ($estado === 'PENDIENTE') {
-                    $query->whereRaw('DATEDIFF(end_date, ?) > ? AND DATEDIFF(end_date, ?) <= ?', 
-                        [$today->toDateString(), $diasCritico, $today->toDateString(), $diasProximo]);
-                } elseif ($estado === 'VENCIDO') {
-                    $query->whereRaw('DATEDIFF(end_date, ?) < 0', [$today->toDateString()]);
-                }
-            }
-
-            if ($request->has('prioridad') && !empty($request->prioridad)) {
-                // La prioridad se basa en los días hasta vencimiento y el monto
-                $prioridad = $request->prioridad;
-                $today = Carbon::now();
-                
-                if ($prioridad === 'CRITICA') {
-                    $query->where(function($q) use ($today, $diasCritico) {
-                        $q->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasCritico])
-                          ->orWhere('premium_amount', '>', 2000000);
-                    });
-                } elseif ($prioridad === 'ALTA') {
-                    $query->where(function($q) use ($today, $diasCritico) {
-                        $q->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) > ?', 
-                            [$today->toDateString(), 15, $today->toDateString(), $diasCritico])
-                          ->orWhere('premium_amount', '>', 1000000);
-                    });
-                }
-            }
-
             if ($request->has('aseguradora') && !empty($request->aseguradora)) {
                 $query->where('insurance_company', $request->aseguradora);
             }
@@ -1031,6 +1232,40 @@ class SaasPolizasController extends Controller
                 $query->whereHas('assignedUser', function($q) use ($request) {
                     $q->where('name', 'like', "%{$request->agente}%");
                 });
+            }
+
+            // Filtro por estado de renovación (acepta múltiples separados por coma)
+            // VENCIDO: DATEDIFF(end_date, today) < 0
+            // CRITICO: 0..7 días
+            // PENDIENTE/EN_PROCESO: 8..30 días
+            // RENOVADO: status = 'renewed'
+            if ($request->filled('estado')) {
+                $today = Carbon::now();
+                $estados = array_filter(array_map('trim', explode(',', strtoupper((string) $request->estado))));
+                if (!empty($estados)) {
+                    $query->where(function ($q) use ($estados, $today) {
+                        foreach ($estados as $estado) {
+                            switch ($estado) {
+                                case 'VENCIDO':
+                                    $q->orWhereRaw('DATEDIFF(end_date, ?) < 0', [$today->toDateString()]);
+                                    break;
+                                case 'CRITICO':
+                                    $q->orWhereRaw('DATEDIFF(end_date, ?) >= 0 AND DATEDIFF(end_date, ?) <= 7', [$today->toDateString(), $today->toDateString()]);
+                                    break;
+                                case 'PENDIENTE':
+                                case 'EN_PROCESO':
+                                    $q->orWhereRaw('DATEDIFF(end_date, ?) > 7 AND DATEDIFF(end_date, ?) <= 30', [$today->toDateString(), $today->toDateString()]);
+                                    break;
+                                case 'RENOVADO':
+                                    $q->orWhere('status', 'renewed');
+                                    break;
+                                default:
+                                    // ignorar
+                                    break;
+                            }
+                        }
+                    });
+                }
             }
 
             // Ordenamiento por defecto: días hasta vencimiento (ascendente - más próxima primero)
@@ -1101,13 +1336,13 @@ class SaasPolizasController extends Controller
 
             // Renovaciones críticas (≤7 días)
             $renovacionesCriticas = (clone $baseQuery)
-                ->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= 0', 
+                ->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= 0',
                     [$today->toDateString(), $diasCritico, $today->toDateString()])
                 ->count();
 
             // Renovaciones pendientes (8-30 días)
             $renovacionesPendientes = (clone $baseQuery)
-                ->whereRaw('DATEDIFF(end_date, ?) > ? AND DATEDIFF(end_date, ?) <= ?', 
+                ->whereRaw('DATEDIFF(end_date, ?) > ? AND DATEDIFF(end_date, ?) <= ?',
                     [$today->toDateString(), $diasCritico, $today->toDateString(), $diasProximo])
                 ->count();
 
@@ -1116,8 +1351,12 @@ class SaasPolizasController extends Controller
                 ->whereRaw('DATEDIFF(end_date, ?) < 0', [$today->toDateString()])
                 ->count();
 
-            // Renovaciones completadas (simulado - en el futuro esto sería un estado específico)
-            $renovacionesCompletadas = 0;
+            // Renovaciones completadas (pólizas con status 'renewed')
+            $renovacionesCompletadas = Poliza::where('broker_id', $brokerId)
+                ->where('status', 'renewed')
+                ->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
+                    [$today->toDateString(), $diasAdelantado, $today->toDateString(), -30])
+                ->count();
 
             // Valor total de primas de renovaciones
             $valorTotalPrimas = (clone $baseQuery)->sum('premium_amount');
@@ -1151,8 +1390,8 @@ class SaasPolizasController extends Controller
         $today = Carbon::now();
         // Tolerancia: algunas pólizas importadas pueden no traer timestamps o end_date casteado
         $endDate = $poliza->end_date ? Carbon::parse($poliza->end_date) : Carbon::now();
-        $diasVencimiento = $today->diffInDays($endDate, false);
-        
+        $diasVencimiento = (int) round($today->diffInDays($endDate, false));
+
         // Determinar estado de renovación
         $estado = 'PENDIENTE';
         if ($diasVencimiento < 0) {
@@ -1162,11 +1401,11 @@ class SaasPolizasController extends Controller
         } elseif ($poliza->status === 'renewed') {
             $estado = 'RENOVADO';
         }
-        
+
         // Determinar prioridad con lógica más coherente
         // Primero evaluar urgencia temporal, luego ajustar por valor económico
         $prioridad = 'MEDIA'; // Default
-        
+
         // 1. URGENCIA TEMPORAL (base de la prioridad)
         if ($diasVencimiento < 0) {
             // Vencidas: siempre críticas
@@ -1184,7 +1423,7 @@ class SaasPolizasController extends Controller
             // Vencen en más de 30 días: baja
             $prioridad = 'BAJA';
         }
-        
+
         // 2. AJUSTE POR VALOR ECONÓMICO (puede elevar la prioridad, nunca bajarla)
         if ($poliza->premium_amount >= 5000000) {
             // Primas muy altas (≥$5M): siempre críticas
@@ -1199,13 +1438,16 @@ class SaasPolizasController extends Controller
             $prioridad = 'MEDIA';
         }
 
+        // Obtener el ramo correcto: usar ramo.nombre si existe, sino mapear el type
+        $ramoNombre = $poliza->ramo?->nombre ?? $this->mapTypeToFrontend($poliza->type);
+
         return [
             'id' => (string)$poliza->id,
             'numeroPoliza' => $poliza->policy_number,
             'cliente' => $poliza->client_name,
             'dni_cliente' => $poliza->client_document,
             'aseguradora' => $poliza->insurance_company,
-            'tipoSeguro' => $this->mapTipoSeguroToFrontend($poliza->type),
+            'tipoSeguro' => $ramoNombre, // Usar el nombre del ramo correcto
             'fechaVencimiento' => $endDate->format('Y-m-d'),
             'diasVencimiento' => (int)$diasVencimiento,
             'valorPrima' => (float)$poliza->premium_amount,
@@ -1260,7 +1502,7 @@ class SaasPolizasController extends Controller
         try {
             // Obtener broker_id dinámicamente
             $brokerId = $this->getBrokerId($request);
-
+            
             $poliza = Poliza::where('broker_id', $brokerId)
                 ->where('id', $id)
                 ->with(['client', 'assignedUser', 'ramo:id,nombre,subramo', 'aseguradora:id,nombre', 'automoviles:id,placa,poliza_id,client_id'])
@@ -1355,6 +1597,7 @@ class SaasPolizasController extends Controller
                 'porcentaje_iva' => 'nullable|numeric|min:0|max:100',
                 'iva' => 'nullable|numeric|min:0',
                 'total' => 'nullable|numeric|min:0',
+                'gastos_adicionales' => 'nullable|numeric|min:0',
                 'porcentaje_comision' => 'nullable|numeric|min:0|max:100',
                 'comision' => 'nullable|numeric|min:0',
                 'forma_pago' => 'nullable|string|max:100',
@@ -1371,7 +1614,6 @@ class SaasPolizasController extends Controller
                 'agreement_term' => 'nullable|string|in:contado,30_45,30_60,60_90|required_if:medio_pago,convenio',
                 'debit_account_number' => 'nullable|string|max:64|required_if:medio_pago,debito',
                 'vendedor' => 'nullable|string|max:255',
-                'vendedor_user_id' => 'nullable|integer|exists:users,id',
                 'observaciones' => 'nullable|string',
                 'observaciones_internas' => 'nullable|string',
                 'fecha_expedicion' => 'required|date',
@@ -1379,33 +1621,16 @@ class SaasPolizasController extends Controller
                 'fecha_fin' => 'required|date|after:fecha_inicio',
                 'estado' => 'nullable|in:ACTIVA,VENCIDA,CANCELADA,SUSPENDIDA,COTIZACION,DEVENGADA,EXPEDICION,NO_RENOVADA,PENDIENTE,COTIZACIÓN,EXPEDICIÓN,VIGENTE',
                 'sede' => 'nullable|string|max:255',
-                // Campos adicionales del formulario (opcionales)
-                'renovable' => 'nullable|boolean',
-                'motivo' => 'nullable|string|max:1000',
+
+                // Nuevos campos para edición coherentes con store
+                'vendedor_user_id' => 'nullable|integer|exists:users,id',
+                'vendedor_id' => 'nullable|integer|exists:vendedores,id',
                 'fecha_recepcion' => 'nullable|date',
+
+                // Beneficiarios
                 'beneficiario_en_remision' => 'nullable|boolean',
                 'beneficiario_oneroso_nombre' => 'nullable|string|max:255',
                 'beneficiario_oneroso_documento' => 'nullable|string|max:255',
-                // Tomador / Asegurado
-                'policy_holder_name' => 'nullable|string|max:255',
-                'policy_holder_document' => 'nullable|string|max:100',
-                'insured_name' => 'nullable|string|max:255',
-                'insured_document' => 'nullable|string|max:100',
-                
-                'pri_a_pre' => 'nullable|numeric',
-                'participacion' => 'nullable|numeric',
-                'co_corretaje' => 'nullable|numeric',
-                'comision_agencia' => 'nullable|numeric',
-                'porcentaje_retencion' => 'nullable|numeric|min:0|max:100',
-                'porcentaje_reteiva' => 'nullable|numeric|min:0|max:100',
-                'porcentaje_iva' => 'nullable|numeric|min:0|max:100',
-                'iva' => 'nullable|numeric|min:0',
-                'total' => 'nullable|numeric|min:0',
-                
-                'documents' => 'nullable|array',
-                // Placas de vehículos (solo aplica para ramo autos/automovil)
-                'placas' => 'nullable|array',
-                'placas.*' => ['nullable','string','max:20','regex:/^[A-Za-z0-9-]{3,20}$/'],
             ]);
 
             \Log::info('POLIZAS: store incoming', [
@@ -1413,6 +1638,14 @@ class SaasPolizasController extends Controller
                 'ramo_mapped' => $this->mapTypeFromFrontend($request->input('ramo_principal')),
                 'placas' => $request->input('placas'),
             ]);
+
+            // Si viene vendedor_id (catálogo de vendedores), mapear su nombre para seller_name
+            if (isset($validated['vendedor_id'])) {
+                $vend = Vendedor::forBroker($brokerId)->find((int)$validated['vendedor_id']);
+                if ($vend) {
+                    $validated['vendedor'] = $validated['vendedor'] ?? $vend->nombres;
+                }
+            }
 
             // Resolver cliente por cliente_id o crear/buscar por documento
             if (!empty($validated['cliente_id'])) {
@@ -1536,7 +1769,7 @@ class SaasPolizasController extends Controller
                 'broker_id' => $brokerId,
                 'client_id' => $cliente->id,
                 'assigned_user_id' => !empty($validated['vendedor_user_id']) ? (int)$validated['vendedor_user_id'] : ($user ? $user->id : null),
-                // Guardar nombre del vendedor si fue enviado
+                // Guardar nombre del vendedor si fue enviado (o si se resolvió por vendedor_id)
                 'seller_name' => $validated['vendedor'] ?? ($user ? ($user->name ?? null) : null),
                 // Nuevas columnas
                 'reception_date' => $validated['fecha_recepcion'] ?? null,
@@ -1551,6 +1784,7 @@ class SaasPolizasController extends Controller
                 'vat_percentage' => $validated['porcentaje_iva'] ?? null,
                 'vat_amount' => $validated['iva'] ?? null,
                 'total_amount' => $validated['total'] ?? null,
+                'gastos_adicionales' => $validated['gastos_adicionales'] ?? null,
                 'withholding_percentage' => $validated['porcentaje_retencion'] ?? null,
                 'reteiva_percentage' => $validated['porcentaje_reteiva'] ?? null,
                 // Tomador / Asegurado
@@ -1644,6 +1878,7 @@ class SaasPolizasController extends Controller
                 'porcentaje_iva' => 'nullable|numeric|min:0|max:100',
                 'iva' => 'nullable|numeric|min:0',
                 'total' => 'nullable|numeric|min:0',
+                'gastos_adicionales' => 'nullable|numeric|min:0',
                 'porcentaje_comision' => 'nullable|numeric|min:0|max:100',
                 'comision' => 'nullable|numeric|min:0',
                 'forma_pago' => 'nullable|string|max:100',
@@ -1676,6 +1911,7 @@ class SaasPolizasController extends Controller
 
                 // Nuevos campos para edición coherentes con store
                 'vendedor_user_id' => 'nullable|integer|exists:users,id',
+                'vendedor_id' => 'nullable|integer|exists:vendedores,id',
                 'fecha_recepcion' => 'nullable|date',
 
                 // Beneficiarios
@@ -1760,6 +1996,18 @@ class SaasPolizasController extends Controller
             if (isset($validated['prima_neta'])) {
                 $updateData['premium_amount'] = $validated['prima_neta'];
             }
+            if (isset($validated['porcentaje_iva'])) {
+                $updateData['vat_percentage'] = $validated['porcentaje_iva'];
+            }
+            if (isset($validated['iva'])) {
+                $updateData['vat_amount'] = $validated['iva'];
+            }
+            if (isset($validated['total'])) {
+                $updateData['total_amount'] = $validated['total'];
+            }
+            if (isset($validated['gastos_adicionales'])) {
+                $updateData['gastos_adicionales'] = $validated['gastos_adicionales'];
+            }
             if (isset($validated['porcentaje_comision'])) {
                 $updateData['commission_percentage'] = $validated['porcentaje_comision'];
             }
@@ -1805,9 +2053,16 @@ class SaasPolizasController extends Controller
             if (isset($validated['debit_account_number'])) {
                 $updateData['debit_account_number'] = $validated['debit_account_number'];
             }
-            // Guardar nombre del vendedor si se envía en edición
+            // Guardar nombre del vendedor si se envía en edición (texto directo)
             if (isset($validated['vendedor'])) {
                 $updateData['seller_name'] = $validated['vendedor'];
+            }
+            // Si viene vendedor_id del catálogo, mapear a seller_name
+            if (isset($validated['vendedor_id'])) {
+                $vend = Vendedor::forBroker($brokerId)->find((int)$validated['vendedor_id']);
+                if ($vend) {
+                    $updateData['seller_name'] = $vend->nombres;
+                }
             }
             // Asignación de asesor (vendedor_user_id) si viene en edición
             if (isset($validated['vendedor_user_id'])) {
@@ -2082,7 +2337,7 @@ class SaasPolizasController extends Controller
         try {
             // Obtener broker_id dinámicamente
             $brokerId = $this->getBrokerId($request);
-
+            
             $poliza = Poliza::where('broker_id', $brokerId)
                 ->where('id', $id)
                 ->first();
@@ -2118,7 +2373,7 @@ class SaasPolizasController extends Controller
         try {
             // Obtener broker_id dinámicamente
             $brokerId = $this->getBrokerId($request);
-
+            
             $poliza = Poliza::where('broker_id', $brokerId)
                 ->where('id', $id)
                 ->first();
@@ -2471,6 +2726,43 @@ class SaasPolizasController extends Controller
     }
 
     /**
+     * Map database payment status to frontend payment status
+     */
+    private function mapPaymentStatusToFrontend($status)
+    {
+        $s = strtolower((string)$status);
+        switch ($s) {
+            case 'paid':
+            case 'completed':
+                return 'Al día';
+            case 'pending':
+                return 'Pendiente';
+            case 'overdue':
+                return 'Vencido';
+            case 'partial':
+                return 'Parcial';
+            default:
+                return 'Al día';
+        }
+    }
+
+    /**
+     * Determinar estado de pago basado en montos
+     */
+    private function determinarEstadoPago(float $recaudado, float $total): string
+    {
+        if ($recaudado == 0) {
+            return 'Pendiente';
+        } elseif ($recaudado >= $total) {
+            return 'Al día';
+        } elseif ($recaudado > 0) {
+            return 'Parcial';
+        } else {
+            return 'Pendiente';
+        }
+    }
+
+    /**
      * Map database payment frequency to UI code used by frontend selects
      * Outputs: mensual | trimestral | semestral | anual
      */
@@ -2498,12 +2790,37 @@ class SaasPolizasController extends Controller
             $poliza = Poliza::where('broker_id', $brokerId)
                 ->where('id', $id)
                 ->first();
-            
+
             if (!$poliza) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Renovación no encontrada'
                 ], 404);
+            }
+
+            // Validar que la póliza no esté ya renovada
+            if ($poliza->status === 'renewed') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta póliza ya ha sido renovada y no puede procesarse nuevamente.'
+                ], 422);
+            }
+
+            // Validar que la póliza esté activa
+            if ($poliza->status !== 'active') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se pueden renovar pólizas activas.'
+                ], 422);
+            }
+
+            // Validar antigüedad de la póliza (mínimo 30 días de vigencia)
+            $diasRestantes = Carbon::now()->diffInDays(Carbon::parse($poliza->end_date), false);
+            if ($diasRestantes < 30) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La póliza debe tener al menos 30 días de vigencia restante para poder renovarse.'
+                ], 422);
             }
 
             $validated = $request->validate([
@@ -2575,12 +2892,21 @@ class SaasPolizasController extends Controller
                 }
             }
 
-            // Log del contacto registrado
+            // Log del contacto registrado con sanitización
+            $observacionesSanitizadas = strip_tags($validated['observaciones']);
             \Log::info("Contacto de renovación registrado para póliza {$poliza->policy_number}", [
                 'poliza_id' => $poliza->id,
                 'broker_id' => $brokerId,
                 'tipo_contacto' => $validated['tipo'],
-                'resultado' => $validated['resultado']
+                'resultado' => $validated['resultado'],
+                'proximo_contacto' => $validated['proximoContacto'] ?? null
+            ]);
+
+            // Registrar auditoría
+            $this->logPolizaAction($request, 'contacto_renovacion', $poliza, 200, [
+                'tipo_contacto' => $validated['tipo'],
+                'resultado' => $validated['resultado'],
+                'proximo_contacto' => $validated['proximoContacto'] ?? null
             ]);
 
             return response()->json([
@@ -2631,11 +2957,40 @@ class SaasPolizasController extends Controller
             }
 
             $validated = $request->validate([
-                'nuevaFechaVencimiento' => 'required|date|after:today',
-                'nuevoValorPrima' => 'required|numeric|min:0',
+                'nuevaFechaVencimiento' => 'required|date|after:today|max:' . Carbon::now()->addYears(2)->format('Y-m-d'),
+                'nuevoValorPrima' => 'required|numeric|min:10000|max:100000000',
                 'observaciones' => 'nullable|string|max:1000',
-                'nuevoNumeroPoliza' => 'nullable|string|max:255',
+                'nuevoNumeroPoliza' => 'nullable|string|max:255|regex:/^[A-Z]{3}-\d{4}-\d{4}$/',
             ]);
+
+            // Validaciones de negocio adicionales
+            $fechaVencimientoActual = Carbon::parse($polizaOriginal->end_date);
+            $nuevaFechaVencimiento = Carbon::parse($validated['nuevaFechaVencimiento']);
+
+            // No permitir renovaciones con menos de 30 días de vigencia actual
+            if ($fechaVencimientoActual->diffInDays(Carbon::now()) < 30) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se puede renovar una póliza con menos de 30 días de vigencia restante.',
+                ], 422);
+            }
+
+            // Validar que la nueva fecha sea al menos 6 meses mayor que la actual
+            if ($nuevaFechaVencimiento->diffInMonths($fechaVencimientoActual) < 6) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La nueva fecha de vencimiento debe ser al menos 6 meses mayor que la fecha actual.',
+                ], 422);
+            }
+
+            // Validar cambio de prima no excesivo (±50%)
+            $cambioPrima = abs($validated['nuevoValorPrima'] - $polizaOriginal->premium_amount) / $polizaOriginal->premium_amount;
+            if ($cambioPrima > 0.5) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El cambio en el valor de la prima no puede ser superior al 50%.',
+                ], 422);
+            }
 
             DB::beginTransaction();
 
@@ -2699,14 +3054,27 @@ class SaasPolizasController extends Controller
 
                 DB::commit();
 
-                // Log de la renovación procesada
+                // Log de la renovación procesada con sanitización
+                $observacionesSanitizadas = strip_tags($validated['observaciones'] ?? '');
                 \Log::info("Renovación procesada para póliza {$polizaOriginal->policy_number}", [
                     'poliza_original_id' => $polizaOriginal->id,
                     'nueva_poliza_id' => $nuevaPoliza->id,
                     'nuevo_numero_poliza' => $nuevaPoliza->policy_number,
                     'nuevo_valor_prima' => $validated['nuevoValorPrima'],
                     'nueva_fecha_vencimiento' => $validated['nuevaFechaVencimiento'],
-                    'broker_id' => $brokerId
+                    'cambio_prima_porcentaje' => $polizaOriginal->premium_amount > 0 ?
+                        round((($validated['nuevoValorPrima'] - $polizaOriginal->premium_amount) / $polizaOriginal->premium_amount) * 100, 2) : 0,
+                    'broker_id' => $brokerId,
+                    'user_id' => $user ? $user->id : null
+                ]);
+
+                // Registrar auditoría de la renovación
+                $this->logPolizaAction($request, 'procesar_renovacion', $polizaOriginal, 200, [
+                    'nueva_poliza_id' => $nuevaPoliza->id,
+                    'nuevo_numero_poliza' => $nuevaPoliza->policy_number,
+                    'nuevo_valor_prima' => $validated['nuevoValorPrima'],
+                    'nueva_fecha_vencimiento' => $validated['nuevaFechaVencimiento'],
+                    'observaciones' => $observacionesSanitizadas
                 ]);
 
                 // Guardar evento en renewal_history
@@ -3051,6 +3419,11 @@ class SaasPolizasController extends Controller
                     $query->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasCritico]);
                 } elseif ($filtro === 'proximo') {
                     $query->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasProximo]);
+                } elseif ($filtro === 'all') {
+                    // No aplicar ventana de días
+                } else {
+                    $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?', 
+                        [Carbon::now()->toDateString(), $diasAdelantado, Carbon::now()->toDateString(), -30]);
                 }
             } else {
                 $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?', 
@@ -3090,7 +3463,7 @@ class SaasPolizasController extends Controller
             foreach ($renovaciones as $poliza) {
                 $today = Carbon::now();
                 $endDate = Carbon::parse($poliza->end_date);
-                $diasVencimiento = $today->diffInDays($endDate, false);
+                $diasVencimiento = (int) round($today->diffInDays($endDate, false));
                 
                 $estado = 'PENDIENTE';
                 if ($diasVencimiento < 0) {

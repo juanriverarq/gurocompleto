@@ -857,7 +857,7 @@ const CampaignsManagementWidget: React.FC = () => {
                               {c.status === 'running' && (
                                 <Dropdown.Item className="flex gap-3" onClick={async () => {
                                   await runWithLoading(c.id, 'pause', async () => {
-                                    const r = await voiceCampaignService.toggleVoiceCampaign(c.id);
+                                    const r = await voiceCampaignService.pauseVoiceCampaign(c.id);
                                     if (r.success) await loadCampaigns();
                                   });
                                 }}>
@@ -867,7 +867,7 @@ const CampaignsManagementWidget: React.FC = () => {
                               {c.status === 'paused' && (
                                 <Dropdown.Item className="flex gap-3" onClick={async () => {
                                   await runWithLoading(c.id, 'resume', async () => {
-                                    const r = await voiceCampaignService.executeVoiceCampaign(c.id);
+                                    const r = await voiceCampaignService.resumeVoiceCampaign(c.id);
                                     if (r.success) await loadCampaigns();
                                   });
                                 }}>
@@ -876,12 +876,12 @@ const CampaignsManagementWidget: React.FC = () => {
                               )}
                               {(c.status === 'running' || c.status === 'paused') && (
                                 <Dropdown.Item className="flex gap-3" onClick={async () => {
-                                  await runWithLoading(c.id, 'stop', async () => {
-                                    const r = await voiceCampaignService.toggleVoiceCampaign(c.id);
+                                  await runWithLoading(c.id, 'cancel', async () => {
+                                    const r = await voiceCampaignService.cancelVoiceCampaign(c.id);
                                     if (r.success) await loadCampaigns();
                                   });
                                 }}>
-                                  {actionLoading[c.id] === 'stop' ? <Spinner size="sm" /> : <Icon icon="solar:stop-bold-duotone" height={18} />} Detener
+                                  {actionLoading[c.id] === 'cancel' ? <Spinner size="sm" /> : <Icon icon="solar:stop-bold-duotone" height={18} />} Cancelar
                                 </Dropdown.Item>
                               )}
                               <Dropdown.Item className="flex gap-3" onClick={() => { setCampaignToEdit(c); setIsEditModalOpen(true); }}>

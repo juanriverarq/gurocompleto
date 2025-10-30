@@ -6,7 +6,7 @@ import RenovacionesPoliza from './components/RenovacionesPoliza';
 
 
 import { IconDots } from '@tabler/icons-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 
 import { polizaService, polizaUtils, type Poliza, type PolizaFilters } from 'src/services/polizaService';
@@ -16,8 +16,10 @@ import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import PolizasFilterModal from './components/PolizasFilterModal';
 import ColumnsCustomizationModal from './components/ColumnsCustomizationModal';
 import PolizasExportModal from './components/PolizasExportModal';
+import PolicyNotificationsModal from './components/PolicyNotificationsModal';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import OnboardingGuard from '../../../../components/auth/OnboardingGuard';
+import policyNotificationService from 'src/services/policyNotificationService';
 
 const Polizas: React.FC = () => {
   
@@ -34,6 +36,8 @@ const Polizas: React.FC = () => {
   const [showColumnsModal, setShowColumnsModal] = useState(false);
   const [showCreateTypeModal, setShowCreateTypeModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<any>(null);
   const [autosTabLoading, setAutosTabLoading] = useState(false);
   const [autosVinculados, setAutosVinculados] = useState<any[]>([]);
   
@@ -46,6 +50,7 @@ const Polizas: React.FC = () => {
 
 const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading: saasLoading, usuarioSaas } = useUnifiedAuth();
 
   // Verificar autenticación
@@ -213,7 +218,62 @@ const { toast } = useToast();
 
   useEffect(() => {
     loadEstadisticas();
+    loadNotificationStatus();
   }, []);
+
+  // Abrir modal por param open_policy_id desde el buscador global
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openId = params.get('open_policy_id') || params.get('open_poliza_id');
+    if (openId) {
+      if (!showModal || String(selectedPoliza?.id) !== String(openId)) {
+        openPolizaById(String(openId));
+      }
+    }
+  }, [location.search]);
+
+  // Cargar estado de notificaciones
+  const loadNotificationStatus = async () => {
+    try {
+      console.log('🔔 Cargando estado de notificaciones...');
+      const config = await policyNotificationService.getConfig();
+      console.log('🔔 Estado de notificaciones cargado:', config);
+      console.log('🔔 is_active:', config?.is_active);
+      console.log('🔔 whatsapp_status:', config?.whatsapp_status);
+      setNotificationStatus(config);
+    } catch (error) {
+      console.error('❌ Error cargando estado de notificaciones:', error);
+      // Establecer un estado por defecto para evitar que el botón quede sin color
+      setNotificationStatus({
+        is_active: false,
+        whatsapp_status: null
+      });
+    }
+  };
+
+  // Deep-link helpers (desde buscador global)
+  const openPolizaById = async (id: string) => {
+    try {
+      const resp = await polizaService.getPoliza(String(id));
+      const pol: any = (resp as any)?.data ?? resp;
+      if (pol) {
+        // Reusar lógica estándar para precargar pestañas (automóviles, etc.)
+        handleViewPoliza(pol as any);
+      }
+    } catch (e) {
+      console.error('Error abriendo póliza por ID desde query param:', e);
+    }
+  };
+
+  const handleCloseDetailsModal = () => {
+    setShowModal(false);
+    try {
+      const params = new URLSearchParams(location.search);
+      params.delete('open_policy_id');
+      params.delete('open_poliza_id');
+      navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+    } catch {}
+  };
 
   // Handlers
   const handleFilterChange = (key: keyof PolizaFilters, value: any) => {
@@ -385,7 +445,7 @@ const formatDate = (value: any): string => {
       case 'prima_neta':
         return (
           <span className="font-medium">
-            {polizaUtils.formatCurrency(poliza.prima_neta)}
+            {polizaUtils.formatCurrency((poliza.total || 0) > 0 ? (poliza.total || 0) : (poliza.prima_neta + (poliza.iva || 0)))}
           </span>
         );
       case 'vencimiento':
@@ -416,7 +476,7 @@ const formatDate = (value: any): string => {
       aseguradora: 'Aseguradora',
       ramo: 'Ramo',
       estado: 'Estado',
-      prima_neta: 'Prima Neta',
+      prima_neta: 'Prima Total',
       vencimiento: 'Vencimiento',
       vendedor: 'Vendedor',
       sede: 'Sede',
@@ -653,6 +713,45 @@ const formatDate = (value: any): string => {
                 </Button>
 
                 <Button
+                  color="light"
+                  onClick={() => {
+                    console.log('🔔 Click en botón de notificaciones. Estado actual:', notificationStatus);
+                    setShowNotificationsModal(true);
+                  }}
+                  className={`relative h-10 w-10 p-0 rounded-[10px] flex items-center justify-center transition-all border-2 ${
+                    notificationStatus?.is_active && notificationStatus?.whatsapp_status?.connected
+                      ? 'border-green-500 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-500 shadow-green-200 shadow-md'
+                      : notificationStatus?.is_active && !notificationStatus?.whatsapp_status?.connected
+                      ? 'border-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-500 animate-pulse shadow-red-200 shadow-md'
+                      : 'border-gray-300 bg-white hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:bg-gray-800'
+                  }`}
+                  title={
+                    notificationStatus?.is_active && notificationStatus?.whatsapp_status?.connected
+                      ? '✅ Notificaciones Activas - WhatsApp Conectado'
+                      : notificationStatus?.is_active && !notificationStatus?.whatsapp_status?.connected
+                      ? '⚠️ Notificaciones Activas - WhatsApp Desconectado'
+                      : 'Notificaciones Inactivas - Click para configurar'
+                  }
+                >
+                  {notificationStatus?.is_active && notificationStatus?.whatsapp_status?.connected && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
+                  )}
+                  {notificationStatus?.is_active && !notificationStatus?.whatsapp_status?.connected && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
+                  )}
+                  <Icon
+                    icon="solar:bell-bold-duotone"
+                    className={`w-5 h-5 transition-colors ${
+                      notificationStatus?.is_active && notificationStatus?.whatsapp_status?.connected
+                        ? 'text-green-600 dark:text-green-400'
+                        : notificationStatus?.is_active && !notificationStatus?.whatsapp_status?.connected
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-gray-500 dark:text-gray-400'
+                    }`}
+                  />
+                </Button>
+
+                <Button
                   color="primary"
                   className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
                   onClick={() => setShowCreateTypeModal(true)}
@@ -830,8 +929,8 @@ const formatDate = (value: any): string => {
 
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
-                        <p className="text-xs text-gray-500 mb-1">Prima Neta</p>
-                        <p className="text-sm font-medium">{polizaUtils.formatCurrency(poliza.prima_neta)}</p>
+                        <p className="text-xs text-gray-500 mb-1">Prima Total</p>
+                        <p className="text-sm font-medium">{polizaUtils.formatCurrency((poliza.total || 0) > 0 ? (poliza.total || 0) : (poliza.prima_neta + (poliza.iva || 0)))}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Vencimiento</p>
@@ -969,7 +1068,7 @@ const formatDate = (value: any): string => {
       </Modal>
 
         {/* Modal de detalle - Mejorado para tablets */}
-            <Modal show={showModal} onClose={() => setShowModal(false)} size="5xl">
+            <Modal show={showModal} onClose={handleCloseDetailsModal} size="5xl">
           <Modal.Header>
             Detalle de Póliza {selectedPoliza?.numero_poliza}
           </Modal.Header>
@@ -1000,8 +1099,8 @@ const formatDate = (value: any): string => {
                           </Badge>
                         </div>
                         <div className="flex justify-between">
-                          <strong>Prima Neta:</strong> 
-                          <span>{polizaUtils.formatCurrency(selectedPoliza.prima_neta)}</span>
+                          <strong>Prima Total:</strong>
+                          <span>{polizaUtils.formatCurrency((selectedPoliza.total || 0) > 0 ? (selectedPoliza.total || 0) : (selectedPoliza.prima_neta + (selectedPoliza.iva || 0)))}</span>
                         </div>
                         <div className="flex justify-between">
                           <strong>IVA:</strong> 
@@ -1223,6 +1322,15 @@ const formatDate = (value: any): string => {
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
           currentFilters={filters}
+        />
+
+        {/* Modal de notificaciones */}
+        <PolicyNotificationsModal
+          isOpen={showNotificationsModal}
+          onClose={() => {
+            setShowNotificationsModal(false);
+            loadNotificationStatus(); // Recargar estado después de cerrar
+          }}
         />
       </div>
       </PermissionGate>

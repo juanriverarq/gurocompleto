@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Tabs } from "flowbite-react";
 import { Icon } from "@iconify/react";
 import Dashboard3 from '../dashboard/Dashboard3';
-import VoiceAISummaryDashboard from '../voice-ai/components/VoiceAISummaryDashboard';
+import VoiceAIDashboard from '../voice-ai/VoiceAIDashboard';
 import ElectronicInvoicingDashboard from '../dashboards/ElectronicInvoicingDashboard';
+import ConfiguracionMasiva from '../saas/configuracion-masiva/ConfiguracionMasiva';
+import Plantillas from '../apps/marketing/plantillas/Plantillas';
+import CarteraClientes from '../apps/cartera/CarteraClientes';
 import DashboardConfigModal from '../../components/modals/DashboardConfigModal';
 import { useWelcomeModal } from '../../hooks/useWelcomeModal';
 import type { TutorialSection } from '../../components/modals/OnboardingTutorialModal';
@@ -53,15 +56,29 @@ const CombinedDashboard = () => {
       id: 'voice-ai',
       name: 'Call Center IA',
       icon: 'solar:phone-calling-rounded-outline',
-      component: VoiceAISummaryDashboard,
-      enabled: true
+      component: VoiceAIDashboard,
+      enabled: false
     },
     {
-      id: 'electronic-invoicing',
-      name: 'Facturación Electrónica',
-      icon: 'solar:document-text-outline',
-      component: ElectronicInvoicingDashboard,
-      enabled: true
+      id: 'whatsapp',
+      name: 'Dashboard WhatsApp',
+      icon: 'solar:chat-round-dots-bold-duotone',
+      component: ConfiguracionMasiva,
+      enabled: false
+    },
+    {
+      id: 'email-marketing',
+      name: 'Email Marketing',
+      icon: 'solar:letter-bold-duotone',
+      component: Plantillas,
+      enabled: false
+    },
+    {
+      id: 'cartera',
+      name: 'Dashboard Cartera',
+      icon: 'solar:wallet-bold-duotone',
+      component: CarteraClientes,
+      enabled: false
     }
   ]);
 
@@ -193,9 +210,11 @@ const CombinedDashboard = () => {
           </button>
         </div>
         <div className="[&_[role=tablist]]:pr-24">
-          <Tabs aria-label="Combined Tabs" variant="underline" onActiveTabChange={(tab) => setActiveTab(tab.toString())}>
+          <Tabs aria-label="Combined Tabs" variant="underline" onActiveTabChange={(tab) => setActiveTab(enabledDashboards[Number(tab)]?.id || enabledDashboards[0]?.id)}>
             {enabledDashboards.map((dashboard, index) => {
               const Component = dashboard.component;
+              const isActive = activeTab === dashboard.id;
+              
               return (
                 <Tabs.Item
                   key={dashboard.id}
@@ -203,7 +222,16 @@ const CombinedDashboard = () => {
                   title={dashboard.name}
                   icon={() => <Icon icon={dashboard.icon} height={20} />}
                 >
-                  <Component />
+                  {/* Solo renderizar el componente si el tab está activo */}
+                  {isActive && <Component />}
+                  {!isActive && (
+                    <div className="flex items-center justify-center h-64">
+                      <div className="text-center">
+                        <Icon icon="solar:loading-outline" height={48} className="text-gray-400 animate-spin mx-auto mb-2" />
+                        <p className="text-gray-500 dark:text-gray-400">Cargando {dashboard.name}...</p>
+                      </div>
+                    </div>
+                  )}
                 </Tabs.Item>
               );
             })}

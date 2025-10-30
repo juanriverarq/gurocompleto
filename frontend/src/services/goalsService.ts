@@ -1,26 +1,32 @@
-import { API_BASE_URL } from '../config/api';
+import api, { API_BASE_URL } from '../config/api';
 
-const headers = () => {
-  const token = localStorage.getItem('firebase_token') || localStorage.getItem('saas_token');
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  } as Record<string, string>;
-};
+function getDevBrokerId(): string | undefined {
+  try {
+    const empleadoPerfil = localStorage.getItem('empleado_profile');
+    if (empleadoPerfil) {
+      const perfil = JSON.parse(empleadoPerfil);
+      if (perfil?.broker_id) return String(perfil.broker_id);
+    }
+  } catch {
+    // ignore
+  }
+  const devBrokerId = (import.meta as any).env?.VITE_DEV_BROKER_ID;
+  return devBrokerId ? String(devBrokerId) : undefined;
+}
 
-const hasAuthToken = () => {
-  const token = localStorage.getItem('firebase_token') || localStorage.getItem('saas_token');
-  return !!token;
-};
+function devHeaders(): Record<string, string> {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  const devBrokerId = getDevBrokerId();
+  if (devBrokerId) h['X-Dev-Broker-Id'] = devBrokerId;
+  h['X-Dev-Mode'] = 'true';
+  return h;
+}
 
-// Metas ahora públicas en /saas/goals: quitamos fallback /test
-async function req(path: string, init?: RequestInit) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+async function testFetch(path: string, init?: RequestInit) {
+  return fetch(`${API_BASE_URL}/test${path}`, {
     ...(init || {}),
-    headers: { 'Content-Type': 'application/json', ...headers(), ...(init?.headers || {}) } as any,
+    headers: { ...(init?.headers || {}), ...devHeaders() },
   });
-  if (!res.ok) throw new Error(`Error ${res.status}`);
-  return res;
 }
 
 export interface GoalDTO {
@@ -47,35 +53,99 @@ export default {
       per_page?: number;
     } = {},
   ) {
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) usp.append(k, String(v));
-    });
-    const path = `/saas/goals?${usp.toString()}`;
-    const res = await req(path);
-    return res.json();
+    try {
+      const res = await api.get('/saas/goals', { params });
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const usp = new URLSearchParams();
+        Object.entries(params).forEach(([k, v]) => {
+          if (v !== undefined && v !== null) usp.append(k, String(v));
+        });
+        const res = await testFetch(`/goals?${usp.toString()}`, { method: 'GET' });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async statistics(period?: string) {
-    const usp = new URLSearchParams();
-    if (period) usp.append('period', period);
-    const path = `/saas/goals/statistics?${usp.toString()}`;
-    const res = await req(path);
-    return res.json();
+    try {
+      const params = period ? { period } : {};
+      const res = await api.get('/saas/goals/statistics', { params });
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const usp = new URLSearchParams();
+        if (period) usp.append('period', period);
+        const res = await testFetch(`/goals/statistics?${usp.toString()}`, { method: 'GET' });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async create(data: Partial<GoalDTO>) {
-    const res = await req(`/saas/goals`, { method: 'POST', body: JSON.stringify(data) });
-    return res.json();
+    try {
+      const res = await api.post('/saas/goals', data);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/goals`, {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async get(id: number) {
-    const res = await req(`/saas/goals/${id}`);
-    return res.json();
+    try {
+      const res = await api.get(`/saas/goals/${id}`);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/goals/${id}`, { method: 'GET' });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async update(id: number, data: Partial<GoalDTO>) {
-    const res = await req(`/saas/goals/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-    return res.json();
+    try {
+      const res = await api.put(`/saas/goals/${id}`, data);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/goals/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async remove(id: number) {
-    const res = await req(`/saas/goals/${id}`, { method: 'DELETE' });
-    return res.json();
+    try {
+      const res = await api.delete(`/saas/goals/${id}`);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/goals/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
 };

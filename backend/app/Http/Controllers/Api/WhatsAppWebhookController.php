@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\CampaignExecution;
 use App\Models\CampaignMessage;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -142,6 +144,91 @@ class WhatsAppWebhookController extends Controller
                 Log::info('🎯 [WEBHOOK] Campaña marcada como completada', [
                     'campaign_id' => $campaignId,
                     'execution_id' => $executionId
+                ]);
+            }
+
+            // 💰 Cobro por WhatsApp enviado (idempotente por ejecución)
+            try {
+                $successCount = (int)($stats['successful'] ?? 0);
+                if ($successCount <= 0) {
+                    // Fallback: contar enviados en DB para esta ejecución
+                    $successCount = CampaignMessage::where('campaign_id', $campaignId)
+                        ->where('campaign_execution_id', $executionId)
+                        ->where('status', CampaignMessage::STATUS_SENT)
+                        ->count();
+                }
+
+                if ($successCount > 0) {
+                    $alreadyCharged = WalletTransaction::where('reference_type', 'whatsapp_campaign_execution')
+                        ->where('reference_id', $executionId)
+                        ->exists();
+
+                    if (!$alreadyCharged) {
+                        $brokerId = (int) $campaign->broker_id;
+                        $wallet = Wallet::firstOrCreate(
+                            ['broker_id' => $brokerId],
+                            [
+                                'balance_cop' => 0,
+                                'balance_usd' => 0,
+                                'pending_balance' => 0,
+                                'total_earnings' => 0,
+                                'is_active' => true
+                            ]
+                        );
+
+                        $costPerWhatsApp = 50;
+                        $amount = $successCount * $costPerWhatsApp;
+
+                        $balanceBefore = (float) $wallet->balance_cop;
+                        $wallet->balance_cop = $balanceBefore - $amount; // permitir balance negativo
+                        $wallet->save();
+
+                        WalletTransaction::create([
+                            'wallet_id' => $wallet->id,
+                            'broker_id' => $brokerId,
+                            'user_id' => null,
+                            'type' => 'debit',
+                            'amount_cop' => $amount,
+                            'amount_usd' => 0,
+                            'currency' => 'COP',
+                            'description' => "WhatsApp campaña: {$campaign->name} (ejecución {$executionId})",
+                            'reference_type' => 'whatsapp_campaign_execution',
+                            'reference_id' => $executionId,
+                            'balance_cop_after' => $wallet->balance_cop,
+                            'metadata' => [
+                                'campaign_id' => $campaignId,
+                                'execution_id' => $executionId,
+                                'messages_successful' => $successCount,
+                                'cost_per_whatsapp' => $costPerWhatsApp
+                            ]
+                        ]);
+
+                        Log::info('💰 [WALLET] Cargo aplicado por mensajes WhatsApp de campaña', [
+                            'broker_id' => $brokerId,
+                            'campaign_id' => $campaignId,
+                            'execution_id' => $executionId,
+                            'success_count' => $successCount,
+                            'amount_cop' => $amount,
+                            'balance_before' => $balanceBefore,
+                            'balance_after' => $wallet->balance_cop
+                        ]);
+                    } else {
+                        Log::info('💰 [WALLET] Cobro ya aplicado previamente (idempotente)', [
+                            'campaign_id' => $campaignId,
+                            'execution_id' => $executionId
+                        ]);
+                    }
+                } else {
+                    Log::info('💰 [WALLET] Sin mensajes exitosos para cobrar', [
+                        'campaign_id' => $campaignId,
+                        'execution_id' => $executionId
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('💰 [WALLET] Error registrando cobro de campaña WhatsApp', [
+                    'campaign_id' => $campaignId,
+                    'execution_id' => $executionId,
+                    'error' => $e->getMessage()
                 ]);
             }
 

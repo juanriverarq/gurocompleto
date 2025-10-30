@@ -3,8 +3,13 @@ import CardBox from "../../shared/CardBox";
 import Chart from 'react-apexcharts';
 import { useDashboardData } from "../../../hooks/useDashboardData";
 
-const SalesOverview = () => {
-  const { data, loading, error } = useDashboardData();
+interface SalesOverviewProps {
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+const SalesOverview = ({ startDate, endDate }: SalesOverviewProps) => {
+  const { data, loading, error } = useDashboardData({ startDate, endDate });
 
   const getChartData = () => {
     // Validar que polizas_por_tipo existe y es un array

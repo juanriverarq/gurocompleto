@@ -26,7 +26,7 @@ export const IconSidebar = () => {
       "embudo_ventas",
     ],
     3: ["pipeline_ventas", "metas_objetivos", "equipos_ventas", "analisis_rendimiento"],
-    4: ["comisiones", "cartera_clientes", "estados_cuenta", "reportes_financieros"],
+    4: ["cartera_clientes", "comisiones", "reportes_financieros"],
     5: [
       "leads",
       "email_marketing",

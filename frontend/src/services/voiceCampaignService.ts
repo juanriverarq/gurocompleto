@@ -176,10 +176,10 @@ export interface CreateVoiceCampaignRequest {
     };
     post_call_tools?: {
       collect?: {
-        email?: boolean;
-        document_id?: boolean;
-        address?: boolean;
-        [k: string]: boolean | undefined;
+        email?: boolean | CollectFieldConfig;
+        document_id?: boolean | CollectFieldConfig;
+        address?: boolean | CollectFieldConfig;
+        [k: string]: boolean | CollectFieldConfig | undefined;
       };
       whatsapp?: {
         enabled?: boolean;
@@ -192,6 +192,41 @@ export interface CreateVoiceCampaignRequest {
   };
 }
 
+/**
+ * Disparadores (Triggers) - Tipos y payloads
+ */
+export interface VoiceCampaignTriggerInput {
+  type: 'new_client' | 'new_policy' | 'policy_expiry' | 'new_lead' | 'new_siniestro';
+  enabled?: boolean;
+  window_config?: {
+    days?: string[];
+    start?: string; // "HH:mm"
+    end?: string;   // "HH:mm"
+    tz?: string;    // e.g. "America/Bogota"
+  };
+  limits?: {
+    daily_quota?: number; // 0 = sin límite
+    dedup_days?: number;  // 0 = sin dedup
+  };
+  filters?: Record<string, any>;
+  expiry_offsets?: { // solo para type="policy_expiry"
+    before_days?: number[];
+    after_days?: number[];
+  };
+  mapping?: {
+    phone_field?: string;
+    alt_phone_field?: string;
+    variables?: Record<string, any>; // { varName: string|{path:string,default?:any} }
+  };
+}
+
+export interface ProcessTriggerEventPayload {
+  type: VoiceCampaignTriggerInput['type'];
+  entity: Record<string, any>;
+  entity_type?: string;
+  entity_id?: string | number;
+}
+
 export interface TestCallRequest {
   phone_number: string;
   customer_name: string;
@@ -199,6 +234,14 @@ export interface TestCallRequest {
   custom_message?: string;
 }
 
+// Tipado rico para campos de recolección post-llamada (coincide con lo que arma CampaignsManagementWidget)
+export interface CollectFieldConfig {
+  enabled: boolean;
+  type: string;
+  required?: boolean;
+  instruction?: string;
+  pattern?: string;
+}
 // Cache simple para optimizar llamadas a ElevenLabs
 interface CacheEntry {
   data: any;
@@ -479,6 +522,89 @@ class VoiceCampaignService {
       return {
         success: false,
         message: `Error al cambiar estado de campaña: ${
+          error instanceof Error ? error.message : 'Error desconocido'
+        }`,
+      };
+    }
+  }
+  /**
+   * Pausar campaña de voz
+   */
+  async pauseVoiceCampaign(
+    id: number,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('⏸️ [VOICE CAMPAIGN] Pausing campaign:', id);
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/${id}/pause`,
+        'POST',
+      );
+      console.log('✅ [VOICE CAMPAIGN] Campaign paused successfully:', response);
+      return {
+        success: true,
+        message: response.message || 'Campaña pausada',
+      };
+    } catch (error) {
+      console.error('❌ [VOICE CAMPAIGN] Error pausing campaign:', error);
+      return {
+        success: false,
+        message: `Error al pausar campaña: ${
+          error instanceof Error ? error.message : 'Error desconocido'
+        }`,
+      };
+    }
+  }
+
+  /**
+   * Reanudar campaña de voz
+   */
+  async resumeVoiceCampaign(
+    id: number,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('▶️ [VOICE CAMPAIGN] Resuming campaign:', id);
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/${id}/resume`,
+        'POST',
+      );
+      console.log('✅ [VOICE CAMPAIGN] Campaign resumed successfully:', response);
+      return {
+        success: true,
+        message: response.message || 'Campaña reanudada',
+      };
+    } catch (error) {
+      console.error('❌ [VOICE CAMPAIGN] Error resuming campaign:', error);
+      return {
+        success: false,
+        message: `Error al reanudar campaña: ${
+          error instanceof Error ? error.message : 'Error desconocido'
+        }`,
+      };
+    }
+  }
+
+  /**
+   * Cancelar campaña de voz
+   */
+  async cancelVoiceCampaign(
+    id: number,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('🛑 [VOICE CAMPAIGN] Cancelling campaign:', id);
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/${id}/cancel`,
+        'POST',
+      );
+      console.log('✅ [VOICE CAMPAIGN] Campaign cancelled successfully:', response);
+      return {
+        success: true,
+        message: response.message || 'Campaña cancelada',
+      };
+    } catch (error) {
+      console.error('❌ [VOICE CAMPAIGN] Error cancelling campaign:', error);
+      return {
+        success: false,
+        message: `Error al cancelar campaña: ${
           error instanceof Error ? error.message : 'Error desconocido'
         }`,
       };
@@ -867,6 +993,139 @@ class VoiceCampaignService {
   }
 
   // ========================
+  // DISPARADORES (TRIGGERS) DE CAMPAÑAS DE VOZ
+  // ========================
+
+  /**
+   * Listar disparadores de una campaña
+   */
+  async listCampaignTriggers(campaignId: number): Promise<{
+    success: boolean;
+    data?: any[];
+    message?: string;
+  }> {
+    try {
+      const response = await this.makeRequest(`/saas/voice-campaigns/${campaignId}/triggers`);
+      return { success: true, data: response.data || [] };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Error al listar disparadores' };
+    }
+  }
+
+  /**
+   * Crear un disparador para una campaña
+   */
+  async createCampaignTrigger(
+    campaignId: number,
+    trigger: VoiceCampaignTriggerInput
+  ): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/${campaignId}/triggers`,
+        'POST',
+        trigger
+      );
+      return { success: true, data: response.data || response };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Error al crear disparador' };
+    }
+  }
+
+  /**
+   * Actualizar un disparador
+   */
+  async updateCampaignTrigger(
+    triggerId: number,
+    patch: Partial<VoiceCampaignTriggerInput> & { status?: string }
+  ): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/triggers/${triggerId}`,
+        'PUT',
+        patch
+      );
+      return { success: true, data: response.data || response };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Error al actualizar disparador' };
+    }
+  }
+
+  /**
+   * Eliminar un disparador
+   */
+  async deleteCampaignTrigger(triggerId: number): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/triggers/${triggerId}`,
+        'DELETE'
+      );
+      return { success: true, message: response.message || 'Disparador eliminado' };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Error al eliminar disparador' };
+    }
+  }
+
+  /**
+   * Test-run de un disparador (evalúa y, si procede, dispara 1 llamada)
+   */
+  async testRunTrigger(
+    triggerId: number,
+    payload: { sample?: Record<string, any>; entity_type?: string; entity_id?: string | number }
+  ): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/triggers/${triggerId}/test-run`,
+        'POST',
+        payload
+      );
+      return { success: true, data: response.data || response };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Error en test-run de disparador' };
+    }
+  }
+
+  /**
+   * Previsualización de targets candidatos para un disparador (no dispara llamadas)
+   */
+  async previewTriggerTargets(
+    triggerId: number,
+    limit: number = 10
+  ): Promise<{ success: boolean; data?: any[]; meta?: any; message?: string }> {
+    try {
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/triggers/${triggerId}/preview-targets`,
+        'POST',
+        { limit }
+      );
+      return {
+        success: true,
+        data: response.data || [],
+        meta: response.meta || { limit }
+      };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Error al previsualizar objetivos' };
+    }
+  }
+
+  /**
+   * Procesar un evento de negocio contra todos los disparadores del broker para ese tipo
+   */
+  async processTriggerEvent(
+    event: ProcessTriggerEventPayload
+  ): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/triggers/process-event`,
+        'POST',
+        event
+      );
+      return { success: true, data: response.data || response };
+    } catch (error: any) {
+      return { success: false, message: error?.message || 'Error al procesar evento' };
+    }
+  }
+
+  // ========================
   // MÉTODOS DE VALIDACIÓN
   // ========================
 
@@ -885,7 +1144,7 @@ class VoiceCampaignService {
     try {
       console.log('🔊 [VOICE CAMPAIGN UPDATE] Updating campaign', { id, campaignData });
 
-      const response = await this.makeRequest(`voice-campaigns/${id}`, 'PUT', campaignData);
+      const response = await this.makeRequest(`/saas/voice-campaigns/${id}`, 'PUT', campaignData);
 
       console.log('✅ [VOICE CAMPAIGN UPDATE] Campaign updated successfully', response);
 
@@ -915,7 +1174,7 @@ class VoiceCampaignService {
     try {
       console.log('🔊 [VOICE CAMPAIGN DELETE] Deleting campaign', { id });
 
-      const response = await this.makeRequest(`voice-campaigns/${id}`, 'DELETE');
+      const response = await this.makeRequest(`/saas/voice-campaigns/${id}`, 'DELETE');
 
       console.log('✅ [VOICE CAMPAIGN DELETE] Campaign deleted successfully', response);
 

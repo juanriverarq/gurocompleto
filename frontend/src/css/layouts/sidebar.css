@@ -95,11 +95,29 @@ transition: color .15s ease-in-out, background-color .15s ease-in-out, border-co
 .miniicons [data-testid="flowbite-tooltip"] {
     width: max-content;
     background-color: var(--color-secondary);
+    z-index: 99999 !important;
 }
 
 .miniicons [data-testid="flowbite-tooltip-arrow"] {
     background-color: var(--color-secondary);
+    z-index: 99999 !important;
 }
-.miniicons .flowbite-tooltip{
-  position: fixed !important;
+
+.miniicons .flowbite-tooltip {
+    position: fixed !important;
+    z-index: 99999 !important;
+}
+
+/* Sobrescribir clases de Tailwind z-10 en tooltips del mini sidebar */
+.miniicons [data-testid="flowbite-tooltip"].z-100 {
+    z-index: 99999 !important;
+}
+
+.miniicons [data-testid="flowbite-tooltip-arrow"].z-100 {
+    z-index: 99999 !important;
+}
+
+/* Asegurar que el contenido interno también tenga z-index alto */
+.miniicons [data-testid="flowbite-tooltip"] > div {
+    z-index: 99999 !important;
 }

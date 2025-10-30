@@ -11,7 +11,7 @@ import {
 import { auth } from '../config/firebase';
 
 // Configuración base de la API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
 
 class SaasApiService {
   private async getAuthHeaders(): Promise<HeadersInit> {
@@ -544,6 +544,14 @@ class SaasApiService {
     return response.blob();
   }
 
+  async getClientesEstadisticas(): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/clientes/estadisticas`, {
+      headers: await this.getAuthHeaders(),
+    });
+
+    return this.handleResponse(response);
+  }
+
   // ===== ROLES =====
 
   async getRoles(): Promise<ApiResponse<RolPersonalizado[]>> {
@@ -673,7 +681,11 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
-  async getPrimasChart(period: 'week' | 'month' | 'year'): Promise<
+  async getPrimasChart(
+    period: 'week' | 'month' | 'year' = 'month',
+    startDate?: string | null,
+    endDate?: string | null
+  ): Promise<
     ApiResponse<{
       labels: string[];
       data: number[];
@@ -682,7 +694,17 @@ class SaasApiService {
       period: string;
     }>
   > {
-    const response = await fetch(`${API_BASE_URL}/saas/dashboard/primas-chart?period=${period}`, {
+    const params = new URLSearchParams();
+    params.append('period', period);
+    
+    if (startDate) {
+      params.append('start_date', startDate);
+    }
+    if (endDate) {
+      params.append('end_date', endDate);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/saas/dashboard/primas-chart?${params.toString()}`, {
       headers: await this.getAuthHeaders(),
     });
 
@@ -712,6 +734,13 @@ class SaasApiService {
       if (v !== undefined && v !== null && v !== '') params.append(k, String(v));
     });
     const response = await fetch(`${API_BASE_URL}/saas/automoviles?${params}`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getAutomovil(id: string | number): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/automoviles/${id}`, {
       headers: await this.getAuthHeaders(),
     });
     return this.handleResponse(response);
@@ -840,6 +869,21 @@ class SaasApiService {
       body: JSON.stringify(data),
     });
 
+    return this.handleResponse(response);
+  }
+  // ===== BÚSQUEDA GLOBAL (Top Bar) =====
+  async globalSearch(
+    q: string,
+    perType: number = 5
+  ): Promise<ApiResponse<{ data: any[]; counts: Record<string, number>; query: string }>> {
+    const headers = await this.getAuthHeaders();
+    const usp = new URLSearchParams();
+    usp.append('q', q);
+    if (perType) usp.append('per_type', String(perType));
+
+    const response = await fetch(`${API_BASE_URL}/saas/search?${usp.toString()}`, {
+      headers,
+    });
     return this.handleResponse(response);
   }
 }

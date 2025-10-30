@@ -66,79 +66,55 @@ const LiquidarVendedores = () => {
     try {
       setLoading(true);
 
-      let todasLasPolizas: any[] = [];
-      let pagina = 1;
-      let hayMas = true;
+      // Usar el endpoint de cartera que incluye información real de pagos y comisiones
+      const response = await polizaService.getCarteraPolizas();
 
-      while (hayMas) {
-        const res = await polizaService.getPolizas({
-          per_page: 100,
-          page: pagina,
-          estado: 'ACTIVA',
-        });
-
-        if (res.success && res.data) {
-          const datos = res.data;
-          const polizasPagina = Array.isArray(datos) ? datos : (datos.data || []);
-          todasLasPolizas = [...todasLasPolizas, ...polizasPagina];
-
-          if (!Array.isArray(datos) && datos.current_page && datos.last_page) {
-            hayMas = datos.current_page < datos.last_page;
-            pagina++;
-          } else {
-            hayMas = false;
-          }
-        } else {
-          hayMas = false;
-        }
+      if (!response.success || !response.data) {
+        setComisiones([]);
+        return;
       }
 
-      const comisionesVendedores: ComisionVendedor[] = todasLasPolizas
-        .filter(p => p.vendedor)
+      // Filtrar solo pólizas con vendedor asignado y que tengan comisiones
+      const comisionesVendedores: ComisionVendedor[] = response.data
+        .filter((poliza: any) => poliza.vendedor && poliza.vendedor !== 'Sin asignar')
         .map((poliza: any) => {
           const primaNeta = Number(poliza.prima_neta || 0);
-          const comisionTotal = Number(poliza.comision || 0) || (primaNeta * Number(poliza.comision_agencia || poliza.porcentaje_comision || 15) / 100);
+          const comisionTotal = Number(poliza.comision || 0);
           
-          const random = Math.random();
+          // Obtener información real de cobro de comisión
+          const cobroComision = poliza.cobro_comision || {};
+          const comisionCobrada = Number(cobroComision.cobrada || 0);
+          const comisionPendiente = Number(cobroComision.pendiente || 0);
+          
+          // Si no hay cobro registrado pero hay comisión, está pendiente
+          const pendiente = comisionPendiente > 0 ? comisionPendiente : (comisionCobrada === 0 && comisionTotal > 0 ? comisionTotal : 0);
+          
+          // Determinar estado de pago
           let estadoPago: 'Pagado' | 'Pendiente' | 'Parcial' = 'Pendiente';
-          let comisionPagada = 0;
-          let comisionPendiente = comisionTotal;
-          let fechaPago: string | undefined = undefined;
-
-          if (random < 0.6) {
+          if (comisionCobrada >= comisionTotal && comisionTotal > 0) {
             estadoPago = 'Pagado';
-            comisionPagada = comisionTotal;
-            comisionPendiente = 0;
-            fechaPago = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          } else if (random < 0.7) {
+          } else if (comisionCobrada > 0) {
             estadoPago = 'Parcial';
-            comisionPagada = comisionTotal * 0.5;
-            comisionPendiente = comisionTotal * 0.5;
-            fechaPago = new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
           }
-
-          const nombreCliente = poliza.nombres_cliente && poliza.apellidos_cliente
-            ? `${poliza.nombres_cliente} ${poliza.apellidos_cliente}`.trim()
-            : poliza.policy_holder_name || 'Sin nombre';
 
           return {
             id: String(poliza.id),
             polizaId: String(poliza.id),
             numeroPoliza: poliza.numero_poliza || '',
-            cliente: nombreCliente,
-            aseguradora: poliza.aseguradora_nombre || poliza.aseguradora || '',
-            ramo: poliza.ramo_nombre || poliza.ramo_principal || '',
-            vendedor: poliza.vendedor || 'Sin asignar',
-            vendedorId: String(poliza.vendedor_id || poliza.vendedor || ''),
+            cliente: poliza.cliente || 'Sin nombre',
+            aseguradora: poliza.aseguradora || '',
+            ramo: poliza.ramo || '',
+            vendedor: poliza.vendedor,
+            vendedorId: String(poliza.vendedor_id || poliza.vendedor),
             primaNeta,
-            porcentajeComision: Number(poliza.comision_agencia || poliza.porcentaje_comision || 15),
+            porcentajeComision: Number(poliza.porcentaje_comision || 15),
             comisionTotal,
-            comisionPagada,
-            comisionPendiente,
-            fechaPoliza: poliza.fecha_expedicion || poliza.created_at || '',
-            fechaVencimiento: poliza.fecha_fin || '',
+            comisionPagada: comisionCobrada,
+            comisionPendiente: pendiente,
+            fechaPoliza: poliza.fecha_inicio || '',
+            fechaVencimiento: poliza.fecha_vencimiento || '',
             estadoPago,
-            fechaPago,
+            fechaPago: cobroComision.fecha,
           };
         });
 
@@ -225,8 +201,25 @@ const LiquidarVendedores = () => {
 
   const totalPaginasPagadas = Math.ceil(comisionesPagadas.length / elementosPorPagina);
 
+  const estadisticasUI = useMemo(() => {
+    const totalComisiones = comisionesFiltradas.reduce((sum, c) => sum + c.comisionTotal, 0);
+    const comisionesPagadasTotal = comisionesFiltradas.reduce((sum, c) => sum + c.comisionPagada, 0);
+    const comisionesPendientesTotal = comisionesFiltradas.reduce((sum, c) => sum + c.comisionPendiente, 0);
+    const vendedoresUnicos = new Set(comisionesFiltradas.map(c => c.vendedorId)).size;
+    const tasaPago = totalComisiones > 0 ? (comisionesPagadasTotal / totalComisiones) * 100 : 0;
+
+    return {
+      totalComisiones,
+      comisionesPagadas: comisionesPagadasTotal,
+      comisionesPendientes: comisionesPendientesTotal,
+      totalVendedores: vendedoresUnicos,
+      polizasConComision: comisionesFiltradas.length,
+      tasaPago,
+    } as EstadisticasLiquidacion;
+  }, [comisionesFiltradas]);
+
   const comisionesPorVendedor = useMemo(() => {
-    const consolidado = comisiones.reduce((acc, c) => {
+    const consolidado = comisionesFiltradas.reduce((acc, c) => {
       if (!acc[c.vendedorId]) {
         acc[c.vendedorId] = {
           vendedor: c.vendedor,
@@ -245,7 +238,7 @@ const LiquidarVendedores = () => {
     }, {} as Record<string, any>);
 
     return Object.values(consolidado);
-  }, [comisiones]);
+  }, [comisionesFiltradas]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -302,10 +295,10 @@ const LiquidarVendedores = () => {
               <div>
                 <p className="text-xs md:text-sm font-medium text-gray-600">Total Comisiones</p>
                 <p className="text-lg md:text-2xl font-bold text-blue-600">
-                  {formatCurrency(estadisticas.totalComisiones)}
+                  {formatCurrency(estadisticasUI.totalComisiones)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {estadisticas.polizasConComision} pólizas
+                  {estadisticasUI.polizasConComision} pólizas
                 </p>
               </div>
               <Icon icon="solar:calculator-bold-duotone" className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
@@ -317,7 +310,7 @@ const LiquidarVendedores = () => {
               <div>
                 <p className="text-xs md:text-sm font-medium text-gray-600">Por Pagar</p>
                 <p className="text-lg md:text-2xl font-bold text-orange-600">
-                  {formatCurrency(estadisticas.comisionesPendientes)}
+                  {formatCurrency(estadisticasUI.comisionesPendientes)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   Pendiente de liquidar
@@ -334,7 +327,7 @@ const LiquidarVendedores = () => {
               <div>
                 <p className="text-xs md:text-sm font-medium text-gray-600">Pagadas</p>
                 <p className="text-lg md:text-2xl font-bold text-green-600">
-                  {formatCurrency(estadisticas.comisionesPagadas)}
+                  {formatCurrency(estadisticasUI.comisionesPagadas)}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   Ya liquidadas
@@ -351,10 +344,10 @@ const LiquidarVendedores = () => {
               <div>
                 <p className="text-xs md:text-sm font-medium text-gray-600">Vendedores</p>
                 <p className="text-lg md:text-2xl font-bold text-purple-600">
-                  {estadisticas.totalVendedores}
+                  {estadisticasUI.totalVendedores}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  Tasa pago: {estadisticas.tasaPago.toFixed(1)}%
+                  Tasa pago: {estadisticasUI.tasaPago.toFixed(1)}%
                 </p>
               </div>
               <div className="w-6 h-6 md:w-8 md:h-8 bg-purple-100 rounded-full flex items-center justify-center">
@@ -661,8 +654,8 @@ const LiquidarVendedores = () => {
             )}
           </Tabs.Item>
 
-          <Tabs.Item 
-            title="Por Vendedor"
+          <Tabs.Item
+            title={`Por Vendedor (${comisionesPorVendedor.length})`}
             icon={() => <Icon icon="solar:user-bold-duotone" />}
           >
             <div className="overflow-x-auto">

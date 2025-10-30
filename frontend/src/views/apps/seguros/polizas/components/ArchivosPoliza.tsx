@@ -102,7 +102,7 @@ const ArchivosPoliza: React.FC<Props> = ({ polizaId }) => {
   }, [items, search, typeFilter, sortBy, sortDir]);
 
   const typesOptions = useMemo(() => {
-    const base = ['caratula', 'condiciones', 'recibo', 'soporte_pago', 'endoso', 'anexo', 'cotizacion', 'otro'];
+    const base = ['caratula', 'condiciones', 'recibo', 'soporte_pago', 'endoso', 'anexo', 'cotizacion', 'matricula', 'sarlaft', 'tratamiento_datos', 'otro'];
     const present = new Set<string>(items.map((d) => (d.type || 'otro')));
     return [''].concat(Array.from(new Set([...base, ...present])));
   }, [items]);
@@ -251,6 +251,9 @@ const ArchivosPoliza: React.FC<Props> = ({ polizaId }) => {
                 <option value="endoso">Endoso</option>
                 <option value="anexo">Anexo</option>
                 <option value="cotizacion">Cotización</option>
+                <option value="matricula">Matrícula</option>
+                <option value="sarlaft">SARLAFT</option>
+                <option value="tratamiento_datos">Tratamiento de Datos</option>
                 <option value="otro">Otro</option>
               </Select>
             </div>

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\VoiceCampaign;
 use App\Models\VoiceCampaignExecution;
 use App\Models\VoiceCampaignCall;
+use App\Models\VoiceCampaignTrigger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -134,22 +135,54 @@ class VoiceCampaignController extends Controller
                 'name' => 'required|string|max:255',
                 'description' => 'nullable|string',
                 'voice_message_template' => 'required|string',
-                'contacts' => 'required|array|min:1',
-                'contacts.*.phone' => 'required|string',
+                'contacts' => 'nullable|array', // Nullable si hay triggers
+                'contacts.*.phone' => 'required_with:contacts|string',
                 'contacts.*.name' => 'nullable|string',
                 'elevenlabs_agent_id' => 'nullable|string',
                 'elevenlabs_phone_number_id' => 'nullable|string',
                 'elevenlabs_voice_id' => 'nullable|string',
                 'agent_name' => 'nullable|string|max:255',
                 'voice_settings' => 'nullable|array',
-                'settings' => 'nullable|array'
+                'settings' => 'nullable|array',
+
+                // Disparadores opcionales incluidos en creación de campaña
+                'triggers' => 'nullable|array',
+                'triggers.*.type' => 'required_with:triggers|in:' . implode(',', \App\Models\VoiceCampaignTrigger::TYPES),
+                'triggers.*.enabled' => 'boolean',
+                'triggers.*.window_config' => 'nullable|array',
+                'triggers.*.limits' => 'nullable|array',
+                'triggers.*.filters' => 'nullable|array',
+                'triggers.*.expiry_offsets' => 'nullable|array',
+                'triggers.*.mapping' => 'nullable|array',
             ]);
 
             if ($validator->fails()) {
+                Log::warning('🔊 [VOICE CAMPAIGN] Validación fallida', [
+                    'errors' => $validator->errors()->toArray(),
+                    'request_data' => $request->all()
+                ]);
+                
                 return response()->json([
                     'success' => false,
                     'message' => 'Datos de entrada inválidos',
                     'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Validación adicional: si no hay triggers, debe haber al menos 1 contacto
+            $hasTriggers = !empty($request->input('triggers'));
+            $hasContacts = !empty($request->input('contacts'));
+            
+            if (!$hasTriggers && !$hasContacts) {
+                Log::warning('🔊 [VOICE CAMPAIGN] Sin triggers ni contactos', [
+                    'has_triggers' => $hasTriggers,
+                    'has_contacts' => $hasContacts
+                ]);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Debes proporcionar contactos o configurar disparadores automáticos',
+                    'errors' => ['contacts' => ['Se requiere al menos un contacto o un disparador configurado']]
                 ], 422);
             }
 
@@ -178,15 +211,52 @@ class VoiceCampaignController extends Controller
                 'created_by' => $request->user()?->id
             ]);
 
+            // Crear triggers opcionales incluidos en el payload
+            $createdTriggers = [];
+            $incomingTriggers = $request->input('triggers');
+            if (is_array($incomingTriggers) && !empty($incomingTriggers)) {
+                foreach ($incomingTriggers as $t) {
+                    try {
+                        $createdTriggers[] = VoiceCampaignTrigger::create([
+                            'voice_campaign_id' => $campaign->id,
+                            'type' => (string) ($t['type'] ?? 'new_client'),
+                            'enabled' => (bool) ($t['enabled'] ?? false),
+                            'window_config' => $t['window_config'] ?? null,
+                            'limits' => $t['limits'] ?? null,
+                            'filters' => $t['filters'] ?? null,
+                            'expiry_offsets' => $t['expiry_offsets'] ?? null,
+                            'mapping' => $t['mapping'] ?? null,
+                            'status' => 'healthy',
+                            'created_by' => $request->user()?->id,
+                            'updated_by' => $request->user()?->id,
+                        ]);
+                    } catch (\Throwable $e) {
+                        \Log::warning('🔊 [VOICE CAMPAIGN] No se pudo crear trigger en createImmediate', ['error' => $e->getMessage()]);
+                    }
+                }
+            }
+
             // Si viene save_as_draft=true, NO ejecutar; devolver como borrador
             $saveAsDraft = $request->boolean('save_as_draft', false);
             if ($saveAsDraft) {
+                // Si hay triggers creados, marcar campaña como running (en curso esperando eventos)
+                if (!empty($createdTriggers)) {
+                    $campaign->update([
+                        'status' => VoiceCampaign::STATUS_RUNNING,
+                        'is_active' => true,
+                        'last_execution' => now()
+                    ]);
+                }
+                
                 DB::commit();
                 return response()->json([
                     'success' => true,
-                    'message' => 'Campaña de voz guardada como borrador',
+                    'message' => !empty($createdTriggers)
+                        ? 'Campaña de voz en curso con disparadores automáticos'
+                        : 'Campaña de voz guardada como borrador',
                     'data' => [
-                        'campaign' => $campaign,
+                        'campaign' => $campaign->fresh(),
+                        'triggers' => $createdTriggers,
                         'stats' => $campaign->getStats()
                     ]
                 ], 201);
@@ -203,6 +273,7 @@ class VoiceCampaignController extends Controller
                 'data' => [
                     'campaign' => $campaign,
                     'execution' => $execution,
+                    'triggers' => $createdTriggers,
                     'stats' => $campaign->getStats()
                 ]
             ], 201);
@@ -318,7 +389,65 @@ class VoiceCampaignController extends Controller
             ]);
             
             if ($isTerminal) {
-                // Extraer datos recolectados dinámicamente
+                // Primero, verificar si hay datos del tool en caché
+                try {
+                    // Intentar caché específico por conversation_id
+                    $cachedToolData = \Cache::get('tool_data:' . $conversationId);
+                    
+                    // Si no hay, intentar caché genérico (para cuando conversation_id es unknown)
+                    if (!$cachedToolData) {
+                        $cachedToolData = \Cache::get('tool_data:latest');
+                        if ($cachedToolData) {
+                            Log::info('💾 [ELEVENLABS WEBHOOK] Usando datos del caché genérico', [
+                                'conversation_id' => $conversationId,
+                                'cached_timestamp' => $cachedToolData['timestamp'] ?? 'N/A'
+                            ]);
+                            $cachedToolData = $cachedToolData['data'] ?? $cachedToolData;
+                        }
+                    }
+                    
+                    if ($cachedToolData) {
+                        Log::info('💾 [ELEVENLABS WEBHOOK] Recuperando datos del tool desde caché', [
+                            'conversation_id' => $conversationId,
+                            'cached_data' => $cachedToolData
+                        ]);
+                        
+                        $meta = is_array($call->call_metadata) ? $call->call_metadata : [];
+                        $existingData = $meta['collected_data'] ?? [];
+                        
+                        // Agregar datos del tool con máxima confianza
+                        foreach ($cachedToolData as $field => $value) {
+                            if ($value !== null && $value !== '' && $field !== 'conversation_id' && $field !== 'timestamp') {
+                                $existingData[$field] = [
+                                    'value' => $value,
+                                    'confidence' => 1.0,
+                                    'source' => 'elevenlabs_tool',
+                                    'collected_at' => now()->toDateTimeString()
+                                ];
+                            }
+                        }
+                        
+                        $meta['collected_data'] = $existingData;
+                        $meta['tool_used'] = true;
+                        $meta['tool_data_from_cache'] = true;
+                        $call->update(['call_metadata' => $meta]);
+                        
+                        // Limpiar cachés
+                        \Cache::forget('tool_data:' . $conversationId);
+                        \Cache::forget('tool_data:latest');
+                        
+                        Log::info('✅ [ELEVENLABS WEBHOOK] Datos del tool aplicados desde caché', [
+                            'call_id' => $call->id,
+                            'fields' => array_keys($existingData)
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('⚠️ [ELEVENLABS WEBHOOK] Error recuperando datos del tool desde caché', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+                
+                // Extraer datos recolectados dinámicamente desde transcript (como fallback)
                 try {
                     $fullTranscriptText = '';
                     if (is_array($transcript)) {
@@ -345,7 +474,8 @@ class VoiceCampaignController extends Controller
                         if (!empty($collected)) {
                             $meta = is_array($call->call_metadata) ? $call->call_metadata : [];
                             $prev = isset($meta['collected_data']) && is_array($meta['collected_data']) ? $meta['collected_data'] : [];
-                            $meta['collected_data'] = array_merge($prev, $collected);
+                            // Merge sin sobrescribir datos del tool (tienen prioridad)
+                            $meta['collected_data'] = array_merge($collected, $prev);
                             $call->update(['call_metadata' => $meta]);
                         }
                     }
@@ -353,23 +483,78 @@ class VoiceCampaignController extends Controller
                     Log::error('Error extrayendo datos recolectados', ['error' => $e->getMessage()]);
                 }
 
-                // Marcar llamada como completada
+                // Extraer y persistir análisis completo de ElevenLabs
+                try {
+                    $analysisData = [];
+                    if (is_array($analysis)) {
+                        $analysisData = $analysis;
+                        
+                        // Traducir transcript_summary al español si viene en inglés
+                        if (isset($analysisData['transcript_summary']) && is_string($analysisData['transcript_summary'])) {
+                            $summary = $analysisData['transcript_summary'];
+                            // Detectar si está en inglés (heurística simple)
+                            if ($this->isEnglish($summary)) {
+                                $translated = $this->translateToSpanish($summary);
+                                if ($translated !== $summary) {
+                                    $analysisData['transcript_summary'] = $translated;
+                                    $analysisData['transcript_summary_original'] = $summary;
+                                    Log::info('✅ [TRANSLATION] Resumen traducido al español', [
+                                        'conversation_id' => $conversationId,
+                                        'original_length' => strlen($summary),
+                                        'translated_length' => strlen($translated)
+                                    ]);
+                                }
+                            }
+                        }
+                    }
+                    // Añadir termination_reason desde metadata
+                    if ($terminationReason = data_get($metadata, 'termination_reason')) {
+                        $analysisData['termination_reason'] = $terminationReason;
+                    }
+                    // Persistir en call_result para acceso desde frontend
+                    if (!empty($analysisData)) {
+                        $call->update(['call_result' => $analysisData]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('⚠️ [ELEVENLABS ANALYSIS] Error persistiendo análisis', ['error' => $e->getMessage()]);
+                }
+
+                // Clasificación robusta de resultado post-llamada
                 $callSuccessfulRaw = data_get($analysis, 'call_successful', null);
+                $durationSeconds = (int) (data_get($metadata, 'call_duration_secs') ?? 0);
+
+                // Señales positivas cuando ElevenLabs no envía call_successful explícito
+                $hasTranscriptArr = is_array($transcript) && count($transcript) > 0;
+                $positiveStatus = in_array($statusLc, ['done','completed','finished','ended'], true);
+                $positiveDuration = $durationSeconds >= 5;
+
                 $callSuccessful = false;
                 if (is_bool($callSuccessfulRaw)) {
                     $callSuccessful = $callSuccessfulRaw;
                 } elseif (is_string($callSuccessfulRaw)) {
                     $lc = strtolower($callSuccessfulRaw);
-                    $callSuccessful = in_array($lc, ['success','successful','yes','true','completed','done']);
+                    $callSuccessful = in_array($lc, ['success','successful','yes','true','completed','done'], true);
+                } else {
+                    // Inferir éxito si hubo conversación real aunque falte la bandera
+                    $callSuccessful = $positiveStatus || $hasTranscriptArr || $positiveDuration;
                 }
 
-                $durationSeconds = (int) (data_get($metadata, 'call_duration_secs') ?? 0);
-
-                // Marcar estado de la llamada
+                // Persistir estado final
                 if ($callSuccessful) {
                     $call->markAsCompleted(['analysis' => $analysis ?? null], $durationSeconds);
                 } else {
-                    $call->markAsFailed(VoiceCampaignCall::RESULT_REJECTED, 'call_successful=false');
+                    // Conservar detalle de motivo para diagnóstico en UI/logs
+                    $failReason = 'call_unsuccessful_or_unknown';
+                    if (is_string($statusLc) && $statusLc !== '') {
+                        $failReason .= "|status={$statusLc}";
+                    }
+                    if (!$hasTranscriptArr) {
+                        $failReason .= '|no_transcript';
+                    }
+                    if ($durationSeconds <= 0) {
+                        $failReason .= '|zero_duration';
+                    }
+                    $call->markAsFailed(VoiceCampaignCall::RESULT_REJECTED, $failReason);
                 }
 
                 // Calcular y persistir costos (ElevenLabs + Twilio) y totales
@@ -436,6 +621,7 @@ class VoiceCampaignController extends Controller
                 }
 
                 // Marcar ejecución/campaña como completadas si no quedan llamadas activas
+                // IMPORTANTE: Solo para campañas sin triggers (immediate/scheduled finitas)
                 try {
                     $activeStatuses = [
                         \App\Models\VoiceCampaignCall::STATUS_PENDING,
@@ -454,13 +640,32 @@ class VoiceCampaignController extends Controller
                         if ($call->execution && !$call->execution->isCompleted()) {
                             $call->execution->markAsCompleted();
                         }
-                        // Terminar campaña si no quedan llamadas activas a nivel campaña
-                        $remainingInCampaign = $call->voiceCampaign
-                            ? $call->voiceCampaign->calls()->whereIn('status', $activeStatuses)->count()
-                            : 0;
-
-                        if ($remainingInCampaign === 0 && $call->voiceCampaign && !$call->voiceCampaign->isCompleted()) {
-                            $call->voiceCampaign->markAsCompleted();
+                        
+                        // Solo terminar campaña si NO tiene triggers activos (campañas finitas)
+                        $campaign = $call->voiceCampaign;
+                        if ($campaign && !$campaign->isCompleted()) {
+                            $hasTriggers = \App\Models\VoiceCampaignTrigger::where('voice_campaign_id', $campaign->id)
+                                ->where('enabled', true)
+                                ->exists();
+                            
+                            if (!$hasTriggers) {
+                                // Campaña sin triggers: verificar si no quedan llamadas activas y marcar como completada
+                                $remainingInCampaign = $campaign->calls()->whereIn('status', $activeStatuses)->count();
+                                if ($remainingInCampaign === 0) {
+                                    $campaign->markAsCompleted();
+                                    Log::info('✅ [VOICE CAMPAIGN] Campaña sin triggers completada', [
+                                        'campaign_id' => $campaign->id,
+                                        'campaign_name' => $campaign->name
+                                    ]);
+                                }
+                            } else {
+                                // Campaña con triggers: mantener activa (running) para futuros eventos
+                                Log::info('ℹ️ [VOICE CAMPAIGN] Campaña con triggers permanece activa', [
+                                    'campaign_id' => $campaign->id,
+                                    'campaign_name' => $campaign->name,
+                                    'active_triggers' => $hasTriggers
+                                ]);
+                            }
                         }
                     }
                 } catch (\Throwable $e) {
@@ -475,6 +680,95 @@ class VoiceCampaignController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return response()->json(['success' => false, 'message' => 'Error interno'], 500);
+        }
+    }
+
+    /**
+     * Detectar si un texto está en inglés (heurística simple)
+     */
+    private function isEnglish(string $text): bool
+    {
+        // Palabras comunes en inglés que no existen en español
+        $englishWords = ['the', 'and', 'was', 'were', 'have', 'has', 'been', 'will', 'would', 'could', 'should', 'their', 'there', 'they'];
+        $textLower = strtolower($text);
+        
+        $englishWordCount = 0;
+        foreach ($englishWords as $word) {
+            if (preg_match('/\b' . $word . '\b/', $textLower)) {
+                $englishWordCount++;
+            }
+        }
+        
+        // Si encuentra 2 o más palabras en inglés, probablemente está en inglés
+        return $englishWordCount >= 2;
+    }
+
+    /**
+     * Traducir texto al español usando DeepSeek/AI configurado
+     */
+    private function translateToSpanish(string $text): string
+    {
+        try {
+            $aiApiKey = env('AI_API_KEY', env('DEEPSEEK_API_KEY'));
+            $aiApiUrl = env('AI_API_URL', env('DEEPSEEK_API_URL', 'https://api.deepseek.com/v1/chat/completions'));
+            
+            if (!$aiApiKey || !$aiApiUrl) {
+                Log::warning('⚠️ [TRANSLATION] API keys no configuradas', [
+                    'has_ai_key' => !empty($aiApiKey),
+                    'has_ai_url' => !empty($aiApiUrl)
+                ]);
+                return $text; // Sin traducción si no hay API configurada
+            }
+
+            Log::info('🌐 [TRANSLATION] Iniciando traducción', [
+                'text_length' => strlen($text),
+                'text_preview' => substr($text, 0, 100)
+            ]);
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $aiApiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(15)->post($aiApiUrl, [
+                'model' => env('AI_MODEL', 'deepseek-chat'),
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'Eres un traductor profesional. Traduce el texto al español de forma natural y fluida. Responde SOLO con la traducción, sin explicaciones adicionales.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Traduce este texto al español:\n\n{$text}"
+                    ]
+                ],
+                'temperature' => 0.3,
+                'max_tokens' => 1000
+            ]);
+
+            if ($response->successful()) {
+                $result = $response->json();
+                $translated = $result['choices'][0]['message']['content'] ?? $text;
+                $cleanTranslated = trim($translated);
+                
+                Log::info('✅ [TRANSLATION] Traducción exitosa', [
+                    'original_length' => strlen($text),
+                    'translated_length' => strlen($cleanTranslated)
+                ]);
+                
+                return $cleanTranslated;
+            } else {
+                Log::warning('⚠️ [TRANSLATION] API respondió con error', [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+            }
+
+            return $text;
+        } catch (\Throwable $e) {
+            Log::error('❌ [TRANSLATION] Error traduciendo con DeepSeek', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $text;
         }
     }
 
@@ -865,7 +1159,8 @@ class VoiceCampaignController extends Controller
                     $campaign->elevenlabs_voice_id,
                     $campaign->voice_settings,
                     $campaign->agent_name,
-                    is_array($campaign->settings) ? data_get($campaign->settings, 'post_call_tools.collect', null) : null
+                    is_array($campaign->settings) ? data_get($campaign->settings, 'post_call_tools.collect', null) : null,
+                    $campaign
                 );
 
                 if ($callResult['success']) {
@@ -918,7 +1213,8 @@ class VoiceCampaignController extends Controller
         ?string $voiceId = null,
         ?array $voiceSettings = null,
         ?string $agentName = null,
-        ?array $collectConfig = null
+        ?array $collectConfig = null,
+        $campaign = null
     ): array {
         try {
             $elevenLabsApiKey = env('ELEVENLABS_API_KEY');
@@ -929,8 +1225,15 @@ class VoiceCampaignController extends Controller
                 throw new \Exception('ElevenLabs configuration missing');
             }
 
+            // Obtener nombre comercial del broker
+            $broker = null;
+            if ($campaign && $campaign->broker_id) {
+                $broker = Broker::find($campaign->broker_id);
+            }
+            $brokerCommercialName = $broker?->name ?? env('DEFAULT_COMPANY_NAME', 'GURO Seguros');
+            
             // Preparar variables dinámicas exigidas por el agente de ElevenLabs
-            $companyName   = $contact['company_name'] ?? data_get($contact, 'custom_data.company_name') ?? env('DEFAULT_COMPANY_NAME', 'GURO Seguros');
+            $companyName   = $contact['company_name'] ?? data_get($contact, 'custom_data.company_name') ?? $brokerCommercialName;
             $policyNumber  = $contact['policy_number'] ?? data_get($contact, 'custom_data.policy_number') ?? 'N/A';
             $debtAmountRaw = $contact['debt_amount'] ?? data_get($contact, 'custom_data.debt_amount') ?? 0;
             $dueDate       = $contact['payment_due_date'] ?? data_get($contact, 'custom_data.payment_due_date') ?? Carbon::now()->addDays(5)->format('Y-m-d');
@@ -977,11 +1280,33 @@ class VoiceCampaignController extends Controller
                 // no bloquear en caso de error al construir instrucciones
             }
 
+            // Detectar si WhatsApp está habilitado en la campaña
+            $whatsappEnabled = false;
+            $campaignSettings = is_array($campaign->settings) ? $campaign->settings : [];
+            $postCallTools = $campaignSettings['post_call_tools'] ?? [];
+            $whatsappConfig = $postCallTools['whatsapp'] ?? [];
+            if (is_array($whatsappConfig) && ($whatsappConfig['enabled'] ?? false)) {
+                $whatsappEnabled = true;
+            }
+
             // Forzar un primer mensaje personalizado para dirigirse por el nombre del cliente
             $agentDisplayName = $agentName ?: 'tu asesor';
-            $safeCompany = $companyName ?: 'tu compañía de seguros';
+            $safeCompany = $companyName ?: $brokerCommercialName;
             $personalizedFirstMessage = "Hola {$customerName}, soy {$agentDisplayName} de {$safeCompany}. " .
                                         "Quería hablar contigo sobre tu póliza {$policyNumber}. ¿Te puedo contar los detalles?";
+
+            // Construir instrucciones condicionales de WhatsApp
+            $whatsappInstruccion = $whatsappEnabled
+                ? " y pregunta si desea recibir el enlace de pago por WhatsApp. Si acepta, confirma el número de WhatsApp (puede ser el mismo de la llamada u otro)"
+                : "";
+            
+            $whatsappCierre = $whatsappEnabled
+                ? "\n   - Si el cliente aceptó recibir el enlace por WhatsApp, confirma el número"
+                : "";
+            
+            $whatsappGuardrail = $whatsappEnabled
+                ? "\n- Solo ofrece el envío por WhatsApp si el cliente lo acepta. Si no tiene WhatsApp, simplemente confirma la fecha de pago."
+                : "\n- NO menciones WhatsApp en ningún momento. Solo confirma la fecha en que puede realizar el pago.";
 
             // Prompt final con políticas conversacionales con estructura tipo ElevenLabs (personalizado a nuestro caso)
             $finalPrompt = trim("
@@ -1001,7 +1326,7 @@ Datos de contexto disponibles (si aplican):
 Mantén respuestas cortas y directas (máximo 2-3 oraciones). Evita repetir lo que ya se dijo; reformula solo si el cliente no entendió.
 
 # Goal
-Tu objetivo es que el cliente entienda claramente el motivo de la llamada (p.ej., recordatorio de vencimiento / falta de cobertura / opciones de pago), defina el siguiente paso (pago ahora o cuándo) y cómo recibir el enlace (WhatsApp) y confirma si lo enviamos a este mismo número o a otro; si es a otro, solicita el número. Si no es inmediato, confirma fecha tentativa y recordatorio.
+Tu objetivo es que el cliente entienda claramente el motivo de la llamada (recordatorio de pago), defina el siguiente paso (pago ahora o cuándo){$whatsappInstruccion}. Si no es inmediato, confirma fecha tentativa de pago.
 
 Plan de conversación y orden:
 1) Apertura (breve):
@@ -1021,7 +1346,8 @@ Plan de conversación y orden:
    - Anuncia la transición: \"Antes de finalizar, necesito confirmar unos datos cortos\".
    - Para cada dato activo, usa EXACTAMENTE el formato: \"campo: valor\"
      (ej.: \"email: usuario@dominio.com\", \"número de documento: 123456789\", \"address: Calle 10 # 20-30\").
-   - Si ya obtuviste un dato durante la conversación, no lo repitas; confírmalo una única vez.
+   - Si ya obtuviste un dato durante la conversación, no lo repitas; confírmalo una única vez.{$whatsappCierre}
+   - SIEMPRE despídete cordialmente antes de finalizar la llamada
 5) Si el cliente está ocupado:
    - Ofrece reagendar de forma proactiva y NO recolectes datos en ese momento.
 
@@ -1034,7 +1360,9 @@ Plan de conversación y orden:
 - No enumeres opciones extensas; entrega la información esencial.
 - Mantén el control del flujo y redirige con suavidad si el cliente se desvía.
 - No pidas datos administrativos hasta el cierre, salvo que sean imprescindibles para avanzar.
-- Siempre usa español de Colombia.
+- Siempre usa español de Colombia.{$whatsappGuardrail}
+- CRÍTICO: NUNCA termines la llamada sin una despedida cordial. Incluso si el cliente dice \"no\" o \"nada más\", DEBES responder con una despedida apropiada antes de colgar.
+- La despedida es OBLIGATORIA en todas las llamadas, sin excepción.
 
 # Tools
 Usa estas instrucciones únicamente en el paso 4 (Cierre), no antes.
@@ -1325,6 +1653,11 @@ Contexto de campaña: {$message}
                               if (is_array($call->call_metadata) && isset($call->call_metadata['collected_data'])) {
                                   $data['collected_data'] = $call->call_metadata['collected_data'];
                               }
+
+                              // Agregar análisis de ElevenLabs si existe en call_result
+                              if (is_array($call->call_result)) {
+                                  $data['elevenlabs_analysis'] = $call->call_result;
+                              }
  
                               return $data;
                           });
@@ -1403,6 +1736,249 @@ Contexto de campaña: {$message}
                 'message' => 'Error al obtener estadísticas',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+    /**
+     * Pausar/Reanudar campañas (toggle)
+     * PATCH /saas/voice-campaigns/{id}/toggle
+     */
+    public function toggle(Request $request, int $id): JsonResponse
+    {
+        try {
+            $brokerId = (int) $this->getBrokerId($request);
+            /** @var VoiceCampaign|null $campaign */
+            $campaign = VoiceCampaign::forBroker($brokerId)->where('id', $id)->first();
+
+            if (!$campaign) {
+                return response()->json(['success' => false, 'message' => 'Campaña no encontrada'], 404);
+            }
+
+            $newActive = !$campaign->is_active;
+            $newStatus = $newActive ? VoiceCampaign::STATUS_RUNNING : VoiceCampaign::STATUS_PAUSED;
+
+            $campaign->update([
+                'is_active' => $newActive,
+                'status' => $newStatus,
+                'last_execution' => now(),
+            ]);
+
+            // Habilitar/Deshabilitar los triggers asociados
+            $this->setTriggersEnabled((int)$campaign->id, $newActive);
+
+            // Si pausamos, cancelar llamadas activas de esta campaña
+            if (!$newActive) {
+                $cancelled = $this->cancelActiveCalls((int)$campaign->id);
+                \Log::info('🔇 [VOICE CAMPAIGN] Campaña pausada, llamadas canceladas', [
+                    'campaign_id' => $campaign->id,
+                    'cancelled_active_calls' => $cancelled,
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $newActive ? 'Campaña reanudada' : 'Campaña pausada',
+                'data' => [
+                    'campaign' => $campaign->fresh(),
+                    'stats' => $campaign->getStats(),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('❌ [VOICE CAMPAIGN] Error en toggle', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al actualizar estado'], 500);
+        }
+    }
+
+    /**
+     * Pausar campaña explícitamente
+     * POST /saas/voice-campaigns/{id}/pause (si agregas la ruta)
+     */
+    public function pause(Request $request, int $id): JsonResponse
+    {
+        try {
+            $brokerId = (int) $this->getBrokerId($request);
+            $campaign = VoiceCampaign::forBroker($brokerId)->where('id', $id)->first();
+
+            if (!$campaign) {
+                return response()->json(['success' => false, 'message' => 'Campaña no encontrada'], 404);
+            }
+
+            $campaign->update([
+                'is_active' => false,
+                'status' => VoiceCampaign::STATUS_PAUSED,
+                'last_execution' => now(),
+            ]);
+
+            $this->setTriggersEnabled((int)$campaign->id, false);
+            $cancelled = $this->cancelActiveCalls((int)$campaign->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña pausada',
+                'data' => [
+                    'campaign' => $campaign->fresh(),
+                    'cancelled_active_calls' => $cancelled,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => 'Error al pausar campaña'], 500);
+        }
+    }
+
+    /**
+     * Reanudar campaña explícitamente
+     * POST /saas/voice-campaigns/{id}/resume (si agregas la ruta)
+     */
+    public function resume(Request $request, int $id): JsonResponse
+    {
+        try {
+            $brokerId = (int) $this->getBrokerId($request);
+            $campaign = VoiceCampaign::forBroker($brokerId)->where('id', $id)->first();
+
+            if (!$campaign) {
+                return response()->json(['success' => false, 'message' => 'Campaña no encontrada'], 404);
+            }
+
+            $campaign->update([
+                'is_active' => true,
+                'status' => VoiceCampaign::STATUS_RUNNING,
+                'last_execution' => now(),
+            ]);
+
+            $this->setTriggersEnabled((int)$campaign->id, true);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña reanudada',
+                'data' => $campaign->fresh(),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => 'Error al reanudar campaña'], 500);
+        }
+    }
+
+    /**
+     * Cancelar campaña (no elimina, deja estado final)
+     * POST /saas/voice-campaigns/{id}/cancel (si agregas la ruta)
+     */
+    public function cancel(Request $request, int $id): JsonResponse
+    {
+        try {
+            $brokerId = (int) $this->getBrokerId($request);
+            $campaign = VoiceCampaign::forBroker($brokerId)->where('id', $id)->first();
+
+            if (!$campaign) {
+                return response()->json(['success' => false, 'message' => 'Campaña no encontrada'], 404);
+            }
+
+            $campaign->update([
+                'is_active' => false,
+                'status' => VoiceCampaign::STATUS_CANCELLED,
+                'last_execution' => now(),
+            ]);
+
+            $this->setTriggersEnabled((int)$campaign->id, false);
+            $cancelled = $this->cancelActiveCalls((int)$campaign->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña cancelada',
+                'data' => [
+                    'campaign' => $campaign->fresh(),
+                    'cancelled_active_calls' => $cancelled,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => 'Error al cancelar campaña'], 500);
+        }
+    }
+
+    /**
+     * Eliminar campaña
+     * DELETE /saas/voice-campaigns/{id}
+     * Parámetro opcional: force=true para forzar cancelación y eliminación
+     */
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        try {
+            $brokerId = (int) $this->getBrokerId($request);
+            /** @var VoiceCampaign|null $campaign */
+            $campaign = VoiceCampaign::forBroker($brokerId)->where('id', $id)->first();
+
+            if (!$campaign) {
+                return response()->json(['success' => false, 'message' => 'Campaña no encontrada'], 404);
+            }
+
+            $isRunning = $campaign->isInProgress();
+            $force = $request->boolean('force', false);
+
+            if ($isRunning && !$force) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La campaña está en ejecución. Pausa o usa force=true para eliminar.'
+                ], 409);
+            }
+
+            // Deshabilitar triggers y cancelar llamadas activas antes de eliminar
+            $this->setTriggersEnabled((int)$campaign->id, false);
+            $this->cancelActiveCalls((int)$campaign->id);
+
+            $campaign->delete();
+
+            return response()->json(['success' => true, 'message' => 'Campaña eliminada']);
+        } catch (\Throwable $e) {
+            \Log::error('❌ [VOICE CAMPAIGN] Error al eliminar', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al eliminar campaña'], 500);
+        }
+    }
+
+    // =========================
+    // Helpers internos de control
+    // =========================
+
+    /**
+     * Habilitar/Deshabilitar todos los triggers de una campaña
+     */
+    private function setTriggersEnabled(int $campaignId, bool $enabled): void
+    {
+        try {
+            VoiceCampaignTrigger::where('voice_campaign_id', $campaignId)
+                ->update(['enabled' => $enabled, 'updated_by' => auth()->id()]);
+        } catch (\Throwable $e) {
+            \Log::warning('⚠️ [VOICE CAMPAIGN] No se pudieron actualizar triggers', [
+                'campaign_id' => $campaignId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Cancelar llamadas activas de una campaña (evita conflictos cuando hay varias campañas)
+     * Retorna cantidad de registros afectados.
+     */
+    private function cancelActiveCalls(int $campaignId): int
+    {
+        try {
+            $active = [
+                VoiceCampaignCall::STATUS_PENDING,
+                VoiceCampaignCall::STATUS_INITIATED,
+                VoiceCampaignCall::STATUS_RINGING,
+                VoiceCampaignCall::STATUS_ANSWERED,
+                VoiceCampaignCall::STATUS_IN_PROGRESS,
+            ];
+
+            return VoiceCampaignCall::where('voice_campaign_id', $campaignId)
+                ->whereIn('status', $active)
+                ->update([
+                    'status' => VoiceCampaignCall::STATUS_CANCELLED,
+                    'call_ended_at' => now(),
+                    'error_message' => 'Cancelled by user/campaign state change'
+                ]);
+        } catch (\Throwable $e) {
+            \Log::warning('⚠️ [VOICE CAMPAIGN] No se pudieron cancelar llamadas activas', [
+                'campaign_id' => $campaignId,
+                'error' => $e->getMessage()
+            ]);
+            return 0;
         }
     }
 }

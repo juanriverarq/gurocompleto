@@ -4,8 +4,13 @@ import { Link } from "react-router";
 import CardBox from "src/components/shared/CardBox";
 import { useDashboardData } from "../../../hooks/useDashboardData";
 
-const ColorBoxes = () => {
-  const { data, loading, error } = useDashboardData();
+interface ColorBoxesProps {
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
+  const { data, loading, error } = useDashboardData({ startDate, endDate });
 
   const getColorboxData = () => {
     if (!data) {

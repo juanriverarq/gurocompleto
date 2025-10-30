@@ -1,1 +1,0 @@
-import{r as e}from"./index-6EesXYnk.js";const o=e.createContext(void 0),n=()=>{const t=e.useContext(o);if(t===void 0)throw new Error("useAuth debe ser usado dentro de un AuthProvider");return t};export{n as u};

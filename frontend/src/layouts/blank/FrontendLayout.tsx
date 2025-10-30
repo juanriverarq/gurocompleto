@@ -2,18 +2,14 @@ import customTheme from "src/utils/theme/custom-theme";
 import { Flowbite } from "flowbite-react";
 import { Outlet } from "react-router";
 import ScrollToTop from "src/components/shared/ScrollToTop";
-
-// Componentes básicos temporales
-const AnnouncementBar = () => null;
-const FrontHeader = () => null;
-const Footer = () => null;
+import Header from "src/components/landingpage/header/Header";
+import Footer from "src/components/landingpage/footer/Footer";
 
 const FrontendLayout = () => (
     <>
     <div className="frontend-page bg-white dark:bg-dark">
     <Flowbite theme={{ theme: customTheme }}>
-        <AnnouncementBar />
-        <FrontHeader />
+        <Header />
         <ScrollToTop>
         <Outlet />
         </ScrollToTop>

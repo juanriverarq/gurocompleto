@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tabs } from "flowbite-react";
 import { Icon } from "@iconify/react";
 import VoiceAIStats from './components/dashboard/VoiceAIStats';
@@ -9,10 +9,29 @@ import CallHistoryWidget from './components/dashboard/CallHistoryWidget';
 import AgentsManagementWidget from './components/dashboard/AgentsManagementWidget';
 
 import CampaignsManagementWidget from './components/CampaignsManagementWidget';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const VoiceAIDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showNewCampaignModal, setShowNewCampaignModal] = useState(false);
+
+  // Leer pestaña desde query param (?tab=dashboard|calls|agents|campaigns)
+  const location = useLocation();
+  const navigate = useNavigate();
+  const params = new URLSearchParams(location.search);
+  const tabParam = params.get('tab');
+  const activeTabKey = (tabParam || 'dashboard').toLowerCase();
+
+  // Limpiar el query param una vez leído para evitar re-triggers
+  useEffect(() => {
+    if (!tabParam) return;
+    params.delete('tab');
+    navigate(
+      { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const handleNewCampaignClick = () => {
     setActiveTab('3'); // Cambiar a la pestaña de Gestión de Campañas
@@ -27,7 +46,7 @@ const VoiceAIDashboard = () => {
           <div className="p-6 bg-white dark:bg-darkgray rounded-lg">
             <Tabs aria-label="Call center IA" variant="underline" onActiveTabChange={(tab) => setActiveTab(tab.toString())}>
               <Tabs.Item
-                active
+                active={activeTabKey === 'dashboard'}
                 title="Call center IA"
                 icon={() => <Icon icon="solar:graph-linear" height={20} />}
               >
@@ -123,6 +142,7 @@ const VoiceAIDashboard = () => {
               </Tabs.Item>
 
               <Tabs.Item
+                active={activeTabKey === 'calls'}
                 title="Historial de Llamadas"
                 icon={() => <Icon icon="solar:phone-calling-rounded-outline" height={20} />}
               >
@@ -132,6 +152,7 @@ const VoiceAIDashboard = () => {
               </Tabs.Item>
 
               <Tabs.Item
+                active={activeTabKey === 'agents'}
                 title="Gestión de Agentes"
                 icon={() => <Icon icon="solar:users-group-rounded-outline" height={20} />}
               >
@@ -141,6 +162,7 @@ const VoiceAIDashboard = () => {
               </Tabs.Item>
 
               <Tabs.Item
+                active={activeTabKey === 'campaigns'}
                 title="Gestión de Campañas"
                 icon={() => <Icon icon="solar:target-outline" height={20} />}
               >

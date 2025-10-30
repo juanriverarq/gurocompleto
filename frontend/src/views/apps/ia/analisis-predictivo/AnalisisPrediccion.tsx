@@ -66,6 +66,23 @@ const buildSeries = (tipo: PrediccionType['tipo']) => {
 };
 
 export default function AnalisisPrediccion() {
+  // Modo mantenimiento temporal
+  const EN_MANTENIMIENTO = true;
+  if (EN_MANTENIMIENTO) {
+    return (
+      <div className="min-h-[70vh] grid place-items-center">
+        <div className="max-w-2xl w-full">
+          <Alert color="warning" className="text-center">
+            <div className="flex items-center justify-center gap-2">
+              <Icon icon="solar:info-circle-bold" width={18} />
+              <span>Estamos mejorando está herramienta para que sea aún más precisa, pronto estará nuevamente disponible.</span>
+            </div>
+          </Alert>
+        </div>
+      </div>
+    );
+  }
+
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -97,6 +114,11 @@ export default function AnalisisPrediccion() {
   return (
     <>
       <BreadcrumbComp title="Análisis Completo" items={BCrumb} />
+
+      <Alert color="warning" className="mb-6">
+        <Icon icon="solar:info-circle-bold" className="mr-2" width={16} />
+        <span>Estamos mejorando está herramienta para que sea aún más precisa, pronto estará nuevamente disponible.</span>
+      </Alert>
 
       <div className="flex justify-between items-start mb-6">
         <div className="flex items-start gap-3">

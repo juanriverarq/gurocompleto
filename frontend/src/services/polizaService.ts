@@ -58,6 +58,8 @@ export interface Poliza {
   porcentaje_iva?: number;
   iva?: number;
   total?: number;
+  gastos_adicionales?: number;
+  gastos_adicionales_aplica_iva?: boolean;
   porcentaje_comision?: number;
   comision?: number;
   forma_pago?: string;
@@ -115,6 +117,8 @@ export type CreatePolizaInput = {
   porcentaje_iva?: number;
   iva?: number;
   total?: number;
+  gastos_adicionales?: number;
+  gastos_adicionales_aplica_iva?: boolean;
   porcentaje_comision?: number;
   comision?: number;
   forma_pago?: string;
@@ -265,6 +269,241 @@ async function makeRequest<T>(
 
 // Servicio de pólizas
 export const polizaService = {
+  /**
+   * Obtener datos de cartera optimizados (solo pólizas activas con información de pagos)
+   */
+  async getCartera(filters: PolizaFilters = {}): Promise<ApiResponse<any[]>> {
+    try {
+      const queryParams = new URLSearchParams();
+
+      // Filtros por defecto para cartera: solo activas, ordenadas por vencimiento
+      const defaultFilters = {
+        estado: 'ACTIVA',
+        sort_field: 'fecha_fin',
+        sort_direction: 'asc',
+        per_page: 1000, // Límite razonable para cartera
+        ...filters
+      };
+
+      // Agregar filtros (por defecto + especificados)
+      Object.entries(defaultFilters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          queryParams.append(key, value.toString());
+        }
+      });
+
+      const endpoint = `${API_PREFIX}/cartera?${queryParams.toString()}`;
+      const response = await makeRequest<any[]>(endpoint);
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al cargar cartera",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Obtener pólizas de cartera (optimizado para vista de cartera)
+   */
+  async getCarteraPolizas(): Promise<ApiResponse<Poliza[]>> {
+    try {
+      const endpoint = `${API_PREFIX}/cartera`;
+      const response = await makeRequest<any>(endpoint);
+
+      return {
+        success: (response && typeof response === 'object' && 'success' in response) ? !!response.success : true,
+        data: response.data || response,
+        message: (response && typeof response === 'object' && 'message' in response) ? response.message : undefined,
+      };
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al cargar cartera",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Registrar recaudo de póliza
+   */
+  async registrarPagoPoliza(polizaId: string, tipoRecaudo: 'oficina' | 'aseguradora', monto: number, metodoPago?: string, referenciaPago?: string, observaciones?: string, fechaPago?: string): Promise<ApiResponse<any>> {
+    try {
+      const endpoint = `${API_PREFIX}/${polizaId}/pagos`;
+      const response = await makeRequest<any>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({
+          tipo_recaudo: tipoRecaudo,
+          monto: monto,
+          metodo_pago: metodoPago,
+          referencia_pago: referenciaPago,
+          fecha_pago: fechaPago,
+          observaciones: observaciones,
+        }),
+      });
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al registrar recaudo",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Registrar cobro de comisión
+   */
+  async registrarCobroComision(polizaId: string, monto: number, referenciaCobro?: string, observaciones?: string, fechaCobro?: string): Promise<ApiResponse<any>> {
+    try {
+      const endpoint = `${API_PREFIX}/${polizaId}/cobrar-comision`;
+      const response = await makeRequest<any>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({
+          monto: monto,
+          referencia_cobro: referenciaCobro,
+          fecha_cobro: fechaCobro,
+          observaciones: observaciones,
+        }),
+      });
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al registrar cobro de comisión",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Revertir un pago de póliza
+   */
+  async revertirPago(polizaId: string, pagoId: string): Promise<ApiResponse<void>> {
+    try {
+      const response = await makeRequest<void>(`${API_PREFIX}/${polizaId}/pagos/${pagoId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.success) {
+        toast({
+          title: "Pago revertido",
+          description: "El pago ha sido revertido exitosamente",
+        });
+      }
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al revertir pago",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Revertir un cobro de comisión
+   */
+  async revertirCobroComision(polizaId: string, cobroId: string): Promise<ApiResponse<void>> {
+    try {
+      const response = await makeRequest<void>(`${API_PREFIX}/${polizaId}/cobrar-comision/${cobroId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.success) {
+        toast({
+          title: "Cobro revertido",
+          description: "El cobro de comisión ha sido revertido exitosamente",
+        });
+      }
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al revertir cobro",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Obtener comisiones de pólizas (basado en pagos reales)
+   */
+  async getComisionesPolizas(): Promise<ApiResponse<any[]>> {
+    try {
+      // Usar el endpoint optimizado de cartera que incluye información de pagos
+      const response = await this.getCarteraPolizas();
+
+      if (!response.success || !response.data) {
+        return response;
+      }
+
+      // Procesar las pólizas para extraer información de comisiones
+      // SOLO incluir pólizas con recaudo (por oficina O por aseguradora)
+      const comisionesData = response.data
+        .filter((poliza: any) =>
+          (poliza.recaudo_oficina?.recaudado || 0) > 0 ||
+          (poliza.recaudo_aseguradora?.pagado || 0) > 0
+        )
+        .map((poliza: any) => {
+          const primaNeta = Number(poliza.prima_neta || 0);
+          const comisionReal = Number(poliza.comision || 0);
+          const porcentajeComision = Number(poliza.comision_agencia || poliza.porcentaje_comision || 15);
+          const comision = comisionReal > 0 ? comisionReal : (primaNeta * porcentajeComision / 100);
+
+          // Usar datos reales de cobro de comisión del backend
+          const cobroComision = poliza.cobro_comision || {};
+          const comisionPendiente = Number(cobroComision.pendiente || 0);
+          const comisionCobrada = Number(cobroComision.cobrada || 0);
+
+          // Si no hay cobro registrado pero hay recaudo por oficina, la comisión está pendiente
+          const pendiente = comisionPendiente > 0 ? comisionPendiente : (comisionCobrada === 0 ? comision : 0);
+
+          return {
+            id: poliza.id,
+            numero_poliza: poliza.numero_poliza,
+            nombres_cliente: poliza.cliente,
+            apellidos_cliente: '',
+            dni_cliente: poliza.documento,
+            aseguradora_nombre: poliza.aseguradora,
+            prima_neta: primaNeta,
+            comision,
+            comisionPendiente: pendiente,
+            comisionCobrada,
+            fecha_fin: poliza.fecha_vencimiento,
+            estadoComision: pendiente > 0 ? 'Pendiente' : comisionCobrada > 0 ? 'Cobrada' : 'Sin Comisión',
+            cobro_id: cobroComision.cobro_id,
+          };
+        });
+
+      return {
+        success: true,
+        data: comisionesData,
+        message: 'Comisiones obtenidas exitosamente',
+      };
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al cargar comisiones",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
   /**
    * Obtener lista de pólizas con filtros y paginación
    */
@@ -781,6 +1020,7 @@ export const polizaService = {
     }
   },
 
+
   /**
    * Exportar pólizas a Excel o CSV
    */
@@ -910,6 +1150,7 @@ export const polizaService = {
       throw error;
     }
   },
+
 };
 
 // Utilidades para pólizas

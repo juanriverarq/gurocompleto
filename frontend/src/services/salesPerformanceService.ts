@@ -1,20 +1,32 @@
-import { API_BASE_URL } from '../config/api';
+import api, { API_BASE_URL } from '../config/api';
 
-const headers = () => {
-  const token = localStorage.getItem('firebase_token') || localStorage.getItem('saas_token');
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  } as Record<string, string>;
-};
+function getDevBrokerId(): string | undefined {
+  try {
+    const empleadoPerfil = localStorage.getItem('empleado_profile');
+    if (empleadoPerfil) {
+      const perfil = JSON.parse(empleadoPerfil);
+      if (perfil?.broker_id) return String(perfil.broker_id);
+    }
+  } catch {
+    // ignore
+  }
+  const devBrokerId = (import.meta as any).env?.VITE_DEV_BROKER_ID;
+  return devBrokerId ? String(devBrokerId) : undefined;
+}
 
-async function req(path: string, init?: RequestInit) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+function devHeaders(): Record<string, string> {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  const devBrokerId = getDevBrokerId();
+  if (devBrokerId) h['X-Dev-Broker-Id'] = devBrokerId;
+  h['X-Dev-Mode'] = 'true';
+  return h;
+}
+
+async function testFetch(path: string, init?: RequestInit) {
+  return fetch(`${API_BASE_URL}/test${path}`, {
     ...(init || {}),
-    headers: { 'Content-Type': 'application/json', ...headers(), ...(init?.headers || {}) } as any,
+    headers: { ...(init?.headers || {}), ...devHeaders() },
   });
-  if (!res.ok) throw new Error(`Error ${res.status}`);
-  return res;
 }
 
 export interface PerformanceMetrics {
@@ -74,58 +86,93 @@ export default {
   async getMetrics(
     params: { period?: string; team_id?: number } = {},
   ): Promise<PerformanceMetrics> {
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) usp.append(k, String(v));
-    });
-    const path = `/saas/sales-performance/metrics?${usp.toString()}`;
-    const res = await req(path);
-    return res.json();
+    try {
+      const res = await api.get('/saas/sales-performance/metrics', { params });
+      return res.data;
+    } catch (e: any) {
+      // Fallback a /test en caso de error de auth o servidor
+      const usp = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) usp.append(k, String(v));
+      });
+      const res = await testFetch(`/sales-performance/metrics?${usp.toString()}`, { method: 'GET' });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      return res.json();
+    }
   },
 
   async getAgentsPerformance(
     params: { period?: string; team_id?: number; limit?: number; sort_by?: string } = {},
   ): Promise<AgentPerformance[]> {
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) usp.append(k, String(v));
-    });
-    const path = `/saas/sales-performance/agents?${usp.toString()}`;
-    const res = await req(path);
-    return res.json();
+    try {
+      const res = await api.get('/saas/sales-performance/agents', { params });
+      return res.data;
+    } catch (e: any) {
+      // Fallback a /test en caso de error de auth o servidor
+      const usp = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) usp.append(k, String(v));
+      });
+      const res = await testFetch(`/sales-performance/agents?${usp.toString()}`, { method: 'GET' });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      return res.json();
+    }
   },
 
   async getTeamsPerformance(
     params: { period?: string; limit?: number } = {},
   ): Promise<TeamPerformance[]> {
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) usp.append(k, String(v));
-    });
-    const path = `/saas/sales-performance/teams?${usp.toString()}`;
-    const res = await req(path);
-    return res.json();
+    try {
+      const res = await api.get('/saas/sales-performance/teams', { params });
+      return res.data;
+    } catch (e: any) {
+      // Fallback a /test en caso de error de auth o servidor
+      const usp = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) usp.append(k, String(v));
+      });
+      const res = await testFetch(`/sales-performance/teams?${usp.toString()}`, { method: 'GET' });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      return res.json();
+    }
   },
 
   async getStatistics(params: { period?: string } = {}): Promise<PerformanceStatistics> {
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) usp.append(k, String(v));
-    });
-    const path = `/saas/sales-performance/statistics?${usp.toString()}`;
-    const res = await req(path);
-    return res.json();
+    try {
+      const res = await api.get('/saas/sales-performance/statistics', { params });
+      return res.data;
+    } catch (e: any) {
+      // Fallback a /test en caso de error de auth o servidor
+      const usp = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) usp.append(k, String(v));
+      });
+      const res = await testFetch(`/sales-performance/statistics?${usp.toString()}`, { method: 'GET' });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      return res.json();
+    }
   },
 
   async exportPerformance(
     params: { period?: string; format?: 'csv' | 'excel' } = {},
   ): Promise<Blob> {
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) usp.append(k, String(v));
-    });
-    const path = `/saas/sales-performance/export?${usp.toString()}`;
-    const res = await req(path);
-    return res.blob();
+    try {
+      const res = await api.get('/saas/sales-performance/export', { 
+        params,
+        responseType: 'blob'
+      });
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const usp = new URLSearchParams();
+        Object.entries(params).forEach(([k, v]) => {
+          if (v !== undefined && v !== null) usp.append(k, String(v));
+        });
+        const res = await testFetch(`/sales-performance/export?${usp.toString()}`, { method: 'GET' });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.blob();
+      }
+      throw e;
+    }
   },
 };

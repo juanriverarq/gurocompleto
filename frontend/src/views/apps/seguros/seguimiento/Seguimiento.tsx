@@ -3,7 +3,7 @@ import { Card, Badge, Button, Modal, Textarea, Spinner, Alert, Table, Dropdown }
 import { Combobox, ComboboxButton, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { Label } from 'src/components/shadcn-ui/Default-Ui/label';
-import { 
+import {
   Select as ShSelect,
   SelectTrigger,
   SelectValue,
@@ -11,57 +11,11 @@ import {
   SelectItem
 } from 'src/components/shadcn-ui/Default-Ui/select';
 import { useToast } from 'src/hooks/use-toast';
+import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import { useVendedores, useEmpleadosBroker } from 'src/hooks/useAdminCrudApi';
 import TitleCard from 'src/components/shared/TitleBorderCard';
 import FormField from 'src/components/shared/FormField';
 
-// CSS inline para forzar z-index del dropdown y mejorar posicionamiento
-const dropdownStyles = `
-  .flowbite-dropdown {
-    z-index: 9999 !important;
-    position: relative !important;
-  }
-  .flowbite-dropdown > div {
-    z-index: 9999 !important;
-    position: relative !important;
-  }
-  .flowbite-dropdown [role="menu"] {
-    z-index: 9999 !important;
-    position: absolute !important;
-    top: 100% !important;
-    right: 0 !important;
-    transform: translateY(4px) !important;
-    min-width: 160px !important;
-    max-width: 200px !important;
-  }
-  [data-testid="flowbite-dropdown"] {
-    z-index: 9999 !important;
-    position: absolute !important;
-    top: 100% !important;
-    right: 0 !important;
-  }
-  .flowbite-dropdown-target {
-    z-index: 9999 !important;
-  }
-  div[role="menu"] {
-    z-index: 9999 !important;
-    position: absolute !important;
-    top: 100% !important;
-    right: 0 !important;
-    transform: translateY(4px) !important;
-  }
-  /* Optimizar transiciones para mejor velocidad */
-  .flowbite-dropdown [role="menu"],
-  [data-testid="flowbite-dropdown"] {
-    transition: opacity 0.15s ease-out, transform 0.15s ease-out !important;
-  }
-  /* Permitir que el dropdown salga del contenedor verticalmente sin afectar el ancho */
-  .overflow-x-auto {
-    overflow-y: visible !important;
-  }
-  table, td {
-    overflow: visible !important;
-  }
-`;
 import { Icon } from '@iconify/react';
 import { IconDots } from '@tabler/icons-react';
 import { format } from 'date-fns';
@@ -86,13 +40,13 @@ const SEGUIMIENTO_STATES = {
 };
 
 // Componente optimizado para filas de tabla
-const SeguimientoTableRow = memo(({ 
-  item, 
-  onEdit, 
-  onChangeState, 
+const SeguimientoTableRow = memo(({
+  item,
+  onEdit,
+  onChangeState,
   onDelete,
   onViewDetails,
-  getTipoIcon 
+  getTipoIcon
 }: {
   item: SeguimientoItem;
   onEdit: (item: SeguimientoItem) => void;
@@ -159,38 +113,49 @@ const SeguimientoTableRow = memo(({
           {item.assigned_user?.name || 'Sin asignar'}
         </div>
       </Table.Cell>
-      <Table.Cell>
+      <Table.Cell className="whitespace-nowrap text-right">
         <div className="relative inline-block">
           <Dropdown
             label=""
             dismissOnClick={false}
+            placement="left-start"
+            className="z-50"
+            style={{ minWidth: '300px' }}
             renderTrigger={() => (
               <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
                 <IconDots size={22} />
               </span>
             )}
           >
-            <Dropdown.Item 
-              className="flex gap-3 w-full justify-start text-left"
+            <Dropdown.Item
+              className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
               onClick={() => onViewDetails(item)}
             >
               <Icon icon="solar:eye-bold-duotone" height={18} />
               <span>Ver Detalles</span>
             </Dropdown.Item>
-            <Dropdown.Item 
-              className="flex gap-3 w-full justify-start text-left"
+            <Dropdown.Item
+              className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
               onClick={() => onEdit(item)}
             >
               <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
               <span>Editar</span>
             </Dropdown.Item>
             <Dropdown.Divider />
-            <Dropdown.Item 
-              className="flex gap-3 w-full justify-start text-left"
+            <Dropdown.Item
+              className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
               onClick={() => onChangeState(item)}
             >
               <Icon icon="solar:refresh-circle-bold-duotone" height={18} />
               <span>Cambiar Estado</span>
+            </Dropdown.Item>
+            <Dropdown.Divider />
+            <Dropdown.Item
+              className="flex gap-3 w-full justify-start text-left whitespace-nowrap text-red-600 hover:text-red-700"
+              onClick={() => onDelete(item.id)}
+            >
+              <Icon icon="solar:trash-bin-trash-bold-duotone" height={18} />
+              <span>Eliminar</span>
             </Dropdown.Item>
           </Dropdown>
         </div>
@@ -201,9 +166,13 @@ const SeguimientoTableRow = memo(({
 
 const Seguimiento: React.FC = () => {
   const { toast } = useToast();
+  const { user } = useUnifiedAuth();
+  const { vendedores: vendedoresHook } = useVendedores();
+  const { empleados: empleadosHook } = useEmpleadosBroker();
   const [isPending, startTransition] = useTransition();
   
   const [seguimientos, setSeguimientos] = useState<SeguimientoItem[]>([]);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [statistics, setStatistics] = useState<SeguimientoStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -270,18 +239,16 @@ const Seguimiento: React.FC = () => {
   const [editarErrores, setEditarErrores] = useState<Record<string, string>>({});
 
 
-  // Cargar usuarios cuando se abren modales
+  // Cargar usuarios y clientes cuando se abren modales
   useEffect(() => {
-    if (modalNuevoOpen && usuarios.length === 0) {
+    if (modalNuevoOpen || modalEditarOpen) {
       loadUsuarios();
+      // Cargar clientes iniciales para los combobox
+      if (clientes.length === 0) {
+        loadClientes();
+      }
     }
-  }, [modalNuevoOpen]);
-
-  useEffect(() => {
-    if (modalEditarOpen && usuarios.length === 0) {
-      loadUsuarios();
-    }
-  }, [modalEditarOpen]);
+  }, [modalNuevoOpen, modalEditarOpen, vendedoresHook, empleadosHook]);
 
   // Búsqueda de clientes con debounce
   useEffect(() => {
@@ -345,13 +312,14 @@ const Seguimiento: React.FC = () => {
         status: filters.estado && filters.estado !== 'todos' ? filters.estado : undefined,
         type: filters.tipo && filters.tipo !== 'todos' ? filters.tipo : undefined,
         priority: filters.prioridad && filters.prioridad !== 'todas' ? filters.prioridad : undefined,
-        assigned_to: filters.asignado || undefined,
+        assigned_to: filters.asignado ? Number(filters.asignado) : undefined,
         due_date_from: filters.fecha_desde || undefined,
         due_date_to: filters.fecha_hasta || undefined,
         page: currentPage,
         per_page: perPage,
       }, signal);
       
+      console.log('[DEBUG] Seguimientos cargados:', response.data);
       setSeguimientos(response.data || []);
       setTotalItems(response.total || 0);
       setTotalPages(Math.ceil((response.total || 0) / perPage));
@@ -361,7 +329,8 @@ const Seguimiento: React.FC = () => {
         setTimeout(() => loadStatistics(), 100); // Lazy load statistics
       }
     } catch (error: any) {
-      console.error('Error loading seguimientos:', error);
+      console.error('[ERROR] Error loading seguimientos:', error);
+      console.error('[ERROR] Error details:', error.message, error.stack);
       setError('Error al cargar seguimientos: ' + error.message);
     } finally {
       setLoading(false);
@@ -398,9 +367,49 @@ const Seguimiento: React.FC = () => {
 
   const loadUsuarios = async () => {
     try {
-      const response = await seguimientoService.getUsers();
-      setUsuarios(response.data);
+      const usuariosLista: any[] = [];
+      
+      // Agregar usuarios de la tabla users
+      try {
+        const response = await seguimientoService.getUsers();
+        response.data.forEach((u: any) => {
+          usuariosLista.push({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            tipo: 'user'
+          });
+        });
+      } catch (e) {
+        console.error('Error loading users:', e);
+      }
+      
+      // Agregar vendedores
+      if (vendedoresHook && vendedoresHook.length > 0) {
+        vendedoresHook.forEach((v: any) => {
+          usuariosLista.push({
+            id: v.id,
+            name: v.nombres || v.nombre || v.name,
+            tipo: 'vendedor'
+          });
+        });
+      }
+      
+      // Agregar empleados
+      if (empleadosHook && empleadosHook.length > 0) {
+        empleadosHook.forEach((e: any) => {
+          usuariosLista.push({
+            id: e.id,
+            name: e.nombre_completo || `${e.nombres} ${e.apellidos}` || e.nombre || e.name,
+            tipo: 'empleado'
+          });
+        });
+      }
+      
+      setUsuarios(usuariosLista);
     } catch (error) {
+      console.error('Error loading usuarios:', error);
+      setUsuarios([]);
     }
   };
 
@@ -550,7 +559,24 @@ const Seguimiento: React.FC = () => {
     try {
       setSaving(true);
       setError(null);
-      await seguimientoService.createSeguimiento(nuevoSeguimiento);
+      
+      // Filtrar campos undefined para evitar enviarlos al backend
+      const dataToSend: any = {};
+      Object.entries(nuevoSeguimiento).forEach(([key, value]) => {
+        // No enviar assigned_to si no está definido o es 0
+        if (key === 'assigned_to' && (!value || value === 0)) {
+          return;
+        }
+        if (value !== undefined && value !== null && value !== '') {
+          dataToSend[key] = value;
+        }
+      });
+      
+      console.log('[DEBUG CREAR] Datos a enviar:', dataToSend);
+      console.log('[DEBUG CREAR] Usuarios disponibles:', usuarios);
+      console.log('[DEBUG CREAR] Cliente seleccionado:', clientes.find(c => c.id === nuevoSeguimiento.client_id));
+      
+      await seguimientoService.createSeguimiento(dataToSend);
       
       // Recargar lista
       await loadSeguimientos();
@@ -580,7 +606,24 @@ const Seguimiento: React.FC = () => {
     try {
       setSaving(true);
       setError(null);
-      await seguimientoService.updateSeguimiento(editarItem.id, editarSeguimiento);
+      
+      // Filtrar campos undefined para evitar enviarlos al backend
+      const dataToSend: any = {};
+      Object.entries(editarSeguimiento).forEach(([key, value]) => {
+        // No enviar assigned_to si no está definido o es 0
+        if (key === 'assigned_to' && (!value || value === 0)) {
+          return;
+        }
+        if (value !== undefined && value !== null && value !== '') {
+          dataToSend[key] = value;
+        }
+      });
+      
+      console.log('[DEBUG] Datos a enviar al actualizar seguimiento:', dataToSend);
+      console.log('[DEBUG] Usuario asignado original:', editarItem?.assigned_to);
+      console.log('[DEBUG] Usuario asignado en formulario:', editarSeguimiento.assigned_to);
+      
+      await seguimientoService.updateSeguimiento(editarItem.id, dataToSend);
       
       // Recargar lista
       await loadSeguimientos();
@@ -613,11 +656,123 @@ const Seguimiento: React.FC = () => {
       
       // Cerrar modal si está abierto
       if (modalOpen) setModalOpen(false);
+      
+      toast({
+        title: "Seguimiento eliminado",
+        description: "El seguimiento ha sido eliminado exitosamente.",
+      });
     } catch (error: any) {
       setError('Error al eliminar seguimiento: ' + error.message);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el seguimiento.",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDeleteMultiple = async () => {
+    if (selectedIds.length === 0) {
+      toast({
+        title: "Selección vacía",
+        description: "Debes seleccionar al menos un seguimiento para eliminar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar ${selectedIds.length} seguimiento(s)?`)) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+      
+      // Eliminar uno por uno
+      for (const id of selectedIds) {
+        await seguimientoService.deleteSeguimiento(id);
+      }
+      
+      // Limpiar selección
+      setSelectedIds([]);
+      
+      // Recargar lista
+      await loadSeguimientos();
+      await loadStatistics();
+      
+      toast({
+        title: "Seguimientos eliminados",
+        description: `Se eliminaron ${selectedIds.length} seguimiento(s) exitosamente.`,
+      });
+    } catch (error: any) {
+      setError('Error al eliminar seguimientos: ' + error.message);
+      toast({
+        title: "Error",
+        description: "No se pudieron eliminar todos los seguimientos.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChangeStateMultiple = async (newStatus: string) => {
+    if (selectedIds.length === 0) {
+      toast({
+        title: "Selección vacía",
+        description: "Debes seleccionar al menos un seguimiento.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+      
+      // Cambiar estado uno por uno
+      for (const id of selectedIds) {
+        await seguimientoService.updateSeguimiento(id, { status: newStatus as any });
+      }
+      
+      // Limpiar selección
+      setSelectedIds([]);
+      
+      // Recargar lista
+      await loadSeguimientos();
+      await loadStatistics();
+      
+      toast({
+        title: "Estados actualizados",
+        description: `Se actualizaron ${selectedIds.length} seguimiento(s) a "${SEGUIMIENTO_STATES[newStatus as keyof typeof SEGUIMIENTO_STATES]?.label}".`,
+      });
+    } catch (error: any) {
+      setError('Error al cambiar estados: ' + error.message);
+      toast({
+        title: "Error",
+        description: "No se pudieron actualizar todos los seguimientos.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === seguimientos.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(seguimientos.map(s => s.id));
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
   };
 
   const handleStartSeguimiento = async (id: number) => {
@@ -717,11 +872,9 @@ const Seguimiento: React.FC = () => {
           stats.in_progress++;
           break;
         case 'completada':
-        case 'completado':
           stats.completed++;
           break;
         case 'vencida':
-        case 'vencido':
           stats.overdue++;
           break;
         case 'cancelada':
@@ -767,7 +920,7 @@ const Seguimiento: React.FC = () => {
     return stats;
   };
 
-  const openEditModal = useCallback((item: SeguimientoItem) => {
+  const openEditModal = useCallback(async (item: SeguimientoItem) => {
     setEditarItem(item);
     setEditarSeguimiento({
       title: item.title,
@@ -775,7 +928,34 @@ const Seguimiento: React.FC = () => {
       type: item.type,
       priority: item.priority,
       scheduled_for: item.scheduled_for ? new Date(item.scheduled_for).toISOString().slice(0, 16) : '',
+      client_id: item.client_id,
+      poliza_id: item.poliza_id,
+      assigned_to: item.assigned_to,
+      contact_method: item.contact_method,
     });
+    
+    // Cargar el cliente actual si existe
+    if (item.client && item.client_id) {
+      setClientes(prev => {
+        const exists = prev.find(c => c.id === item.client_id);
+        if (!exists && item.client) {
+          return [...prev, {
+            id: item.client.id,
+            name: item.client.name,
+            document: item.client.document,
+            email: item.client.email,
+            phone: item.client.phone
+          }];
+        }
+        return prev;
+      });
+    }
+    
+    // Cargar pólizas del cliente si existe
+    if (item.client_id) {
+      await loadPolizasDeCliente(item.client_id);
+    }
+    
     setModalEditarOpen(true);
   }, []);
 
@@ -831,8 +1011,6 @@ const Seguimiento: React.FC = () => {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: dropdownStyles }} />
-      
       {/* Header idéntico a clientes */}
       <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
@@ -941,7 +1119,7 @@ const Seguimiento: React.FC = () => {
       {/* Filtros adicionales eliminados para igualar sales-funnel */}
 
       {/* Tabla */}
-      <Card>
+      <Card className="overflow-visible">
         {seguimientos.length === 0 && !loading ? (
           <div className="text-center py-12">
             <div className="flex flex-col items-center justify-center space-y-4">
@@ -956,7 +1134,7 @@ const Seguimiento: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto table-container-with-dropdowns">
               <Table hoverable className="w-full shadow-md dark:shadow-none bg-white dark:bg-darkgray rounded-[10px]">
             <Table.Head>
               <Table.HeadCell>
@@ -982,9 +1160,9 @@ const Seguimiento: React.FC = () => {
               <Table.HeadCell>Prioridad</Table.HeadCell>
               <Table.HeadCell>Fecha Programada</Table.HeadCell>
               <Table.HeadCell>Asignado</Table.HeadCell>
-              <Table.HeadCell>Acciones</Table.HeadCell>
+              <Table.HeadCell className="text-right">Acciones</Table.HeadCell>
             </Table.Head>
-                <Table.Body>
+                <Table.Body className="group/body">
                   {seguimientos.map((item) => (
                     <SeguimientoTableRow
                       key={item.id}
@@ -1178,17 +1356,19 @@ const Seguimiento: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-medium mb-1 block">Asignado a</Label>
+                  <Label className="text-sm font-medium mb-1 block">Asignar a</Label>
                   <ShSelect
                     value={nuevoSeguimiento.assigned_to ? String(nuevoSeguimiento.assigned_to) : undefined}
                     onValueChange={(val) => setNuevoSeguimiento(prev => ({ ...prev, assigned_to: val ? Number(val) : undefined }))}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Yo mismo" />
+                      <SelectValue placeholder="Seleccionar usuario" />
                     </SelectTrigger>
                     <SelectContent className="z-[70]">
                       {usuarios.map(u => (
-                        <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.name} {u.email ? `(${u.email})` : ''}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </ShSelect>
@@ -1199,8 +1379,12 @@ const Seguimiento: React.FC = () => {
                     value={clientes.find(c=> c.id === nuevoSeguimiento.client_id) || null}
                     onChange={async (val: any) => {
                       const clientId = val?.id as number | undefined;
-                      setNuevoSeguimiento(prev => ({...prev, client_id: clientId, poliza_id: undefined}));
-                      await loadPolizasDeCliente(clientId);
+                      setNuevoSeguimiento(prev => ({...prev, client_id: clientId}));
+                      if (clientId) {
+                        await loadPolizasDeCliente(clientId);
+                      } else {
+                        setPolizasCliente([]);
+                      }
                     }}
                     onClose={()=> setClienteQuery('')}
                   >
@@ -1411,8 +1595,12 @@ const Seguimiento: React.FC = () => {
                   value={clientes.find(c=> c.id === editarSeguimiento.client_id) || null}
                   onChange={async (val: any) => {
                     const clientId = val?.id as number | undefined;
-                    setEditarSeguimiento(prev => ({...prev, client_id: clientId, poliza_id: undefined}));
-                    await loadPolizasDeCliente(clientId);
+                    setEditarSeguimiento(prev => ({...prev, client_id: clientId}));
+                    if (clientId) {
+                      await loadPolizasDeCliente(clientId);
+                    } else {
+                      setPolizasCliente([]);
+                    }
                   }}
                   onClose={()=> setClienteQuery('')}
                 >
@@ -1530,7 +1718,7 @@ const Seguimiento: React.FC = () => {
       </Modal>
 
       {/* Modal para cambiar estado */}
-      <Modal show={showStateModal} onClose={() => setShowStateModal(false)} size="md">
+      <Modal show={showStateModal} onClose={() => setShowStateModal(false)} size="md" className="z-[9999]">
         <Modal.Header>Cambiar Estado del Seguimiento</Modal.Header>
         <Modal.Body>
           <div className="space-y-4">

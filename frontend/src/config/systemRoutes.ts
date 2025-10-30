@@ -156,23 +156,31 @@ export const SYSTEM_ROUTES: RouteInfo[] = [
     synonyms: ['modelos ia', 'machine learning', 'algoritmos', 'modelos predictivos']
   },
 
-  // Marketing
-  {
-    path: '/apps/marketing/enlaces-cotizacion',
-    title: 'Enlaces de Cotización',
-    description: 'Gestión de enlaces para cotizaciones',
-    keywords: ['enlaces', 'cotización', 'links', 'marketing'],
-    category: 'marketing',
-    synonyms: ['enlaces', 'links', 'cotización online', 'marketing digital']
-  },
-  {
-    path: '/apps/marketing/recordatorios',
-    title: 'Recordatorios',
-    description: 'Sistema de recordatorios y notificaciones',
-    keywords: ['recordatorios', 'notificaciones', 'alertas', 'avisos'],
-    category: 'marketing',
-    synonyms: ['recordatorios', 'notificaciones', 'alertas', 'avisos', 'seguimiento']
-  },
+   // Marketing
+    {
+      path: '/apps/marketing/enlaces-cotizacion',
+      title: 'Enlaces de Cotización',
+      description: 'Gestión de enlaces para cotizaciones',
+      keywords: ['enlaces', 'cotización', 'links', 'marketing'],
+      category: 'marketing',
+      synonyms: ['enlaces', 'links', 'cotización online', 'marketing digital']
+    },
+    {
+      path: '/apps/marketing/mini-web',
+      title: 'Mini Web',
+      description: 'Creador de mini sitios tipo link-in-bio con enlaces, contacto y colores personalizados',
+      keywords: ['mini web', 'link in bio', 'perfil', 'enlaces', 'marketing'],
+      category: 'marketing',
+      synonyms: ['mini web', 'link-in-bio', 'landing personal', 'link my bio']
+    },
+    {
+      path: '/apps/marketing/recordatorios',
+      title: 'Recordatorios',
+      description: 'Sistema de recordatorios y notificaciones',
+      keywords: ['recordatorios', 'notificaciones', 'alertas', 'avisos'],
+      category: 'marketing',
+      synonyms: ['recordatorios', 'notificaciones', 'alertas', 'avisos', 'seguimiento']
+    },
 
   // Administración
   {

@@ -150,6 +150,19 @@ export const emailCampaignService = {
       `/saas/email-campaigns/${id}/recipients${q.toString() ? `?${q.toString()}` : ''}`,
     );
   },
+
+  async deleteCampaign(id: number): Promise<ApiResponse> {
+    return makeRequest(`/saas/email-campaigns/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async bulkDeleteCampaigns(campaignIds: number[]): Promise<ApiResponse> {
+    return makeRequest(`/saas/email-campaigns/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ campaign_ids: campaignIds }),
+    });
+  },
 };
 
 export default emailCampaignService;
