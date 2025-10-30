@@ -622,7 +622,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
           setTrialEndsAt(null);
           setSaasChecked(true);
 
-          // Apply tenant branding
+          // Apply tenant branding (incluye color primario)
           if (data.data.broker?.branding) {
             applyTenantBranding(data.data.broker.branding);
           }
@@ -658,6 +658,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
     try {
       if (branding?.primary_color) {
         document.documentElement.style.setProperty('--color-primary', branding.primary_color);
+        console.log('🎨 Color primario aplicado:', branding.primary_color);
       }
       if (branding?.secondary_color) {
         document.documentElement.style.setProperty('--color-secondary', branding.secondary_color);
@@ -665,8 +666,19 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
       if (branding?.accent_color) {
         document.documentElement.style.setProperty('--color-accent', branding.accent_color);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.warn('Error aplicando branding:', error);
+    }
   };
+
+  // Aplicar branding al cargar el contexto (empleado o Firebase)
+  useEffect(() => {
+    if (tenant?.branding) {
+      applyTenantBranding(tenant.branding);
+    } else if ((tenant as any)?.branding) {
+      applyTenantBranding((tenant as any).branding);
+    }
+  }, [tenant]);
 
   // Create broker (usar axios con interceptores para token/cookies)
   const createBroker = async (brokerData: any): Promise<{ success: boolean; message: string }> => {

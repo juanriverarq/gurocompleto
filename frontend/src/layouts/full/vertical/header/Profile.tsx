@@ -17,6 +17,7 @@ const Profile = () => {
   } = useUnifiedAuth();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -35,6 +36,16 @@ const Profile = () => {
     } else if (url && url !== "#") {
       navigate(url);
     }
+  };
+
+  // Manejar error de carga de imagen
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
+  // Resetear error cuando cambia la URL de la foto
+  const resetImageError = () => {
+    setImageError(false);
   };
 
   // Obtener la primera letra del nombre para el avatar por defecto
@@ -85,18 +96,22 @@ const Profile = () => {
     <div className="relative">
       <Dropdown
         label=""
-        className="w-screen sm:w-[360px] pb-4 rounded-sm"
+        className="w-screen sm:w-[360px] pb-4 rounded-sm z-[30]"
         dismissOnClick={false}
         renderTrigger={() => (
           <div className="flex items-center gap-1">
             <span className="h-10 w-10 hover:text-primary rounded-full flex justify-center items-center cursor-pointer group-hover/menu:bg-lightprimary group-hover/menu:text-primary">
-              {photoURL ? (
+              {photoURL && !imageError ? (
                 <img
                   src={photoURL}
                   alt="avatar"
                   height="35"
                   width="35"
-                  className="rounded-full"
+                  className="rounded-full object-cover"
+                  onError={handleImageError}
+                  onLoad={resetImageError}
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                 />
               ) : (
                 <div className="h-8 w-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-semibold">
@@ -115,13 +130,17 @@ const Profile = () => {
         <div className="py-4">
           <div className="flex items-center gap-6 pb-5 border-b dark:border-darkborder mt-5 mb-3 px-6">
             <div className="flex-shrink-0">
-              {photoURL ? (
+              {photoURL && !imageError ? (
                 <img
                   src={photoURL}
                   alt="avatar"
                   height="56"
                   width="56"
                   className="rounded-full h-14 w-14 object-cover"
+                  onError={handleImageError}
+                  onLoad={resetImageError}
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                 />
               ) : (
                 <div className="h-14 w-14 bg-primary text-white rounded-full flex items-center justify-center text-xl font-semibold">

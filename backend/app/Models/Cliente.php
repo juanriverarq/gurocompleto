@@ -8,10 +8,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\BrokerScoped;
+use App\Events\ClienteCreated;
 
 class Cliente extends Model
 {
     use HasFactory, SoftDeletes, BrokerScoped;
+
+    /**
+     * The event map for the model.
+     *
+     * @var array
+     */
+    protected $dispatchesEvents = [
+        'created' => ClienteCreated::class,
+    ];
 
     /**
      * The attributes that are mass assignable.

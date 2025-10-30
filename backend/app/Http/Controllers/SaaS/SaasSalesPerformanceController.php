@@ -7,6 +7,8 @@ use App\Models\SalesPerformance;
 use App\Models\User;
 use App\Models\SalesTeam;
 use App\Models\SalesTeamMember;
+use App\Models\SalesFunnel;
+use App\Models\Poliza;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
@@ -203,26 +205,44 @@ class SaasSalesPerformanceController extends Controller
     {
         $brokerId = $request->user()->broker_id;
         $period = $request->get('period', 'month');
-
-        // Calcular métricas generales
-        $query = SalesPerformance::forBroker($brokerId);
-
-        if ($period === 'month') {
-            $query->where('period', date('Y-m'));
-        } elseif ($period === 'week') {
-            // Lógica para semana actual
-            $query->where('period', date('Y-m'));
+    
+        $now = now();
+        if ($period === 'week') {
+            $start = $now->copy()->startOfWeek();
+            $end = $now->copy()->endOfWeek();
         } elseif ($period === 'year') {
-            $query->where('year', date('Y'));
+            $start = $now->copy()->startOfYear();
+            $end = $now->copy()->endOfYear();
+        } else {
+            $start = $now->copy()->startOfMonth();
+            $end = $now->copy()->endOfMonth();
         }
-
-        $performances = $query->get();
-
-        $totalSales = $performances->sum('sales_current_month');
-        $totalGoals = $performances->sum('monthly_goal');
-        $activeAgents = $performances->where('fulfillment_percentage', '>', 0)->count();
+    
+        // Ventas reales desde pólizas o (fallback) embudo cerrado ganado
+        $polizaSales = (float) Poliza::byBroker($brokerId)
+            ->whereNotNull('assigned_user_id')
+            ->whereBetween('issue_date', [$start->toDateString(), $end->toDateString()])
+            ->sum(\DB::raw('COALESCE(total_amount, premium_amount, 0)'));
+    
+        $funnelSales = (float) SalesFunnel::forBroker($brokerId)
+            ->where('stage', 'closed_won')
+            ->whereBetween('closed_at', [$start, $end])
+            ->sum(\DB::raw('COALESCE(final_value, potential_value, 0)'));
+    
+        $totalSales = $polizaSales > 0 ? $polizaSales : $funnelSales;
+    
+        // Metas del equipo desde miembros
+        $totalGoals = (float) SalesTeamMember::whereHas('team', function($q) use ($brokerId) {
+            $q->where('broker_id', $brokerId);
+        })->sum('monthly_goal');
+    
+        // Vendedores activos (miembros no inactivos)
+        $activeAgents = (int) SalesTeamMember::whereHas('team', function($q) use ($brokerId) {
+            $q->where('broker_id', $brokerId);
+        })->where('status', '!=', 'inactive')->count();
+    
         $activeTeams = SalesTeam::forBroker($brokerId)->count();
-
+    
         return response()->json([
             'total_sales' => $totalSales,
             'total_goals' => $totalGoals,
@@ -237,148 +257,284 @@ class SaasSalesPerformanceController extends Controller
     {
         $brokerId = $request->user()->broker_id;
         $period = $request->get('period', 'month');
-        $limit = $request->get('limit', 10);
+        $limit = (int) $request->get('limit', 10);
         $sortBy = $request->get('sort_by', 'monthly_sales');
-
-        $query = SalesPerformance::forBroker($brokerId)->with('user');
-
-        if ($period === 'month') {
-            $query->where('period', date('Y-m'));
-        } elseif ($period === 'week') {
-            $query->where('period', date('Y-m'));
+        $teamId = $request->get('team_id');
+    
+        $membersQuery = SalesTeamMember::whereHas('team', function($q) use ($brokerId) {
+            $q->where('broker_id', $brokerId);
+        })->with(['user', 'vendedor', 'team']);
+    
+        if (!empty($teamId)) {
+            $membersQuery->where('team_id', (int) $teamId);
+        }
+    
+        $teamMembers = $membersQuery->get();
+        if ($teamMembers->isEmpty()) {
+            return response()->json([]);
+        }
+    
+        $memberIds = $teamMembers->pluck('user_id')->filter()->unique()->values();
+    
+        $now = now();
+        if ($period === 'week') {
+            $start = $now->copy()->startOfWeek();
+            $end = $now->copy()->endOfWeek();
         } elseif ($period === 'year') {
-            $query->where('year', date('Y'));
+            $start = $now->copy()->startOfYear();
+            $end = $now->copy()->endOfYear();
+        } else {
+            $start = $now->copy()->startOfMonth();
+            $end = $now->copy()->endOfMonth();
         }
-
-        if ($request->filled('team_id')) {
-            // Filtrar por miembros del equipo
-            $teamMembers = SalesTeamMember::where('team_id', $request->team_id)->pluck('user_id');
-            $query->whereIn('user_id', $teamMembers);
-        }
-
-        // Ordenar
-        switch ($sortBy) {
-            case 'monthly_sales':
-                $query->orderBy('sales_current_month', 'desc');
-                break;
-            case 'achievement':
-                $query->orderBy('fulfillment_percentage', 'desc');
-                break;
-            case 'conversion_rate':
-                $query->orderBy('conversion_rate', 'desc');
-                break;
-            default:
-                $query->orderBy('sales_current_month', 'desc');
-        }
-
-        $performances = $query->limit($limit)->get();
-
-        $result = $performances->map(function ($performance, $index) {
+    
+        // Agregados por agente desde Pólizas
+        $polizaAgg = Poliza::byBroker($brokerId)
+            ->whereNotNull('assigned_user_id')
+            ->whereIn('assigned_user_id', $memberIds)
+            ->whereBetween('issue_date', [$start->toDateString(), $end->toDateString()])
+            ->selectRaw('assigned_user_id as user_id, SUM(COALESCE(total_amount, premium_amount, 0)) as sales, SUM(COALESCE(commission_amount, 0)) as commissions, COUNT(*) as policies, COUNT(DISTINCT client_id) as clients')
+            ->groupBy('assigned_user_id')
+            ->get()
+            ->keyBy('user_id');
+    
+        // Agregados por agente desde Embudo (cerrados ganados)
+        $wonAgg = SalesFunnel::forBroker($brokerId)
+            ->where('stage', 'closed_won')
+            ->whereIn('assigned_agent_id', $memberIds)
+            ->whereBetween('closed_at', [$start, $end])
+            ->selectRaw('assigned_agent_id as user_id, SUM(COALESCE(final_value, potential_value, 0)) as sales, COUNT(*) as deals')
+            ->groupBy('assigned_agent_id')
+            ->get()
+            ->keyBy('user_id');
+    
+        // Leads creados en el periodo (para tasa de conversión)
+        $leadsAgg = SalesFunnel::forBroker($brokerId)
+            ->whereIn('assigned_agent_id', $memberIds)
+            ->whereBetween('created_at', [$start, $end])
+            ->selectRaw('assigned_agent_id as user_id, COUNT(*) as leads')
+            ->groupBy('assigned_agent_id')
+            ->get()
+            ->keyBy('user_id');
+    
+        $items = $teamMembers->map(function ($member) use ($polizaAgg, $wonAgg, $leadsAgg) {
+            $uid = (int) $member->user_id;
+    
+            $salesFromPolicies = (float) ($polizaAgg->get($uid)->sales ?? 0);
+            $commissions = (float) ($polizaAgg->get($uid)->commissions ?? 0);
+            $newClients = (int) ($polizaAgg->get($uid)->clients ?? 0);
+    
+            $salesFromWon = (float) ($wonAgg->get($uid)->sales ?? 0);
+            $wonDeals = (int) ($wonAgg->get($uid)->deals ?? 0);
+    
+            $totalLeads = (int) ($leadsAgg->get($uid)->leads ?? 0);
+    
+            $monthlySales = $salesFromPolicies > 0 ? $salesFromPolicies : $salesFromWon;
+    
+            $goal = (float) ($member->monthly_goal ?? 0);
+            $achievement = $goal > 0 ? ($monthlySales / $goal) * 100 : 0;
+    
+            $conversion = $totalLeads > 0 ? ($wonDeals / $totalLeads) * 100 : 0;
+    
+            $userName = $member->vendedor->nombres ?? $member->user->name ?? 'Vendedor ' . $uid;
+    
             return [
-                'id' => $performance->user_id,
-                'name' => $performance->user->name ?? 'Usuario ' . $performance->user_id,
-                'email' => $performance->user->email ?? '',
-                'monthly_sales' => $performance->sales_current_month ?? 0,
-                'monthly_goal' => $performance->monthly_goal ?? 0,
-                'achievement_percentage' => $performance->fulfillment_percentage ?? 0,
-                'commission_earned' => $performance->commissions ?? 0,
-                'new_clients' => $performance->new_clients ?? 0,
-                'calls_made' => $performance->calls ?? 0,
-                'meetings_scheduled' => $performance->meetings ?? 0,
-                'proposals_sent' => $performance->proposals ?? 0,
-                'conversion_rate' => $performance->conversion_rate ?? 0,
-                'status' => 'active'
+                'id' => $uid,
+                'name' => $userName,
+                'email' => $member->vendedor->email ?? $member->user->email ?? '',
+                'team_name' => $member->team->name ?? '',
+                'monthly_sales' => $monthlySales,
+                'monthly_goal' => $goal,
+                'achievement_percentage' => $achievement,
+                'commission_earned' => $commissions,
+                'new_clients' => $newClients,
+                'calls_made' => 0,
+                'meetings_scheduled' => 0,
+                'proposals_sent' => 0,
+                'conversion_rate' => $conversion,
+                'ranking' => 0,
+                'status' => $member->status === 'inactive' ? 'inactive' : 'active'
             ];
         });
-
-        return response()->json($result);
+    
+        // Ordenar, limitar y asignar ranking
+        $sorted = collect($items)->sortByDesc(function ($item) use ($sortBy) {
+            if ($sortBy === 'achievement_percentage') return $item['achievement_percentage'];
+            if ($sortBy === 'conversion_rate') return $item['conversion_rate'];
+            return $item['monthly_sales'];
+        })->values();
+    
+        $limited = $sorted->take($limit)->values()->map(function($item, $index) {
+            $item['ranking'] = $index + 1;
+            return $item;
+        });
+    
+        return response()->json($limited);
     }
 
     public function getTeamsPerformance(Request $request): JsonResponse
     {
         $brokerId = $request->user()->broker_id;
         $period = $request->get('period', 'month');
-        $limit = $request->get('limit', 10);
-
-        $teams = SalesTeam::forBroker($brokerId)->with(['members.user', 'leader'])->get();
-
-        $result = $teams->map(function ($team) use ($period) {
-            $members = $team->members ?? [];
-            $teamPerformances = SalesPerformance::whereIn('user_id', $members->pluck('user_id'))
-                ->when($period === 'month', fn($q) => $q->where('period', date('Y-m')))
-                ->when($period === 'year', fn($q) => $q->where('year', date('Y')))
-                ->get();
-
-            $totalSales = $teamPerformances->sum('sales_current_month');
-            $totalGoals = $teamPerformances->sum('monthly_goal');
-            $avgConversion = $teamPerformances->avg('conversion_rate') ?? 0;
-
-            $topPerformer = $teamPerformances->sortByDesc('sales_current_month')->first();
-
+        $limit = (int) $request->get('limit', 10);
+    
+        $now = now();
+        if ($period === 'week') {
+            $start = $now->copy()->startOfWeek();
+            $end = $now->copy()->endOfWeek();
+        } elseif ($period === 'year') {
+            $start = $now->copy()->startOfYear();
+            $end = $now->copy()->endOfYear();
+        } else {
+            $start = $now->copy()->startOfMonth();
+            $end = $now->copy()->endOfMonth();
+        }
+    
+        $teams = SalesTeam::forBroker($brokerId)->with(['members.user', 'members.vendedor', 'leader'])->get();
+    
+        $result = $teams->map(function ($team) use ($start, $end) {
+            $members = $team->members ?? collect();
+            $memberIds = $members->pluck('user_id')->filter()->unique()->values();
+    
+            if ($memberIds->isEmpty()) {
+                return [
+                    'id' => $team->id,
+                    'name' => $team->name,
+                    'leader_name' => $team->leader->name ?? 'Sin líder',
+                    'total_members' => 0,
+                    'team_sales' => 0,
+                    'team_goal' => 0,
+                    'achievement_percentage' => 0,
+                    'average_conversion' => 0,
+                    'top_performer' => 'N/A'
+                ];
+            }
+    
+            $polizaSales = (float) Poliza::whereIn('assigned_user_id', $memberIds)
+                ->whereBetween('issue_date', [$start->toDateString(), $end->toDateString()])
+                ->sum(\DB::raw('COALESCE(total_amount, premium_amount, 0)'));
+    
+            $funnelSales = (float) SalesFunnel::whereIn('assigned_agent_id', $memberIds)
+                ->where('stage', 'closed_won')
+                ->whereBetween('closed_at', [$start, $end])
+                ->sum(\DB::raw('COALESCE(final_value, potential_value, 0)'));
+    
+            $teamSales = $polizaSales > 0 ? $polizaSales : $funnelSales;
+    
+            $teamGoal = (float) $members->sum('monthly_goal');
+    
+            // Conversión promedio del equipo
+            $wonCount = (int) SalesFunnel::whereIn('assigned_agent_id', $memberIds)
+                ->where('stage', 'closed_won')
+                ->whereBetween('closed_at', [$start, $end])
+                ->count();
+    
+            $totalLeads = (int) SalesFunnel::whereIn('assigned_agent_id', $memberIds)
+                ->whereBetween('created_at', [$start, $end])
+                ->count();
+    
+            $avgConversion = $totalLeads > 0 ? ($wonCount / $totalLeads) * 100 : 0;
+    
+            // Top performer dentro del equipo
+            $salesByMember = collect($memberIds)->mapWithKeys(function($uid) use ($start, $end) {
+                $p = (float) Poliza::where('assigned_user_id', $uid)
+                    ->whereBetween('issue_date', [$start->toDateString(), $end->toDateString()])
+                    ->sum(\DB::raw('COALESCE(total_amount, premium_amount, 0)'));
+                $f = (float) SalesFunnel::where('assigned_agent_id', $uid)
+                    ->where('stage', 'closed_won')
+                    ->whereBetween('closed_at', [$start, $end])
+                    ->sum(\DB::raw('COALESCE(final_value, potential_value, 0)'));
+                return [$uid => ($p > 0 ? $p : $f)];
+            });
+    
+            $topUserId = (int) ($salesByMember->sortDesc()->keys()->first() ?? 0);
+            $topName = 'N/A';
+            if ($topUserId) {
+                $member = $members->firstWhere('user_id', $topUserId);
+                if ($member) {
+                    $topName = $member->vendedor->nombres ?? ($member->user->name ?? 'N/A');
+                }
+            }
+    
             return [
                 'id' => $team->id,
                 'name' => $team->name,
                 'leader_name' => $team->leader->name ?? 'Sin líder',
                 'total_members' => $members->count(),
-                'team_sales' => $totalSales,
-                'team_goal' => $totalGoals,
-                'achievement_percentage' => $totalGoals > 0 ? ($totalSales / $totalGoals) * 100 : 0,
+                'team_sales' => $teamSales,
+                'team_goal' => $teamGoal,
+                'achievement_percentage' => $teamGoal > 0 ? ($teamSales / $teamGoal) * 100 : 0,
                 'average_conversion' => $avgConversion,
-                'top_performer' => $topPerformer ? ($topPerformer->user->name ?? 'N/A') : 'N/A'
+                'top_performer' => $topName
             ];
-        })->sortByDesc('team_sales')->take($limit);
-
-        return response()->json($result->values());
+        })->sortByDesc('team_sales')->take($limit)->values();
+    
+        return response()->json($result);
     }
 
     public function getStatistics(Request $request): JsonResponse
     {
         $brokerId = $request->user()->broker_id;
         $period = $request->get('period', 'month');
-
-        $query = SalesPerformance::forBroker($brokerId);
-
-        if ($period === 'month') {
-            $query->where('period', date('Y-m'));
-        } elseif ($period === 'year') {
-            $query->where('year', date('Y'));
-        }
-
-        $performances = $query->get();
-
-        $totalRevenue = $performances->sum('sales_current_month');
-        $totalCommissions = $performances->sum('commissions');
-        $avgConversionRate = $performances->avg('conversion_rate') ?? 0;
-
-        $topPerformer = $performances->sortByDesc('sales_current_month')->first();
-        // Obtener equipos como array desde la respuesta JSON
+    
+        // Obtener agentes y equipos usando los endpoints ya agregados (con datos reales)
+        $agentsResponse = $this->getAgentsPerformance($request);
+        $agentsData = $agentsResponse->getData(true);
+    
         $teamsResponse = $this->getTeamsPerformance($request);
         $teamsData = $teamsResponse->getData(true);
-        $topTeam = $teamsData[0] ?? null;
-
-        $currentMonth = $performances->sum('sales_current_month');
-        $previousMonth = SalesPerformance::forBroker($brokerId)
-            ->where('period', date('Y-m', strtotime('-1 month')))
-            ->sum('sales_current_month');
-
-        $salesGrowth = $previousMonth > 0 ? (($currentMonth - $previousMonth) / $previousMonth) * 100 : 0;
-
+    
+        $totalRevenue = 0;
+        $totalCommissions = 0;
+        $avgConversionRate = 0;
+    
+        if (is_array($agentsData) && count($agentsData) > 0) {
+            foreach ($agentsData as $a) {
+                $totalRevenue += (float) ($a['monthly_sales'] ?? 0);
+                $totalCommissions += (float) ($a['commission_earned'] ?? 0);
+                $avgConversionRate += (float) ($a['conversion_rate'] ?? 0);
+            }
+            $avgConversionRate = $avgConversionRate / max(1, count($agentsData));
+        }
+    
+        $topPerformer = is_array($agentsData) && count($agentsData) > 0 ? $agentsData[0] : null;
+        $topTeam = is_array($teamsData) && count($teamsData) > 0 ? $teamsData[0] : null;
+    
+        // Tendencia vs mes anterior (revenue desde pólizas o fallback embudo)
+        $now = now();
+        $prevStart = $now->copy()->subMonth()->startOfMonth();
+        $prevEnd = $now->copy()->subMonth()->endOfMonth();
+    
+        $prevRevenue = (float) Poliza::byBroker($brokerId)
+            ->whereNotNull('assigned_user_id')
+            ->whereBetween('issue_date', [$prevStart->toDateString(), $prevEnd->toDateString()])
+            ->sum(\DB::raw('COALESCE(total_amount, premium_amount, 0)'));
+    
+        if ($prevRevenue <= 0) {
+            $prevRevenue = (float) SalesFunnel::forBroker($brokerId)
+                ->where('stage', 'closed_won')
+                ->whereBetween('closed_at', [$prevStart, $prevEnd])
+                ->sum(\DB::raw('COALESCE(final_value, potential_value, 0)'));
+        }
+    
+        $salesGrowth = $prevRevenue > 0 ? (($totalRevenue - $prevRevenue) / $prevRevenue) * 100 : 0;
+    
         return response()->json([
-            'period' => $period === 'month' ? date('F Y') : date('Y'),
+            'period' => $period === 'month' ? date('F Y') : ($period === 'year' ? date('Y') : 'current'),
             'total_revenue' => $totalRevenue,
             'total_commissions' => $totalCommissions,
             'average_conversion_rate' => $avgConversionRate,
             'top_performing_agent' => $topPerformer ? [
-                'id' => $topPerformer->user_id,
-                'name' => $topPerformer->user->name ?? 'N/A',
-                'monthly_sales' => $topPerformer->sales_current_month ?? 0,
-                'achievement_percentage' => $topPerformer->fulfillment_percentage ?? 0
+                'id' => $topPerformer['id'],
+                'name' => $topPerformer['name'],
+                'monthly_sales' => $topPerformer['monthly_sales'],
+                'achievement_percentage' => $topPerformer['achievement_percentage']
             ] : null,
             'top_performing_team' => $topTeam,
             'trends' => [
                 'sales_growth' => $salesGrowth,
-                'conversion_improvement' => 0, // Placeholder
-                'new_clients_growth' => 0 // Placeholder
+                'conversion_improvement' => 0,
+                'new_clients_growth' => 0
             ]
         ]);
     }

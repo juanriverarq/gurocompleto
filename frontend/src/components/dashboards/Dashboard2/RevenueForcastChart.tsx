@@ -5,20 +5,25 @@ import { useDashboardData } from "../../../hooks/useDashboardData";
 import React from 'react';
 import { saasApi } from "src/services/saasApi";
 
-const RevenueForcastChart = () => {
-  const { data, loading, error } = useDashboardData();
+interface RevenueForcastChartProps {
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+const RevenueForcastChart = ({ startDate, endDate }: RevenueForcastChartProps) => {
+  const { data, loading, error } = useDashboardData({ startDate, endDate });
   const [labels, setLabels] = React.useState<string[]>([]);
   const [values, setValues] = React.useState<number[]>([]);
   const [loadingPrimas, setLoadingPrimas] = React.useState(true);
   const [errorPrimas, setErrorPrimas] = React.useState<string | null>(null);
-  const [period, setPeriod] = React.useState<'week' | 'month' | 'year'>('month');
 
   React.useEffect(() => {
     const fetchPrimas = async () => {
       try {
         setLoadingPrimas(true);
         setErrorPrimas(null);
-        const res = await saasApi.getPrimasChart(period);
+        // Usar el filtro de fecha del contexto si está disponible
+        const res = await saasApi.getPrimasChart('month', startDate, endDate);
         if (res.success && res.data) {
           setLabels(res.data.labels || []);
           setValues((res.data.data || []).map((v) => Number(v)));
@@ -32,7 +37,7 @@ const RevenueForcastChart = () => {
       }
     };
     fetchPrimas();
-  }, [period]);
+  }, [startDate, endDate]);
 
   const getChartData = () => {
     // Convertir a millones para coincidir con el formato del eje Y
@@ -142,13 +147,8 @@ const RevenueForcastChart = () => {
       <CardBox>
         <div className="md:flex justify-between items-center">
           <div>
-            <h5 className="card-title">Primas por Mes</h5>
+            <h5 className="card-title">Prima de Pólizas</h5>
             <p className="card-subtitle">Cargando datos...</p>
-          </div>
-          <div className="flex gap-2">
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'week' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('week')}>Semana</button>
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'month' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('month')}>Mes</button>
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'year' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('year')}>Año</button>
           </div>
         </div>
         <div className="h-80 flex items-center justify-center">
@@ -163,13 +163,8 @@ const RevenueForcastChart = () => {
       <CardBox>
         <div className="md:flex justify-between items-center">
           <div>
-            <h5 className="card-title">Primas por Mes</h5>
+            <h5 className="card-title">Prima de Pólizas</h5>
             <p className="card-subtitle text-red-500">Error al cargar datos</p>
-          </div>
-          <div className="flex gap-2">
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'week' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('week')}>Semana</button>
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'month' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('month')}>Mes</button>
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'year' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('year')}>Año</button>
           </div>
         </div>
         <div className="h-80 flex items-center justify-center">
@@ -182,25 +177,10 @@ const RevenueForcastChart = () => {
   return (
     <>
       <CardBox>
-        <div className="md:flex justify-between items-center">
+        <div className="md:flex justify-between items-center mb-4">
           <div>
-            <h5 className="card-title">Primas por Mes</h5>
-            <p className="card-subtitle">Comparativo de Ingresos por Primas</p>
-          </div>
-          <div className="flex gap-5 items-center md:mt-0 mt-4">
-            <div className="flex gap-2 text-sm items-center">
-              <span className="bg-primary rounded-full h-2 w-2"></span>
-              <span className="text-ld opacity-80">2024</span>
-            </div>
-            <div className="flex gap-2 text-sm text-ld items-center">
-              <span className="bg-secondary rounded-full h-2 w-2"></span>
-              <span className="text-ld opacity-80">2023</span>
-            </div>
-          </div>
-          <div className="flex gap-2 items-center md:mt-0 mt-4">
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'week' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('week')}>Semana</button>
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'month' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('month')}>Mes</button>
-            <button className={`px-3 py-1 rounded-md text-sm ${period === 'year' ? 'bg-primary text-white' : 'bg-muted dark:bg-dark text-ld'}`} onClick={() => setPeriod('year')}>Año</button>
+            <h5 className="card-title">Prima de Pólizas</h5>
+            <p className="card-subtitle">Ingresos por Primas de Seguros</p>
           </div>
         </div>
         <div className="rounded-bars">

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Button, Table, TextInput, Label, Spinner, Modal, Select } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import saasApi from 'src/services/saasApi';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface Automovil {
   id: number;
@@ -51,6 +52,9 @@ const Automoviles: React.FC = () => {
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Automovil>>({});
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Autocompletar cliente/póliza
   const [clientQuery, setClientQuery] = useState('');
@@ -109,6 +113,17 @@ const Automoviles: React.FC = () => {
   };
 
   useEffect(() => { loadData(); }, [filters.page, filters.per_page, filters.search]);
+
+  // Abrir modal de edición por param open_auto_id desde el buscador global
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openId = params.get('open_auto_id');
+    if (openId) {
+      if (!showEdit || String(editingId || '') !== String(openId)) {
+        openAutoById(String(openId));
+      }
+    }
+  }, [location.search]);
 
   // Cargar marcas al abrir modal crear
   useEffect(() => {
@@ -267,6 +282,30 @@ const Automoviles: React.FC = () => {
     setShowCreate(false);
     setForm({ placa: '', marca: '', modelo: '', brand_id: null, model_id: null, line_id: null });
     loadData();
+  };
+
+  // Deep-link helpers
+  const openAutoById = async (id: string) => {
+    try {
+      const resp = await saasApi.getAutomovil(id);
+      const data: any = (resp as any)?.data ?? resp;
+      if (data) {
+        setEditingId(Number(data.id ?? id));
+        setEditForm(data);
+        setShowEdit(true);
+      }
+    } catch (e) {
+      console.error('Error abriendo automóvil por ID desde query param:', e);
+    }
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEdit(false);
+    try {
+      const params = new URLSearchParams(location.search);
+      params.delete('open_auto_id');
+      navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+    } catch {}
   };
 
   return (
@@ -516,7 +555,7 @@ const Automoviles: React.FC = () => {
       </Modal>
 
       {/* Modal Editar */}
-      <Modal show={showEdit} onClose={() => setShowEdit(false)}>
+      <Modal show={showEdit} onClose={handleCloseEditModal}>
         <Modal.Header>Editar Automóvil</Modal.Header>
         <Modal.Body>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

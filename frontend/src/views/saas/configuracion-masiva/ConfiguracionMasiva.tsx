@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Chart from "react-apexcharts";
 import { Tabs, Table, Dropdown } from "flowbite-react";
 import {
@@ -12,6 +12,7 @@ import { Input } from "../../../components/shadcn-ui/Default-Ui/input";
 import { Label } from "../../../components/shadcn-ui/Default-Ui/label";
 import { Textarea } from "../../../components/shadcn-ui/Default-Ui/textarea";
 import { Alert, AlertDescription } from "../../../components/shadcn-ui/Default-Ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../../components/shadcn-ui/Default-Ui/dialog";
 import { useToast } from "../../../hooks/use-toast";
 import whatsappMicroservice, {
   WhatsAppConnection,
@@ -24,6 +25,7 @@ import { useUnifiedAuth } from "../../../context/UnifiedAuthContext";
 import { auth } from "../../../config/firebase";
 import HeroMetricCard from "../../../components/campaigns/HeroMetricCard";
 import SecondaryMetricCard from "../../../components/campaigns/SecondaryMetricCard";
+import { useLocation, useNavigate } from "react-router-dom";
 
 // Tipos locales mínimos para TS
 type Contact = { phone: string; name: string; email?: string };
@@ -124,6 +126,43 @@ const ConfiguracionMasiva: React.FC = () => {
   const [avgCostCOPState, setAvgCostCOP] = useState(0);
   
 
+  // Deep-link desde buscador global: abrir detalles de campaña WhatsApp por ID
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openId = params.get('open_whatsapp_campaign_id');
+    if (!openId) return;
+
+    const open = async () => {
+      try {
+        if (!campaigns || campaigns.length === 0) {
+          await loadCampaigns();
+        }
+        const c = (campaigns || []).find((x: any) => String(x.id) === String(openId));
+        if (c) {
+          setSelectedCampaign(c);
+          setIsCampaignDetailOpen(true);
+          try {
+            await loadCampaignStats();
+          } catch {}
+        }
+      } finally {
+        params.delete('open_whatsapp_campaign_id');
+        navigate(
+          {
+            pathname: location.pathname,
+            search: params.toString() ? `?${params.toString()}` : '',
+          },
+          { replace: true },
+        );
+      }
+    };
+    open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   // Cargar estado inicial
   useEffect(() => {
     loadInitialData();
@@ -132,19 +171,162 @@ const ConfiguracionMasiva: React.FC = () => {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      await Promise.all([
-        loadConnectionStatus(),
-        loadStats(),
-        loadMessageHistory(),
-        loadCampaigns(),
-        loadCampaignStats(),
-        loadInstances(),
-        loadInstanceStats()
+      // Rango de fechas para inicial (últimos 30 días)
+      const now = new Date();
+      const defaultTo = toDate || now.toISOString().slice(0, 10);
+      const from = fromDate || new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      // Cargar datos en paralelo evitando duplicados (instancias, campañas, historial)
+      const [instancesResp, campaignStatsResp, campaignsResp, historyResp] = await Promise.all([
+        whatsappInstanceService.getInstances(),
+        campaignService.getCampaignStats(),
+        campaignService.getCampaigns(),
+        campaignService.getSendHistory({ date_from: from, date_to: defaultTo, limit: 500, offset: 0 }),
       ]);
+
+      // ===== Instancias / Conexión / Estadísticas de instancias
+      if (instancesResp?.success && instancesResp.data) {
+        const instancesData = instancesResp.data;
+
+        const connectedInstances = instancesData.filter(
+          (inst: any) => inst.status === 'connected' || inst.status === 'authenticated'
+        );
+        const isConnected = connectedInstances.length > 0;
+
+        setConnectionStatus({
+          success: true,
+          connected: isConnected,
+          qrCode: undefined,
+        });
+
+        const mappedInstances = instancesData.map((instance: any) => ({
+          id: instance.id,
+          instance_id: instance.instance_id,
+          phone_number: instance.phone_number,
+          status: instance.status || 'disconnected',
+          is_active: instance.is_active,
+          session_id: instance.session_id || 'N/A',
+          last_activity_at: instance.last_activity_at || instance.updated_at,
+          reconnect_attempts: instance.reconnect_attempts || 0,
+          webhook_url: instance.webhook_url,
+          settings: instance.settings,
+        }));
+        setInstances(mappedInstances);
+
+        const stats = {
+          total_instances: instancesData.length,
+          connected_instances: instancesData.filter((i: any) => i.status === 'connected').length,
+          connecting_instances: instancesData.filter((i: any) => i.status === 'connecting' || i.status === 'qr_pending').length,
+          disconnected_instances: instancesData.filter((i: any) => i.status === 'disconnected').length,
+          error_instances: instancesData.filter((i: any) => i.status === 'error').length,
+        };
+        setInstanceStats(stats);
+
+        // Ajustar WhatsAppStats con el estado real de conexión
+        if (campaignStatsResp?.success && campaignStatsResp.stats) {
+          setStats({
+            success: true,
+            stats: {
+              total_contacts: 0,
+              total_messages: campaignStatsResp.stats.total_messages_sent || 0,
+              total_automations: 0,
+              whatsapp_connected: isConnected,
+              uptime: 0,
+            },
+          });
+        }
+      } else {
+        setConnectionStatus({ success: true, connected: false });
+        setInstanceStats({
+          total_instances: 0,
+          connected_instances: 0,
+          connecting_instances: 0,
+          disconnected_instances: 0,
+          error_instances: 0,
+        });
+      }
+
+      // ===== Campañas
+      if (campaignsResp?.success) {
+        setCampaigns(campaignsResp.campaigns || []);
+      } else {
+        setCampaigns([]);
+      }
+      if (campaignStatsResp?.success && campaignStatsResp.stats) {
+        setCampaignStats(campaignStatsResp.stats);
+        if (!instancesResp?.success) {
+          // Fallback de stats cuando no pudimos leer instancias
+          setStats({
+            success: true,
+            stats: {
+              total_contacts: 0,
+              total_messages: campaignStatsResp.stats.total_messages_sent || 0,
+              total_automations: 0,
+              whatsapp_connected: false,
+              uptime: 0,
+            },
+          });
+        }
+      }
+
+      // ===== Historial y gráfico (usar misma data para ambos para evitar doble request)
+      if (historyResp?.success) {
+        const messages = historyResp.messages || [];
+
+        // Listado inicial (página 1) y totales
+        setMessageHistory(messages.slice(0, messagesPerPage));
+        setTotalMessages(historyResp.total || messages.length || 0);
+        setHistoryStats(historyResp.stats || {});
+
+        // Construcción de gráfico a partir del mismo dataset
+        const dates: string[] = [];
+        const start = new Date(from);
+        const end = new Date(defaultTo);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          dates.push(d.toISOString().slice(0, 10));
+        }
+
+        const countByDate: Record<string, { sent: number; delivered: number; read: number; failed: number }> = {};
+        dates.forEach(d => { countByDate[d] = { sent: 0, delivered: 0, read: 0, failed: 0 }; });
+
+        messages.forEach((m: any) => {
+          const dateStr = (m.sent_at || m.delivered_at || m.read_at || m.created_at || '').slice(0, 10);
+          if (!dateStr || !countByDate[dateStr]) return;
+          switch (m.status) {
+            case 'sent':
+              countByDate[dateStr].sent += 1;
+              break;
+            case 'delivered':
+              countByDate[dateStr].delivered += 1;
+              break;
+            case 'read':
+              countByDate[dateStr].read += 1;
+              break;
+            case 'failed':
+              countByDate[dateStr].failed += 1;
+              break;
+          }
+        });
+
+        setChartCategories(dates);
+        setChartSeries([
+          { name: 'Enviados', data: dates.map(d => countByDate[d].sent) },
+          { name: 'Entregados', data: dates.map(d => countByDate[d].delivered) },
+          { name: 'Leídos', data: dates.map(d => countByDate[d].read) },
+          { name: 'Fallidos', data: dates.map(d => countByDate[d].failed) },
+        ]);
+      } else {
+        setMessageHistory([]);
+        setTotalMessages(0);
+        setHistoryStats({});
+        setChartCategories([]);
+        setChartSeries([]);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
+      initialLoadedRef.current = true;
     }
   };
 
@@ -403,22 +585,29 @@ const ConfiguracionMasiva: React.FC = () => {
     }
   };
 
-  // UseEffect para recargar cuando cambian página o búsqueda
+  // Evitar recargas dobles/flasheos de gráficos: unificar triggers y saltar la primera ejecución
+  const firstLoadRef = useRef(true);
+  const initialLoadedRef = useRef(false);
   useEffect(() => {
-    if (activeTab === 'dashboard') {
-      loadMessageHistory();
-      loadChartData();
-    }
-  }, [currentPage, searchTerm, activeTab]);
+    if (activeTab !== 'dashboard') return;
 
-  // Recargar historial y gráfico al cambiar filtros de fecha
-  useEffect(() => {
-    if (activeTab === 'dashboard') {
-      setCurrentPage(1);
-      loadMessageHistory(1);
-      loadChartData();
+    // La primera carga ya la hace loadInitialData(); evitamos duplicar
+    if (firstLoadRef.current) {
+      firstLoadRef.current = false;
+      return;
     }
-  }, [fromDate, toDate]);
+
+    // Si cambian filtros de fecha, resetear a página 1 y cargar una sola vez
+    const dateFiltersChanged = !!fromDate || !!toDate;
+    const targetPage = dateFiltersChanged ? 1 : currentPage;
+    if (dateFiltersChanged && currentPage !== 1) {
+      setCurrentPage(1);
+    }
+
+    loadMessageHistory(targetPage, searchTerm);
+    loadChartData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentPage, searchTerm, fromDate, toDate]);
 
   // Recalcular costos cuando cambian estadísticas o filtros
   useEffect(() => {
@@ -1100,9 +1289,15 @@ const ConfiguracionMasiva: React.FC = () => {
   // Función para mostrar QR de una instancia específica
   const handleShowQR = async (instance: any) => {
     if (!instance.id) return;
-    
+
+    // Forzar header detrás de la modal antes de abrir
+    const header = document.querySelector('header');
+    if (header) {
+      header.style.zIndex = '0';
+    }
+
     console.log('🔲 Obteniendo QR para instancia:', instance.id, instance.phone_number);
-    
+
     setSelectedInstance(instance);
     setQrCode('');
     setIsQRModalOpen(true);
@@ -1111,11 +1306,11 @@ const ConfiguracionMasiva: React.FC = () => {
       // Usar el servicio específico de instancias de Laravel (NO el microservicio directo)
       const response = await whatsappInstanceService.getQRCode(instance.id);
       console.log('🔲 Respuesta QR de Laravel:', response);
-      
+
       if (response.success && response.qr) {
         setQrCode(response.qr);
         setQrExpiry(response.expires_at || '');
-        
+
         toast({
           title: "QR Generado",
           description: `QR código disponible para ${instance.phone_number}`,
@@ -1123,16 +1318,16 @@ const ConfiguracionMasiva: React.FC = () => {
       } else if (!response.success && response.message) {
         // Caso específico: instancia ya conectada u otro error del microservicio
         console.log('ℹ️ Instancia no puede generar QR:', response.message);
-        
+
         // Cerrar el modal de QR ya que no se puede mostrar
         setIsQRModalOpen(false);
-        
+
         toast({
           title: "Información",
           description: response.message,
           variant: "default" // Usar variante default en lugar de destructive para mensajes informativos
         });
-        
+
         // Actualizar el estado de la instancia por si cambió
         await handleRefreshStatus(instance.id);
       } else {
@@ -1258,7 +1453,14 @@ const ConfiguracionMasiva: React.FC = () => {
         email: auth.currentUser.email,
         emailVerified: auth.currentUser.emailVerified
       });
-      console.log('🚀 [CONFIGURACION] Cargando instancias con autenticación Firebase...');
+
+      // Evitar doble carga durante la inicialización (ya la hace loadInitialData)
+      if (!initialLoadedRef.current) {
+        console.log('⏭️ [CONFIGURACION] Evitando carga duplicada de instancias (inicial en progreso)');
+        return;
+      }
+
+      console.log('🚀 [CONFIGURACION] Cargando instancias por cambio de usuario...');
       loadInstances();
     } else {
       console.warn('❌ [CONFIGURACION] No hay Firebase user autenticado');
@@ -2024,101 +2226,6 @@ const ConfiguracionMasiva: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Tasa de éxito (ApexCharts para replicar diseño Voice AI) */}
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <IconifyIcon icon="solar:chart-bold" className="h-5 w-5 text-green-600" />
-                  Tasa de éxito (Entregados / Enviados)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {chartLoading ? (
-                  <div className="h-64 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-                  </div>
-                ) : chartCategories.length > 0 ? (
-                  <div className="-mx-2">
-                    <Chart
-                      options={{
-                        chart: {
-                          toolbar: { show: false },
-                          height: 350,
-                          type: 'line',
-                          fontFamily: 'inherit',
-                          foreColor: '#adb0bb'
-                        },
-                        colors: ['#10B981'],
-                        stroke: { width: 4, curve: 'smooth' },
-                        dataLabels: { enabled: false },
-                        legend: { show: false },
-                        grid: {
-                          borderColor: '#f1f5f9',
-                          strokeDashArray: 3,
-                          xaxis: { lines: { show: true } },
-                          yaxis: { lines: { show: true } }
-                        },
-                        xaxis: {
-                          categories: chartCategories,
-                          axisBorder: { show: false },
-                          axisTicks: { show: false },
-                          labels: { style: { fontSize: '12px' } }
-                        },
-                        yaxis: {
-                          min: 0,
-                          max: 100,
-                          labels: {
-                            formatter: (val: number) => `${val.toFixed(0)}%`
-                          },
-                          title: {
-                            text: 'Porcentaje de éxito',
-                            style: { fontSize: '12px', fontWeight: 500 }
-                          }
-                        },
-                        tooltip: {
-                          theme: 'dark',
-                          y: {
-                            formatter: (val: number) => `${val.toFixed(1)}% de éxito`
-                          },
-                          x: {
-                            formatter: (val: any) => (val != null ? String(val) : '')
-                          }
-                        },
-                        markers: { size: 0, hover: { size: 6 } },
-                        fill: {
-                          type: 'gradient',
-                          gradient: {
-                            shade: 'light',
-                            type: 'vertical',
-                            shadeIntensity: 0.5,
-                            gradientToColors: ['#34D399'],
-                            inverseColors: false,
-                            opacityFrom: 0.8,
-                            opacityTo: 0.1,
-                            stops: [0, 100]
-                          }
-                        }
-                      } as any}
-                      series={[
-                        {
-                          name: 'Tasa de éxito',
-                          data: chartCategories.map((_, idx) => {
-                            const sent = chartSeries[0]?.data[idx] || 0;
-                            const delivered = chartSeries[1]?.data[idx] || 0;
-                            return sent > 0 ? Number(((delivered / sent) * 100).toFixed(1)) : 0;
-                          })
-                        }
-                      ] as any}
-                      type="line"
-                      height="350px"
-                      width="100%"
-                    />
-                  </div>
-                ) : (
-                  <p className="text-center text-gray-500 dark:text-gray-400">Sin datos para el rango seleccionado.</p>
-                )}
-              </CardContent>
-            </Card>
 
             {/* Historial de Envíos - estilo CallHistory */}
             <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
@@ -2172,8 +2279,8 @@ const ConfiguracionMasiva: React.FC = () => {
             </div>
 
             {/* Tabla de mensajes - estilo CallHistory */}
-            <Card>
-              <div className="overflow-x-auto">
+            <Card className="overflow-visible">
+              <div className="table-container-with-dropdowns overflow-x-auto">
                 {historyLoading ? (
                   <div className="flex flex-col items-center justify-center h-64 space-y-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -2198,7 +2305,7 @@ const ConfiguracionMasiva: React.FC = () => {
                       <Table.HeadCell>Campaña</Table.HeadCell>
                       <Table.HeadCell>Estado</Table.HeadCell>
                       <Table.HeadCell>Fecha</Table.HeadCell>
-                      <Table.HeadCell>Acciones</Table.HeadCell>
+                      <Table.HeadCell className="text-right">Acciones</Table.HeadCell>
                     </Table.Head>
                     <Table.Body>
                       {messageHistory.map((message) => {
@@ -2225,29 +2332,29 @@ const ConfiguracionMasiva: React.FC = () => {
                             <Table.Cell className="text-sm text-gray-600 dark:text-gray-400">
                               {formatDate(message.created_at || message.sent_at)}
                             </Table.Cell>
-                            <Table.Cell className="overflow-visible">
-                              <div className="relative z-[9999]">
+                            <Table.Cell className="whitespace-nowrap text-right">
+                              <div className="relative inline-block">
                                 <Dropdown
                                   label=""
                                   dismissOnClick={false}
-                                  className="z-[9999]"
+                                  inline
                                   renderTrigger={() => (
                                     <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
                                       <IconifyIcon icon="solar:menu-dots-bold" className="w-5 h-5" />
                                     </span>
                                   )}
                                 >
-                                <Dropdown.Item
-                                  className="flex gap-3"
-                                  onClick={() => {
-                                    setSelectedMessage(message);
-                                    setIsMessageDetailOpen(true);
-                                  }}
-                                >
-                                  <IconifyIcon icon="solar:eye-bold-duotone" height={18} />
-                                  Ver Detalles
-                                </Dropdown.Item>
-                              </Dropdown>
+                                  <Dropdown.Item
+                                    className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
+                                    onClick={() => {
+                                      setSelectedMessage(message);
+                                      setIsMessageDetailOpen(true);
+                                    }}
+                                  >
+                                    <IconifyIcon icon="solar:eye-bold-duotone" height={18} />
+                                    <span>Ver Detalles</span>
+                                  </Dropdown.Item>
+                                </Dropdown>
                               </div>
                             </Table.Cell>
                           </Table.Row>
@@ -2427,7 +2534,7 @@ const ConfiguracionMasiva: React.FC = () => {
             ) : (
               <Card className="overflow-visible">
                 <CardContent className="p-0 overflow-visible">
-                  <div className="overflow-x-auto">
+                  <div className="table-container-with-dropdowns overflow-x-auto">
                     <Table hoverable className="shadow-md dark:shadow-none bg-white dark:bg-darkgray rounded-[10px]">
                       <Table.Head>
                         <Table.HeadCell>Instancia</Table.HeadCell>
@@ -2435,7 +2542,7 @@ const ConfiguracionMasiva: React.FC = () => {
                         <Table.HeadCell>Session ID</Table.HeadCell>
                         <Table.HeadCell>Última Actividad</Table.HeadCell>
                         <Table.HeadCell>Reintentos</Table.HeadCell>
-                        <Table.HeadCell>Acciones</Table.HeadCell>
+                        <Table.HeadCell className="text-right">Acciones</Table.HeadCell>
                       </Table.Head>
                       <Table.Body>
                         {instances.map((instance) => (
@@ -2463,43 +2570,46 @@ const ConfiguracionMasiva: React.FC = () => {
                             <Table.Cell className="text-sm text-gray-900 dark:text-white">
                               {instance.reconnect_attempts}
                             </Table.Cell>
-                            <Table.Cell>
-                              <Dropdown
-                                label=""
-                                dismissOnClick={false}
-                                renderTrigger={() => (
-                                  <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                    <IconifyIcon icon="solar:menu-dots-bold" className="w-5 h-5" />
-                                  </span>
-                                )}
-                              >
-                                {(instance.status === 'qr_pending' || instance.status === 'disconnected') && (
-                                  <Dropdown.Item className="flex gap-3" onClick={() => handleShowQR(instance)}>
-                                    <IconifyIcon icon="solar:qr-code-bold" height={18} />
-                                    Mostrar QR
-                                  </Dropdown.Item>
-                                )}
-                                {instance.status === 'disconnected' && (
-                                  <Dropdown.Item className="flex gap-3" onClick={() => handleReconnectInstance(instance.id)}>
+                            <Table.Cell className="whitespace-nowrap text-right">
+                              <div className="relative inline-block">
+                                <Dropdown
+                                  label=""
+                                  dismissOnClick={false}
+                                  inline
+                                  renderTrigger={() => (
+                                    <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
+                                      <IconifyIcon icon="solar:menu-dots-bold" className="w-5 h-5" />
+                                    </span>
+                                  )}
+                                >
+                                  {(instance.status === 'qr_pending' || instance.status === 'disconnected') && (
+                                    <Dropdown.Item className="flex gap-3 w-full justify-start text-left whitespace-nowrap" onClick={() => handleShowQR(instance)}>
+                                      <IconifyIcon icon="solar:qr-code-bold" height={18} />
+                                      <span>Mostrar QR</span>
+                                    </Dropdown.Item>
+                                  )}
+                                  {instance.status === 'disconnected' && (
+                                    <Dropdown.Item className="flex gap-3 w-full justify-start text-left whitespace-nowrap" onClick={() => handleReconnectInstance(instance.id)}>
+                                      <IconifyIcon icon="solar:refresh-bold" height={18} />
+                                      <span>Reconectar</span>
+                                    </Dropdown.Item>
+                                  )}
+                                  {(instance.status === 'connected' || instance.status === 'connecting') && (
+                                    <Dropdown.Item className="flex gap-3 w-full justify-start text-left whitespace-nowrap" onClick={() => handleDisconnectInstance(instance.id)}>
+                                      <IconifyIcon icon="solar:power-bold" height={18} />
+                                      <span>Desconectar</span>
+                                    </Dropdown.Item>
+                                  )}
+                                  <Dropdown.Item className="flex gap-3 w-full justify-start text-left whitespace-nowrap" onClick={() => instance.id && handleRefreshStatus(instance.id)}>
                                     <IconifyIcon icon="solar:refresh-bold" height={18} />
-                                    Reconectar
+                                    <span>Actualizar Estado</span>
                                   </Dropdown.Item>
-                                )}
-                                {(instance.status === 'connected' || instance.status === 'connecting') && (
-                                  <Dropdown.Item className="flex gap-3" onClick={() => handleDisconnectInstance(instance.id)}>
-                                    <IconifyIcon icon="solar:power-bold" height={18} />
-                                    Desconectar
+                                  <Dropdown.Item className="flex gap-3 w-full justify-start text-left whitespace-nowrap" onClick={() => handleDeleteInstance(instance.id)}>
+                                    <IconifyIcon icon="solar:trash-bin-trash-bold" height={18} />
+                                    <span>Eliminar</span>
                                   </Dropdown.Item>
-                                )}
-                                <Dropdown.Item className="flex gap-3" onClick={() => instance.id && handleRefreshStatus(instance.id)}>
-                                  <IconifyIcon icon="solar:refresh-bold" height={18} />
-                                  Actualizar Estado
-                                </Dropdown.Item>
-                                <Dropdown.Item className="flex gap-3" onClick={() => handleDeleteInstance(instance.id)}>
-                                  <IconifyIcon icon="solar:trash-bin-trash-bold" height={18} />
-                                  Eliminar
-                                </Dropdown.Item>
-                              </Dropdown>
+                                </Dropdown>
+                              </div>
                             </Table.Cell>
                           </Table.Row>
                         ))}
@@ -2663,9 +2773,9 @@ const ConfiguracionMasiva: React.FC = () => {
                 </CardContent>
               </Card>
             ) : (
-              <Card>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
+              <Card className="overflow-visible">
+                <CardContent className="p-0 overflow-visible">
+                  <div className="table-container-with-dropdowns overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead className="bg-gray-50 dark:bg-gray-800/50">
                         <tr className="text-left text-gray-600 dark:text-gray-300">
@@ -2732,6 +2842,7 @@ const ConfiguracionMasiva: React.FC = () => {
                                   <Dropdown
                                     label=""
                                     dismissOnClick={false}
+                                    inline
                                     renderTrigger={() => (
                                       <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
                                         <IconifyIcon icon="solar:menu-dots-bold" className="w-5 h-5" />
@@ -2799,8 +2910,8 @@ const ConfiguracionMasiva: React.FC = () => {
 
       {/* Modal de Detalles de Campaña */}
       {isCampaignDetailOpen && selectedCampaign && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-darkgray rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9998] p-4">
+          <div className="bg-white dark:bg-darkgray rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto relative z-[9999]">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -2958,8 +3069,8 @@ const ConfiguracionMasiva: React.FC = () => {
 
       {/* Modal de Confirmación de Eliminación de Campaña */}
       {isDeleteCampaignModalOpen && campaignToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-darkgray rounded-lg w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9998] p-4">
+          <div className="bg-white dark:bg-darkgray rounded-lg w-full max-w-md relative z-[9999]">
             <div className="p-6">
               <div className="flex items-center gap-2 mb-4">
                 <IconifyIcon icon="solar:danger-triangle-bold" className="w-6 h-6 text-red-600" />
@@ -3018,117 +3129,94 @@ const ConfiguracionMasiva: React.FC = () => {
       )}
 
       {/* Modal QR */}
-      {isQRModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-darkgray rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Código QR - WhatsApp</h3>
-              <Button
-                onClick={() => {
-                  setIsQRModalOpen(false);
-                  stopQRPolling();
-                }}
-                variant="ghost"
-                size="sm"
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <IconifyIcon icon="solar:close-circle-bold" className="w-5 h-5" />
-              </Button>
+      <Dialog open={isQRModalOpen} onOpenChange={setIsQRModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Código QR - WhatsApp</DialogTitle>
+          </DialogHeader>
+
+          <div className="text-center">
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Escanea este código QR con WhatsApp Web en tu teléfono
+              </p>
+              <div className="flex items-center justify-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                <IconifyIcon icon="solar:refresh-bold" className="w-3 h-3 animate-spin z-[20] relative" />
+                <span>Detectando conexión automáticamente...</span>
+              </div>
             </div>
-            
-            <div className="text-center">
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  Escanea este código QR con WhatsApp Web en tu teléfono
-                </p>
-                <div className="flex items-center justify-center gap-2 text-xs text-blue-600 dark:text-blue-400">
-                  <IconifyIcon icon="solar:refresh-bold" className="w-3 h-3 animate-spin z-[20] relative" />
-                  <span>Detectando conexión automáticamente...</span>
+
+            {qrCode ? (
+              <div>
+                <div className="bg-white p-4 rounded-lg border mb-4">
+                  <img
+                    src={qrCode || ''}
+                    alt="Código QR de WhatsApp"
+                    className="w-64 h-64 mx-auto"
+                  />
+                </div>
+                {qrExpiry && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Expira: {new Date(qrExpiry).toLocaleString()}
+                  </p>
+                )}
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-left text-sm">
+                  <p className="font-medium mb-2 text-blue-800 dark:text-blue-200">Instrucciones:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-gray-700 dark:text-gray-300">
+                    <li>Abre WhatsApp en tu teléfono</li>
+                    <li>Ve a Configuración → Dispositivos vinculados</li>
+                    <li>Toca "Vincular un dispositivo"</li>
+                    <li>Escanea este código QR</li>
+                  </ol>
                 </div>
               </div>
-              
-              {qrCode ? (
-                <div>
-                  <div className="bg-white p-4 rounded-lg border mb-4">
-                    <img
-                      src={qrCode || ''}
-                      alt="Código QR de WhatsApp"
-                      className="w-64 h-64 mx-auto"
-                    />
-                  </div>
-                  {qrExpiry && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                      Expira: {new Date(qrExpiry).toLocaleString()}
-                    </p>
-                  )}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-left text-sm">
-                    <p className="font-medium mb-2 text-blue-800 dark:text-blue-200">Instrucciones:</p>
-                    <ol className="list-decimal list-inside space-y-1 text-gray-700 dark:text-gray-300">
-                      <li>Abre WhatsApp en tu teléfono</li>
-                      <li>Ve a Configuración → Dispositivos vinculados</li>
-                      <li>Toca "Vincular un dispositivo"</li>
-                      <li>Escanea este código QR</li>
-                    </ol>
-                  </div>
+            ) : (
+              <div className="py-8">
+                <div className="mb-4">
+                  <IconifyIcon icon="solar:refresh-bold" className="w-16 h-16 text-blue-500 mx-auto animate-spin z-[20] relative" />
                 </div>
-              ) : (
-                <div className="py-8">
-                  <div className="mb-4">
-                    <IconifyIcon icon="solar:refresh-bold" className="w-16 h-16 text-blue-500 mx-auto animate-spin z-[20] relative" />
-                  </div>
-                  <p className="text-gray-600 dark:text-gray-400">Generando código QR...</p>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex justify-between mt-6">
-              <Button 
-                onClick={() => setIsQRModalOpen(false)}
-                variant="outline"
-              >
-                Cerrar
-              </Button>
-              {selectedInstance?.id && (
-                <Button 
-                  onClick={() => handleShowQR(selectedInstance)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <IconifyIcon icon="solar:refresh-bold" className="w-4 h-4 mr-2 z-[20] relative" />
-                  Actualizar QR
-                </Button>
-              )}
-            </div>
+                <p className="text-gray-600 dark:text-gray-400">Generando código QR...</p>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+
+          <div className="flex justify-between mt-6">
+            <Button
+              onClick={() => {
+                setIsQRModalOpen(false);
+                stopQRPolling();
+              }}
+              variant="outline"
+            >
+              Cerrar
+            </Button>
+            {selectedInstance?.id && (
+              <Button
+                onClick={() => handleShowQR(selectedInstance)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <IconifyIcon icon="solar:refresh-bold" className="w-4 h-4 mr-2 z-[20] relative" />
+                Actualizar QR
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Detalles de Mensaje - estilo CallHistory */}
-      {isMessageDetailOpen && selectedMessage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-darkgray rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <IconifyIcon icon="solar:chat-round-bold-duotone" className="w-5 h-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Detalles del Mensaje
-                  </h3>
-                </div>
-                <Button 
-                  onClick={() => {
-                    setIsMessageDetailOpen(false);
-                    setSelectedMessage(null);
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <IconifyIcon icon="solar:close-circle-bold" className="w-5 h-5" />
-                </Button>
-              </div>
-            </div>
+      <Dialog open={isMessageDetailOpen} onOpenChange={() => {
+        setIsMessageDetailOpen(false);
+        setSelectedMessage(null);
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconifyIcon icon="solar:chat-round-bold-duotone" className="w-5 h-5 text-blue-600" />
+              Detalles del Mensaje
+            </DialogTitle>
+          </DialogHeader>
 
-            <div className="p-6 space-y-6">
+          <div className="space-y-6">
               {/* Header con información básica */}
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
@@ -3138,14 +3226,14 @@ const ConfiguracionMasiva: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
-                        {selectedMessage.recipient_name || 'Sin nombre'}
+                        {selectedMessage?.recipient_name || 'Sin nombre'}
                       </h3>
-                      <p className="text-gray-600 dark:text-gray-400">{selectedMessage.recipient_phone}</p>
+                      <p className="text-gray-600 dark:text-gray-400">{selectedMessage?.recipient_phone}</p>
                     </div>
                   </div>
                   <div className="text-right">
                     {(() => {
-                      const { variant, text, className } = getMessageStatusBadge(selectedMessage.status);
+                      const { variant, text, className } = getMessageStatusBadge(selectedMessage?.status);
                       return <Badge variant={variant} className={className}>{text}</Badge>;
                     })()}
                   </div>
@@ -3154,20 +3242,20 @@ const ConfiguracionMasiva: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
                     <p className="text-gray-500 dark:text-gray-400 mb-1">Campaña</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedMessage.campaign_name || '-'}</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{selectedMessage?.campaign_name || '-'}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 dark:text-gray-400 mb-1">Instancia</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedMessage.instance_name || '-'}</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{selectedMessage?.instance_name || '-'}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 dark:text-gray-400 mb-1">Enviado</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{formatDate(selectedMessage.sent_at || selectedMessage.created_at)}</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{formatDate(selectedMessage?.sent_at || selectedMessage?.created_at)}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 dark:text-gray-400 mb-1">Entregado</p>
                     <p className="font-medium text-gray-900 dark:text-white">
-                      {selectedMessage.delivered_at ? formatDate(selectedMessage.delivered_at) : '-'}
+                      {selectedMessage?.delivered_at ? formatDate(selectedMessage.delivered_at) : '-'}
                     </p>
                   </div>
                 </div>
@@ -3181,7 +3269,7 @@ const ConfiguracionMasiva: React.FC = () => {
                 </h4>
                 <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                   <p className="text-sm leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300">
-                    {selectedMessage.message_content || 'Sin contenido'}
+                    {selectedMessage?.message_content || 'Sin contenido'}
                   </p>
                 </div>
               </div>
@@ -3197,21 +3285,21 @@ const ConfiguracionMasiva: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600 dark:text-gray-400 font-medium">Estado:</span>
                       {(() => {
-                        const { variant, text, className } = getMessageStatusBadge(selectedMessage.status);
+                        const { variant, text, className } = getMessageStatusBadge(selectedMessage?.status);
                         return <Badge variant={variant} className={className}>{text}</Badge>;
                       })()}
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600 dark:text-gray-400 font-medium">ID del mensaje:</span>
-                      <span className="text-gray-900 dark:text-white font-mono text-xs">{selectedMessage.id}</span>
+                      <span className="text-gray-900 dark:text-white font-mono text-xs">{selectedMessage?.id}</span>
                     </div>
-                    {selectedMessage.whatsapp_message_id && (
+                    {selectedMessage?.whatsapp_message_id && (
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600 dark:text-gray-400 font-medium">WhatsApp ID:</span>
                         <span className="text-gray-900 dark:text-white font-mono text-xs">{selectedMessage.whatsapp_message_id}</span>
                       </div>
                     )}
-                    {selectedMessage.error_message && (
+                    {selectedMessage?.error_message && (
                       <div className="flex items-start justify-between">
                         <span className="text-gray-600 dark:text-gray-400 font-medium">Error:</span>
                         <span className="text-red-600 dark:text-red-400 text-xs text-right max-w-xs">{selectedMessage.error_message}</span>
@@ -3228,21 +3316,21 @@ const ConfiguracionMasiva: React.FC = () => {
                   <div className="flex flex-col gap-3 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600 dark:text-gray-400 font-medium">Creado:</span>
-                      <span className="text-gray-900 dark:text-white text-xs">{formatDate(selectedMessage.created_at)}</span>
+                      <span className="text-gray-900 dark:text-white text-xs">{formatDate(selectedMessage?.created_at)}</span>
                     </div>
-                    {selectedMessage.sent_at && (
+                    {selectedMessage?.sent_at && (
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600 dark:text-gray-400 font-medium">Enviado:</span>
                         <span className="text-gray-900 dark:text-white text-xs">{formatDate(selectedMessage.sent_at)}</span>
                       </div>
                     )}
-                    {selectedMessage.delivered_at && (
+                    {selectedMessage?.delivered_at && (
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600 dark:text-gray-400 font-medium">Entregado:</span>
                         <span className="text-gray-900 dark:text-white text-xs">{formatDate(selectedMessage.delivered_at)}</span>
                       </div>
                     )}
-                    {selectedMessage.read_at && (
+                    {selectedMessage?.read_at && (
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600 dark:text-gray-400 font-medium">Leído:</span>
                         <span className="text-gray-900 dark:text-white text-xs">{formatDate(selectedMessage.read_at)}</span>
@@ -3253,7 +3341,7 @@ const ConfiguracionMasiva: React.FC = () => {
               </div>
 
               {/* Metadatos si existen */}
-              {selectedMessage.metadata && (
+              {selectedMessage?.metadata && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h4 className="font-medium mb-4 text-gray-900 dark:text-white">Metadatos</h4>
                   <pre className="text-xs bg-gray-50 dark:bg-gray-900 p-4 rounded overflow-x-auto text-gray-700 dark:text-gray-300">
@@ -3263,96 +3351,85 @@ const ConfiguracionMasiva: React.FC = () => {
               )}
             </div>
 
-            <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-              <Button 
-                onClick={() => {
-                  setIsMessageDetailOpen(false);
-                  setSelectedMessage(null);
-                }}
-                variant="outline"
-              >
-                Cerrar
-              </Button>
-            </div>
+          <div className="flex justify-end">
+            <Button
+              onClick={() => {
+                setIsMessageDetailOpen(false);
+                setSelectedMessage(null);
+              }}
+              variant="outline"
+            >
+              Cerrar
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Crear Instancia */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-darkgray rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Nueva Instancia WhatsApp</h3>
-              <Button 
-                onClick={() => setIsCreateModalOpen(false)}
-                variant="ghost"
-                size="sm"
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <IconifyIcon icon="solar:close-circle-bold" className="w-5 h-5" />
-              </Button>
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva Instancia WhatsApp</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="phone_number">Número de Teléfono</Label>
+              <Input
+                id="phone_number"
+                type="text"
+                placeholder="+57 300 123 4567"
+                value={newInstance.phone_number}
+                onChange={(e) => setNewInstance((prev: NewInstanceForm) => ({ ...prev, phone_number: e.target.value }))}
+              />
             </div>
-            
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="phone_number">Número de Teléfono</Label>
-                <Input
-                  id="phone_number"
-                  type="text"
-                  placeholder="+57 300 123 4567"
-                  value={newInstance.phone_number}
-                  onChange={(e) => setNewInstance((prev: NewInstanceForm) => ({ ...prev, phone_number: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="webhook_url">Webhook URL (Opcional)</Label>
-                <Input
-                  id="webhook_url"
-                  type="url"
-                  placeholder="https://tu-dominio.com/webhook"
-                  value={newInstance.webhook_url}
-                  onChange={(e) => setNewInstance((prev: NewInstanceForm) => ({ ...prev, webhook_url: e.target.value }))}
-                />
-              </div>
-              
-              <Alert>
-                <IconifyIcon icon="solar:info-circle-bold" className="w-4 h-4" />
-                <AlertDescription>
-                  La nueva instancia se creará y estará lista para ser configurada con el código QR.
-                </AlertDescription>
-              </Alert>
+
+            <div>
+              <Label htmlFor="webhook_url">Webhook URL (Opcional)</Label>
+              <Input
+                id="webhook_url"
+                type="url"
+                placeholder="https://tu-dominio.com/webhook"
+                value={newInstance.webhook_url}
+                onChange={(e) => setNewInstance((prev: NewInstanceForm) => ({ ...prev, webhook_url: e.target.value }))}
+              />
             </div>
-            
-            <div className="flex justify-between mt-6">
-              <Button 
-                onClick={() => setIsCreateModalOpen(false)}
-                variant="outline"
-              >
-                Cancelar
-              </Button>
-              <Button 
-                onClick={handleCreateInstance}
-                disabled={creating || !newInstance.phone_number}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {creating ? (
-                  <>
-                    <IconifyIcon icon="solar:refresh-bold" className="w-4 h-4 mr-2 animate-spin z-[20] relative" />
-                    Creando...
-                  </>
-                ) : (
-                  <>
-                    <IconifyIcon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                    Crear Instancia
-                  </>
-                )}
-              </Button>
-            </div>
+
+            <Alert>
+              <IconifyIcon icon="solar:info-circle-bold" className="w-4 h-4" />
+              <AlertDescription>
+                La nueva instancia se creará y estará lista para ser configurada con el código QR.
+              </AlertDescription>
+            </Alert>
           </div>
-        </div>
-      )}
+
+          <div className="flex justify-between mt-6">
+            <Button
+              onClick={() => setIsCreateModalOpen(false)}
+              variant="outline"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateInstance}
+              disabled={creating || !newInstance.phone_number}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {creating ? (
+                <>
+                  <IconifyIcon icon="solar:refresh-bold" className="w-4 h-4 mr-2 animate-spin z-[20] relative" />
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <IconifyIcon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
+                  Crear Instancia
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

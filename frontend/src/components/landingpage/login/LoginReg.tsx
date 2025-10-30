@@ -13,7 +13,7 @@ const LoginReg = () => {
                 Revoluciona tu Agencia de Seguros con Software de IA Avanzado
               </h2>
               <p className="text-white/90 text-lg mb-6 leading-relaxed">
-                Únete a más de 50 agencias de seguros que ya transformaron su negocio con Guro, 
+                Únete a más de 150 agencias de seguros que ya transformaron su negocio con Guro, 
                 el software de seguros con inteligencia artificial más completo del mercado. 
                 Comienza tu prueba gratuita hoy mismo.
               </p>

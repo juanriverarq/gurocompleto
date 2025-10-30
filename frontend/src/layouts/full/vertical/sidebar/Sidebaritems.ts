@@ -151,29 +151,19 @@ const BaseMenuitems: MenuitemsType[] = [
     id: uniqueId(),
     title: "Cartera",
     icon: "solar:wallet-bold-duotone",
-    children: [
-      {
-        id: uniqueId(),
-        title: "Cartera de Clientes",
-        href: "/apps/cartera/clientes",
-      },
-      {
-        id: uniqueId(),
-        title: "Comisiones",
-        href: "/apps/comisiones/por-poliza",
-      },
-      {
-        id: uniqueId(),
-        title: "Liquidar Vendedores",
-        href: "/apps/cartera/liquidar-vendedores",
-      },
-    ],
+    href: "/apps/cartera/clientes",
   },
   {
     id: uniqueId(),
-    title: "Estados de Cuenta",
-    icon: "solar:document-text-bold-duotone",
-    href: "/apps/cartera/estados-cuenta",
+    title: "Comisiones",
+    icon: "solar:dollar-minimalistic-bold-duotone",
+    href: "/apps/comisiones/por-poliza",
+  },
+  {
+    id: uniqueId(),
+    title: "Liquidar Vendedores",
+    icon: "solar:calculator-bold-duotone",
+    href: "/apps/cartera/liquidar-vendedores",
   },
   {
     id: uniqueId(),
@@ -212,6 +202,12 @@ const BaseMenuitems: MenuitemsType[] = [
     icon: "solar:link-bold-duotone",
     href: "/apps/marketing/enlaces-cotizacion",
   },
+  {
+    id: uniqueId(),
+    title: "Mini Web",
+    icon: "solar:smartphone-2-bold-duotone",
+    href: "/apps/marketing/mini-web",
+  },
 
   // 🤖 INTELIGENCIA ARTIFICIAL
   {
@@ -222,7 +218,7 @@ const BaseMenuitems: MenuitemsType[] = [
     id: uniqueId(),
     title: "Chatbot",
     icon: "solar:cpu-bolt-bold-duotone",
-    href: "/apps/ia/asistente/deepseek",
+    href: "/apps/ia/asistente",
   },
   {
     id: uniqueId(),
@@ -341,16 +337,6 @@ const BaseMenuitems: MenuitemsType[] = [
         title: "Roles y Permisos",
         href: "/apps/admin/roles",
       },
-      {
-        id: uniqueId(),
-        title: "Demo Permisos",
-        href: "/apps/admin/demo-permisos",
-      },
-      {
-        id: uniqueId(),
-        title: "Auditoría de Accesos",
-        href: "/apps/admin/auditoria",
-      },
     ],
   },
   {
@@ -417,16 +403,6 @@ const BaseMenuitems: MenuitemsType[] = [
     children: [
       {
         id: uniqueId(),
-        title: "Parámetros Generales",
-        href: "/apps/admin/configuracion",
-      },
-      {
-        id: uniqueId(),
-        title: "Personalización",
-        href: "/apps/admin/personalizacion",
-      },
-      {
-        id: uniqueId(),
         title: "Copias de Seguridad",
         href: "/apps/admin/respaldos",
       },
@@ -435,23 +411,6 @@ const BaseMenuitems: MenuitemsType[] = [
             title: "Importación Masiva",
             href: "/apps/admin/importacion-masiva",
           },
-    ],
-  },
-  {
-    id: uniqueId(),
-    title: "Monitoreo y Logs",
-    icon: "solar:chart-square-bold-duotone",
-    children: [
-      {
-        id: uniqueId(),
-        title: "Logs del Sistema",
-        href: "/apps/admin/logs",
-      },
-      {
-        id: uniqueId(),
-        title: "Monitoreo de Performance",
-        href: "/apps/admin/monitoreo",
-      },
     ],
   },
 ];

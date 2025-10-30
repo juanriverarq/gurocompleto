@@ -277,7 +277,7 @@ class VoiceCampaignCall extends Model
     /**
      * Marcar llamada como iniciada
      */
-    public function markAsInitiated(string $elevenLabsCallId = null): void
+    public function markAsInitiated(?string $elevenLabsCallId = null): void
     {
         $this->update([
             'status' => self::STATUS_INITIATED,
@@ -323,7 +323,7 @@ class VoiceCampaignCall extends Model
     /**
      * Marcar llamada como fallida
      */
-    public function markAsFailed(string $reason, string $errorMessage = null): void
+    public function markAsFailed(string $reason, ?string $errorMessage = null): void
     {
         $this->update([
             'status' => self::STATUS_FAILED,
@@ -420,6 +420,8 @@ class VoiceCampaignCall extends Model
             'execution_id' => $this->voice_campaign_execution_id,
             'recipient_phone' => $this->recipient_phone,
             'recipient_name' => $this->recipient_name,
+            'agent_name' => $this->voiceCampaign?->agent_name ?? 'Agente IA',
+            'agent_id' => $this->elevenlabs_agent_id,
             'status' => $this->status,
             'call_initiated_at' => $this->call_initiated_at,
             'call_answered_at' => $this->call_answered_at,

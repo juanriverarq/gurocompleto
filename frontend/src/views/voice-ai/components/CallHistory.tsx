@@ -435,6 +435,9 @@ const CallHistory: React.FC = () => {
           elevenlabs_analysis: call.elevenlabs_analysis || null,
           elevenlabs_metadata: call.elevenlabs_metadata || null,
           elevenlabs_raw: call.elevenlabs?.raw || null,
+          // Datos recolectados del tool (NUEVO)
+          collected_data: call.collected_data || null,
+          call_metadata: call.call_metadata || null,
           // Costos del backend con margen por broker (si existen)
           costs: call.costs ? {
             currency: call.costs.currency,
@@ -1818,28 +1821,142 @@ const CallHistory: React.FC = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Datos Recolectados Durante la Llamada */}
+                      {(selectedCall as any).collected_data && Object.keys((selectedCall as any).collected_data).length > 0 && (
+                        <div className="bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-lg border border-green-200 dark:border-green-800 p-6">
+                          <h4 className="font-medium mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
+                            <Icon icon="solar:database-bold-duotone" className="w-5 h-5 text-green-500 dark:text-green-400" />
+                            Datos Recolectados Durante la Llamada
+                            <Badge color="success" size="sm">Nuevo</Badge>
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {Object.entries((selectedCall as any).collected_data).map(([field, data]: [string, any]) => (
+                              <div key={field} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-start justify-between mb-2">
+                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+                                    {field.replace(/_/g, ' ')}
+                                  </label>
+                                  <Badge color="success" size="xs">
+                                    {Math.round((data.confidence || 0) * 100)}% confianza
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-gray-900 dark:text-white font-semibold mb-1">
+                                  {typeof data.value === 'number' ? data.value : data.value || 'N/A'}
+                                </p>
+                                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                  <Icon icon="solar:check-circle-bold-duotone" className="w-3 h-3 text-green-500" />
+                                  <span>Fuente: {data.source === 'elevenlabs_tool' ? 'Tool de IA' : 'Transcripción'}</span>
+                                </div>
+                                {data.collected_at && (
+                                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                    Recolectado: {new Date(data.collected_at).toLocaleString()}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Indicador de herramienta usada */}
+                          {(selectedCall as any).call_metadata?.tool_used && (
+                            <div className="mt-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                              <Icon icon="solar:verified-check-bold-duotone" className="w-5 h-5" />
+                              <span className="font-medium">Datos recolectados automáticamente por el agente de IA</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {activeTab === 'analysis' && (
                     <div className="space-y-6">
-                      {selectedCall.analysis ? (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg border p-6">
-                          <h4 className="font-medium mb-4 flex items-center gap-2">
-                            <Icon icon="solar:chart-bold-duotone" className="w-5 h-5 text-purple-500" />
+                      {/* Resumen de la conversación */}
+                      {((selectedCall as any).call_result?.transcript_summary || (selectedCall as any).elevenlabs_analysis?.transcript_summary) && (
+                        <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg border border-purple-200 dark:border-purple-800 p-6">
+                          <h4 className="font-medium mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
+                            <Icon icon="solar:document-text-bold-duotone" className="w-5 h-5 text-purple-500 dark:text-purple-400" />
+                            Resumen de la Conversación
+                          </h4>
+                          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                            <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                              {(selectedCall as any).call_result?.transcript_summary || (selectedCall as any).elevenlabs_analysis?.transcript_summary}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Razón de terminación */}
+                      {((selectedCall as any).call_result?.termination_reason || (selectedCall as any).elevenlabs_analysis?.termination_reason) && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 p-4">
+                          <div className="flex items-start gap-3">
+                            <Icon icon="solar:info-circle-bold-duotone" className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <h5 className="font-medium text-amber-900 dark:text-amber-100 mb-1">Razón de Finalización</h5>
+                              <p className="text-sm text-amber-800 dark:text-amber-200">
+                                {(selectedCall as any).call_result?.termination_reason || (selectedCall as any).elevenlabs_analysis?.termination_reason}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Análisis de éxito de la llamada */}
+                      {((selectedCall as any).call_result || (selectedCall as any).elevenlabs_analysis) && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                          <h4 className="font-medium mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
+                            <Icon icon="solar:chart-bold-duotone" className="w-5 h-5 text-blue-500 dark:text-blue-400" />
+                            Análisis de Resultados
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Llamada Exitosa</span>
+                                <Badge color={(selectedCall as any).elevenlabs_analysis.call_successful ? 'success' : 'failure'} size="sm">
+                                  {(selectedCall as any).elevenlabs_analysis.call_successful ? 'Sí' : 'No'}
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            {(selectedCall as any).elevenlabs_analysis.user_sentiment && (
+                              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sentimiento del Cliente</span>
+                                  <Badge
+                                    color={
+                                      (selectedCall as any).elevenlabs_analysis.user_sentiment === 'positive' ? 'success' :
+                                      (selectedCall as any).elevenlabs_analysis.user_sentiment === 'negative' ? 'failure' : 'warning'
+                                    }
+                                    size="sm"
+                                  >
+                                    {(selectedCall as any).elevenlabs_analysis.user_sentiment === 'positive' ? 'Positivo' :
+                                     (selectedCall as any).elevenlabs_analysis.user_sentiment === 'negative' ? 'Negativo' : 'Neutral'}
+                                  </Badge>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Análisis de calidad (legacy) */}
+                      {selectedCall.analysis && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                          <h4 className="font-medium mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
+                            <Icon icon="solar:chart-bold-duotone" className="w-5 h-5 text-purple-500 dark:text-purple-400" />
                             Análisis de Calidad
                           </h4>
                           <div className="space-y-4">
                             <div>
                               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Puntuación de Calidad</label>
                               <div className="flex items-center gap-3 mt-1">
-                                <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                  <div 
+                                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                  <div
                                     className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-500"
                                     style={{ width: `${selectedCall.analysis.qualityScore * 100}%` }}
                                   ></div>
                                 </div>
-                                <span className="text-sm font-medium">{Math.round(selectedCall.analysis.qualityScore * 100)}%</span>
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">{Math.round(selectedCall.analysis.qualityScore * 100)}%</span>
                               </div>
                             </div>
                             
@@ -1847,8 +1964,8 @@ const CallHistory: React.FC = () => {
                               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Puntos Clave</label>
                               <ul className="mt-2 space-y-2">
                                 {selectedCall.analysis.keyPoints.map((point, index) => (
-                                  <li key={index} className="flex items-start gap-2 text-sm">
-                                    <Icon icon="solar:check-circle-bold-duotone" className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                  <li key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                    <Icon icon="solar:check-circle-bold-duotone" className="w-4 h-4 text-green-500 dark:text-green-400 mt-0.5 flex-shrink-0" />
                                     <span>{point}</span>
                                   </li>
                                 ))}
@@ -1856,12 +1973,8 @@ const CallHistory: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <Icon icon="solar:chart-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                          <p className="text-gray-500">Análisis no disponible para esta conversación</p>
-                        </div>
                       )}
+
                     </div>
                   )}
                 </div>

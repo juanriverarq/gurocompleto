@@ -16,15 +16,16 @@ class WhatsAppInstanceManager {
         console.log(`🏗️ [${instanceId}] Creando nueva instancia con settings:`, settings);
         const instance = new WhatsAppInstance(instanceId, this.io, this.database, settings);
         
+        // Limpiar cualquier estado de autenticación anterior para forzar generación de QR
+        console.log(`🧹 [${instanceId}] Limpiando estado de autenticación anterior...`);
+        await instance.clearAuthState();
+        
         console.log(`🏗️ [${instanceId}] Instancia creada - Estado inicial: connected=${instance.isConnected()}, connecting=${instance.isConnecting()}`);
         
         this.instances.set(instanceId, instance);
         
-        // Conectar automáticamente
-        console.log(`🔌 [${instanceId}] Iniciando conexión automática...`);
-        await instance.connect();
-        
-        console.log(`🔌 [${instanceId}] Conexión completada - Estado final: connected=${instance.isConnected()}, connecting=${instance.isConnecting()}`);
+        // NO conectar automáticamente - esperar a que el usuario solicite el QR
+        console.log(`⏸️  [${instanceId}] Instancia lista. Esperando solicitud de QR para conectar...`);
         
         return instance;
     }

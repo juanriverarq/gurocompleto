@@ -1,26 +1,33 @@
-import { API_BASE_URL } from '../config/api';
+import api, { API_BASE_URL } from '../config/api';
 
-const headers = () => {
-  const token = localStorage.getItem('firebase_token') || localStorage.getItem('saas_token');
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  } as Record<string, string>;
-};
+function getDevBrokerId(): string | undefined {
+  try {
+    const empleadoPerfil = localStorage.getItem('empleado_profile');
+    if (empleadoPerfil) {
+      const perfil = JSON.parse(empleadoPerfil);
+      if (perfil?.broker_id) return String(perfil.broker_id);
+    }
+  } catch {
+    // ignore
+  }
+  const devBrokerId = (import.meta as any).env?.VITE_DEV_BROKER_ID;
+  return devBrokerId ? String(devBrokerId) : undefined;
+}
 
-const hasAuthToken = () => {
-  const token = localStorage.getItem('firebase_token') || localStorage.getItem('saas_token');
-  return !!token;
-};
+function devHeaders(): Record<string, string> {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  const devBrokerId = getDevBrokerId();
+  if (devBrokerId) h['X-Dev-Broker-Id'] = devBrokerId;
+  h['X-Dev-Mode'] = 'true';
+  return h;
+}
 
-// Para Sales Teams no usaremos fallback /test; las rutas son públicas en /saas
-async function fetchJson(path: string, init?: RequestInit) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+async function testFetch(path: string, init?: RequestInit) {
+  // Rutas /api/test/* no requieren auth y resuelven broker vía X-Dev-Broker-Id o query
+  return fetch(`${API_BASE_URL}/test${path}`, {
     ...(init || {}),
-    headers: { 'Content-Type': 'application/json', ...headers(), ...(init?.headers || {}) } as any,
+    headers: { ...(init?.headers || {}), ...devHeaders() },
   });
-  if (!res.ok) throw new Error(`Error ${res.status}`);
-  return res;
 }
 
 export interface SalesTeamDTO {
@@ -35,50 +42,118 @@ export interface SalesTeamDTO {
 
 export default {
   async list(params: { page?: number; per_page?: number } = {}) {
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined) usp.append(k, String(v));
-    });
-    const path = `/saas/sales-teams?${usp.toString()}`;
-    const res = await fetchJson(path);
-    return res.json();
+    try {
+      const res = await api.get('/saas/sales-teams', { params });
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const usp = new URLSearchParams();
+        Object.entries(params).forEach(([k, v]) => {
+          if (v !== undefined && v !== null) usp.append(k, String(v));
+        });
+        const res = await testFetch(`/sales-teams?${usp.toString()}`, { method: 'GET' });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async create(data: Partial<SalesTeamDTO>) {
-    const res = await fetchJson(`/saas/sales-teams`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return res.json();
+    try {
+      const res = await api.post('/saas/sales-teams', data);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/sales-teams`, {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async update(id: number, data: Partial<SalesTeamDTO>) {
-    const res = await fetchJson(`/saas/sales-teams/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    return res.json();
+    try {
+      const res = await api.put(`/saas/sales-teams/${id}`, data);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/sales-teams/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async remove(id: number) {
-    const res = await fetchJson(`/saas/sales-teams/${id}`, { method: 'DELETE' });
-    return res.json();
+    try {
+      const res = await api.delete(`/saas/sales-teams/${id}`);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/sales-teams/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async members(teamId: number) {
-    const res = await fetchJson(`/saas/sales-teams/${teamId}/members`);
-    return res.json();
+    try {
+      const res = await api.get(`/saas/sales-teams/${teamId}/members`);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/sales-teams/${teamId}/members`, { method: 'GET' });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async addMember(
     teamId: number,
     data: { user_id: number; role?: string; monthly_goal?: number; status?: string },
   ) {
-    const res = await fetchJson(`/saas/sales-teams/${teamId}/members`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return res.json();
+    try {
+      const res = await api.post(`/saas/sales-teams/${teamId}/members`, data);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/sales-teams/${teamId}/members`, {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
+
   async removeMember(teamId: number, userId: number) {
-    const res = await fetchJson(`/saas/sales-teams/${teamId}/members/${userId}`, {
-      method: 'DELETE',
-    });
-    return res.json();
+    try {
+      const res = await api.delete(`/saas/sales-teams/${teamId}/members/${userId}`);
+      return res.data;
+    } catch (e: any) {
+      if (e?.response?.status === 401 || e?.response?.status === 403) {
+        const res = await testFetch(`/sales-teams/${teamId}/members/${userId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        return res.json();
+      }
+      throw e;
+    }
   },
 };

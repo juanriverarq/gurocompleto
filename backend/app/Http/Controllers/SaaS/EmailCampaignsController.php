@@ -15,6 +15,8 @@ use App\Models\EmailCampaign;
 use App\Models\EmailCampaignRecipient;
 use App\Models\UploadCsv;
 use App\Models\Cliente;
+use App\Models\Wallet;
+use App\Models\WalletTransaction;
 
 class EmailCampaignsController extends Controller
 {
@@ -278,12 +280,42 @@ class EmailCampaignsController extends Controller
                 'last_execution' => now()
             ]);
 
+            // Verificar saldo en wallet antes de enviar
+            $wallet = Wallet::firstOrCreate(
+                ['broker_id' => $brokerId],
+                [
+                    'user_id' => optional($request->user())->id,
+                    'balance_cop' => 0,
+                    'balance_usd' => 0,
+                    'pending_balance' => 0,
+                    'total_earnings' => 0,
+                    'is_active' => true
+                ]
+            );
+
+            $costPerEmail = 10; // 10 pesos COP por email
+            $totalCost = $totalResolved * $costPerEmail;
+
+            if ($wallet->balance_cop < $totalCost) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Saldo insuficiente. Se requieren $" . number_format($totalCost, 0, ',', '.') . " COP para enviar {$totalResolved} emails. Saldo actual: $" . number_format($wallet->balance_cop, 0, ',', '.') . " COP",
+                    'data' => [
+                        'required_balance' => $totalCost,
+                        'current_balance' => (float) $wallet->balance_cop,
+                        'emails_count' => $totalResolved,
+                        'cost_per_email' => $costPerEmail
+                    ]
+                ], 402);
+            }
+
             // Envío directo vía Twilio SendGrid (sin n8n)
             $apiKey = (string) env('SENDGRID_API_KEY', '');
             $fromEmail = (string) env('SENDGRID_FROM_EMAIL', 'no-reply@guro.co');
             $fromName = (string) env('SENDGRID_FROM_NAME', 'GURO');
             $sentOk = 0;
             $attempted = 0;
+            $emailsSent = 0;
 
             if (!$apiKey) {
                 Log::warning('SendGrid no configurado: falta SENDGRID_API_KEY');
@@ -341,6 +373,7 @@ class EmailCampaignsController extends Controller
                                 'sent_at' => $r->sent_at ?: now(),
                             ]);
                             $sentOk++;
+                            $emailsSent++;
                         } else {
                             $r->update([
                                 'status' => 'failed',
@@ -366,6 +399,44 @@ class EmailCampaignsController extends Controller
                     }
                 }
             }
+
+            // Cobrar por emails enviados exitosamente
+            if ($emailsSent > 0) {
+                $totalCharged = $emailsSent * $costPerEmail;
+                $wallet->balance_cop -= $totalCharged;
+                $wallet->save();
+
+                // Registrar transacción
+                WalletTransaction::create([
+                    'wallet_id' => $wallet->id,
+                    'broker_id' => $brokerId,
+                    'user_id' => optional($request->user())->id,
+                    'type' => 'debit',
+                    'amount_cop' => $totalCharged,
+                    'amount_usd' => 0,
+                    'currency' => 'COP',
+                    'description' => "Envío de {$emailsSent} emails - Campaña: {$campaign->name}",
+                    'reference_type' => 'email_campaign',
+                    'reference_id' => $campaign->id,
+                    'balance_cop_after' => $wallet->balance_cop,
+                    'metadata' => [
+                        'campaign_id' => $campaign->id,
+                        'campaign_name' => $campaign->name,
+                        'emails_sent' => $emailsSent,
+                        'cost_per_email' => $costPerEmail,
+                        'total_cost' => $totalCharged
+                    ]
+                ]);
+
+                Log::info('💰 [WALLET] Cobro por emails enviados', [
+                    'broker_id' => $brokerId,
+                    'campaign_id' => $campaign->id,
+                    'emails_sent' => $emailsSent,
+                    'total_charged' => $totalCharged,
+                    'new_balance' => $wallet->balance_cop
+                ]);
+            }
+
             // Refrescar métricas preliminares
             $campaign->refreshStats();
 
@@ -375,7 +446,9 @@ class EmailCampaignsController extends Controller
                 'campaign_id' => $campaign->id,
                 'resolved_recipients' => $totalResolved,
                 'sent_attempted' => $attempted,
-                'sent_ok' => $sentOk
+                'sent_ok' => $sentOk,
+                'wallet_charged' => $emailsSent > 0 ? ($emailsSent * $costPerEmail) : 0,
+                'new_balance' => (float) $wallet->balance_cop
             ]);
         } catch (\Throwable $e) {
             Log::error('EmailCampaignsController@start error', ['e' => $e->getMessage()]);
@@ -439,6 +512,88 @@ class EmailCampaignsController extends Controller
             ]);
         } catch (\Throwable $e) {
             return response()->json(['success' => false, 'message' => 'Error al obtener destinatarios'], 500);
+        }
+    }
+
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            if (!$brokerId) {
+                return response()->json(['success' => false, 'message' => 'Broker no resuelto'], 403);
+            }
+
+            /** @var EmailCampaign $campaign */
+            $campaign = EmailCampaign::forBroker($brokerId)->findOrFail($id);
+
+            // Eliminar recipients primero
+            $campaign->recipients()->delete();
+            
+            // Eliminar la campaña
+            $campaign->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña eliminada correctamente'
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('EmailCampaignsController@destroy error', ['e' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al eliminar campaña'], 500);
+        }
+    }
+
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            if (!$brokerId) {
+                return response()->json(['success' => false, 'message' => 'Broker no resuelto'], 403);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'campaign_ids' => 'required|array|min:1',
+                'campaign_ids.*' => 'required|integer|min:1',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'IDs de campañas inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $campaignIds = $request->get('campaign_ids');
+            
+            // Verificar que todas las campañas pertenezcan al broker
+            $campaigns = EmailCampaign::forBroker($brokerId)
+                ->whereIn('id', $campaignIds)
+                ->get();
+
+            if ($campaigns->count() !== count($campaignIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Algunas campañas no existen o no pertenecen a tu broker'
+                ], 404);
+            }
+
+            $deleted = 0;
+            foreach ($campaigns as $campaign) {
+                // Eliminar recipients
+                $campaign->recipients()->delete();
+                // Eliminar campaña
+                $campaign->delete();
+                $deleted++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Se eliminaron {$deleted} campañas correctamente",
+                'deleted' => $deleted
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('EmailCampaignsController@bulkDelete error', ['e' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al eliminar campañas'], 500);
         }
     }
 

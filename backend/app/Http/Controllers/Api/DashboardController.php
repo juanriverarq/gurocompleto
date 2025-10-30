@@ -14,6 +14,9 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+// Configurar Carbon en español
+Carbon::setLocale('es');
+
 class DashboardController extends Controller
 {
     /**
@@ -42,14 +45,28 @@ class DashboardController extends Controller
                 ], 403);
             }
             
+            // Obtener filtros de fecha si existen
+            $startDate = $request->get('start_date');
+            $endDate = $request->get('end_date');
+            
             Log::info('🏢 Dashboard data request', [
                 'user_id' => $user->id,
                 'broker_id' => $broker->id,
-                'broker_name' => $broker->name
+                'broker_name' => $broker->name,
+                'start_date' => $startDate,
+                'end_date' => $endDate
             ]);
             
+            // Query base para pólizas con filtro de fecha opcional
+            $polizaQuery = Poliza::where('broker_id', $broker->id);
+            if ($startDate && $endDate) {
+                $polizaQuery->where(function($q) use ($startDate, $endDate) {
+                    $q->whereBetween(DB::raw('COALESCE(issue_date, start_date, created_at)'), [$startDate, $endDate]);
+                });
+            }
+            
             // OPTIMIZACIÓN: Estadísticas de pólizas en una sola consulta
-            $polizaStats = Poliza::where('broker_id', $broker->id)
+            $polizaStats = (clone $polizaQuery)
                 ->selectRaw('
                     COUNT(*) as total_polizas,
                     COUNT(CASE WHEN status = "active" THEN 1 END) as polizas_activas,
@@ -62,8 +79,14 @@ class DashboardController extends Controller
                 ')
                 ->first();
 
+            // Query base para clientes con filtro de fecha opcional
+            $clienteQuery = Cliente::where('broker_id', $broker->id);
+            if ($startDate && $endDate) {
+                $clienteQuery->whereBetween('created_at', [$startDate, $endDate]);
+            }
+
             // OPTIMIZACIÓN: Estadísticas de clientes en una sola consulta
-            $clienteStats = Cliente::where('broker_id', $broker->id)
+            $clienteStats = (clone $clienteQuery)
                 ->selectRaw('
                     COUNT(*) as total_clientes,
                     COUNT(CASE WHEN status = "active" THEN 1 END) as clientes_activos,
@@ -71,10 +94,15 @@ class DashboardController extends Controller
                 ')
                 ->first();
 
-            // OPTIMIZACIÓN: Estadísticas de siniestros en una sola consulta (si existen)
+            // Query base para siniestros con filtro de fecha opcional
             $siniestroStats = ['total_siniestros' => 0, 'siniestros_pendientes' => 0, 'siniestros_aprobados' => 0];
             if (class_exists('App\Models\Siniestro')) {
-                $siniestroStats = Siniestro::where('broker_id', $broker->id)
+                $siniestroQuery = Siniestro::where('broker_id', $broker->id);
+                if ($startDate && $endDate) {
+                    $siniestroQuery->whereBetween('created_at', [$startDate, $endDate]);
+                }
+                
+                $siniestroStats = $siniestroQuery
                     ->selectRaw('
                         COUNT(*) as total_siniestros,
                         COUNT(CASE WHEN estado IN ("reportado", "en_revision", "asignado", "investigacion", "peritaje") THEN 1 END) as siniestros_pendientes,
@@ -101,8 +129,15 @@ class DashboardController extends Controller
             $siniestrosPendientes = (int) $siniestroStats->siniestros_pendientes;
             $siniestrosAprobados = (int) $siniestroStats->siniestros_aprobados;
             
-            // Distribución por tipo de póliza
-            $polizasPorTipo = Poliza::where('broker_id', $broker->id)
+            // Distribución por tipo de póliza con filtro de fecha
+            $polizasPorTipoQuery = Poliza::where('broker_id', $broker->id);
+            if ($startDate && $endDate) {
+                $polizasPorTipoQuery->where(function($q) use ($startDate, $endDate) {
+                    $q->whereBetween(DB::raw('COALESCE(issue_date, start_date, created_at)'), [$startDate, $endDate]);
+                });
+            }
+            
+            $polizasPorTipo = $polizasPorTipoQuery
                 ->selectRaw('type, COUNT(*) as total')
                 ->groupBy('type')
                 ->get()
@@ -110,8 +145,15 @@ class DashboardController extends Controller
                     return [$item->type => $item->total];
                 });
             
-            // Pólizas recientes
-            $polizasRecientes = Poliza::where('broker_id', $broker->id)
+            // Pólizas recientes con filtro de fecha
+            $polizasRecientesQuery = Poliza::where('broker_id', $broker->id);
+            if ($startDate && $endDate) {
+                $polizasRecientesQuery->where(function($q) use ($startDate, $endDate) {
+                    $q->whereBetween(DB::raw('COALESCE(issue_date, start_date, created_at)'), [$startDate, $endDate]);
+                });
+            }
+            
+            $polizasRecientes = $polizasRecientesQuery
                 ->with('client')
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
@@ -141,8 +183,15 @@ class DashboardController extends Controller
                     ->count();
             }
 
-            // OPTIMIZACIÓN: Ventas del mes actual y anterior en una sola consulta
-            $ventasStats = Poliza::where('broker_id', $broker->id)
+            // OPTIMIZACIÓN: Ventas del mes actual y anterior con filtro de fecha
+            $ventasQuery = Poliza::where('broker_id', $broker->id);
+            if ($startDate && $endDate) {
+                $ventasQuery->where(function($q) use ($startDate, $endDate) {
+                    $q->whereBetween(DB::raw('COALESCE(issue_date, start_date, created_at)'), [$startDate, $endDate]);
+                });
+            }
+            
+            $ventasStats = (clone $ventasQuery)
                 ->selectRaw('
                     COUNT(CASE WHEN MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE()) THEN 1 END) as ventas_del_mes,
                     COUNT(CASE WHEN MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) THEN 1 END) as ventas_mes_anterior
@@ -297,10 +346,29 @@ class DashboardController extends Controller
             }
 
             $period = $request->get('period', 'month'); // week | month | year
+            
+            // Verificar si hay fechas personalizadas
+            $customStartDate = $request->get('start_date');
+            $customEndDate = $request->get('end_date');
 
-            // Rango de fechas según periodo
+            // Rango de fechas según periodo o fechas personalizadas
             $now = Carbon::now();
-            if ($period === 'week') {
+            
+            if ($customStartDate && $customEndDate) {
+                // Usar fechas personalizadas del calendario
+                $start = Carbon::parse($customStartDate)->startOfDay();
+                $end = Carbon::parse($customEndDate)->endOfDay();
+                
+                // Determinar intervalo basado en el rango de días
+                $daysDiff = $start->diffInDays($end);
+                if ($daysDiff <= 7) {
+                    $interval = 'day';
+                } elseif ($daysDiff <= 90) {
+                    $interval = 'week';
+                } else {
+                    $interval = 'month';
+                }
+            } elseif ($period === 'week') {
                 $start = $now->copy()->startOfWeek();
                 $end = $now->copy()->endOfWeek();
                 $interval = 'day';
@@ -322,6 +390,10 @@ class DashboardController extends Controller
                     $key = $cursor->format('Y-m-d');
                     $label = $cursor->translatedFormat('D d');
                     $cursor->addDay();
+                } elseif ($interval === 'week') {
+                    $key = $cursor->format('Y-W');
+                    $label = 'Sem ' . $cursor->format('W');
+                    $cursor->addWeek();
                 } else { // month
                     $key = $cursor->format('Y-m');
                     $label = $cursor->translatedFormat('M Y');
@@ -352,9 +424,15 @@ class DashboardController extends Controller
 
             foreach ($rows as $row) {
                 $date = Carbon::parse($row->f);
-                $key = $interval === 'day' ? $date->format('Y-m-d') : $date->format('Y-m');
+                if ($interval === 'day') {
+                    $key = $date->format('Y-m-d');
+                } elseif ($interval === 'week') {
+                    $key = $date->format('Y-W');
+                } else {
+                    $key = $date->format('Y-m');
+                }
                 if (isset($buckets[$key])) {
-                    $buckets[$key]['value'] = (float) $row->total;
+                    $buckets[$key]['value'] += (float) $row->total;
                 }
             }
 

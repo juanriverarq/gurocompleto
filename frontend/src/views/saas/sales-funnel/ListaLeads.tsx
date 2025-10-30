@@ -282,6 +282,14 @@ const ListaLeads: React.FC = () => {
             <div className="flex gap-2">
               <Button
                 color="light"
+                onClick={() => navigate('/apps/saas/sales-funnel/kanban')}
+                className="h-10 px-4 rounded-[10px]"
+              >
+                <IconifyIcon icon="solar:kanban-bold" className="w-4 h-4 mr-2" />
+                Ver Kanban
+              </Button>
+              <Button
+                color="light"
                 onClick={() => window.location.reload()}
                 disabled={loading}
                 className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"

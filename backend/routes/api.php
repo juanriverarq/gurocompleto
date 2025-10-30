@@ -134,6 +134,21 @@ Route::prefix('auth')->group(function () {
 Route::post('/saas/voice-campaigns/webhooks/elevenlabs', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'receiveElevenLabsWebhook']);
 
 // =============================================================
+// Custom Tools de ElevenLabs (públicos - llamados durante la llamada)
+// =============================================================
+Route::post('/saas/voice-campaigns/tools/collect-data/{conversationId}', [\App\Http\Controllers\Api\VoiceToolsController::class, 'collectData']);
+Route::post('/saas/voice-campaigns/tools/collect-data', [\App\Http\Controllers\Api\VoiceToolsController::class, 'collectData']); // Sin conversation_id en URL
+Route::post('/saas/voice-campaigns/tools/schedule-payment/{conversationId}', [\App\Http\Controllers\Api\VoiceToolsController::class, 'schedulePaymentLink']);
+Route::post('/saas/voice-campaigns/tools/handle/{conversationId}', [\App\Http\Controllers\Api\VoiceToolsController::class, 'handleToolCall']);
+
+// =============================================================
+// Chatbot Query Tools (públicos - llamados durante la llamada)
+// =============================================================
+Route::post('/saas/voice-campaigns/tools/query-system/{conversationId}', [\App\Http\Controllers\Api\VoiceToolsController::class, 'querySystem']);
+Route::post('/saas/voice-campaigns/tools/query-policies/{conversationId}', [\App\Http\Controllers\Api\VoiceToolsController::class, 'queryPolicies']);
+Route::post('/saas/voice-campaigns/tools/query-clients/{conversationId}', [\App\Http\Controllers\Api\VoiceToolsController::class, 'queryClients']);
+
+// =============================================================
 // Proxy seguro para ElevenLabs TTS (sin exponer API key en frontend)
 // =============================================================
 Route::post('/saas/elevenlabs/tts/{voiceId}', [\App\Http\Controllers\Api\ElevenLabsProxyController::class, 'tts']);
@@ -339,6 +354,46 @@ Route::prefix('saas')->group(function () {
             [, $err] = $resolveUser($request); if ($err) return $err;
             return app(\App\Http\Controllers\SaaS\SaasReportesFinancierosController::class)->byInsurer($request);
         });
+    });
+
+    // Anticipos y Ajustes - público temporal (sin middlewares)
+    Route::prefix('cartera/anticipos-ajustes')->group(function () {
+        $resolveUser = function(\Illuminate\Http\Request $request) {
+            try {
+                $brokerId = (int) ($request->query('broker_id') ?? $request->header('X-Dev-Broker-Id') ?? env('DEV_FALLBACK_BROKER_ID', 0));
+                if ($brokerId <= 0) { $brokerId = (int) (\App\Models\Broker::query()->active()->orderBy('id')->value('id') ?: 0); }
+                if ($brokerId <= 0) { return [null, response()->json(['success'=>false,'message'=>'broker_id no resuelto'], 400)]; }
+                $user = new class($brokerId) { public $broker_id; public $id = 1; public function __construct($b){ $this->broker_id=$b; } };
+                $request->setUserResolver(function() use ($user) { return $user; });
+                $request->merge(['broker_id' => $brokerId]);
+                return [$user, null];
+            } catch (\Throwable $e) { return [null, response()->json(['success'=>false,'message'=>$e->getMessage()], 500)]; }
+        };
+
+        Route::get('/', function (\Illuminate\Http\Request $request) use ($resolveUser) {
+            [, $err] = $resolveUser($request); if ($err) return $err;
+            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->index($request);
+        });
+        Route::post('/', function (\Illuminate\Http\Request $request) use ($resolveUser) {
+            [, $err] = $resolveUser($request); if ($err) return $err;
+            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->store($request);
+        });
+        Route::get('/estadisticas', function (\Illuminate\Http\Request $request) use ($resolveUser) {
+            [, $err] = $resolveUser($request); if ($err) return $err;
+            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->estadisticas($request);
+        });
+        Route::post('/{id}/aprobar', function (\Illuminate\Http\Request $request, int $id) use ($resolveUser) {
+            [, $err] = $resolveUser($request); if ($err) return $err;
+            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->aprobar($request, $id);
+        })->whereNumber('id');
+        Route::post('/{id}/rechazar', function (\Illuminate\Http\Request $request, int $id) use ($resolveUser) {
+            [, $err] = $resolveUser($request); if ($err) return $err;
+            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->rechazar($request, $id);
+        })->whereNumber('id');
+        Route::delete('/{id}', function (\Illuminate\Http\Request $request, int $id) use ($resolveUser) {
+            [, $err] = $resolveUser($request); if ($err) return $err;
+            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->destroy($request, $id);
+        })->whereNumber('id');
     });
 });
 
@@ -2225,7 +2280,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
         // RUTAS DE CLIENTES (CON FIREBASE AUTH)
         Route::get('/clientes', [SaasClientesController::class, 'index']);
         Route::get('/clientes/all', [SaasClientesController::class, 'all']); // ✅ MOVIDA AL LUGAR CORRECTO
-        Route::get('/clientes/estadisticas', [SaasClientesController::class, 'estadisticasDev']);
+        Route::get('/clientes/estadisticas', [SaasClientesController::class, 'estadisticas']);
         Route::post('/clientes', [SaasClientesController::class, 'store']);
         Route::get('/clientes/{id}', [SaasClientesController::class, 'show'])->whereNumber('id');
         Route::put('/clientes/{id}', [SaasClientesController::class, 'update'])->whereNumber('id');
@@ -2320,6 +2375,17 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
             // Historial de llamadas
             Route::get('/call-history', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'getCallHistory']);
             
+// =============================
+// Voice Campaign Triggers (CRUD + utilities)
+// IMPORTANT: Keep these BEFORE '/{id}' routes to avoid conflicts
+// =============================
+Route::get('/{campaignId}/triggers', [\App\Http\Controllers\Api\VoiceCampaignTriggersController::class, 'index'])->whereNumber('campaignId');
+Route::post('/{campaignId}/triggers', [\App\Http\Controllers\Api\VoiceCampaignTriggersController::class, 'store'])->whereNumber('campaignId');
+Route::put('/triggers/{triggerId}', [\App\Http\Controllers\Api\VoiceCampaignTriggersController::class, 'update'])->whereNumber('triggerId');
+Route::delete('/triggers/{triggerId}', [\App\Http\Controllers\Api\VoiceCampaignTriggersController::class, 'destroy'])->whereNumber('triggerId');
+Route::post('/triggers/{triggerId}/test-run', [\App\Http\Controllers\Api\VoiceCampaignTriggersController::class, 'testRun'])->whereNumber('triggerId');
+Route::post('/triggers/{triggerId}/preview-targets', [\App\Http\Controllers\Api\VoiceCampaignTriggersController::class, 'previewTargets'])->whereNumber('triggerId');
+Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignTriggersController::class, 'processEvent']);
             // Gestión general de campañas de voz
             Route::get('/', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'index']);
             Route::get('/{id}', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'show'])->whereNumber('id');
@@ -2334,6 +2400,11 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
             
             // Gestión de estado de campañas de voz
             Route::patch('/{id}/toggle', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'toggle'])->whereNumber('id');
+            // Controles explícitos (pausar, reanudar, cancelar)
+            Route::post('/{id}/pause', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'pause'])->whereNumber('id');
+            Route::post('/{id}/resume', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'resume'])->whereNumber('id');
+            Route::post('/{id}/cancel', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'cancel'])->whereNumber('id');
+            // Ejecutar campaña manualmente (para inmediatas/programadas)
             Route::post('/{id}/execute', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'execute'])->whereNumber('id');
             
             // 🔊 Prueba de llamada de voz con ElevenLabs
@@ -2823,6 +2894,10 @@ Route::prefix('test')->group(function () {
             [, $err] = $resolveUser($request); if ($err) return $err;
             return app(\App\Http\Controllers\SaaS\SaasSalesFunnelController::class)->getAvailableAgents($request);
         });
+        Route::get('/sales-funnel/constants', function (\Illuminate\Http\Request $request) use ($resolveUser) {
+            [, $err] = $resolveUser($request); if ($err) return $err;
+            return app(\App\Http\Controllers\SaaS\SaasSalesFunnelController::class)->getConstants();
+        });
         Route::get('/sales-funnel', function (\Illuminate\Http\Request $request) use ($resolveUser) {
             [, $err] = $resolveUser($request); if ($err) return $err;
             return app(\App\Http\Controllers\SaaS\SaasSalesFunnelController::class)->index($request);
@@ -2920,6 +2995,12 @@ Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group
             ], 403);
         }
 
+        // Compose branding payload with computed URLs to ensure frontend always receives them
+        $branding = is_array($broker->branding) ? $broker->branding : [];
+        $branding['primary_color'] = $branding['primary_color'] ?? null;
+        $branding['logo'] = method_exists($broker, 'getLogoUrl') ? $broker->getLogoUrl() : ($branding['logo'] ?? null);
+        $branding['favicon'] = method_exists($broker, 'getFaviconUrl') ? $broker->getFaviconUrl() : ($branding['favicon'] ?? null);
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -2936,12 +3017,12 @@ Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group
                     'status' => $broker->status,
                     'plan' => $broker->plan,
                     'trial_ends_at' => optional($broker->trial_ends_at)->toISOString(),
+                    'logo' => $broker->logo,
+                    'branding' => $branding,
                 ],
             ],
         ]);
-    });
-
-    // Cierre de sesión SaaS (token es manejado por el cliente; aquí solo acuse)
+    });// Cierre de sesión SaaS (token es manejado por el cliente; aquí solo acuse)
     Route::post('logout', function (Request $request) {
         return response()->json(['success' => true, 'message' => 'Sesión finalizada']);
     });
@@ -3015,7 +3096,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::get('/', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'index']);
         // Endpoint utilizado por el frontend para cargar todo (sin paginación)
         Route::get('/all', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'all']);
-        Route::get('/estadisticas', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'estadisticasDev']);
+        Route::get('/estadisticas', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'estadisticas']);
         Route::post('/', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'store']);
         Route::get('/{id}', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'show'])->whereNumber('id');
         Route::put('/{id}', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'update'])->whereNumber('id');
@@ -3042,6 +3123,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
     Route::prefix('polizas')->group(function () {
         // Listado y CRUD (coincide con polizaService.ts)
         Route::get('/', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'indexDev']);
+        Route::get('/cartera', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'carteraDev']); // OPTIMIZACIÓN: Endpoint específico para cartera
         Route::get('/estadisticas', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'estadisticasDev']);
         Route::post('/', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'store']);
         Route::get('/{id}', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'show'])->whereNumber('id');
@@ -3050,6 +3132,13 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         // Ambos alias soportados por el frontend
         Route::put('/{id}/estado', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
         Route::post('/{id}/cambiar-estado', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
+
+        // Pagos y cobros
+        Route::get('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'index'])->whereNumber('id');
+        Route::post('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'store'])->whereNumber('id');
+        Route::delete('/{id}/pagos/{pagoId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPago'])->whereNumber('id')->whereNumber('pagoId');
+        Route::post('/{id}/cobrar-comision', [\App\Http\Controllers\Api\PagoPolizaController::class, 'registrarCobroComision'])->whereNumber('id');
+        Route::delete('/{id}/cobrar-comision/{cobroId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirCobroComision'])->whereNumber('id')->whereNumber('cobroId');
 
         // Documentos de póliza
         // Lista global de documentos de todas las pólizas del broker (debe ir antes de /{id})
@@ -3066,6 +3155,9 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::put('/{id}/anexos/{anexoId}', [\App\Http\Controllers\SaaS\AnexosController::class, 'update'])->where(['id' => '[0-9]+', 'anexoId' => '[0-9]+']);
         Route::delete('/{id}/anexos/{anexoId}', [\App\Http\Controllers\SaaS\AnexosController::class, 'destroy'])->where(['id' => '[0-9]+', 'anexoId' => '[0-9]+']);
     });
+
+    // Estadísticas de pagos
+    Route::get('/pagos/estadisticas', [\App\Http\Controllers\Api\PagoPolizaController::class, 'estadisticas']);
 
     // Siniestros - Documentos (alineado con siniestroDocumentsService)
     Route::prefix('siniestros')->group(function () {
@@ -3107,11 +3199,25 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::get('/', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'index']);
         Route::post('/', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'store']);
         Route::post('/uploads', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'uploadCsv']);
+        Route::post('/bulk-delete', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'bulkDelete']);
         Route::get('/{id}', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'show'])->whereNumber('id');
         Route::post('/{id}/start', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'start'])->whereNumber('id');
         Route::get('/{id}/status', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'status'])->whereNumber('id');
         Route::get('/{id}/recipients', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'recipients'])->whereNumber('id');
+        Route::delete('/{id}', [\App\Http\Controllers\SaaS\EmailCampaignsController::class, 'destroy'])->whereNumber('id');
     });
+    // =============================
+    // RUTAS DE NOTIFICACIONES DE PÓLIZAS
+    // =============================
+    Route::prefix('policy-notifications')->group(function () {
+        Route::get('/config', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getConfig']);
+        Route::put('/config', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'updateConfig']);
+        Route::get('/logs', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getLogs']);
+        Route::get('/stats', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getStats']);
+        Route::get('/pending-policies', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getPendingPolicies']);
+        Route::post('/test', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'testNotification']);
+    });
+
 });
 
 // ===== HOTFIX: Importación de clientes (compatibilidad con frontend) =====
@@ -3162,3 +3268,23 @@ Route::middleware(['security.auth','global.broker.auth'])->prefix('saas/tenants'
 // ===== Webhook n8n Email Status (protegido por Bearer) =====
  // ===== Webhook SendGrid events =====
  Route::post('/webhooks/sendgrid/events', [\App\Http\Controllers\Api\SendgridWebhookController::class, 'handle']);
+
+// === Global Search endpoint (unificado) ===
+// Se agrega como HOTFIX al final para evitar conflictos de orden con otros grupos.
+// Protegido con unified.auth + global.broker.auth + saas.auth, bajo prefijo /saas
+Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->group(function () {
+    Route::get('/search', [\App\Http\Controllers\Api\GlobalSearchController::class, 'index']);
+    
+    // Información de Agencia (Broker)
+    Route::get('/informacion-agencia', [\App\Http\Controllers\SaaS\InformacionAgenciaController::class, 'show']);
+    Route::put('/informacion-agencia', [\App\Http\Controllers\SaaS\InformacionAgenciaController::class, 'update']);
+    Route::post('/informacion-agencia/branding', [\App\Http\Controllers\SaaS\InformacionAgenciaController::class, 'uploadBranding']);
+
+    // Ventas Cruzadas
+    Route::prefix('ventas-cruzadas')->group(function () {
+        Route::get('/', [\App\Http\Controllers\SaaS\VentasCruzadasController::class, 'getOportunidades']);
+        Route::get('/estadisticas', [\App\Http\Controllers\SaaS\VentasCruzadasController::class, 'getEstadisticas']);
+        Route::post('/forzar-reanalisis', [\App\Http\Controllers\SaaS\VentasCruzadasController::class, 'forzarReanalisis']);
+        Route::post('/{oportunidadId}/ejecutar-accion', [\App\Http\Controllers\SaaS\VentasCruzadasController::class, 'ejecutarAccion']);
+    });
+});

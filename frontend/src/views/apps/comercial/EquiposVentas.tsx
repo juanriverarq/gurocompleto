@@ -3,7 +3,7 @@ import { Card, Button, Spinner, Badge, Table, Modal, Avatar } from 'flowbite-rea
 import { Icon } from '@iconify/react';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { Label as ShLabel } from 'src/components/shadcn-ui/Default-Ui/label';
-import { 
+import {
   Select as ShSelect,
   SelectTrigger,
   SelectValue,
@@ -12,8 +12,7 @@ import {
 } from 'src/components/shadcn-ui/Default-Ui/select';
 import { salesFunnelService } from 'src/services/salesFunnelService';
 import salesTeamsService from 'src/services/salesTeamsService';
-
- 
+import { useVendedores } from 'src/hooks/useAdminCrudApi';
 
 interface Miembro {
   id: string;
@@ -33,6 +32,7 @@ interface Equipo {
   nombre: string;
   descripcion: string;
   lider: string;
+  liderUserId?: number;
   miembros: Miembro[];
   metaEquipo: number;
   ventasEquipo: number;
@@ -75,8 +75,11 @@ const EquiposVentas = () => {
 
   // Estado no usado: nuevoMiembro
 
-  const [availableAgents, setAvailableAgents] = useState<Array<{ id: number; first_name: string; last_name: string; email?: string }>>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const { vendedores: vendedoresHook } = useVendedores();
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: number; first_name: string; last_name: string; email?: string }>>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [selectedLeaderId, setSelectedLeaderId] = useState<string>('');
+  const [selectedEditLeaderId, setSelectedEditLeaderId] = useState<string>('');
   const [monthlyGoal, setMonthlyGoal] = useState<string>('');
 
   // Filtros y paginación (persistencia local)
@@ -216,6 +219,22 @@ const EquiposVentas = () => {
     equipos.forEach(e => set.add(e.especialidad));
     return Array.from(set);
   }, [equipos]);
+
+  const vendedoresOptions = useMemo(() => {
+    return (vendedoresHook || []).map((v: any) => ({
+      id: String(v.id),
+      nombre: v.nombres || v.nombre || v.name,
+      email: v.email
+    }));
+  }, [vendedoresHook]);
+
+  const usuariosOptions = useMemo(() => {
+    return availableUsers.map(u => ({
+      id: String(u.id),
+      nombre: `${u.first_name} ${u.last_name}`,
+      email: u.email
+    }));
+  }, [availableUsers]);
 
   const filteredEquipos = useMemo(() => {
     return equipos.filter(e => {
@@ -377,7 +396,7 @@ const EquiposVentas = () => {
     });
   };
 
-  // Cargar equipos persistidos; si no hay, fallback a generar desde agentes/leads
+  // Cargar equipos persistidos
   useEffect(() => {
     const load = async () => {
       try {
@@ -389,11 +408,12 @@ const EquiposVentas = () => {
             id: String(t.id),
             nombre: t.name,
             descripcion: t.description || '',
-            lider: t.leader?.name || '-',
+            lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+            liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
             miembros: (t.members || []).map((m: any) => ({
               id: String(m.user_id),
-              nombre: m.user?.name || `Usuario ${m.user_id}`,
-              email: m.user?.email || '',
+              nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`,
+              email: m.vendedor?.email || m.user?.email || '',
               telefono: '',
               rol: 'Asesor Junior',
               ventasMes: 0,
@@ -413,9 +433,9 @@ const EquiposVentas = () => {
           setEquipos(equiposApi);
           return;
         }
-        // Obtener agentes
-        const agents = await salesFunnelService.getAvailableAgents();
-        // Para cada agente, obtener leads del mes actual para calcular ventas
+        // Obtener usuarios
+        const users = await salesFunnelService.getAvailableAgents();
+        // Para cada usuario, obtener leads del mes actual para calcular ventas
         const start = new Date();
         start.setDate(1);
         const created_from = start.toISOString().slice(0, 10);
@@ -425,16 +445,16 @@ const EquiposVentas = () => {
         const created_to = end.toISOString().slice(0, 10);
 
         const miembros: Miembro[] = [];
-        for (const a of agents) {
+        for (const u of users) {
           try {
-            const res = await salesFunnelService.getLeads({ assigned_agent_id: a.id, per_page: 100, created_from, created_to });
+            const res = await salesFunnelService.getLeads({ assigned_agent_id: u.id, per_page: 100, created_from, created_to });
             const ventasMes = (res.data || []).reduce((acc, l) => acc + (l.potential_value || 0), 0);
             const metaMes = Math.max(ventasMes * 1.1, 1); // objetivo simple (10% por encima)
             const porcentajeMeta = (ventasMes / metaMes) * 100;
             miembros.push({
-              id: String(a.id),
-              nombre: `${a.first_name} ${a.last_name}`,
-              email: a.email || '',
+              id: String(u.id),
+              nombre: `${u.first_name} ${u.last_name}`,
+              email: u.email || '',
               telefono: '',
               rol: 'Asesor Junior',
               ventasMes,
@@ -762,13 +782,9 @@ const EquiposVentas = () => {
                       )}
                     </div>
                     <div className="flex space-x-1">
-                      <Button size="sm" color="light" onClick={async () => {
+                      <Button size="sm" color="light" onClick={() => {
                         setEquipoIdGestion(equipo.id);
-                        try {
-                          const agents = await salesFunnelService.getAvailableAgents();
-                          setAvailableAgents(agents || []);
-                        } catch (_) { setAvailableAgents([]); }
-                        setSelectedAgentId('');
+                        setSelectedUserId('');
                         setMonthlyGoal('');
                         setShowModalMiembro(true);
                       }}>
@@ -789,6 +805,7 @@ const EquiposVentas = () => {
                           especialidad: equipo.especialidad,
                           estado: equipo.estado
                         });
+                        setSelectedEditLeaderId(equipo.liderUserId ? String(equipo.liderUserId) : '');
                         setShowModalEditar(true);
                       }}>
                         <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
@@ -801,7 +818,7 @@ const EquiposVentas = () => {
                           const equiposApi: any[] = refreshed?.data || [];
                           setEquipos(equiposApi.map((t: any) => ({
                             id: String(t.id), nombre: t.name, descripcion: t.description || '',
-                            lider: t.leader?.name || '-', miembros: (t.members || []).map((m: any) => ({ id: String(m.user_id), nombre: m.user?.name || `Usuario ${m.user_id}`, email: m.user?.email || '', telefono: '', rol: 'Asesor Junior', ventasMes: 0, metaMes: Number(m.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: m.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
+                            lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-', liderUserId: t.leader_user_id || (t.leader?.id ?? undefined), miembros: (t.members || []).map((m: any) => ({ id: String(m.user_id), nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`, email: m.vendedor?.email || m.user?.email || '', telefono: '', rol: m.role || 'Asesor Junior', ventasMes: 0, metaMes: Number(m.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: m.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
                         } catch (_) {}
                       }}>
                         <Icon icon="solar:trash-bin-minimalistic-bold-duotone" className="h-4 w-4" />
@@ -958,12 +975,14 @@ const EquiposVentas = () => {
             </div>
             <div>
               <ShLabel htmlFor="lider">Líder del Equipo</ShLabel>
-              <ShSelect value={nuevoEquipo.lider} onValueChange={(v) => setNuevoEquipo({...nuevoEquipo, lider: v})}>
+              <ShSelect value={selectedLeaderId} onValueChange={(v) => setSelectedLeaderId(v)}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar líder" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="María García">María García</SelectItem>
-                  <SelectItem value="Carlos López">Carlos López</SelectItem>
-                  <SelectItem value="Ana Rodríguez">Ana Rodríguez</SelectItem>
+                  {vendedoresOptions.length === 0 ? (
+                    <SelectItem value="no-vendedores" disabled>Cargando vendedores...</SelectItem>
+                  ) : vendedoresOptions.map(v => (
+                    <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
+                  ))}
                 </SelectContent>
               </ShSelect>
             </div>
@@ -1005,11 +1024,14 @@ const EquiposVentas = () => {
         <Modal.Footer>
           <Button onClick={async () => {
             try {
+              // El líder se selecciona desde vendedores, pero necesitamos enviar como leader_user_id
+              // Por ahora, enviar el ID del vendedor directamente (asumiendo que vendedor.id puede usarse)
               const payload = {
                 name: nuevoEquipo.nombre,
                 description: nuevoEquipo.descripcion,
                 territory: nuevoEquipo.territorio,
                 specialty: nuevoEquipo.especialidad,
+                leader_user_id: selectedLeaderId ? Number(selectedLeaderId) : undefined,
                 status: 'active',
               };
               await salesTeamsService.create(payload);
@@ -1019,11 +1041,12 @@ const EquiposVentas = () => {
                 id: String(t.id),
                 nombre: t.name,
                 descripcion: t.description || '',
-                lider: t.leader?.name || '-',
+                lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+                liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
                 miembros: (t.members || []).map((m: any) => ({
                   id: String(m.user_id),
-                  nombre: m.user?.name || `Usuario ${m.user_id}`,
-                  email: m.user?.email || '',
+                  nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`,
+                  email: m.vendedor?.email || m.user?.email || '',
                   telefono: '',
                   rol: 'Asesor Junior',
                   ventasMes: 0,
@@ -1041,6 +1064,7 @@ const EquiposVentas = () => {
                 estado: t.status === 'inactive' ? 'Inactivo' : 'Activo'
               })));
               setShowModalEquipo(false);
+              setSelectedLeaderId('');
             } catch (_) {}
           }}>Crear Equipo</Button>
           <Button color="gray" onClick={() => setShowModalEquipo(false)}>
@@ -1073,6 +1097,19 @@ const EquiposVentas = () => {
               </div>
             </div>
             <div>
+              <ShLabel>Líder del Equipo</ShLabel>
+              <ShSelect value={selectedEditLeaderId} onValueChange={(v) => setSelectedEditLeaderId(v)}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar líder" /></SelectTrigger>
+                <SelectContent>
+                  {vendedoresOptions.length === 0 ? (
+                    <SelectItem value="no-vendedores" disabled>Cargando vendedores...</SelectItem>
+                  ) : vendedoresOptions.map(v => (
+                    <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </ShSelect>
+            </div>
+            <div>
               <ShLabel>Estado</ShLabel>
               <ShSelect value={editarEquipo.estado} onValueChange={(v) => setEditarEquipo({ ...editarEquipo, estado: v })}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Estado" /></SelectTrigger>
@@ -1088,11 +1125,13 @@ const EquiposVentas = () => {
         <Modal.Footer>
           <Button onClick={async () => {
             try {
+              // El líder se selecciona desde vendedores
               await salesTeamsService.update(Number(editarEquipo.id), {
                 name: editarEquipo.nombre,
                 description: editarEquipo.descripcion,
                 territory: editarEquipo.territorio,
                 specialty: editarEquipo.especialidad,
+                leader_user_id: selectedEditLeaderId ? Number(selectedEditLeaderId) : undefined,
                 status: editarEquipo.estado === 'Inactivo' ? 'inactive' : (editarEquipo.estado === 'Reestructuración' ? 'restructuring' : 'active')
               });
               const refreshed = await salesTeamsService.list({ per_page: 50 });
@@ -1101,11 +1140,12 @@ const EquiposVentas = () => {
                 id: String(t.id),
                 nombre: t.name,
                 descripcion: t.description || '',
-                lider: t.leader?.name || '-',
+                lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+                liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
                 miembros: (t.members || []).map((m: any) => ({
                   id: String(m.user_id),
-                  nombre: m.user?.name || `Usuario ${m.user_id}`,
-                  email: m.user?.email || '',
+                  nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`,
+                  email: m.vendedor?.email || m.user?.email || '',
                   telefono: '',
                   rol: 'Asesor Junior',
                   ventasMes: 0,
@@ -1135,15 +1175,36 @@ const EquiposVentas = () => {
         <Modal.Body>
           <div className="space-y-4">
             <div>
-              <ShLabel>Agregar miembro</ShLabel>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+              <ShLabel>Agregar vendedor al equipo</ShLabel>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-2">
                 <div className="md:col-span-2">
-                  <ShSelect value={selectedAgentId || ''} onValueChange={(v) => setSelectedAgentId(v)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar agente" /></SelectTrigger>
+                  <ShSelect value={selectedUserId || ''} onValueChange={(v) => setSelectedUserId(v)}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar vendedor" /></SelectTrigger>
                     <SelectContent>
-                      {availableAgents.map(a => (
-                        <SelectItem key={a.id} value={String(a.id)}>{`${a.first_name} ${a.last_name}`}</SelectItem>
+                      {vendedoresOptions.filter(v => {
+                        const equipo = equipos.find(e => e.id === equipoIdGestion);
+                        return !equipo?.miembros.some(m => m.id === v.id);
+                      }).length === 0 ? (
+                        <SelectItem value="no-disponibles" disabled>No hay vendedores disponibles</SelectItem>
+                      ) : vendedoresOptions.filter(v => {
+                        const equipo = equipos.find(e => e.id === equipoIdGestion);
+                        return !equipo?.miembros.some(m => m.id === v.id);
+                      }).map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </ShSelect>
+                </div>
+                <div>
+                  <ShSelect value={selectedUserId ? (equipos.find(e => e.id === equipoIdGestion)?.miembros.find(m => m.id === selectedUserId)?.rol || 'Asesor Junior') : 'Asesor Junior'} onValueChange={(v) => {
+                    // Guardar rol seleccionado en estado temporal si es necesario
+                  }}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Rol" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Líder">Líder</SelectItem>
+                      <SelectItem value="Asesor Senior">Asesor Senior</SelectItem>
+                      <SelectItem value="Asesor Junior">Asesor Junior</SelectItem>
+                      <SelectItem value="Trainee">Trainee</SelectItem>
                     </SelectContent>
                   </ShSelect>
                 </div>
@@ -1152,16 +1213,28 @@ const EquiposVentas = () => {
                 </div>
               </div>
               <div className="mt-2">
-                <Button disabled={!selectedAgentId} onClick={async () => {
+                <Button disabled={!selectedUserId} onClick={async () => {
                   try {
-                    await salesTeamsService.addMember(Number(equipoIdGestion), { user_id: Number(selectedAgentId), monthly_goal: parseFloat(monthlyGoal || '0') });
+                    const equipo = equipos.find(e => e.id === equipoIdGestion);
+                    if (equipo?.miembros.some(m => m.id === selectedUserId)) {
+                      alert('Este vendedor ya es miembro del equipo');
+                      return;
+                    }
+                    await salesTeamsService.addMember(Number(equipoIdGestion), {
+                      user_id: Number(selectedUserId),
+                      monthly_goal: parseFloat(monthlyGoal || '0')
+                    });
                     const refreshed = await salesTeamsService.list({ per_page: 50 });
                     const equiposApi: any[] = refreshed?.data || [];
                     setEquipos(equiposApi.map((t: any) => ({
                       id: String(t.id), nombre: t.name, descripcion: t.description || '',
-                      lider: t.leader?.name || '-', miembros: (t.members || []).map((m: any) => ({ id: String(m.user_id), nombre: m.user?.name || `Usuario ${m.user_id}`, email: m.user?.email || '', telefono: '', rol: 'Asesor Junior', ventasMes: 0, metaMes: Number(m.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: m.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
-                    setSelectedAgentId(''); setMonthlyGoal('');
-                  } catch (_) {}
+                      lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-', liderUserId: t.leader_user_id || (t.leader?.id ?? undefined), miembros: (t.members || []).map((m: any) => ({ id: String(m.user_id), nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`, email: m.vendedor?.email || m.user?.email || '', telefono: '', rol: m.role || 'Asesor Junior', ventasMes: 0, metaMes: Number(m.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: m.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
+                    setSelectedUserId(''); setMonthlyGoal('');
+                  } catch (err: any) {
+                    if (err?.response?.data?.message) {
+                      alert(err.response.data.message);
+                    }
+                  }
                 }}>Agregar</Button>
               </div>
             </div>
@@ -1189,7 +1262,7 @@ const EquiposVentas = () => {
                               const equiposApi: any[] = refreshed?.data || [];
                               setEquipos(equiposApi.map((t: any) => ({
                                 id: String(t.id), nombre: t.name, descripcion: t.description || '',
-                                lider: t.leader?.name || '-', miembros: (t.members || []).map((x: any) => ({ id: String(x.user_id), nombre: x.user?.name || `Usuario ${x.user_id}`, email: x.user?.email || '', telefono: '', rol: 'Asesor Junior', ventasMes: 0, metaMes: Number(x.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: x.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
+                                lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-', liderUserId: t.leader_user_id || (t.leader?.id ?? undefined), miembros: (t.members || []).map((x: any) => ({ id: String(x.user_id), nombre: x.vendedor_name || x.vendedor?.nombres || x.user?.name || `Vendedor ${x.user_id}`, email: x.vendedor?.email || x.user?.email || '', telefono: '', rol: x.role || 'Asesor Junior', ventasMes: 0, metaMes: Number(x.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: x.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
                             } catch (_) {}
                           }}>
                             <Icon icon="solar:trash-bin-minimalistic-bold-duotone" className="h-4 w-4" />

@@ -15,6 +15,7 @@ const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')))
 /* ****Pages***** */
 const TerminosCondiciones = Loadable(lazy(() => import('../views/pages/TerminosCondiciones')));
 const PoliticaPrivacidad = Loadable(lazy(() => import('../views/pages/PoliticaPrivacidad')));
+const Regalo = Loadable(lazy(() => import('../views/pages/Regalo')));
 
 /* ****Apps***** */
 const CombinedDashboard = Loadable(lazy(() => import('../views/combined/CombinedDashboard')));
@@ -50,6 +51,7 @@ const SaasListaEmpleados = Loadable(lazy(() => import('../views/saas/empleados/L
 const SaasNuevoEmpleado = Loadable(lazy(() => import('../views/saas/empleados/NuevoEmpleado')));
 const SaasEditarEmpleado = Loadable(lazy(() => import('../views/saas/empleados/EditarEmpleado')));
 const SaasListaLeads = Loadable(lazy(() => import('../views/saas/sales-funnel/ListaLeads')));
+const SaasKanbanLeads = Loadable(lazy(() => import('../views/saas/sales-funnel/KanbanView')));
 const SaasNuevoLead = Loadable(lazy(() => import('../views/saas/sales-funnel/NuevoLead')));
 const SaasDetalleLead = Loadable(lazy(() => import('../views/saas/sales-funnel/DetalleLead')));
 const SaasEditarLead = Loadable(lazy(() => import('../views/saas/sales-funnel/EditarLead')));
@@ -65,6 +67,7 @@ const About = Loadable(lazy(() => import('../views/pages/frontend-pages/About'))
 const ContactPage = Loadable(lazy(() => import('../views/pages/frontend-pages/Contact')));
 const Portfolio = Loadable(lazy(() => import('../views/pages/frontend-pages/Portfolio')));
 const PagePricing = Loadable(lazy(() => import('../views/pages/frontend-pages/Pricing')));
+const PricingCalculatorPage = Loadable(lazy(() => import('../views/pages/frontend-pages/PricingCalculatorPage')));
 const BlogPage = Loadable(lazy(() => import('../views/pages/frontend-pages/Blog')));
 const BlogPost = Loadable(lazy(() => import('../views/pages/frontend-pages/BlogPost')));
 
@@ -92,7 +95,7 @@ const Renovaciones = Loadable(lazy(() => import('../views/apps/seguros/renovacio
 const Seguimiento = Loadable(lazy(() => import('../views/apps/seguros/seguimiento/Seguimiento')));
 
 // IA Apps
-const AsistenteDeepSeek = Loadable(lazy(() => import('../views/apps/ia/asistente/AsistenteDeepSeek')));
+const AsistenteIA = Loadable(lazy(() => import('../views/apps/ia/asistente/AsistenteDeepSeek')));
 const VentasCruzadas = Loadable(lazy(() => import('../views/apps/ia/ventas-cruzadas/VentasCruzadas')));
 const Predicciones = Loadable(lazy(() => import('../views/apps/ia/analisis-predictivo/Predicciones')));
 const AnalisisPrediccion = Loadable(lazy(() => import('../views/apps/ia/analisis-predictivo/AnalisisPrediccion')));
@@ -100,6 +103,7 @@ const RecomendacionesProducto = Loadable(lazy(() => import('../views/apps/ia/rec
 
 // Voice AI
 const VoiceAIDashboard = Loadable(lazy(() => import('../views/voice-ai/VoiceAIDashboard')));
+const Perfil = Loadable(lazy(() => import('../views/apps/account/Perfil')));
 
 // RRHH Apps
 const RecursosHumanos = Loadable(lazy(() => import('../views/apps/rrhh/RecursosHumanos')));
@@ -110,9 +114,12 @@ const Reclutamiento = Loadable(lazy(() => import('../views/apps/rrhh/Reclutamien
 const Desempeno = Loadable(lazy(() => import('../views/apps/rrhh/Desempeno')));
 const Clima = Loadable(lazy(() => import('../views/apps/rrhh/Clima')));
 
-// Marketing Apps
+ // Marketing Apps
 const EnlacesCotizacion = Loadable(lazy(() => import('../views/apps/marketing/enlaces-cotizacion/EnlacesCotizacion')));
 const Plantillas = Loadable(lazy(() => import('../views/apps/marketing/plantillas/Plantillas')));
+const MiniWeb = Loadable(lazy(() => import('../views/apps/marketing/mini-web/MiniWeb')));
+const MiniWebPublic = Loadable(lazy(() => import('../views/public/MiniWebPublic')));
+const QuoteForm = Loadable(lazy(() => import('../views/public/QuoteForm')));
 
 // Admin Apps
 const Usuarios = Loadable(lazy(() => import('../views/apps/admin/usuarios/Usuarios')));
@@ -141,7 +148,7 @@ const CopiasSeguridad = Loadable(lazy(() => import('../views/apps/admin/backup/C
 const ComisionesPorPoliza = Loadable(lazy(() => import('../views/apps/comisiones/ComisionesPorPoliza')));
 const AnticiposAjustes = Loadable(lazy(() => import('../views/apps/comisiones/AnticiposAjustes')));
 const CarteraClientes = Loadable(lazy(() => import('../views/apps/cartera/CarteraClientes')));
-const EstadosCuenta = Loadable(lazy(() => import('../views/apps/cartera/EstadosCuenta')));
+const ReciboCaja = Loadable(lazy(() => import('../views/apps/cartera/ReciboCaja')));
 const ReportesFinancieros = Loadable(lazy(() => import('../views/apps/cartera/ReportesFinancieros')));
 const LiquidarVendedores = Loadable(lazy(() => import('../views/apps/cartera/LiquidarVendedores')));
 
@@ -177,6 +184,7 @@ const Router = [
     element: <BlankLayout />,
     children: [
       { path: '/', element: <LandingPages /> },
+      { path: '/regalo', element: <Regalo /> },
       { path: '/terminos-condiciones', element: <TerminosCondiciones /> },
       { path: '/politica-privacidad', element: <PoliticaPrivacidad /> },
       // Transitional route while SaaS contexto/tenant se termina de resolver
@@ -223,7 +231,7 @@ const Router = [
       // Rutas removidas: siniestros/documentos, siniestros/estadisticas
       
       // IA Routes
-      { path: '/apps/ia/asistente/deepseek', element: <AsistenteDeepSeek /> },
+      { path: '/apps/ia/asistente', element: <AsistenteIA /> },
       { path: '/apps/ia/ventas-cruzadas', element: <VentasCruzadas /> },
       { path: '/apps/ia/analisis-predictivo/predicciones', element: <Predicciones /> },
       { path: '/apps/ia/analisis-predictivo/predicciones/:id', element: <AnalisisPrediccion /> },
@@ -231,10 +239,13 @@ const Router = [
 
       // ElevenLabs Dashboard Routes
       { path: '/apps/voice-ai/dashboard', element: <VoiceAIDashboard /> },
+      // Cuenta / Perfil
+      { path: '/apps/account/perfil', element: <Perfil /> },
 
       // Marketing Routes
       { path: '/apps/marketing/enlaces-cotizacion', element: <EnlacesCotizacion /> },
       { path: '/apps/marketing/plantillas', element: <Plantillas /> },
+      { path: '/apps/marketing/mini-web', element: <MiniWeb /> },
 
       // Admin Routes
       { path: '/apps/admin/usuarios', element: <Usuarios /> },
@@ -263,7 +274,6 @@ const Router = [
             { path: '/apps/comisiones/anticipos-ajustes', element: <AnticiposAjustes /> },
             { path: '/apps/cartera/clientes', element: <CarteraClientes /> },
             { path: '/apps/cartera/liquidar-vendedores', element: <LiquidarVendedores /> },
-            { path: '/apps/cartera/estados-cuenta', element: <EstadosCuenta /> },
             { path: '/apps/cartera/reportes-financieros', element: <ReportesFinancieros /> },
       
       // Gestión Comercial Routes
@@ -295,7 +305,9 @@ const Router = [
       { path: '/apps/saas/empleados', element: <SaasListaEmpleados /> },
       { path: '/apps/saas/empleados/nuevo', element: <SaasNuevoEmpleado /> },
       { path: '/apps/saas/empleados/:id/editar', element: <SaasEditarEmpleado /> },
-      { path: '/apps/saas/sales-funnel', element: <SaasListaLeads /> },
+      { path: '/apps/saas/sales-funnel', element: <Navigate to="/apps/saas/sales-funnel/kanban" /> },
+      { path: '/apps/saas/sales-funnel/kanban', element: <SaasKanbanLeads /> },
+      { path: '/apps/saas/sales-funnel/lista', element: <SaasListaLeads /> },
       { path: '/apps/saas/sales-funnel/nuevo', element: <SaasNuevoLead /> },
       { path: '/apps/saas/sales-funnel/:id', element: <SaasDetalleLead /> },
       { path: '/apps/saas/sales-funnel/:id/editar', element: <SaasEditarLead /> },
@@ -313,8 +325,11 @@ const Router = [
     path: '/',
     element: <BlankLayout />,
     children: [
+      // Recibo de Caja - Sin header para impresión
+      { path: '/apps/cartera/recibo-caja/:id', element: <ReciboCaja /> },
       // Redirect público a la ubicación en dashboard
       { path: '/ayuda/faq', element: <Navigate to="/apps/ayuda/faq" /> },
+      { path: '/precios', element: <FrontendLayout />, children: [{ path: '', element: <PricingCalculatorPage /> }] },
       {
         path: '/frontend-pages',
         element: <FrontendLayout />,
@@ -328,6 +343,8 @@ const Router = [
           { path: 'blog/detail/:id', element: <BlogPost /> },
         ]
       },
+      { path: '/web/:slug', element: <MiniWebPublic /> },
+      { path: '/web/:slug/:tipo', element: <QuoteForm /> },
       { path: '/empleados', element: <Navigate to="/empleados/login" /> },
       { path: '/empleados/login', element: <EmpleadoLogin /> },
       { path: '/auth/login', element: <Login /> },

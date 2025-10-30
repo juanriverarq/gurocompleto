@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, Badge, Button, Alert, Modal, TextInput, Textarea } from 'flowbite-react';
 import { Card as SCard, CardContent as SCardContent, CardHeader as SCardHeader, CardTitle as SCardTitle } from 'src/components/shadcn-ui/Default-Ui/card';
 import { CardContent } from 'src/components/shadcn-ui/Default-Ui/card';
+import { Button as ShButton } from 'src/components/shadcn-ui/Default-Ui/button';
 import { Icon } from '@iconify/react';
 import CardBox from 'src/components/shared/CardBox';
 import Chart from 'react-apexcharts';
@@ -10,6 +12,7 @@ import { emailCampaignService } from 'src/services/emailCampaignService';
 import saasApi from 'src/services/saasApi';
 import sendgridService, { type SendgridTemplate } from 'src/services/sendgridService';
 import EmailDesigner from 'src/components/email/EmailDesigner';
+import EmailCampaignWizard from 'src/components/email/EmailCampaignWizard';
 
 
 
@@ -186,6 +189,50 @@ interface CategoriaUI {
 
 const Plantillas = () => {
   const [loading, setLoading] = useState(true);
+  
+  // Deep-link desde buscador global: abrir detalles de campaña email por ID
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openId = params.get('open_email_campaign_id');
+    if (!openId) return;
+
+    const open = async () => {
+      try {
+        if (!campaigns || campaigns.length === 0) {
+          await loadCampaigns();
+        }
+        const c = (campaigns || []).find((x: any) => String(x.id) === String(openId));
+        if (c) {
+          setCampaniaSeleccionada(c);
+          setMostrarDetallesCampania(true);
+          setStatsLoading(true);
+          try {
+            await refreshCampaignStatus(c.id);
+          } finally {
+            setStatsLoading(false);
+          }
+          setRecipients([]);
+          setRecipientsPage(1);
+          setRecipientStatusFilter('all');
+          await loadRecipientsList(true);
+        }
+      } finally {
+        params.delete('open_email_campaign_id');
+        navigate(
+          {
+            pathname: location.pathname,
+            search: params.toString() ? `?${params.toString()}` : '',
+          },
+          { replace: true },
+        );
+      }
+    };
+    open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // Filtros
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('todos');
@@ -208,6 +255,13 @@ const Plantillas = () => {
   const [campaniaSeleccionada, setCampaniaSeleccionada] = useState<CampaignRow | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [campaignStats, setCampaignStats] = useState<any>(null);
+  // Destinatarios - modal de detalles
+  const [recipients, setRecipients] = useState<any[]>([]);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
+  const [recipientsPage, setRecipientsPage] = useState(1);
+  const [recipientsLimit, setRecipientsLimit] = useState(10);
+  const [recipientsHasMore, setRecipientsHasMore] = useState(false);
+  const [recipientStatusFilter, setRecipientStatusFilter] = useState<string>('all');
 
   // Estado del editor de plantillas (creación simple)
   const [editorNombre, setEditorNombre] = useState('');
@@ -259,6 +313,11 @@ const Plantillas = () => {
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [campaignsError, setCampaignsError] = useState<string | null>(null);
+  // Mapa de stats por campaña (hidratado desde /status)
+  const [campaignStatsMap, setCampaignStatsMap] = useState<Record<number, any>>({});
+  // Selección masiva
+  const [selectedCampaigns, setSelectedCampaigns] = useState<Set<number>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
 
 
@@ -348,35 +407,7 @@ const Plantillas = () => {
 
   // Abrir wizard precargando contenido desde la plantilla seleccionada (si existe)
   const handleOpenWizard = () => {
-    setWizardError(null);
-    setWizardStep(1);
-    setCampName('');
-    setCampSubject('');
     setCampContent(plantillaSeleccionada?.content || '');
-    setCampThrottling(30);
-    setUploadId(null);
-    setDetectedColumns([]);
-    setSampleRows([]);
-    // Reset audiencia
-    setAudienceMode('all');
-    setClientQuery('');
-    setClientResults([]);
-    setSelectedClients({});
-    setClientsPage(1);
-
-    // Reset programación
-    setScheduleMode('now');
-    setScheduleStart('');
-    setScheduleEnd('');
-    try {
-      setScheduleTz(Intl.DateTimeFormat().resolvedOptions().timeZone || scheduleTz);
-    } catch {}
-    
-    // Reset template mode
-    setTemplateMode('custom');
-    setSelectedSgTemplate('');
-    setSgVarsText('{}');
-
     setMostrarWizardCampania(true);
   };
   const handleCsvChange = async (e: any) => {
@@ -550,6 +581,32 @@ useEffect(() => {
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [audienceMode, mostrarWizardCampania]);
+
+// Auto-cargar plantillas de SendGrid cuando se abre el paso 2 del wizard en modo 'sendgrid'
+useEffect(() => {
+  if (mostrarWizardCampania && wizardStep === 2 && templateMode === 'sendgrid' && !sgLoading && sgTemplates.length === 0) {
+    (async () => {
+      try {
+        setSgLoading(true);
+        const list: SendgridTemplate[] = await sendgridService.listTemplates();
+        setSgTemplates((list || []).map(t => ({ id: String(t.id), name: t.name || String(t.id) })));
+      } catch {
+        setSgTemplates([]);
+      } finally {
+        setSgLoading(false);
+      }
+    })();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [mostrarWizardCampania, wizardStep, templateMode]);
+
+// Recargar destinatarios al cambiar filtro dentro del modal de detalles
+useEffect(() => {
+  if (mostrarDetallesCampania && campaniaSeleccionada) {
+    loadRecipientsList(true);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [recipientStatusFilter]);
   const estadisticas = useMemo(() => {
     const total = plantillas.length;
     const activas = plantillas.filter((p) => p.is_active).length;
@@ -631,28 +688,123 @@ useEffect(() => {
       setLoading(false);
     }
   };
+const loadCampaigns = async () => {
+  try {
+    setCampaignsLoading(true);
+    setCampaignsError(null);
+    const resp = await emailCampaignService.listCampaigns({ limit: 20, offset: 0 });
+    const rows = Array.isArray((resp as any)?.data)
+      ? (resp as any).data
+      : Array.isArray((resp as any)?.data?.data)
+        ? (resp as any).data.data
+        : [];
+    
+    // Normalizar stats_json a stats para compatibilidad con la tabla
+    const normalized = (rows as any[]).map((c: any) => ({
+      ...c,
+      stats: c.stats_json || c.stats || {}
+    }));
+    
+    setCampaigns(normalized as CampaignRow[]);
+    // Hidratar stats de campañas activas/pendientes en background
+    hydrateCampaignsStats(normalized as CampaignRow[]).catch(() => {});
+  } catch (e: any) {
+    setCampaignsError(e?.message || 'Error al cargar campañas');
+    setCampaigns([]);
+  } finally {
+    setCampaignsLoading(false);
+  }
+};
 
-  const loadCampaigns = async () => {
-    try {
-      setCampaignsLoading(true);
-      setCampaignsError(null);
-      const resp = await emailCampaignService.listCampaigns({ limit: 20, offset: 0 });
-      const rows = Array.isArray((resp as any)?.data)
-        ? (resp as any).data
-        : Array.isArray((resp as any)?.data?.data)
-          ? (resp as any).data.data
-          : [];
-      setCampaigns(rows as CampaignRow[]);
-    } catch (e: any) {
-      setCampaignsError(e?.message || 'Error al cargar campañas');
-      setCampaigns([]);
-    } finally {
-      setCampaignsLoading(false);
+// --- Helpers: estado y destinatarios de campaña (modal de detalles) ---
+const refreshCampaignStatus = async (id: number) => {
+  try {
+    const resp = await emailCampaignService.getStatus(id);
+    const payload: any = (resp as any)?.data || resp || {};
+    setCampaignStats(payload);
+    // El backend devuelve stats en payload.stats o payload.campaign.stats_json
+    const stats = payload?.stats || payload?.campaign?.stats_json || {};
+    if (stats && Object.keys(stats).length > 0) {
+      setCampaignStatsMap((prev) => ({ ...prev, [id]: stats }));
+      // También actualizar la campaña en el array principal
+      setCampaigns((prev) => prev.map((c) =>
+        c.id === id ? { ...c, stats } : c
+      ));
     }
-  };
+  } catch {
+    setCampaignStats(null);
+  }
+};
 
+const loadRecipientsList = async (reset: boolean = false) => {
+  if (!campaniaSeleccionada) return;
+  try {
+    const page = reset ? 1 : recipientsPage;
+    const limit = recipientsLimit;
+    const status = recipientStatusFilter !== 'all' ? recipientStatusFilter : undefined;
+    setRecipientsLoading(true);
+    const resp = await emailCampaignService.getRecipients(campaniaSeleccionada.id, { status, page, limit });
+    const arr = Array.isArray((resp as any)?.data)
+      ? (resp as any).data
+      : (Array.isArray(resp as any) ? (resp as any) : []);
+    setRecipients(reset ? arr : [...recipients, ...arr]);
+    setRecipientsHasMore((arr?.length || 0) === limit);
+    if (!reset) {
+      setRecipientsPage(page + 1);
+    } else {
+      setRecipientsPage(2);
+    }
+  } catch {
+    if (reset) setRecipients([]);
+    setRecipientsHasMore(false);
+  } finally {
+    setRecipientsLoading(false);
+  }
+};
+// Hidratación de stats de campañas (consulta /status para campañas activas/no completadas)
+const hydrateCampaignsStats = async (rows?: CampaignRow[]) => {
+  const list = (rows || campaigns || []).filter((c) => c.status !== 'completed');
+  await Promise.allSettled(
+    list.map(async (c) => {
+      try {
+        const resp = await emailCampaignService.getStatus(c.id);
+        const payload: any = (resp as any)?.data || resp || {};
+        // El backend devuelve stats en payload.stats o payload.campaign.stats_json
+        const stats = payload?.stats || payload?.campaign?.stats_json || {};
+        if (stats && Object.keys(stats).length > 0) {
+          setCampaignStatsMap((prev) => ({ ...prev, [c.id]: stats }));
+          // También actualizar la campaña en el array principal
+          setCampaigns((prev) => prev.map((camp) =>
+            camp.id === c.id ? { ...camp, stats } : camp
+          ));
+        }
+      } catch {
+        /* ignore individual errors */
+      }
+    })
+  );
+};
+// Auto-refresh periódico DESHABILITADO - usar botón manual de actualizar
+// useEffect(() => {
+//   const id = setInterval(() => {
+//     loadCampaigns().catch(() => {});
+//     hydrateCampaignsStats().catch(() => {});
+//   }, 10000); // 10s
+//   return () => clearInterval(id);
+//   // eslint-disable-next-line react-hooks/exhaustive-deps
+// }, []);
+// Auto-refresh en modal DESHABILITADO - usar botón manual de actualizar
+// useEffect(() => {
+//   if (!(mostrarDetallesCampania && campaniaSeleccionada)) return;
+//   const id = setInterval(() => {
+//     refreshCampaignStatus(campaniaSeleccionada!.id).catch(() => {});
+//   }, 8000);
+//   return () => clearInterval(id);
+//   // eslint-disable-next-line react-hooks/exhaustive-deps
+// }, [mostrarDetallesCampania, campaniaSeleccionada?.id]);
+// ---------------------------------------------------------------------
 
-  const getPreviewText = (html: string) => {
+const getPreviewText = (html: string) => {
     try {
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       return text.length > 140 ? text.slice(0, 140) + '…' : text;
@@ -752,8 +904,8 @@ useEffect(() => {
   }
 
   return (
-    <>
-      <div className="grid grid-cols-12 gap-[30px]">
+    <div className="p-6 space-y-6">
+      <div className="grid grid-cols-12 gap-6">
         {/* Main content container */}
         <div className="col-span-12">
           <div className="p-6 bg-white dark:bg-darkgray rounded-lg">
@@ -888,12 +1040,73 @@ useEffect(() => {
               <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
               Nueva Campaña
             </Button>
-            <Button size="sm" color="light" onClick={loadCampaigns}>
+            <Button
+              size="sm"
+              color="light"
+              onClick={() => {
+                loadCampaigns();
+                hydrateCampaignsStats().catch(() => {});
+              }}
+            >
               <Icon icon="solar:refresh-bold" className="mr-2" width={16} />
               Actualizar
             </Button>
           </div>
         </div>
+
+        {/* Barra de acciones masivas */}
+        {selectedCampaigns.size > 0 && (
+          <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Icon icon="solar:checklist-bold" className="text-blue-600" width={20} />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {selectedCampaigns.size} campaña{selectedCampaigns.size !== 1 ? 's' : ''} seleccionada{selectedCampaigns.size !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  color="light"
+                  onClick={() => {
+                    setSelectedCampaigns(new Set());
+                    setSelectAll(false);
+                  }}
+                >
+                  <Icon icon="solar:close-circle-bold" className="mr-2" width={16} />
+                  Cancelar selección
+                </Button>
+                <Button
+                  size="sm"
+                  color="failure"
+                  onClick={async () => {
+                    const count = selectedCampaigns.size;
+                    if (!confirm(`¿Estás seguro de eliminar ${count} campaña${count !== 1 ? 's' : ''}?\n\nSe perderán todos los datos de envíos, estadísticas y destinatarios asociados.\n\nEsta acción no se puede deshacer.`)) {
+                      return;
+                    }
+                    try {
+                      const ids = Array.from(selectedCampaigns);
+                      const resp = await emailCampaignService.bulkDeleteCampaigns(ids);
+                      if (resp?.success) {
+                        alert(`${count} campaña${count !== 1 ? 's eliminadas' : ' eliminada'} correctamente`);
+                        setSelectedCampaigns(new Set());
+                        setSelectAll(false);
+                        await loadCampaigns();
+                      } else {
+                        alert(resp?.message || 'Error al eliminar las campañas');
+                      }
+                    } catch (e: any) {
+                      alert(e?.message || 'Error al eliminar las campañas');
+                    }
+                  }}
+                >
+                  <Icon icon="solar:trash-bin-minimalistic-bold" className="mr-2" width={16} />
+                  Eliminar seleccionadas
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {campaignsLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -921,23 +1134,71 @@ useEffect(() => {
             </Button>
           </div>
         ) : (
-          <Card>
-            <CardContent className="p-0">
+          <SCard>
+            <SCardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-800/50">
                     <tr className="text-left text-gray-600 dark:text-gray-300">
+                      <th className="px-4 py-3 w-12">
+                        <input
+                          type="checkbox"
+                          checked={selectAll}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectAll(checked);
+                            if (checked) {
+                              setSelectedCampaigns(new Set(campaigns.map(c => c.id)));
+                            } else {
+                              setSelectedCampaigns(new Set());
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </th>
                       <th className="px-4 py-3">Campaña</th>
                       <th className="px-4 py-3">Estado</th>
-                      <th className="px-4 py-3">Métricas</th>
+                      <th className="px-4 py-3">Enviados</th>
+                      <th className="px-4 py-3">Entregados</th>
+                      <th className="px-4 py-3">Aperturas</th>
+                      <th className="px-4 py-3">Clicks</th>
+                      <th className="px-4 py-3">Avance</th>
                       <th className="px-4 py-3">Fecha</th>
                       <th className="px-4 py-3 text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {campaigns.map((c) => (
+                  {campaigns.map((c) => {
+                    const s = (c as any).stats || campaignStatsMap[c.id] || {};
+                    const sent = Number(s.sent || 0);
+                    const delivered = Number(s.delivered || 0);
+                    const opened = Number(s.opened || 0);
+                    const clicked = Number(s.clicked || 0);
+                    const bounced = Number(s.bounced || 0);
+                    // Consideramos avance como (entregados + rebotados) / enviados
+                    const processed = delivered + bounced;
+                    const percent = sent > 0 ? Math.round((processed / sent) * 100) : (c.status === 'completed' ? 100 : 0);
+
+                    return (
                     <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedCampaigns.has(c.id)}
+                          onChange={(e) => {
+                            const newSelected = new Set(selectedCampaigns);
+                            if (e.target.checked) {
+                              newSelected.add(c.id);
+                            } else {
+                              newSelected.delete(c.id);
+                              setSelectAll(false);
+                            }
+                            setSelectedCampaigns(newSelected);
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
                         <div>
                           <div className="text-sm font-semibold text-gray-900 dark:text-white">
                             {c.name}
@@ -947,96 +1208,119 @@ useEffect(() => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <Badge
-                          color={
-                            c.status === 'completed' ? 'success' :
-                            c.status === 'active' ? 'info' :
-                            c.status === 'pending' ? 'warning' :
-                            'gray'
-                          }
-                          size="sm"
-                        >
-                          {c.status === 'completed' ? 'Completada' :
-                           c.status === 'active' ? 'Activa' :
-                           c.status === 'pending' ? 'Pendiente' :
-                           c.status}
-                        </Badge>
+
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
+                          c.status === 'completed'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : c.status === 'running'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                            : c.status === 'draft'
+                            ? 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                            : c.status === 'paused'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : c.status === 'failed'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                        }`}>
+                          {c.status === 'completed'
+                            ? 'Completada'
+                            : c.status === 'running'
+                            ? 'En ejecución'
+                            : c.status === 'draft'
+                            ? 'Borrador'
+                            : c.status === 'paused'
+                            ? 'Pausada'
+                            : c.status === 'failed'
+                            ? 'Fallida'
+                            : c.status}
+                        </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3 text-xs">
-                          <div className="flex items-center gap-1" title="Enviados">
-                            <Icon icon="solar:letter-bold" width={12} className="text-blue-600" />
-                            <span className="font-semibold">{c.stats?.sent || 0}</span>
+
+                      <td className="px-4 py-3 tabular-nums font-medium text-gray-900 dark:text-white">{sent}</td>
+                      <td className="px-4 py-3 tabular-nums text-gray-700 dark:text-gray-300">{delivered}</td>
+                      <td className="px-4 py-3 tabular-nums text-gray-700 dark:text-gray-300">{opened}</td>
+                      <td className="px-4 py-3 tabular-nums text-gray-700 dark:text-gray-300">{clicked}</td>
+
+                      <td className="px-4 py-3 w-56">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${percent}%` }}></div>
                           </div>
-                          <div className="flex items-center gap-1" title="Abiertos">
-                            <Icon icon="solar:eye-bold" width={12} className="text-purple-600" />
-                            <span className="font-semibold">{c.stats?.opened || 0}</span>
-                          </div>
-                          <div className="flex items-center gap-1" title="Clicks">
-                            <Icon icon="solar:cursor-bold" width={12} className="text-orange-600" />
-                            <span className="font-semibold">{c.stats?.clicked || 0}</span>
-                          </div>
+                          <span className="text-gray-700 dark:text-gray-300 tabular-nums w-10 text-right">{percent}%</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                         {new Date(c.created_at).toLocaleDateString('es-ES', {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric'
                         })}
                       </td>
-                      <td className="px-6 py-4 text-right">
+
+                      <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
-                            size="xs"
-                            color="light"
+                          <ShButton
+                            size="sm"
+                            variant="outline"
                             onClick={async () => {
                               setCampaniaSeleccionada(c);
                               setMostrarDetallesCampania(true);
                               setStatsLoading(true);
                               try {
-                                const resp = await emailCampaignService.getStatus(c.id);
-                                setCampaignStats(resp?.data || resp);
-                              } catch (e) {
-                                setCampaignStats(null);
+                                await refreshCampaignStatus(c.id);
                               } finally {
                                 setStatsLoading(false);
                               }
+                              // Inicializar destinatarios
+                              setRecipients([]);
+                              setRecipientsPage(1);
+                              setRecipientStatusFilter('all');
+                              await loadRecipientsList(true);
                             }}
                             title="Ver detalles"
+                            className="flex items-center gap-1"
                           >
                             <Icon icon="solar:eye-bold" width={14} />
-                          </Button>
-                          <Button
-                            size="xs"
-                            color="light"
+                            <span className="hidden sm:inline">Ver</span>
+                          </ShButton>
+
+                          <ShButton
+                            size="sm"
+                            variant="destructive"
                             onClick={async () => {
-                              setCampaniaSeleccionada(c);
-                              setMostrarDetallesCampania(true);
-                              setStatsLoading(true);
+                              if (!confirm(`¿Estás seguro de eliminar la campaña "${c.name}"?\n\nSe perderán todos los datos de envíos, estadísticas y destinatarios asociados a esta campaña.\n\nEsta acción no se puede deshacer.`)) {
+                                return;
+                              }
                               try {
-                                const resp = await emailCampaignService.getStatus(c.id);
-                                setCampaignStats(resp?.data || resp);
-                              } catch (e) {
-                                setCampaignStats(null);
-                              } finally {
-                                setStatsLoading(false);
+                                const resp = await emailCampaignService.deleteCampaign(c.id);
+                                if (resp?.success) {
+                                  alert('Campaña eliminada correctamente');
+                                  await loadCampaigns();
+                                } else {
+                                  alert(resp?.message || 'Error al eliminar la campaña');
+                                }
+                              } catch (e: any) {
+                                alert(e?.message || 'Error al eliminar la campaña');
                               }
                             }}
-                            title="Ver estadísticas"
+                            title="Eliminar campaña"
+                            className="flex items-center gap-1"
                           >
-                            <Icon icon="solar:chart-2-bold" width={14} />
-                          </Button>
+                            <Icon icon="solar:trash-bin-minimalistic-bold" width={14} />
+                            <span className="hidden sm:inline">Eliminar</span>
+                          </ShButton>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
+          </SCardContent>
+        </SCard>
         )}
       </div>
 
@@ -1600,480 +1884,192 @@ useEffect(() => {
         </Modal.Footer>
       </Modal>
 
-      {/* Modal Wizard Campaña con Stepper */}
-      <Modal show={mostrarWizardCampania} onClose={() => setMostrarWizardCampania(false)} size="4xl">
-        <Modal.Header>
-          <div className="w-full">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-              Crear campaña de Email
-            </h3>
-            
-            {/* Stepper Visual */}
-            <div className="flex items-center justify-between mb-2">
-              {[
-                { step: 1, label: 'Información', icon: 'solar:document-text-bold' },
-                { step: 2, label: 'Contenido', icon: 'solar:palette-round-bold' },
-                { step: 3, label: 'Audiencia', icon: 'solar:users-group-two-rounded-bold' },
-                { step: 4, label: 'Programación', icon: 'solar:calendar-bold' }
-              ].map((item, idx) => (
-                <div key={item.step} className="flex items-center flex-1">
-                  <div className="flex flex-col items-center flex-1">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                        wizardStep === item.step
-                          ? 'bg-blue-600 text-white shadow-lg scale-110'
-                          : wizardStep > item.step
-                          ? 'bg-green-600 text-white'
-                          : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
-                      }`}
-                    >
-                      {wizardStep > item.step ? (
-                        <Icon icon="solar:check-circle-bold" width={20} />
-                      ) : (
-                        <Icon icon={item.icon} width={20} />
-                      )}
-                    </div>
-                    <span
-                      className={`text-xs mt-2 font-medium ${
-                        wizardStep === item.step
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : wizardStep > item.step
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-gray-500'
-                      }`}
-                    >
-                      {item.label}
-                    </span>
-                  </div>
-                  {idx < 3 && (
-                    <div
-                      className={`h-1 flex-1 mx-2 rounded transition-all ${
-                        wizardStep > item.step
-                          ? 'bg-green-600'
-                          : 'bg-gray-200 dark:bg-gray-700'
-                      }`}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-            
-            {/* Indicador de paso actual */}
-            <div className="text-center mt-3">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Paso {wizardStep} de 4
-              </span>
-            </div>
-          </div>
-        </Modal.Header>
+      {/* Wizard de Campaña - Nuevo diseño con Tabs */}
+      {mostrarWizardCampania && (
+        <EmailCampaignWizard
+          initialContent={campContent}
+          onComplete={async () => {
+            setMostrarWizardCampania(false);
+            await loadCampaigns();
+          }}
+          onCancel={() => setMostrarWizardCampania(false)}
+        />
+      )}
+
+      {/* Modal Detalles de Campaña (SendGrid) */}
+      <Modal show={mostrarDetallesCampania} onClose={() => setMostrarDetallesCampania(false)} size="6xl">
+        <Modal.Header>Detalles de campaña</Modal.Header>
         <Modal.Body>
-          <>
-            {wizardError && (
-              <Alert color="failure">
-                <Icon icon="solar:danger-triangle-bold" className="mr-2" width={20} />
-                <span>{wizardError}</span>
-              </Alert>
-            )}
-
-            {/* Paso 1: Información básica */}
-            {wizardStep === 1 && (
+          {statsLoading ? (
+            <div className="py-10 text-center text-sm text-gray-500">Cargando estadísticas…</div>
+          ) : (
+            campaniaSeleccionada && (
               <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Nombre de la campaña</label>
-                  <TextInput
-                    placeholder="Ej: Renovaciones Octubre"
-                    value={campName}
-                    onChange={(e) => setCampName(e.target.value)}
-                  />
+                {/* Encabezado */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs text-gray-500">Nombre</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">{campaniaSeleccionada.name}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Asunto</div>
+                    <div className="text-gray-800 dark:text-gray-300">{campaniaSeleccionada.subject}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Estado</div>
+                    <Badge color={
+                      campaniaSeleccionada.status === 'completed' ? 'success' :
+                      campaniaSeleccionada.status === 'running' ? 'info' :
+                      campaniaSeleccionada.status === 'failed' ? 'failure' :
+                      'warning'
+                    }>
+                      {campaniaSeleccionada.status === 'completed' ? 'Completada' :
+                       campaniaSeleccionada.status === 'running' ? 'En ejecución' :
+                       campaniaSeleccionada.status === 'draft' ? 'Borrador' :
+                       campaniaSeleccionada.status === 'paused' ? 'Pausada' :
+                       campaniaSeleccionada.status === 'failed' ? 'Fallida' :
+                       campaniaSeleccionada.status}
+                    </Badge>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Asunto</label>
-                  <TextInput
-                    placeholder="Ej: ¡Renueva tu póliza este mes!"
-                    value={campSubject}
-                    onChange={(e) => setCampSubject(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
 
-            {/* Paso 2: Contenido */}
-            {wizardStep === 2 && (
-              <div className="space-y-6">
+                {/* KPIs */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  {(() => {
+                    const s = (campaignStats?.stats || campaignStats?.campaign?.stats_json || campaniaSeleccionada?.stats || {}) as any;
+                    const sent = Number(s.sent || 0);
+                    const delivered = Number(s.delivered || 0);
+                    const opened = Number(s.opened || 0);
+                    const clicked = Number(s.clicked || 0);
+                    const bounced = Number(s.bounced || s.failed || 0);
+                    const openRate = sent > 0 ? Math.round((opened / sent) * 100) : 0;
+                    const clickRate = sent > 0 ? Math.round((clicked / sent) * 100) : 0;
+                    return (
+                      <>
+                        <Card><div className="p-3"><div className="text-xs text-gray-500">Enviados</div><div className="text-lg font-bold">{sent}</div></div></Card>
+                        <Card><div className="p-3"><div className="text-xs text-gray-500">Entregados</div><div className="text-lg font-bold">{delivered}</div></div></Card>
+                        <Card><div className="p-3"><div className="text-xs text-gray-500">Aperturas</div><div className="text-lg font-bold">{opened} <span className="text-xs text-gray-500">({openRate}%)</span></div></div></Card>
+                        <Card><div className="p-3"><div className="text-xs text-gray-500">Clicks</div><div className="text-lg font-bold">{clicked} <span className="text-xs text-gray-500">({clickRate}%)</span></div></div></Card>
+                        <Card><div className="p-3"><div className="text-xs text-gray-500">Rebotes</div><div className="text-lg font-bold">{bounced}</div></div></Card>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* Destinatarios */}
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium">Contenido</label>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="xs"
-                      color={templateMode === 'custom' ? 'primary' : 'gray'}
-                      onClick={() => setTemplateMode('custom')}
-                    >
-                      <Icon icon="solar:code-bold" className="mr-2" width={14} />
-                      Contenido manual
-                    </Button>
-                    <Button
-                      size="xs"
-                      color={templateMode === 'sendgrid' ? 'primary' : 'gray'}
-                      onClick={() => setTemplateMode('sendgrid')}
-                    >
-                      <Icon icon="solar:palette-round-bold" className="mr-2" width={14} />
-                      Plantilla SendGrid
-                    </Button>
-                  </div>
-
-                  {templateMode === 'custom' ? (
-                    <>
-                      <Textarea
-                        rows={8}
-                        placeholder="Contenido del email. Puedes usar variables como {{nombre}}, {{numero_documento}}..."
-                        value={campContent}
-                        onChange={(e) => setCampContent(e.target.value)}
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Sugerencia: si abriste una plantilla propia, el contenido se precarga automáticamente.
-                      </p>
-                    </>
-                  ) : (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Seleccionar plantilla (SendGrid)</label>
-                        <div className="flex gap-2">
-                          <select
-                            className="border rounded-md px-2 py-2 text-sm w-full dark:bg-darkgray"
-                            value={selectedSgTemplate}
-                            onChange={(e) => setSelectedSgTemplate(e.target.value)}
-                            disabled={sgLoading}
-                          >
-                            <option value="">{sgLoading ? 'Cargando…' : 'Seleccione una plantilla'}</option>
-                            {sgTemplates.map((t) => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                          </select>
-                          <Button size="sm" color="gray" onClick={async () => {
-                            setSgLoading(true);
-                            try {
-                              const list: SendgridTemplate[] = await sendgridService.listTemplates();
-                              setSgTemplates((list || []).map(t => ({ id: String(t.id), name: t.name || String(t.id) })));
-                            } catch {
-                              setSgTemplates([]);
-                            } finally {
-                              setSgLoading(false);
-                            }
-                          }}>
-                            <Icon icon="solar:refresh-bold" className="mr-1" width={16} />
-                            Refrescar
-                          </Button>
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500">
-                          Las plantillas provienen del proveedor (p. ej. SendGrid). Se usará su HTML y variables.
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Variables de plantilla (JSON)</label>
-                        <Textarea
-                          rows={6}
-                          placeholder='{"nombre":"Juan","numero_documento":"123"}'
-                          value={sgVarsText}
-                          onChange={(e) => setSgVarsText(e.target.value)}
-                        />
-                        <p className="mt-1 text-xs text-gray-500">
-                          Pega aquí los valores para las variables definidas en la plantilla (formato JSON).
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Paso 3: Audiencia */}
-            {wizardStep === 3 && (
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Audiencia</label>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="xs"
-                        color={audienceMode === 'all' ? 'primary' : 'gray'}
-                        onClick={() => setAudienceMode('all')}
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold">Destinatarios</h4>
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm"
+                        value={recipientStatusFilter}
+                        onChange={(e) => { setRecipientStatusFilter(e.target.value); }}
                       >
-                        <Icon icon="solar:users-group-two-rounded-bold" className="mr-2" width={14} />
-                        Todos los clientes con email válido
-                      </Button>
-                      <Button
-                        size="xs"
-                        color={audienceMode === 'manual' ? 'primary' : 'gray'}
-                        onClick={() => setAudienceMode('manual')}
-                      >
-                        <Icon icon="solar:user-check-rounded-bold" className="mr-2" width={14} />
-                        Seleccionar manualmente
+                        <option value="all">Todos</option>
+                        <option value="queued">En cola</option>
+                        <option value="sent">Enviado</option>
+                        <option value="delivered">Entregado</option>
+                        <option value="opened">Abierto</option>
+                        <option value="clicked">Click</option>
+                        <option value="bounced">Rebotado</option>
+                        <option value="failed">Fallido</option>
+                      </select>
+                      <Button color="light" size="sm" onClick={() => campaniaSeleccionada && refreshCampaignStatus(campaniaSeleccionada.id)}>
+                        <Icon icon="solar:refresh-bold" className="mr-1" width={16} />
+                        Actualizar
                       </Button>
                     </div>
                   </div>
 
-                  {audienceMode === 'all' ? (
-                    <Alert color="info">
-                      <Icon icon="solar:users-group-two-rounded-bold" className="mr-2" width={20} />
-                      <span>Se enviará a TODOS los clientes del sistema con email válido.</span>
-                    </Alert>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-medium mb-2">Buscar clientes</label>
-                          <TextInput
-                            placeholder="Nombre, correo o documento..."
-                            value={clientQuery}
-                            onChange={(e) => setClientQuery(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                searchClients(1, false);
-                              }
-                            }}
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            color="gray"
-                            onClick={() => {
-                              searchClients(1, false);
-                            }}
-                          >
-                            <Icon icon="solar:magnifer-bold" className="mr-2" width={16} />
-                            Buscar
-                          </Button>
-                          <Button
-                            size="sm"
-                            color="light"
-                            onClick={() => {
-                              setClientQuery('');
-                              setClientResults([]);
-                            }}
-                          >
-                            <Icon icon="solar:refresh-bold" className="mr-2" width={16} />
-                            Limpiar
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-gray-600">
-                          Seleccionados: <span className="font-semibold">{Object.keys(selectedClients).length}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="xs"
-                            color="success"
-                            onClick={() => {
-                              setSelectedClients((prev) => {
-                                const next = { ...prev };
-                                clientResults.forEach((r) => { next[r.id] = r; });
-                                return next;
-                              });
-                            }}
-                          >
-                            <Icon icon="solar:checklist-bold" className="mr-1" width={14} />
-                            Seleccionar todos (página)
-                          </Button>
-                          <Button
-                            size="xs"
-                            color="failure"
-                            onClick={() => setSelectedClients({})}
-                          >
-                            <Icon icon="solar:trash-bin-minimalistic-bold" className="mr-1" width={14} />
-                            Limpiar selección
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="border border-gray-200 dark:border-gray-700 rounded-md p-3 max-h-60 overflow-y-auto">
-                        {clientLoading ? (
-                          <Badge color="info">Buscando clientes...</Badge>
-                        ) : clientResults.length === 0 ? (
-                          <p className="text-xs text-gray-500">Sin resultados. Usa el buscador para cargar clientes.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {clientResults.map((r) => (
-                              <div key={r.id} className="flex items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={!!selectedClients[r.id]}
-                                  onChange={(e) => {
-                                    const checked = e.target.checked;
-                                    setSelectedClients((prev) => {
-                                      const next = { ...prev };
-                                      if (checked) next[r.id] = r;
-                                      else delete next[r.id];
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <div className="text-sm">
-                                  <div className="font-medium text-gray-900 dark:text-white">{r.name || `Cliente ${r.id}`}</div>
-                                  <div className="text-xs text-gray-500">{r.email}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex justify-end mt-2">
-                        <Button
-                          size="xs"
-                          color="gray"
-                          disabled={clientLoading || !clientsHasMore}
-                          onClick={() => searchClients(clientsPage + 1, true)}
-                        >
-                          <Icon icon="solar:alt-arrow-down-bold" className="mr-1" width={14} />
-                          Cargar más
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Paso 4: Programación y Throttling */}
-            {wizardStep === 4 && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Throttling (emails/min)</label>
-                    <TextInput
-                      type="number"
-                      min={1}
-                      max={120}
-                      value={campThrottling}
-                      onChange={(e) => setCampThrottling(Math.max(1, Math.min(120, Number(e.target.value) || 30)))}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Valor por defecto: 30</p>
-                  </div>
-                  <div className="md:col-span-2 space-y-3">
-                    <label className="block text-sm font-medium mb-2">Programación</label>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="xs"
-                        color={scheduleMode === 'now' ? 'primary' : 'gray'}
-                        onClick={() => setScheduleMode('now')}
-                      >
-                        <Icon icon="solar:flash-bold" className="mr-2" width={14} />
-                        Enviar ahora
-                      </Button>
-                      <Button
-                        size="xs"
-                        color={scheduleMode === 'window' ? 'primary' : 'gray'}
-                        onClick={() => setScheduleMode('window')}
-                      >
-                        <Icon icon="solar:calendar-bold" className="mr-2" width={14} />
-                        Programar
-                      </Button>
-                    </div>
-
-                    {scheduleMode === 'window' && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Inicio (fecha y hora)</label>
-                          <TextInput
-                            type="datetime-local"
-                            value={scheduleStart}
-                            onChange={(e) => setScheduleStart(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Fin (opcional)</label>
-                          <TextInput
-                            type="datetime-local"
-                            value={scheduleEnd}
-                            onChange={(e) => setScheduleEnd(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Zona horaria</label>
-                          <TextInput disabled value={scheduleTz} />
-                          <p className="text-[11px] text-gray-500 mt-1">
-                            Se utilizará esta zona para resolver la ventana.
-                          </p>
-                        </div>
-                      </div>
+                  <div className="overflow-x-auto">
+                    {recipientsLoading && recipients.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-gray-500">Cargando destinatarios...</div>
+                    ) : recipients.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-gray-500">Sin destinatarios para el filtro seleccionado</div>
+                    ) : (
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50 dark:bg-gray-800/50">
+                          <tr className="text-left text-gray-600 dark:text-gray-300">
+                            <th className="px-4 py-2">Nombre</th>
+                            <th className="px-4 py-2">Email</th>
+                            <th className="px-4 py-2">Estado</th>
+                            <th className="px-4 py-2">Enviado</th>
+                            <th className="px-4 py-2">Entregado</th>
+                            <th className="px-4 py-2">Abierto</th>
+                            <th className="px-4 py-2">Click</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {recipients.map((r, idx) => {
+                            const statusColors: Record<string, string> = {
+                              'pending': 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+                              'sent': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+                              'delivered': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                              'opened': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+                              'clicked': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+                              'failed': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+                            };
+                            const statusLabels: Record<string, string> = {
+                              'pending': 'Pendiente',
+                              'sent': 'Enviado',
+                              'delivered': 'Entregado',
+                              'opened': 'Abierto',
+                              'clicked': 'Click',
+                              'failed': 'Fallido',
+                            };
+                            return (
+                            <tr key={r.id ?? idx} className="hover:bg-gray-50 dark:hover:bg-gray-900/30">
+                              <td className="px-4 py-2">{r.name || r.full_name || '-'}</td>
+                              <td className="px-4 py-2 text-sm">{r.email || r.to || '-'}</td>
+                              <td className="px-4 py-2">
+                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${statusColors[r.status] || 'bg-gray-100 text-gray-800'}`}>
+                                  {statusLabels[r.status] || r.status || 'N/D'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 text-xs text-gray-600 dark:text-gray-400">
+                                {r.sent_at ? new Date(r.sent_at).toLocaleString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                              <td className="px-4 py-2 text-xs text-gray-600 dark:text-gray-400">
+                                {r.delivered_at ? new Date(r.delivered_at).toLocaleString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                              <td className="px-4 py-2 text-xs text-gray-600 dark:text-gray-400">
+                                {r.opened_at ? new Date(r.opened_at).toLocaleString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                              <td className="px-4 py-2 text-xs text-gray-600 dark:text-gray-400">
+                                {r.clicked_at ? new Date(r.clicked_at).toLocaleString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                            </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     )}
+                  </div>
 
-                    <Alert color="info">
-                      <Icon icon="solar:info-circle-bold" className="mr-2" width={20} />
-                      <span>
-                        Si programas una ventana (inicio/fin), el backend enviará dentro del intervalo configurado respetando el throttling.
-                      </span>
-                    </Alert>
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      size="sm"
+                      color="light"
+                      disabled={recipientsLoading || !recipientsHasMore}
+                      onClick={() => loadRecipientsList(false)}
+                    >
+                      {recipientsLoading ? 'Cargando...' : (recipientsHasMore ? 'Cargar más' : 'No hay más')}
+                    </Button>
                   </div>
                 </div>
               </div>
-            )}
-          </>
+            )
+          )}
         </Modal.Body>
         <Modal.Footer>
-          <div className="flex items-center justify-between w-full">
-            <div className="flex gap-2">
-              {wizardStep > 1 && (
-                <Button
-                  color="gray"
-                  onClick={() => setWizardStep((prev) => Math.max(1, prev - 1) as 1 | 2 | 3 | 4)}
-                  disabled={creatingCampaign}
-                >
-                  <Icon icon="solar:alt-arrow-left-bold" className="mr-2" width={16} />
-                  Anterior
-                </Button>
-              )}
-            </div>
-            
-            <div className="flex gap-2">
-              <Button
-                color="gray"
-                onClick={() => setMostrarWizardCampania(false)}
-                disabled={creatingCampaign}
-              >
-                Cancelar
-              </Button>
-              
-              {wizardStep < 4 ? (
-                <Button
-                  color="primary"
-                  onClick={() => setWizardStep((prev) => Math.min(4, prev + 1) as 1 | 2 | 3 | 4)}
-                  disabled={
-                    (wizardStep === 1 && (!campName.trim() || !campSubject.trim())) ||
-                    (wizardStep === 2 && templateMode === 'custom' && !campContent.trim()) ||
-                    (wizardStep === 2 && templateMode === 'sendgrid' && !selectedSgTemplate)
-                  }
-                >
-                  Siguiente
-                  <Icon icon="solar:alt-arrow-right-bold" className="ml-2" width={16} />
-                </Button>
-              ) : (
-                <Button
-                  color="primary"
-                  onClick={handleCreateAndStartCampaign}
-                  disabled={
-                    creatingCampaign ||
-                    !campName.trim() ||
-                    !campSubject.trim() ||
-                    (templateMode === 'custom' && !campContent.trim()) ||
-                    (templateMode === 'sendgrid' && !selectedSgTemplate)
-                  }
-                >
-                  <Icon icon="solar:paper-plane-bold" className="mr-2" width={16} />
-                  {creatingCampaign ? 'Creando…' : 'Crear e iniciar campaña'}
-                </Button>
-              )}
-            </div>
-          </div>
+          <Button color="gray" onClick={() => setMostrarDetallesCampania(false)}>Cerrar</Button>
         </Modal.Footer>
       </Modal>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

@@ -3,7 +3,7 @@ import { Card, Button, Badge, Table, Modal, Tabs, Timeline, Progress, Spinner, D
 import { HiPlus, HiSearch, HiEye, HiPencil, HiDocumentText, HiClock, HiCheckCircle, HiXCircle, HiTrash, HiFilter, HiAdjustments, HiDownload } from 'react-icons/hi';
 import { FaExclamationTriangle, FaCar, FaHome, FaHeartbeat, FaShieldAlt, FaFileAlt } from 'react-icons/fa';
 import { IconDots } from '@tabler/icons-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useToast } from 'src/hooks/use-toast';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { Icon } from '@iconify/react';
@@ -42,6 +42,7 @@ const tiposSeguro = [
 
 const Siniestros: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [siniestros, setSiniestros] = useState<Siniestro[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +121,17 @@ const Siniestros: React.FC = () => {
     loadSiniestros();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.page, filters.per_page, filters.search, filters.tipo, filters.estado, filters.prioridad, filters.sort_by, filters.sort_dir]);
+
+  // Abrir modal por param open_siniestro_id desde el buscador global
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openId = params.get('open_siniestro_id') || params.get('open_claim_id');
+    if (openId) {
+      if (!showModal || String(selectedSiniestro?.id) !== String(openId)) {
+        openSiniestroById(String(openId));
+      }
+    }
+  }, [location.search]);
 
   const loadSiniestros = async () => {
     try {
@@ -331,6 +343,29 @@ const Siniestros: React.FC = () => {
     } finally {
       setDeleting(false);
     }
+  };
+
+  // Deep-link helpers
+  const openSiniestroById = async (id: string) => {
+    try {
+      const sin = await siniestroService.getSiniestro(Number(id));
+      if (sin) {
+        setSelectedSiniestro(sin);
+        setShowModal(true);
+      }
+    } catch (e) {
+      console.error('Error abriendo siniestro por ID desde query param:', e);
+    }
+  };
+
+  const handleCloseDetailsModal = () => {
+    setShowModal(false);
+    try {
+      const params = new URLSearchParams(location.search);
+      params.delete('open_siniestro_id');
+      params.delete('open_claim_id');
+      navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+    } catch {}
   };
 
   const getProgressPercentage = (estado: string) => {
@@ -910,7 +945,7 @@ const Siniestros: React.FC = () => {
       </Card>
 
       {/* Modal de Detalle */}
-      <Modal show={showModal} onClose={() => setShowModal(false)} size="5xl">
+      <Modal show={showModal} onClose={handleCloseDetailsModal} size="5xl">
         <Modal.Header>
           Detalle de Siniestro - {selectedSiniestro?.numero_siniestro}
         </Modal.Header>
@@ -1224,7 +1259,7 @@ const Siniestros: React.FC = () => {
             <HiAdjustments className="w-4 h-4 mr-2" />
             Cambiar Estado
           </Button>
-          <Button color="gray" onClick={() => setShowModal(false)}>
+          <Button color="gray" onClick={handleCloseDetailsModal}>
             <HiXCircle className="w-4 h-4 mr-2" />
             Cerrar
           </Button>

@@ -33,6 +33,8 @@ export interface PolizaFormData {
   porcentajeIva: string;
   iva: string;
   total: string;
+  gastosAdicionales: string;
+  gastosAdicionalesAplicaIva: boolean;
   porcentajeComision: string;
   comision: string;
   formaPago: string;

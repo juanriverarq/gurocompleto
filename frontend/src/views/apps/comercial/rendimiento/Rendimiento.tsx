@@ -1,28 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Card, Badge, Button, Alert, Dropdown, Table } from 'flowbite-react';
+import { Card, Badge, Button, Dropdown, Table } from 'flowbite-react';
 import { Icon } from '@iconify/react';
-import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
-import { salesFunnelService } from 'src/services/salesFunnelService';
 import salesPerformanceService, { AgentPerformance, PerformanceMetrics, PerformanceStatistics } from 'src/services/salesPerformanceService';
 
-const BCrumb = [
-  {
-    to: "/",
-    title: "Dashboard",
-  },
-  {
-    to: "/apps/comercial",
-    title: "Gestión Comercial",
-  },
-  {
-    title: "Análisis de Rendimiento",
-  },
-];
 
 interface RendimientoVendedor {
   id: string;
   nombre: string;
-  foto: string;
+  iniciales: string;
   ventas_mes: number;
   ventas_anterior: number;
   meta_mes: number;
@@ -49,44 +34,57 @@ interface MetricaEquipo {
 
 const Rendimiento = () => {
   const [loading, setLoading] = useState(true);
-  const [periodoSeleccionado, setPeriodoSeleccionado] = useState<'semana' | 'mes' | 'anio'>('mes');
+  const getInitialPeriodo = (): 'semana' | 'mes' | 'anio' => {
+    const p = new URLSearchParams(window.location.search).get('period');
+    if (p === 'year' || p === 'anio') return 'anio';
+    if (p === 'week' || p === 'semana') return 'semana';
+    return 'mes';
+  };
+  const [periodoSeleccionado, setPeriodoSeleccionado] = useState<'semana' | 'mes' | 'anio'>(getInitialPeriodo());
   const [ordenarPor, setOrdenarPor] = useState('ventas_mes');
 
   const [metricas, setMetricas] = useState<MetricaEquipo>({
-    periodo: 'Enero 2025',
-    ventas_totales: 450000000,
-    meta_equipo: 500000000,
-    num_vendedores: 8,
-    clientes_nuevos: 45,
-    tasa_retencion: 87.5,
-    ticket_promedio: 2800000
+    periodo: 'Mes Actual',
+    ventas_totales: 0,
+    meta_equipo: 0,
+    num_vendedores: 0,
+    clientes_nuevos: 0,
+    tasa_retencion: 0,
+    ticket_promedio: 0
   });
 
   const [vendedores, setVendedores] = useState<RendimientoVendedor[]>([]);
+
+  const getIniciales = (nombre: string): string => {
+    const partes = nombre.trim().split(' ').filter(Boolean);
+    if (partes.length === 0) return '??';
+    if (partes.length === 1) return partes[0].substring(0, 2).toUpperCase();
+    return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+  };
 
   useEffect(() => {
     const loadAll = async () => {
       try {
         setLoading(true);
 
-        // Obtener métricas generales
         const period = periodoSeleccionado === 'semana' ? 'week' : periodoSeleccionado === 'anio' ? 'year' : 'month';
-        const metrics = await salesPerformanceService.getMetrics({ period });
 
-        // Obtener rendimiento de agentes
-        const agentsPerformance = await salesPerformanceService.getAgentsPerformance({
-          period,
-          limit: 10,
-          sort_by: 'monthly_sales'
-        });
+        const [metrics, agentsPerformance, stats] = await Promise.all([
+          salesPerformanceService.getMetrics({ period }),
+          salesPerformanceService.getAgentsPerformance({
+            period,
+            limit: 10,
+            sort_by: 'monthly_sales',
+          }),
+          salesPerformanceService.getStatistics({ period }),
+        ]);
 
-        // Convertir datos del backend al formato del componente
         const vendedoresData: RendimientoVendedor[] = agentsPerformance.map((agent, index) => ({
           id: String(agent.id),
           nombre: agent.name,
-          foto: `/images/profile/user-${(index % 12) + 1}.jpg`, // Placeholder
+          iniciales: getIniciales(agent.name),
           ventas_mes: agent.monthly_sales,
-          ventas_anterior: agent.monthly_sales * 0.9, // Placeholder
+          ventas_anterior: agent.monthly_sales,
           meta_mes: agent.monthly_goal,
           cumplimiento: agent.achievement_percentage,
           comisiones: agent.commission_earned,
@@ -95,101 +93,38 @@ const Rendimiento = () => {
           reuniones: agent.meetings_scheduled,
           propuestas: agent.proposals_sent,
           tasa_conversion: agent.conversion_rate,
-          ticket_promedio: agent.monthly_sales / Math.max(1, agent.new_clients), // Calcular ticket promedio
-          ranking: index + 1
+          ticket_promedio: agent.new_clients > 0 ? agent.monthly_sales / agent.new_clients : 0,
+          ranking: agent.ranking || index + 1,
         }));
+
+        const totalNewClients = vendedoresData.reduce((sum, v) => sum + (v.clientes_nuevos || 0), 0);
+        const totalSales = vendedoresData.reduce((sum, v) => sum + (v.ventas_mes || 0), 0);
+        const avgTicket = totalNewClients > 0 ? totalSales / totalNewClients : 0;
 
         setMetricas({
           periodo: periodoSeleccionado === 'semana' ? 'Semana Actual' : periodoSeleccionado === 'anio' ? 'Año Actual' : 'Mes Actual',
           ventas_totales: metrics.total_sales,
           meta_equipo: metrics.total_goals,
           num_vendedores: metrics.active_agents,
-          clientes_nuevos: vendedoresData.reduce((sum, v) => sum + v.clientes_nuevos, 0),
-          tasa_retencion: 87.5, // Placeholder
-          ticket_promedio: vendedoresData.reduce((sum, v) => sum + v.ticket_promedio, 0) / Math.max(1, vendedoresData.length)
+          clientes_nuevos: totalNewClients,
+          tasa_retencion: stats?.average_conversion_rate ?? 0,
+          ticket_promedio: avgTicket,
         });
 
         setVendedores(vendedoresData);
-
       } catch (e) {
         console.error('Error loading performance data:', e);
-        // Fallback a datos mock si falla la API
-        setMetricas(prev => ({
+        setVendedores([]);
+        setMetricas((prev) => ({
           ...prev,
           periodo: periodoSeleccionado === 'semana' ? 'Semana Actual' : periodoSeleccionado === 'anio' ? 'Año Actual' : 'Mes Actual',
+          ventas_totales: 0,
+          meta_equipo: 0,
+          num_vendedores: 0,
+          clientes_nuevos: 0,
+          tasa_retencion: 0,
+          ticket_promedio: 0,
         }));
-
-        // Mantener datos mock como fallback
-        setVendedores([
-          {
-            id: 'V001',
-            nombre: 'Carlos Mendoza',
-            foto: '/images/profile/user-1.jpg',
-            ventas_mes: 85000000,
-            ventas_anterior: 72000000,
-            meta_mes: 80000000,
-            cumplimiento: 106.25,
-            comisiones: 4250000,
-            clientes_nuevos: 12,
-            llamadas: 145,
-            reuniones: 28,
-            propuestas: 15,
-            tasa_conversion: 53.6,
-            ticket_promedio: 3200000,
-            ranking: 1
-          },
-          {
-            id: 'V002',
-            nombre: 'Ana García',
-            foto: '/images/profile/user-2.jpg',
-            ventas_mes: 78000000,
-            ventas_anterior: 81000000,
-            meta_mes: 75000000,
-            cumplimiento: 104.0,
-            comisiones: 3900000,
-            clientes_nuevos: 9,
-            llamadas: 132,
-            reuniones: 24,
-            propuestas: 12,
-            tasa_conversion: 50.0,
-            ticket_promedio: 2900000,
-            ranking: 2
-          },
-          {
-            id: 'V003',
-            nombre: 'Miguel Torres',
-            foto: '/images/profile/user-3.jpg',
-            ventas_mes: 65000000,
-            ventas_anterior: 58000000,
-            meta_mes: 70000000,
-            cumplimiento: 92.9,
-            comisiones: 3250000,
-            clientes_nuevos: 8,
-            llamadas: 118,
-            reuniones: 22,
-            propuestas: 14,
-            tasa_conversion: 63.6,
-            ticket_promedio: 2600000,
-            ranking: 3
-          },
-          {
-            id: 'V004',
-            nombre: 'Laura Rodríguez',
-            foto: '/images/profile/user-4.jpg',
-            ventas_mes: 62000000,
-            ventas_anterior: 69000000,
-            meta_mes: 65000000,
-            cumplimiento: 95.4,
-            comisiones: 3100000,
-            clientes_nuevos: 7,
-            llamadas: 98,
-            reuniones: 19,
-            propuestas: 11,
-            tasa_conversion: 57.9,
-            ticket_promedio: 2800000,
-            ranking: 4
-          }
-        ]);
       } finally {
         setLoading(false);
       }
@@ -239,8 +174,6 @@ const Rendimiento = () => {
 
   return (
     <>
-      <BreadcrumbComp title="Análisis de Rendimiento" items={BCrumb} />
-      
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-dark dark:text-white mb-2">Análisis de Rendimiento Comercial</h1>
         <p className="text-gray-600 dark:text-gray-400">
@@ -271,13 +204,13 @@ const Rendimiento = () => {
               <p className="text-sm text-gray-500">Ventas Totales</p>
               <div className="mt-2">
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-primary h-2 rounded-full" 
-                    style={{ width: `${(metricas.ventas_totales / metricas.meta_equipo) * 100}%` }}
+                  <div
+                    className="bg-primary h-2 rounded-full"
+                    style={{ width: `${Math.min(100, metricas.meta_equipo > 0 ? (metricas.ventas_totales / metricas.meta_equipo) * 100 : 0)}%` }}
                   ></div>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {((metricas.ventas_totales / metricas.meta_equipo) * 100).toFixed(1)}% de la meta
+                  {metricas.meta_equipo > 0 ? ((metricas.ventas_totales / metricas.meta_equipo) * 100).toFixed(1) : '0.0'}% de la meta
                 </p>
               </div>
             </div>
@@ -288,7 +221,6 @@ const Rendimiento = () => {
               </div>
               <h4 className="text-2xl font-bold text-dark dark:text-white">{metricas.clientes_nuevos}</h4>
               <p className="text-sm text-gray-500">Clientes Nuevos</p>
-              <p className="text-xs text-success mt-2">+15% vs mes anterior</p>
             </div>
             
             <div className="text-center">
@@ -297,7 +229,6 @@ const Rendimiento = () => {
               </div>
               <h4 className="text-2xl font-bold text-dark dark:text-white">{metricas.tasa_retencion}%</h4>
               <p className="text-sm text-gray-500">Tasa Retención</p>
-              <p className="text-xs text-info mt-2">Meta: 85%</p>
             </div>
             
             <div className="text-center">
@@ -306,7 +237,6 @@ const Rendimiento = () => {
               </div>
               <h4 className="text-lg font-bold text-dark dark:text-white">{formatearMoneda(metricas.ticket_promedio)}</h4>
               <p className="text-sm text-gray-500">Ticket Promedio</p>
-              <p className="text-xs text-warning mt-2">+8% vs mes anterior</p>
             </div>
           </div>
         </div>
@@ -328,18 +258,16 @@ const Rendimiento = () => {
               
               <div className="flex items-center gap-4 mb-4">
                 <div className="relative">
-                  <img 
-                    src={vendedor.foto} 
-                    alt={vendedor.nombre}
-                    className="w-12 h-12 rounded-full object-cover"
-                  />
+                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-lg">
+                    {vendedor.iniciales}
+                  </div>
                   <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold">
                     {vendedor.ranking}
                   </div>
                 </div>
                 <div>
                   <h4 className="font-semibold text-dark dark:text-white">{vendedor.nombre}</h4>
-                  <p className="text-sm text-gray-500">{vendedor.id}</p>
+                  <p className="text-sm text-gray-500">ID: {vendedor.id}</p>
                 </div>
               </div>
               
@@ -350,9 +278,9 @@ const Rendimiento = () => {
                     <span className="font-semibold">{formatearMoneda(vendedor.ventas_mes)}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full" 
-                      style={{ width: `${(vendedor.ventas_mes / vendedor.meta_mes) * 100}%` }}
+                    <div
+                      className="bg-primary h-2 rounded-full"
+                      style={{ width: `${Math.min(100, vendedor.meta_mes > 0 ? (vendedor.ventas_mes / vendedor.meta_mes) * 100 : 0)}%` }}
                     ></div>
                   </div>
                 </div>
@@ -429,11 +357,9 @@ const Rendimiento = () => {
                   <Table.Row key={vendedor.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
                     <Table.Cell>
                       <div className="flex items-center gap-3">
-                        <img 
-                          src={vendedor.foto} 
-                          alt={vendedor.nombre}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
+                        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-xs">
+                          {vendedor.iniciales}
+                        </div>
                         <div>
                           <p className="font-semibold text-sm">{vendedor.nombre}</p>
                           <p className="text-xs text-gray-500">Ranking #{vendedor.ranking}</p>
@@ -477,9 +403,9 @@ const Rendimiento = () => {
                     <Table.Cell>
                       <div className="flex items-center gap-2">
                         <div className="w-12 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-primary h-2 rounded-full" 
-                            style={{ width: `${vendedor.tasa_conversion}%` }}
+                          <div
+                            className="bg-primary h-2 rounded-full"
+                            style={{ width: `${Math.min(100, vendedor.tasa_conversion)}%` }}
                           ></div>
                         </div>
                         <span className="text-sm">{vendedor.tasa_conversion.toFixed(1)}%</span>

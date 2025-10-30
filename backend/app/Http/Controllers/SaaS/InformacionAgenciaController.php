@@ -21,10 +21,21 @@ class InformacionAgenciaController extends Controller
 
     public function show(Request $request)
     {
-        $broker = $this->currentBroker($request);
+        $broker = $this->currentBroker($request)->fresh();
+
+        // Normalizar branding y adjuntar URLs absolutas para el frontend
+        $branding = is_array($broker->branding) ? $broker->branding : [];
+        $branding['primary_color'] = $branding['primary_color'] ?? null;
+        $branding['logo'] = method_exists($broker, 'getLogoUrl') ? $broker->getLogoUrl() : ($branding['logo'] ?? null);
+        $branding['favicon'] = method_exists($broker, 'getFaviconUrl') ? $broker->getFaviconUrl() : ($branding['favicon'] ?? null);
+
         return response()->json([
             'success' => true,
-            'data' => $broker->fresh(),
+            'data' => array_merge($broker->toArray(), [
+                'logo_url' => $broker->getLogoUrl(),
+                'favicon_url' => $broker->getFaviconUrl(),
+                'branding' => $branding,
+            ]),
         ]);
     }
 
@@ -66,18 +77,37 @@ class InformacionAgenciaController extends Controller
         $broker = $this->currentBroker($request);
 
         $request->validate([
-            'logo' => 'nullable|image|max:2048',
+            'logo' => 'nullable|image|max:5120',
             'favicon' => 'nullable|image|max:1024',
+            'primary_color' => 'nullable|string|max:7',
         ]);
 
+        // Manejar subida de logo
         if ($request->hasFile('logo')) {
+            // Eliminar logo anterior si existe
+            if ($broker->logo && Storage::disk('public')->exists($broker->logo)) {
+                Storage::disk('public')->delete($broker->logo);
+            }
             $path = $request->file('logo')->store('branding', 'public');
             $broker->logo = $path;
         }
+
+        // Manejar subida de favicon
         if ($request->hasFile('favicon')) {
+            if ($broker->favicon && Storage::disk('public')->exists($broker->favicon)) {
+                Storage::disk('public')->delete($broker->favicon);
+            }
             $path = $request->file('favicon')->store('branding', 'public');
             $broker->favicon = $path;
         }
+
+        // Manejar color primario
+        if ($request->has('primary_color')) {
+            $branding = $broker->branding ?? [];
+            $branding['primary_color'] = $request->input('primary_color');
+            $broker->branding = $branding;
+        }
+
         $broker->save();
 
         return response()->json([
@@ -86,6 +116,7 @@ class InformacionAgenciaController extends Controller
             'data' => [
                 'logo_url' => $broker->getLogoUrl(),
                 'favicon_url' => $broker->getFaviconUrl(),
+                'primary_color' => $broker->branding['primary_color'] ?? null,
             ],
         ]);
     }

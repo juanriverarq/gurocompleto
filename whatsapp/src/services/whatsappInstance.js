@@ -1,8 +1,9 @@
-const { 
-    default: makeWASocket, 
-    DisconnectReason, 
+const {
+    default: makeWASocket,
+    DisconnectReason,
     useMultiFileAuthState,
-    downloadMediaMessage
+    downloadMediaMessage,
+    fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const fs = require('fs');
@@ -34,7 +35,8 @@ class WhatsAppInstance {
         this.config = {
             browser: settings.browser || ['GuroMensajes', 'Chrome', '1.0.0'],
             webhook: settings.webhook || null,
-            autoReconnect: settings.autoReconnect !== false,
+            // Desactivado por defecto: solo se reintenta si settings.autoReconnect === true
+            autoReconnect: settings.autoReconnect === true,
             maxReconnectAttempts: settings.maxReconnectAttempts || 5,
             ...settings
         };
@@ -78,12 +80,42 @@ class WhatsAppInstance {
                 hasCreds: !!state.creds
             });
             
+            // Forzar versión de WhatsApp Web para evitar bloqueos por incompatibilidad
+            const { version, isLatest } = await fetchLatestBaileysVersion();
+            try {
+                console.log(`🧩 [${this.instanceId}] Usando WhatsApp Web v${version?.join?.('.')}, latest=${isLatest}`);
+            } catch (e) {}
+
+            // Logger compatible con Baileys (pino-like)
+            const logger = {
+                level: 'silent',
+                fatal: () => {},
+                error: () => {},
+                warn: () => {},
+                info: () => {},
+                debug: () => {},
+                trace: () => {},
+                child: () => logger
+            };
+
             this.sock = makeWASocket({
                 auth: state,
+                version,
                 printQRInTerminal: false,
                 browser: this.config.browser,
                 generateHighQualityLinkPreview: true,
-                markOnlineOnConnect: true
+                // mantener offline al conectar para reducir fricción inicial durante pairing
+                markOnlineOnConnect: false,
+                // Configuraciones adicionales para evitar error 515
+                syncFullHistory: false,
+                defaultQueryTimeoutMs: 60000,
+                connectTimeoutMs: 60000,
+                keepAliveIntervalMs: 30000,
+                // Configuración de reconexión mejorada
+                retryRequestDelayMs: 250,
+                maxMsgRetryCount: 5,
+                // Logger compatible con Baileys
+                logger
             });
 
             // Eventos de conexión
@@ -126,19 +158,31 @@ class WhatsAppInstance {
 
     async handleConnectionUpdate(update) {
         const { connection, lastDisconnect, qr, isNewLogin } = update;
-        
-        console.log(`🔄 [${this.instanceId}] Estado de conexión:`, { connection, isNewLogin });
-        
+
+        console.log(`🔄 [${this.instanceId}] Estado de conexión:`, {
+            connection,
+            isNewLogin,
+            hasQR: !!qr,
+            lastDisconnectReason: lastDisconnect?.error?.message,
+            statusCode: lastDisconnect?.error?.output?.statusCode
+        });
+
         if (qr) {
             console.log(`🔑 [${this.instanceId}] QR Code generado - MARCANDO COMO NO CONECTADO`);
-            
+            console.log(`🔍 [${this.instanceId}] Detalles del QR:`, {
+                qrLength: qr?.length,
+                qrPreview: qr?.substring(0, 50) + '...'
+            });
+
             // IMPORTANTE: Al generar QR, la instancia NO está conectada
             this.connected = false;
             this.connecting = true;
-            
+
             try {
                 this.qrCode = await qrcode.toDataURL(qr);
-                
+
+                console.log(`✅ [${this.instanceId}] QR convertido a DataURL exitosamente`);
+
                 // Emitir eventos específicos por instancia
                 this.io.emit(`qr_code_${this.instanceId}`, this.qrCode);
                 this.io.emit('instance_update', {
@@ -146,10 +190,15 @@ class WhatsAppInstance {
                     event: 'qr_code',
                     data: this.qrCode
                 });
-                
+
                 console.log(`📡 [${this.instanceId}] QR Code enviado via WebSocket - Estado: connecting=true, connected=false`);
             } catch (qrError) {
                 console.error(`❌ [${this.instanceId}] Error generando QR:`, qrError);
+                console.error(`❌ [${this.instanceId}] Detalles del error QR:`, {
+                    message: qrError.message,
+                    stack: qrError.stack,
+                    qrData: qr?.substring(0, 100)
+                });
             }
         }
         
@@ -191,6 +240,11 @@ class WhatsAppInstance {
                         setTimeout(() => this.connect(), 5000);
                         break;
                         
+                    case 515: // Error específico "Stream Errored"
+                        console.log(`⚠️ [${this.instanceId}] Error 515 detectado - Reconectando inmediatamente...`);
+                        setTimeout(() => this.connect(), 2000);
+                        break;
+                        
                     case DisconnectReason.loggedOut:
                         console.log(`🚪 [${this.instanceId}] Usuario deslogueado, limpiando sesión...`);
                         await this.clearAuthState();
@@ -204,6 +258,12 @@ class WhatsAppInstance {
                             console.log(`🔁 [${this.instanceId}] Reconectando en 10 segundos...`);
                             setTimeout(() => this.connect(), 10000);
                         }
+                }
+            } else {
+                // Incluso sin autoReconnect, manejar error 515 automáticamente
+                if (statusCode === 515) {
+                    console.log(`⚠️ [${this.instanceId}] Error 515 detectado - Reconectando automáticamente (override autoReconnect)...`);
+                    setTimeout(() => this.connect(), 2000);
                 }
             }
         } else if (connection === 'connecting') {

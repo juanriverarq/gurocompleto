@@ -159,45 +159,120 @@ class GuromensajesServer {
         });
         
         // Obtener QR de instancia específica
-        this.app.get(`${apiPrefix}/instances/:instanceId/qr`, (req, res) => {
+        this.app.get(`${apiPrefix}/instances/:instanceId/qr`, async (req, res) => {
             try {
                 const { instanceId } = req.params;
                 console.log(`🔲 QR solicitado para instancia: ${instanceId}`);
-                
+
                 const instance = this.whatsappManager.getInstance(instanceId);
-                
+
                 if (!instance) {
+                    console.log(`❌ Instancia ${instanceId} no encontrada`);
                     return res.status(404).json({
                         success: false,
                         message: 'Instancia no encontrada'
                     });
                 }
-                
-                const qrCode = instance.getQRCode();
-                
+
+                console.log(`📊 Estado de instancia ${instanceId}:`, {
+                    connected: instance.isConnected(),
+                    connecting: instance.isConnecting(),
+                    hasQR: !!instance.getQRCode()
+                });
+
+                // Si ya está conectada, no necesita QR
+                if (instance.isConnected()) {
+                    console.log(`✅ Instancia ${instanceId} ya está conectada`);
+                    return res.json({
+                        success: false,
+                        message: 'Instancia ya está conectada'
+                    });
+                }
+
+                // Si no está conectando, iniciar la conexión
+                if (!instance.isConnecting()) {
+                    console.log(`🔌 [${instanceId}] Iniciando conexión para generar QR...`);
+                    try {
+                        await instance.connect();
+                        console.log(`✅ [${instanceId}] Conexión iniciada exitosamente`);
+                    } catch (err) {
+                        console.error(`❌ [${instanceId}] Error iniciando conexión:`, err);
+                        return res.status(500).json({
+                            success: false,
+                            message: 'Error iniciando conexión para QR',
+                            error: err.message
+                        });
+                    }
+                } else {
+                    console.log(`⏳ [${instanceId}] Ya hay una conexión en progreso`);
+                }
+
+                // Intentar obtener el QR inmediatamente
+                let qrCode = instance.getQRCode();
+                console.log(`🔍 QR inmediato disponible: ${!!qrCode}`);
+
+                // Si no hay QR, esperar hasta 15 segundos para que se genere
+                if (!qrCode) {
+                    console.log(`⏳ QR no disponible inmediatamente, esperando generación...`);
+                    const maxAttempts = 30; // 30 intentos x 500ms = 15 segundos
+                    let attempts = 0;
+
+                    while (!qrCode && attempts < maxAttempts && !instance.isConnected()) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        qrCode = instance.getQRCode();
+                        attempts++;
+
+                        if (attempts % 5 === 0) { // Log cada 2.5 segundos
+                            console.log(`⏳ [${instanceId}] Esperando QR... intento ${attempts}/${maxAttempts}, conectado: ${instance.isConnected()}`);
+                        }
+                    }
+
+                    if (qrCode) {
+                        console.log(`✅ QR generado después de ${attempts * 500}ms`);
+                    }
+                }
+
                 if (qrCode) {
-                    res.json({ 
-                        success: true, 
+                    console.log(`🎉 QR encontrado, enviando respuesta exitosa`);
+                    res.json({
+                        success: true,
                         qr: qrCode,
                         instanceId,
                         expires_at: new Date(Date.now() + 45000).toISOString()
                     });
                 } else if (instance.isConnected()) {
-                    res.json({ 
-                        success: false, 
-                        message: 'Instancia ya está conectada'
+                    // Se conectó mientras esperábamos
+                    console.log(`🔄 Instancia se conectó automáticamente mientras esperábamos QR`);
+                    res.json({
+                        success: false,
+                        message: 'Instancia se conectó automáticamente'
                     });
                 } else {
-                    res.json({ 
-                        success: false, 
-                        message: 'QR no disponible'
+                    console.log(`⚠️ QR no se generó después de esperar - Estado final:`, {
+                        connected: instance.isConnected(),
+                        connecting: instance.isConnecting(),
+                        hasQR: !!instance.getQRCode()
+                    });
+                    res.json({
+                        success: false,
+                        message: 'QR no disponible. La instancia puede estar iniciándose. Intenta de nuevo en unos segundos.',
+                        debug: {
+                            connected: instance.isConnected(),
+                            connecting: instance.isConnecting(),
+                            hasQR: !!instance.getQRCode()
+                        }
                     });
                 }
             } catch (error) {
                 console.error(`❌ Error obteniendo QR para ${req.params.instanceId}:`, error);
-                res.status(500).json({ 
-                    success: false, 
-                    message: 'Error al obtener QR'
+                console.error(`❌ Detalles del error:`, {
+                    message: error.message,
+                    stack: error.stack
+                });
+                res.status(500).json({
+                    success: false,
+                    message: 'Error al obtener QR',
+                    error: error.message
                 });
             }
         });
@@ -303,26 +378,50 @@ class GuromensajesServer {
             }
         });
         
-        // Eliminar instancia específica
+        // Eliminar instancia específica (siempre devuelve JSON, evitando cuerpos vacíos)
         this.app.delete(`${apiPrefix}/instances/:instanceId`, async (req, res) => {
             try {
                 const { instanceId } = req.params;
                 console.log(`🗑️ Eliminación solicitada para instancia: ${instanceId}`);
-                
-                await this.whatsappManager.deleteInstance(instanceId);
-                
-                res.json({
+
+                // Verificar existencia de instancia para retornar 404 consistente en JSON
+                const instance = this.whatsappManager.getInstance(instanceId);
+                if (!instance) {
+                    res
+                        .status(404)
+                        .type('application/json')
+                        .send(JSON.stringify({
+                            success: false,
+                            message: 'Instancia no encontrada'
+                        }));
+                    return;
+                }
+
+                // Ejecutar eliminación con tolerancia a errores internos
+                try {
+                    await this.whatsappManager.deleteInstance(instanceId);
+                } catch (opErr) {
+                    // No romper la respuesta si Baileys emite errores internos durante logout
+                    console.error(`⚠️ Error durante eliminación de ${instanceId} (continuando):`, opErr);
+                }
+
+                const payload = {
                     success: true,
                     message: 'Instancia eliminada exitosamente',
                     instanceId
-                });
+                };
+                // Forzar Content-Type y cuerpo explícito para evitar "Unexpected end of JSON input"
+                res.status(200).type('application/json').send(JSON.stringify(payload));
+                return;
             } catch (error) {
                 console.error(`❌ Error eliminando instancia ${req.params.instanceId}:`, error);
-                res.status(500).json({ 
-                    success: false, 
-                    message: 'Error al eliminar instancia', 
-                    error: error.message 
-                });
+                const payload = {
+                    success: false,
+                    message: 'Error al eliminar instancia',
+                    error: error.message
+                };
+                // Asegurar siempre respuesta JSON incluso en error
+                res.status(500).type('application/json').send(JSON.stringify(payload));
             }
         });
         

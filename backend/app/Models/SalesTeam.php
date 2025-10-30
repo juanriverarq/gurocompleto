@@ -32,6 +32,11 @@ class SalesTeam extends Model
         return $this->belongsTo(User::class, 'leader_user_id');
     }
 
+    public function leaderVendedor()
+    {
+        return $this->belongsTo(Vendedor::class, 'leader_user_id');
+    }
+
     public function scopeForBroker($query, int $brokerId)
     {
         return $query->where('broker_id', $brokerId);

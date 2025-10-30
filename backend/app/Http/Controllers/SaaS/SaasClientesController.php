@@ -382,9 +382,9 @@ class SaasClientesController extends Controller
                 // Documentos empresa
                 $mappedData['document_type'] = $request->input('tipo_documento', $request->input('document_type', 'NIT'));
                 $mappedData['document_number'] = $request->input('documento', $request->input('document_number'));
-                // Contacto principal (opcional)
-                $mappedData['first_name'] = $request->input('first_name', $request->input('contacto_nombres', ''));
-                $mappedData['last_name'] = $request->input('last_name', $request->input('contacto_apellidos', ''));
+                // Contacto principal (opcional) - Convertir null a vacío para empresas
+                $mappedData['first_name'] = $request->input('first_name', $request->input('contacto_nombres', '')) ?? '';
+                $mappedData['last_name'] = $request->input('last_name', $request->input('contacto_apellidos', '')) ?? '';
             } else {
                 // Persona natural
                 $mappedData['first_name'] = $request->input('nombre', $request->input('first_name'));
@@ -586,10 +586,10 @@ class SaasClientesController extends Controller
             // Evitar forzar validación "required" cuando el campo viene vacío en empresas:
             // usar filled() en lugar de has() para solo mapear si trae contenido.
             if ($request->filled('first_name') || $request->filled('nombre')) {
-                $mappedData['first_name'] = $request->input('first_name', $request->input('nombre'));
+                $mappedData['first_name'] = $request->input('first_name', $request->input('nombre')) ?? '';
             }
             if ($request->filled('last_name') || $request->filled('apellidos')) {
-                $mappedData['last_name'] = $request->input('last_name', $request->input('apellidos'));
+                $mappedData['last_name'] = $request->input('last_name', $request->input('apellidos')) ?? '';
             }
 
             // Documento
@@ -928,7 +928,7 @@ class SaasClientesController extends Controller
 
             $brokerId = $user->broker_id;
 
-            // OPTIMIZACIÓN: Estadísticas básicas en una sola consulta
+            // OPTIMIZACIÓN: Estadísticas básicas de clientes en una sola consulta
             $basicStats = Cliente::where('broker_id', $brokerId)
                 ->selectRaw('
                     COUNT(*) as total_clientes,
@@ -936,7 +936,20 @@ class SaasClientesController extends Controller
                     COUNT(CASE WHEN status = "inactive" THEN 1 END) as clientes_inactivos,
                     COUNT(CASE WHEN status = "prospect" THEN 1 END) as clientes_prospectos,
                     COUNT(CASE WHEN status = "blocked" THEN 1 END) as clientes_bloqueados,
+                    COUNT(CASE WHEN client_type = "persona" THEN 1 END) as clientes_personas,
+                    COUNT(CASE WHEN client_type = "empresa" THEN 1 END) as clientes_empresas,
                     COUNT(CASE WHEN MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE()) THEN 1 END) as nuevos_este_mes
+                ')
+                ->first();
+
+            // OPTIMIZACIÓN: Estadísticas de pólizas activas (valor cartera y total pólizas)
+            $polizasStats = DB::table('polizas')
+                ->where('broker_id', $brokerId)
+                ->where('status', 'ACTIVA')
+                ->whereNull('deleted_at')
+                ->selectRaw('
+                    COUNT(*) as total_polizas_activas,
+                    COALESCE(SUM(premium_amount), 0) as valor_total_cartera
                 ')
                 ->first();
 
@@ -992,8 +1005,14 @@ class SaasClientesController extends Controller
                     'clientes_inactivos' => (int) $basicStats->clientes_inactivos,
                     'clientes_prospectos' => $prospectos,
                     'clientes_bloqueados' => (int) $basicStats->clientes_bloqueados,
+                    'clientes_personas' => (int) $basicStats->clientes_personas,
+                    'clientes_empresas' => (int) $basicStats->clientes_empresas,
                     'nuevos_este_mes' => (int) $basicStats->nuevos_este_mes,
                     'tasa_conversion' => $tasaConversion,
+                    // Estadísticas de pólizas
+                    'total_polizas_activas' => (int) ($polizasStats->total_polizas_activas ?? 0),
+                    'valor_total_cartera' => (float) ($polizasStats->valor_total_cartera ?? 0),
+                    // Estadísticas agrupadas
                     'clientes_por_mes' => $clientesPorMes,
                     'clientes_por_estado' => $clientesPorEstado,
                     'clientes_por_ciudad' => $clientesPorCiudad,

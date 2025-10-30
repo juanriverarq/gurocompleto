@@ -118,14 +118,46 @@ class WhatsAppInstanceService {
 
     try {
       const response = await fetch(url, options);
-      
+      const status = response.status;
+      const contentType = response.headers.get('content-type') || '';
+      console.log('📥 [INSTANCE DEBUG] Response meta:', { status, contentType });
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
+        // Leer como texto primero para evitar fallos en JSON vacío
+        const errorText = await response.text().catch(() => '');
+        let errorData: any = {};
+        if (errorText && (contentType.includes('application/json') || errorText.trim().startsWith('{') || errorText.trim().startsWith('['))) {
+          try { errorData = JSON.parse(errorText); } catch { /* ignore parse error */ }
+        }
+        throw new Error(`HTTP error! status: ${status}, message: ${errorData.message || errorText || 'Unknown error'}`);
       }
-      
-      const result = await response.json();
-      return result;
+
+      // No Content
+      if (status === 204) {
+        console.log('✅ [INSTANCE DEBUG] 204 No Content: devolviendo { success: true }');
+        return { success: true };
+      }
+
+      // Leer cuerpo como texto de forma segura
+      const text = await response.text();
+      if (!text || !text.trim()) {
+        console.log('✅ [INSTANCE DEBUG] Cuerpo vacío: devolviendo { success: true }');
+        return { success: true };
+      }
+
+      // Intentar parsear JSON si corresponde
+      if (contentType.includes('application/json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+        try {
+          const json = JSON.parse(text);
+          return json;
+        } catch (parseErr) {
+          console.warn('⚠️ [INSTANCE DEBUG] Falló parseo JSON; retornando texto como message');
+          return { success: true, message: text };
+        }
+      }
+
+      // Contenido no JSON
+      return { success: true, message: text };
     } catch (error) {
       console.error('WhatsApp Instance Service Error:', error);
       throw new Error(`Error de conexión con backend: ${error instanceof Error ? error.message : 'Error desconocido'}`);

@@ -3,8 +3,13 @@ import CardBox from "../../shared/CardBox";
 import Chart from 'react-apexcharts';
 import { useDashboardData } from "../../../hooks/useDashboardData";
 
-const CustomerChart = () => {
-  const { data, loading, error } = useDashboardData();
+interface CustomerChartProps {
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+const CustomerChart = ({ startDate, endDate }: CustomerChartProps) => {
+  const { data, loading, error } = useDashboardData({ startDate, endDate });
 
   const getChartData = () => {
     if (!data) {

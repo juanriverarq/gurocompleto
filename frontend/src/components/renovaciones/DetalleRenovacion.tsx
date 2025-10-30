@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Card, Badge, Button, Timeline } from 'flowbite-react';
+import { Modal, Card, Badge, Button, Timeline, Spinner } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { Link } from 'react-router-dom';
 import { Renovacion } from 'src/services/renovacionesService';
+import { useToast } from 'src/hooks/use-toast';
 
 interface DetalleRenovacionProps {
   show: boolean;
@@ -30,41 +31,63 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'historial' | 'documentos'>('general');
   const [historialContactos, setHistorialContactos] = useState<HistorialContacto[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const { toast } = useToast();
 
-  // Datos mock para el historial de contactos
-  const historialMock: HistorialContacto[] = [
-    {
-      id: '1',
-      fecha: '2024-07-20T10:30:00',
-      tipo: 'llamada',
-      resultado: 'Cliente contactado exitosamente',
-      observaciones: 'Cliente confirma interés en renovar, solicita cotización actualizada',
-      agente: 'María González'
-    },
-    {
-      id: '2',
-      fecha: '2024-07-18T14:15:00',
-      tipo: 'email',
-      resultado: 'Email enviado exitosamente',
-      observaciones: 'Envío de recordatorio de vencimiento y documentos requeridos',
-      agente: 'María González'
-    },
-    {
-      id: '3',
-      fecha: '2024-07-15T09:45:00',
-      tipo: 'whatsapp',
-      resultado: 'Cliente no disponible',
-      observaciones: 'Mensaje enviado, cliente responde que llamará en la tarde',
-      agente: 'María González'
-    }
-  ];
+  // Datos mock para el historial de contactos (solo para desarrollo)
+  const historialMock: HistorialContacto[] = [];
 
   useEffect(() => {
     if (renovacion) {
-      // Simular carga de historial
-      setHistorialContactos(historialMock);
+      // Cargar historial real desde el backend
+      loadHistorialContactos();
     }
   }, [renovacion]);
+
+  const loadHistorialContactos = async () => {
+    if (!renovacion) return;
+
+    setLoadingHistorial(true);
+    try {
+      // Llamada real al backend para obtener el historial
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8081/api'}/saas/polizas/${renovacion.poliza_id}/renovaciones/historial`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('saas_token')}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          // Transformar datos del backend al formato del componente
+          const historialTransformado = data.data.map((item: any) => ({
+            id: item.id || item.fecha,
+            fecha: item.fecha,
+            tipo: item.canal || item.tipo,
+            resultado: item.resultado,
+            observaciones: item.observaciones || item.descripcion,
+            agente: item.usuario || 'Sistema'
+          }));
+          setHistorialContactos(historialTransformado);
+        } else {
+          // No hay datos reales, mostrar lista vacía
+          setHistorialContactos([]);
+        }
+      } else {
+        // Error en la respuesta, mostrar lista vacía
+        setHistorialContactos([]);
+        console.error('Error en respuesta del servidor:', response.status);
+      }
+    } catch (error) {
+      console.error('Error cargando historial de contactos:', error);
+      // Error de conexión, mostrar lista vacía
+      setHistorialContactos([]);
+    } finally {
+      setLoadingHistorial(false);
+    }
+  };
 
   const tiposSeguro = [
     { value: 'vida', label: 'Vida', icon: 'solar:heart-bold-duotone', color: 'red' },
@@ -146,40 +169,62 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
   if (!renovacion) return null;
 
   return (
-    <Modal show={show} onClose={onClose} size="6xl" className="!max-w-6xl">
-      <Modal.Header className="border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between w-full pr-4">
-          <div className="flex items-center gap-3">
-            {getTipoIcon(renovacion.tipoSeguro)}
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Póliza {renovacion.numeroPoliza}
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {renovacion.cliente} • {renovacion.aseguradora}
-              </p>
+    <div
+      className={`fixed inset-0 z-[100] flex items-center justify-center ${
+        show ? 'block' : 'hidden'
+      }`}
+      style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-6xl max-h-[90vh] bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-gray-200 dark:border-gray-700 flex-shrink-0 p-6">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              {getTipoIcon(renovacion.tipoSeguro)}
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Póliza {renovacion.numeroPoliza}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {renovacion.cliente} • {renovacion.aseguradora}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                color={`light${getEstadoBadge(renovacion.estado)}`}
+                className="capitalize"
+              >
+                {estadosRenovacion.find(e => e.value === renovacion.estado)?.label || renovacion.estado}
+              </Badge>
+              <Badge
+                color={`light${getPrioridadBadge(renovacion.prioridad)}`}
+                className="capitalize"
+              >
+                {prioridadRenovacion.find(p => p.value === renovacion.prioridad)?.label || renovacion.prioridad}
+              </Badge>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <Icon icon="solar:close-bold-duotone" className="w-5 h-5" />
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge
-              color={`light${getEstadoBadge(renovacion.estado)}`}
-              className="capitalize"
-            >
-              {estadosRenovacion.find(e => e.value === renovacion.estado)?.label || renovacion.estado}
-            </Badge>
-            <Badge
-              color={`light${getPrioridadBadge(renovacion.prioridad)}`}
-              className="capitalize"
-            >
-              {prioridadRenovacion.find(p => p.value === renovacion.prioridad)?.label || renovacion.prioridad}
-            </Badge>
-          </div>
         </div>
-      </Modal.Header>
 
-      <Modal.Body className="p-0">
+        <div className="flex-1 overflow-hidden flex flex-col">
         {/* Tabs Navigation */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
+        <div className="border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <nav className="flex space-x-8 px-6 pt-4">
             <button
               onClick={() => setActiveTab('general')}
@@ -205,8 +250,12 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
               <div className="flex items-center gap-2">
                 <Icon icon="solar:history-bold-duotone" className="w-4 h-4" />
                 Historial
-                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs rounded-full px-2 py-0.5">
-                  {historialContactos.length}
+                <span className={`text-xs rounded-full px-2 py-0.5 ${
+                  loadingHistorial
+                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 animate-pulse'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                }`}>
+                  {loadingHistorial ? '...' : historialContactos.length}
                 </span>
               </div>
             </button>
@@ -226,8 +275,8 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
           </nav>
         </div>
 
-        {/* Tab Content */}
-        <div className="p-6">
+          {/* Tab Content */}
+          <div className="p-6 overflow-y-auto flex-1">
           {activeTab === 'general' && (
             <div className="space-y-6">
               {/* Alert de vencimiento */}
@@ -415,15 +464,14 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
                         </Button>
                       )}
 
-                      <Link to={`/apps/seguros/polizas/${renovacion.poliza_id}`}>
-                        <Button
-                          color="light"
-                          className="w-full justify-start"
-                        >
-                          <Icon icon="solar:document-bold-duotone" className="w-4 h-4 mr-2" />
-                          Ver Póliza Completa
-                        </Button>
-                      </Link>
+                      <Button
+                        color="light"
+                        className="w-full justify-start"
+                        onClick={() => window.open(`/apps/seguros/polizas/${renovacion.poliza_id}`, '_blank')}
+                      >
+                        <Icon icon="solar:document-bold-duotone" className="w-4 h-4 mr-2" />
+                        Ver Póliza Completa
+                      </Button>
                     </div>
                   </Card>
 
@@ -482,16 +530,36 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
                 </Button>
               </div>
 
-              {historialContactos.length > 0 ? (
+              {loadingHistorial ? (
+                <div className="flex justify-center items-center py-8">
+                  <Spinner size="lg" />
+                  <span className="ml-2">Cargando historial...</span>
+                </div>
+              ) : historialContactos.length === 0 ? (
+                <div className="text-center py-8">
+                  <Icon icon="solar:history-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">No hay contactos registrados para esta renovación</p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-400">Comienza el proceso de renovación registrando el primer contacto</p>
+                    <Button
+                      color="primary"
+                      onClick={() => onRegistrarContacto?.(renovacion)}
+                    >
+                      <Icon icon="solar:phone-bold-duotone" className="w-4 h-4 mr-2" />
+                      Registrar Primer Contacto
+                    </Button>
+                  </div>
+                </div>
+              ) : (
                 <div className="space-y-4">
                   {historialContactos.map((contacto) => (
                     <Card key={contacto.id} className="relative">
                       <div className="flex items-start gap-4">
                         <div className="flex-shrink-0">
                           <div className="flex items-center justify-center w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-full">
-                            <Icon 
-                              icon={getContactoIcon(contacto.tipo)} 
-                              className="w-5 h-5 text-blue-600 dark:text-blue-400" 
+                            <Icon
+                              icon={getContactoIcon(contacto.tipo)}
+                              className="w-5 h-5 text-blue-600 dark:text-blue-400"
                             />
                           </div>
                         </div>
@@ -528,80 +596,30 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
                     </Card>
                   ))}
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Icon icon="solar:history-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 mb-4">No hay contactos registrados</p>
-                  <Button
-                    color="primary"
-                    onClick={() => onRegistrarContacto?.(renovacion)}
-                  >
-                    <Icon icon="solar:phone-bold-duotone" className="w-4 h-4 mr-2" />
-                    Registrar Primer Contacto
-                  </Button>
-                </div>
               )}
             </div>
           )}
 
           {activeTab === 'documentos' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <div className="text-center">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Documentos de la Renovación
                 </h4>
-                <Button color="primary" size="sm">
-                  <Icon icon="solar:upload-bold-duotone" className="w-4 h-4 mr-2" />
-                  Subir Documento
-                </Button>
               </div>
 
-              {/* Lista de documentos simulada */}
-              <div className="space-y-3">
-                {[
-                  { nombre: 'Póliza Original.pdf', fecha: '2024-07-15', tipo: 'PDF', tamaño: '2.4 MB' },
-                  { nombre: 'Inspección Vehículo.jpg', fecha: '2024-07-18', tipo: 'Imagen', tamaño: '1.8 MB' },
-                  { nombre: 'Documentos Cliente.zip', fecha: '2024-07-20', tipo: 'ZIP', tamaño: '5.2 MB' }
-                ].map((doc, index) => (
-                  <Card key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                          <Icon 
-                            icon={
-                              doc.tipo === 'PDF' ? 'solar:file-text-bold-duotone' :
-                              doc.tipo === 'Imagen' ? 'solar:gallery-bold-duotone' :
-                              'solar:folder-bold-duotone'
-                            } 
-                            className="w-5 h-5 text-gray-600 dark:text-gray-400" 
-                          />
-                        </div>
-                        <div>
-                          <h6 className="text-sm font-medium text-gray-900 dark:text-white">
-                            {doc.nombre}
-                          </h6>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {doc.tamaño} • {new Date(doc.fecha).toLocaleDateString('es-CO')}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button color="light" size="xs">
-                          <Icon icon="solar:download-bold-duotone" className="w-4 h-4" />
-                        </Button>
-                        <Button color="light" size="xs">
-                          <Icon icon="solar:eye-bold-duotone" className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+              {/* Lista de documentos - funcionalidad pendiente */}
+              <div className="text-center py-8">
+                <Icon icon="solar:folder-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 mb-4">Documentos de renovación</p>
+                <p className="text-sm text-gray-400">Esta funcionalidad estará disponible próximamente</p>
               </div>
             </div>
           )}
+          </div>
         </div>
-      </Modal.Body>
-    </Modal>
+      </div>
+    </div>
   );
 };
 

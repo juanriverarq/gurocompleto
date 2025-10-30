@@ -113,7 +113,7 @@ const CreateButton = () => {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full mt-2 w-80 sm:w-72 bg-white dark:bg-darkgray rounded-lg shadow-lg border border-ld dark:border-darkborder z-50 left-0 sm:left-0 right-auto origin-top-left min-w-[280px] max-w-[calc(100vw-1rem)]">
+        <div className="absolute top-full mt-2 w-80 sm:w-72 bg-white dark:bg-darkgray rounded-lg shadow-lg border border-ld dark:border-darkborder z-[30] left-0 sm:left-0 right-auto origin-top-left min-w-[280px] max-w-[calc(100vw-1rem)]">
           <div className="p-3">
             <div className="mb-3">
               <h4 className="text-sm font-semibold text-ld mb-1">Crear Nuevo</h4>

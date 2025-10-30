@@ -30,11 +30,7 @@ class SaasSalesGoalsController extends Controller
     {
         $brokerId = $request->user()->broker_id;
         $validated = $request->validate([
-            'user_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('users', 'id')->where(fn($q) => $q->where('broker_id', $brokerId)),
-            ],
+            'user_id' => 'nullable|integer',
             'team_id' => [
                 'nullable',
                 'integer',
@@ -65,11 +61,7 @@ class SaasSalesGoalsController extends Controller
         $this->authorizeGoal($request, $goal);
         $brokerId = $request->user()->broker_id;
         $validated = $request->validate([
-            'user_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('users', 'id')->where(fn($q) => $q->where('broker_id', $brokerId)),
-            ],
+            'user_id' => 'nullable|integer',
             'team_id' => [
                 'nullable',
                 'integer',

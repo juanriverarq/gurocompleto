@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use App\Traits\RequiresAuth;
 use App\Models\Broker;
+use App\Models\CampaignExecution;
 
 class WalletController extends Controller
 {
@@ -256,17 +257,48 @@ class WalletController extends Controller
                 ->take(20)
                 ->get()
                 ->map(function (WalletTransaction $tx) {
+                    $description = $tx->description;
+                    $campaignName = null;
+
+                    if ($tx->reference_type === 'whatsapp_campaign_execution') {
+                        // Preferir metadata si viene
+                        $campaignName = is_array($tx->metadata ?? null) ? ($tx->metadata['campaign_name'] ?? null) : null;
+
+                        // Si no viene en metadata, intentar resolver por ejecución -> campaña
+                        if (!$campaignName && $tx->reference_id) {
+                            try {
+                                $exec = CampaignExecution::find($tx->reference_id);
+                                if ($exec && $exec->campaign) {
+                                    $campaignName = $exec->campaign->name;
+                                }
+                            } catch (\Throwable $e) {
+                                // ignorar errores de lookup
+                            }
+                        }
+
+                        // Si logramos nombre de campaña, usarlo como descripción visible con etiqueta WhatsApp
+                        if ($campaignName) {
+                            $description = 'Envío WhatsApp: ' . $campaignName;
+                        } else {
+                            // fallback claro por si no se pudo resolver el nombre
+                            $description = 'Envío WhatsApp';
+                        }
+                    }
+
                     return [
                         'id' => $tx->id,
                         'type' => $tx->type,
                         'amount_cop' => (float) $tx->amount_cop,
                         'currency' => $tx->currency,
-                        'description' => $tx->description,
+                        'description' => $description,
                         'reference_type' => $tx->reference_type,
                         'reference_id' => $tx->reference_id,
                         'balance_cop_after' => (float) $tx->balance_cop_after,
                         'created_at' => $tx->created_at?->toDateTimeString(),
-                        'metadata' => $tx->metadata,
+                        'metadata' => array_merge(is_array($tx->metadata ?? null) ? $tx->metadata : [], [
+                            'campaign_name' => $campaignName,
+                            'label' => 'whatsapp_send'
+                        ]),
                     ];
                 });
 

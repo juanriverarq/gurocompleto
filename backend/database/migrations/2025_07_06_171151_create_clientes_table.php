@@ -18,8 +18,8 @@ return new class extends Migration
             $table->unsignedBigInteger('broker_id'); // Aislamiento multi-tenant
             
             // Información personal
-            $table->string('first_name');
-            $table->string('last_name');
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
             $table->string('document_type')->default('CC'); // CC, NIT, CE, etc.
             $table->string('document_number');
             $table->string('email')->nullable();

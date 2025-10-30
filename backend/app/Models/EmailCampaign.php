@@ -14,6 +14,7 @@ class EmailCampaign extends Model
         'segment_filters' => 'array',
         'stats_json' => 'array',
         'last_execution' => 'datetime',
+        'last_stats_sync' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'is_active' => 'boolean',
@@ -44,27 +45,70 @@ class EmailCampaign extends Model
     // Utilidad: actualizar métricas agregadas
     public function refreshStats(): void
     {
-        $sent = $this->recipients()->where('status', 'sent')->count();
-        $delivered = $this->recipients()->where('status', 'delivered')->count();
-        $failed = $this->recipients()->where('status', 'failed')->count();
-        $opened = $this->recipients()->where('status', 'opened')->count();
-        $clicked = $this->recipients()->where('status', 'clicked')->count();
+        // Los estados progresan: pending -> sent -> delivered -> opened -> clicked
+        // También puede haber: failed (en cualquier momento antes de delivered)
+        // Contamos cada estado considerando la progresión
+        
         $total = $this->recipients()->count();
+        
+        // Enviados: todos los que NO están en pending o failed
+        $sent = $this->recipients()
+            ->whereIn('status', ['sent', 'delivered', 'opened', 'clicked'])
+            ->count();
+        
+        // Entregados: delivered, opened, clicked (progresión exitosa)
+        $delivered = $this->recipients()
+            ->whereIn('status', ['delivered', 'opened', 'clicked'])
+            ->count();
+        
+        // Fallidos: solo los que tienen status failed
+        $failed = $this->recipients()
+            ->where('status', 'failed')
+            ->count();
+        
+        // Abiertos: opened, clicked (clicked implica que se abrió)
+        $opened = $this->recipients()
+            ->whereIn('status', ['opened', 'clicked'])
+            ->count();
+        
+        // Clicks: solo clicked
+        $clicked = $this->recipients()
+            ->where('status', 'clicked')
+            ->count();
+        
+        // Pendientes: aún no enviados
+        $pending = $this->recipients()
+            ->where('status', 'pending')
+            ->count();
 
         $stats = [
             'total' => $total,
+            'pending' => $pending,
             'sent' => $sent,
             'delivered' => $delivered,
             'failed' => $failed,
             'opened' => $opened,
             'clicked' => $clicked,
+            'bounced' => $failed, // Alias para compatibilidad
             'delivery_rate' => $sent > 0 ? round(($delivered / $sent) * 100, 2) : 0,
-            'open_rate' => $total > 0 ? round(($opened / $total) * 100, 2) : 0,
-            'click_rate' => $total > 0 ? round(($clicked / $total) * 100, 2) : 0,
+            'open_rate' => $delivered > 0 ? round(($opened / $delivered) * 100, 2) : 0,
+            'click_rate' => $opened > 0 ? round(($clicked / $opened) * 100, 2) : 0,
         ];
 
-        $this->update([
+        // Determinar si la campaña debe marcarse como completada
+        // Una campaña está completada cuando no hay recipients pendientes
+        $shouldComplete = $pending === 0 && $total > 0 && $this->status === 'running';
+        
+        $updateData = [
             'stats_json' => $stats,
-        ]);
+            'last_stats_sync' => now(),
+        ];
+        
+        if ($shouldComplete) {
+            $updateData['status'] = 'completed';
+            $updateData['is_active'] = false;
+        }
+        
+        $this->update($updateData);
     }
 }

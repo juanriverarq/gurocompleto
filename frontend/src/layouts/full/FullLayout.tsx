@@ -15,11 +15,11 @@ const FullLayout: FC = () => {
       <>
       
     <div className="flex w-full min-h-screen dark:bg-darkgray">
-      <div className="page-wrapper flex w-full  ">
+      <div className="page-wrapper flex w-full min-w-0">
         {/* Header/sidebar */}
 
         {activeLayout == "vertical" ? <Sidebar /> : null}
-        <div className="page-wrapper-sub flex flex-col w-full dark:bg-darkgray">
+        <div className="page-wrapper-sub flex flex-col w-full min-w-0 dark:bg-darkgray">
           {/* Top Header  */}
           {activeLayout == "horizontal" ? (
             <Header layoutType="horizontal" />
@@ -37,8 +37,8 @@ const FullLayout: FC = () => {
             <div
               className={` ${
                 isLayout == "full"
-                  ? "w-full py-30 md:px-30 px-5"
-                  : "container mx-auto  py-30"
+                  ? "w-full py-8 md:py-10 px-4 md:px-6 xl:px-8 2xl:px-10 min-w-0 overflow-x-auto"
+                  : "container mx-auto py-8 md:py-10"
               } ${activeLayout == "horizontal" ? "xl:mt-3" : ""}
               `}
             >

@@ -10,11 +10,11 @@ const MobileDrawer = () => {
   const handleClose = () => setIsOpen(false);
 
   const menuItems = [
-    { name: "Funciones", href: "#funciones" },
-    { name: "Características", href: "#caracteristicas" },
-    { name: "Testimonios", href: "#testimonios" },
-    { name: "Precios", href: "#precios" },
-    { name: "FAQ", href: "#faq" }
+    { name: "Funciones", href: "#funciones", isLink: false },
+    { name: "Características", href: "#caracteristicas", isLink: false },
+    { name: "Testimonios", href: "#testimonios", isLink: false },
+    { name: "Precios", href: "/precios", isLink: true },
+    { name: "FAQ", href: "#faq", isLink: false }
   ];
 
   return (
@@ -34,14 +34,25 @@ const MobileDrawer = () => {
           <div className="mt-8">
             <nav className="space-y-2">
               {menuItems.map((item, index) => (
-                <a
-                  key={index}
-                  href={item.href}
-                  onClick={handleClose}
-                  className="block py-3 px-2 text-base text-dark dark:text-white font-medium hover:text-primary hover:bg-lightprimary rounded-md transition-colors"
-                >
-                  {item.name}
-                </a>
+                item.isLink ? (
+                  <Link
+                    key={index}
+                    to={item.href}
+                    onClick={handleClose}
+                    className="block py-3 px-2 text-base text-dark dark:text-white font-medium hover:text-primary hover:bg-lightprimary rounded-md transition-colors"
+                  >
+                    {item.name}
+                  </Link>
+                ) : (
+                  <a
+                    key={index}
+                    href={item.href}
+                    onClick={handleClose}
+                    className="block py-3 px-2 text-base text-dark dark:text-white font-medium hover:text-primary hover:bg-lightprimary rounded-md transition-colors"
+                  >
+                    {item.name}
+                  </a>
+                )
               ))}
             </nav>
           </div>

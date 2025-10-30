@@ -65,7 +65,7 @@ export const Language = () => {
       <div className="relative group/menu">
         <Dropdown
           label=""
-          className="w-56 rounded-sm"
+          className="w-56 rounded-sm z-[30]"
           dismissOnClick={false}
           renderTrigger={() => (
             <span className="h-8 w-8 hover:bg-lightprimary rounded-full flex justify-center items-center cursor-pointer group-hover/menu:bg-lightprimary">

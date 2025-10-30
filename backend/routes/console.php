@@ -165,3 +165,33 @@ Schedule::command('campaigns:run-scheduled --limit=20')
     ->everyMinute()
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/schedule.log'));
+
+/**
+ * Ejecuta notificaciones de pólizas programadas cada minuto.
+ * Verifica la hora configurada y los días de envío antes de ejecutar.
+ * Ver comando: policy:send-notifications
+ */
+Schedule::command('policy:send-notifications')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/policy-notifications.log'));
+
+/**
+ * Sincroniza estadísticas de campañas de email desde SendGrid cada 5 minutos.
+ * Actualiza métricas de aperturas, clics, entregas, rebotes para campañas activas.
+ * Ver comando: sendgrid:sync-stats
+ */
+Schedule::command('sendgrid:sync-stats')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/sendgrid-sync.log'));
+
+/**
+ * Procesa triggers de vencimiento de pólizas para campañas de voz automáticas.
+ * Revisa pólizas próximas a vencer y dispara llamadas según configuración de triggers.
+ * Ver comando: voice-campaigns:process-policy-expiry
+ */
+Schedule::command('voice-campaigns:process-policy-expiry --days-range=60')
+    ->dailyAt('06:00')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/voice-campaign-triggers.log'));

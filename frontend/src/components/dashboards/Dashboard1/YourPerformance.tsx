@@ -3,8 +3,13 @@ import { Icon } from "@iconify/react";
 import Chart from 'react-apexcharts';
 import { useDashboardData } from "../../../hooks/useDashboardData";
 
-const YourPerformance = () => {
-  const { data, loading, error } = useDashboardData();
+interface YourPerformanceProps {
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+const YourPerformance = ({ startDate, endDate }: YourPerformanceProps) => {
+  const { data, loading, error } = useDashboardData({ startDate, endDate });
 
   const getPerformanceData = () => {
     if (!data) {

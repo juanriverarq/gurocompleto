@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\SaaS;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\CommercialTaskResource;
 use App\Models\CommercialTask;
 use App\Models\Cliente;
 use App\Models\Poliza;
@@ -24,7 +25,23 @@ class SaasCommercialTasksController extends Controller
             $brokerId = $this->getBrokerId($request);
             
             $query = CommercialTask::forBroker($brokerId)
-                ->with(['client', 'poliza', 'assignedUser', 'creator']);
+                ->with([
+                    'client' => function($q) {
+                        $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                    },
+                    'poliza' => function($q) {
+                        $q->select('id', 'policy_number', 'type', 'status');
+                    },
+                    'assignedUser' => function($q) {
+                        $q->select('id', 'name', 'email');
+                    },
+                    'assignedEmpleado' => function($q) {
+                        $q->select('id', 'nombres', 'apellidos', 'email');
+                    },
+                    'creator' => function($q) {
+                        $q->select('id', 'name', 'email');
+                    }
+                ]);
 
             // Aplicar filtros
             $this->applyFilters($query, $request);
@@ -38,8 +55,19 @@ class SaasCommercialTasksController extends Controller
             $perPage = min($request->get('per_page', 15), 100);
             $tasks = $query->paginate($perPage);
 
+            // Debug: Log para verificar la carga de usuarios asignados
+            \Log::info('🔍 [DEBUG] Commercial Tasks cargadas', [
+                'total' => $tasks->total(),
+                'first_task_assigned_to' => $tasks->items()[0]->assigned_to ?? null,
+                'first_task_has_assigned_user' => isset($tasks->items()[0]) && $tasks->items()[0]->relationLoaded('assignedUser'),
+                'first_task_assigned_user_data' => isset($tasks->items()[0]) && $tasks->items()[0]->assignedUser ? [
+                    'id' => $tasks->items()[0]->assignedUser->id,
+                    'name' => $tasks->items()[0]->assignedUser->name,
+                ] : 'NO LOADED'
+            ]);
+
             return response()->json([
-                'data' => $tasks->items(),
+                'data' => CommercialTaskResource::collection($tasks->items()),
                 'current_page' => $tasks->currentPage(),
                 'last_page' => $tasks->lastPage(),
                 'per_page' => $tasks->perPage(),
@@ -71,7 +99,7 @@ class SaasCommercialTasksController extends Controller
                 'priority' => 'required|in:' . implode(',', array_keys(CommercialTask::PRIORITIES)),
                 'client_id' => 'nullable|exists:clientes,id',
                 'poliza_id' => 'nullable|exists:polizas,id',
-                'assigned_to' => 'nullable|exists:users,id',
+                'assigned_to' => 'nullable|integer',
                 'due_date' => 'nullable|date|after:now',
                 'scheduled_for' => 'nullable|date',
                 'contact_method' => 'nullable|in:' . implode(',', array_keys(CommercialTask::CONTACT_METHODS)),
@@ -99,7 +127,23 @@ class SaasCommercialTasksController extends Controller
             }
 
             $task = CommercialTask::create($taskData);
-            $task->load(['client', 'poliza', 'assignedUser', 'creator']);
+            $task->load([
+                'client' => function($q) {
+                    $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                },
+                'poliza' => function($q) {
+                    $q->select('id', 'policy_number', 'type', 'status');
+                },
+                'assignedUser' => function($q) {
+                    $q->select('id', 'name', 'email');
+                },
+                'assignedEmpleado' => function($q) {
+                    $q->select('id', 'nombres', 'apellidos', 'email');
+                },
+                'creator' => function($q) {
+                    $q->select('id', 'name', 'email');
+                }
+            ]);
 
             $task->addActivity('Tarea creada', [
                 'title' => $task->title,
@@ -109,7 +153,7 @@ class SaasCommercialTasksController extends Controller
 
             return response()->json([
                 'message' => 'Tarea creada exitosamente',
-                'data' => $task
+                'data' => new CommercialTaskResource($task)
             ], 201);
 
         } catch (\Exception $e) {
@@ -132,9 +176,25 @@ class SaasCommercialTasksController extends Controller
                 return response()->json(['error' => 'Acceso denegado'], 403);
             }
 
-            $task->load(['client', 'poliza', 'assignedUser', 'creator']);
+            $task->load([
+                'client' => function($q) {
+                    $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                },
+                'poliza' => function($q) {
+                    $q->select('id', 'policy_number', 'type', 'status');
+                },
+                'assignedUser' => function($q) {
+                    $q->select('id', 'name', 'email');
+                },
+                'assignedEmpleado' => function($q) {
+                    $q->select('id', 'nombres', 'apellidos', 'email');
+                },
+                'creator' => function($q) {
+                    $q->select('id', 'name', 'email');
+                }
+            ]);
 
-            return response()->json(['data' => $task]);
+            return response()->json(['data' => new CommercialTaskResource($task)]);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -164,7 +224,7 @@ class SaasCommercialTasksController extends Controller
                 'status' => 'sometimes|required|in:' . implode(',', array_keys(CommercialTask::STATUSES)),
                 'client_id' => 'nullable|exists:clientes,id',
                 'poliza_id' => 'nullable|exists:polizas,id',
-                'assigned_to' => 'nullable|exists:users,id',
+                'assigned_to' => 'nullable|integer',
                 'due_date' => 'nullable|date',
                 'scheduled_for' => 'nullable|date',
                 'progress_percentage' => 'sometimes|integer|min:0|max:100',
@@ -198,11 +258,27 @@ class SaasCommercialTasksController extends Controller
                 ]);
             }
 
-            $task->load(['client', 'poliza', 'assignedUser', 'creator']);
+            $task->load([
+                'client' => function($q) {
+                    $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                },
+                'poliza' => function($q) {
+                    $q->select('id', 'policy_number', 'type', 'status');
+                },
+                'assignedUser' => function($q) {
+                    $q->select('id', 'name', 'email');
+                },
+                'assignedEmpleado' => function($q) {
+                    $q->select('id', 'nombres', 'apellidos', 'email');
+                },
+                'creator' => function($q) {
+                    $q->select('id', 'name', 'email');
+                }
+            ]);
 
             return response()->json([
                 'message' => 'Tarea actualizada exitosamente',
-                'data' => $task
+                'data' => new CommercialTaskResource($task)
             ]);
 
         } catch (\Exception $e) {
@@ -274,9 +350,24 @@ class SaasCommercialTasksController extends Controller
             $task->start();
             $task->addActivity('Tarea iniciada');
 
+            $task->load([
+                'client' => function($q) {
+                    $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                },
+                'poliza' => function($q) {
+                    $q->select('id', 'numero_poliza', 'tipo_seguro', 'estado');
+                },
+                'assignedUser' => function($q) {
+                    $q->select('id', 'name', 'email');
+                },
+                'assignedEmpleado' => function($q) {
+                    $q->select('id', 'nombres', 'apellidos', 'email');
+                }
+            ]);
+
             return response()->json([
                 'message' => 'Tarea iniciada exitosamente',
-                'data' => $task->fresh(['client', 'poliza', 'assignedUser'])
+                'data' => new CommercialTaskResource($task)
             ]);
 
         } catch (\Exception $e) {
@@ -322,9 +413,24 @@ class SaasCommercialTasksController extends Controller
 
             $task->addActivity('Tarea completada', $data);
 
+            $task->load([
+                'client' => function($q) {
+                    $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                },
+                'poliza' => function($q) {
+                    $q->select('id', 'policy_number', 'type', 'status');
+                },
+                'assignedUser' => function($q) {
+                    $q->select('id', 'name', 'email');
+                },
+                'assignedEmpleado' => function($q) {
+                    $q->select('id', 'nombres', 'apellidos', 'email');
+                }
+            ]);
+
             return response()->json([
                 'message' => 'Tarea completada exitosamente',
-                'data' => $task->fresh(['client', 'poliza', 'assignedUser'])
+                'data' => new CommercialTaskResource($task)
             ]);
 
         } catch (\Exception $e) {
@@ -367,9 +473,24 @@ class SaasCommercialTasksController extends Controller
                 'notes' => $data['notes'] ?? null
             ]);
 
+            $task->load([
+                'client' => function($q) {
+                    $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                },
+                'poliza' => function($q) {
+                    $q->select('id', 'policy_number', 'type', 'status');
+                },
+                'assignedUser' => function($q) {
+                    $q->select('id', 'name', 'email');
+                },
+                'assignedEmpleado' => function($q) {
+                    $q->select('id', 'nombres', 'apellidos', 'email');
+                }
+            ]);
+
             return response()->json([
                 'message' => 'Progreso actualizado exitosamente',
-                'data' => $task->fresh(['client', 'poliza', 'assignedUser'])
+                'data' => new CommercialTaskResource($task)
             ]);
 
         } catch (\Exception $e) {
@@ -413,9 +534,24 @@ class SaasCommercialTasksController extends Controller
                 'notes' => $data['notes'] ?? null
             ]);
 
+            $task->load([
+                'client' => function($q) {
+                    $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                },
+                'poliza' => function($q) {
+                    $q->select('id', 'policy_number', 'type', 'status');
+                },
+                'assignedUser' => function($q) {
+                    $q->select('id', 'name', 'email');
+                },
+                'assignedEmpleado' => function($q) {
+                    $q->select('id', 'nombres', 'apellidos', 'email');
+                }
+            ]);
+
             return response()->json([
                 'message' => 'Seguimiento programado exitosamente',
-                'data' => $task->fresh(['client', 'poliza', 'assignedUser'])
+                'data' => new CommercialTaskResource($task)
             ]);
 
         } catch (\Exception $e) {
@@ -434,9 +570,24 @@ class SaasCommercialTasksController extends Controller
         try {
             $brokerId = $this->getBrokerId($request);
             
-            $tasks = CommercialTask::getTasksNeedingAttention($brokerId)->get();
+            $tasks = CommercialTask::getTasksNeedingAttention($brokerId)
+                ->with([
+                    'client' => function($q) {
+                        $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                    },
+                    'poliza' => function($q) {
+                        $q->select('id', 'numero_poliza', 'tipo_seguro', 'estado');
+                    },
+                    'assignedUser' => function($q) {
+                        $q->select('id', 'name', 'email');
+                    },
+                    'assignedEmpleado' => function($q) {
+                        $q->select('id', 'nombres', 'apellidos', 'email');
+                    }
+                ])
+                ->get();
 
-            return response()->json(['data' => $tasks]);
+            return response()->json(['data' => CommercialTaskResource::collection($tasks)]);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -529,8 +680,24 @@ class SaasCommercialTasksController extends Controller
             }
         }
 
-        // Producción: obtener de usuario autenticado
-        return auth()->user()->broker_id ?? 4; // Fallback para desarrollo
+        // Obtener de usuario autenticado
+        $user = auth()->user();
+        if ($user && $user->broker_id) {
+            return $user->broker_id;
+        }
+
+        // Fallback: intentar obtener del request
+        if ($request->has('broker_id')) {
+            return (int) $request->broker_id;
+        }
+
+        // Último fallback para desarrollo
+        \Log::warning('🔥 getBrokerId - No se pudo obtener broker_id, usando fallback', [
+            'user' => $user ? $user->id : null,
+            'has_broker_id' => $user ? isset($user->broker_id) : false
+        ]);
+        
+        return 21; // Fallback al broker con datos
     }
 
     private function applyFilters($query, Request $request): void

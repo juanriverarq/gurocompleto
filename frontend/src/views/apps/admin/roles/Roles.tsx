@@ -42,13 +42,13 @@ const defaultModulosDisponibles = {
   sms_marketing: { label: 'SMS Marketing', icon: 'solar:phone-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'enviar'] },
   enlaces_cotizacion: { label: 'Enlaces de Cotización', icon: 'solar:link-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
   plantillas_campana: { label: 'Plantillas de Campaña', icon: 'solar:document-text-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
+  mini_web: { label: 'Mini Web', icon: 'solar:globe-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'publicar'] },
   configuracion_masiva: { label: 'Configuración Masiva', icon: 'solar:chat-round-dots-bold-duotone', permisos: ['ver', 'ejecutar'] },
   asistentes_ia: { label: 'Asistentes IA', icon: 'solar:cpu-bolt-bold-duotone', permisos: ['ver', 'usar', 'configurar'] },
   voice_ai: { label: 'Voice AI (ElevenLabs)', icon: 'solar:microphone-bold-duotone', permisos: ['ver', 'usar', 'configurar'] },
   analytics_predictivo: { label: 'Analytics Predictivo', icon: 'solar:chart-square-bold-duotone', permisos: ['ver', 'usar', 'configurar'] },
   comisiones: { label: 'Comisiones', icon: 'solar:dollar-minimalistic-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'calcular', 'pagar'] },
-  cartera_clientes: { label: 'Cartera de Clientes', icon: 'solar:users-group-rounded-bold-duotone', permisos: ['ver', 'gestionar'] },
-  estados_cuenta: { label: 'Estados de Cuenta', icon: 'solar:document-text-bold-duotone', permisos: ['ver', 'generar', 'enviar'] },
+  cartera: { label: 'Cartera', icon: 'solar:wallet-bold-duotone', permisos: ['ver', 'gestionar'] },
   reportes_financieros: { label: 'Reportes Financieros', icon: 'solar:chart-square-bold-duotone', permisos: ['ver', 'generar', 'exportar'] },
   contratos: { label: 'Contratos', icon: 'solar:document-medicine-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'firmar'] },
   documentos_poliza: { label: 'Documentos de Póliza', icon: 'solar:folder-with-files-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'] },
@@ -93,13 +93,13 @@ const buildCategorias = (mods: Record<string, { label: string; icon?: string; pe
     ['Gestión Comercial', ['embudo_ventas', 'seguimiento_comercial', 'metas_objetivos', 'equipos_ventas', 'analisis_rendimiento']],
 
     // Marketing Digital
-    ['Marketing Digital', ['whatsapp_business', 'email_marketing', 'sms_marketing', 'enlaces_cotizacion']],
+    ['Marketing Digital', ['whatsapp_business', 'email_marketing', 'sms_marketing', 'enlaces_cotizacion', 'mini_web']],
 
     // Inteligencia Artificial
     ['Inteligencia Artificial', ['asistentes_ia', 'voice_ai', 'analytics_predictivo']],
 
     // Gestión Financiera
-    ['Gestión Financiera', ['comisiones', 'cartera_clientes', 'estados_cuenta', 'reportes_financieros']],
+    ['Gestión Financiera', ['cartera', 'comisiones', 'liquidar_vendedores', 'reportes_financieros']],
 
     // Gestión Documental
     ['Gestión Documental', ['contratos', 'documentos_clientes', 'documentos_poliza', 'documentos_siniestro', 'cumplimiento_legal']],
@@ -147,6 +147,7 @@ const LABEL_OVERRIDES: Record<string, string> = {
   email_marketing: 'Email Marketing',
   sms_marketing: 'SMS Marketing',
   enlaces_cotizacion: 'Enlaces de Cotización',
+  mini_web: 'Mini Web',
 
   // IA
   asistentes_ia: 'Chatbot',

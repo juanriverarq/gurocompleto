@@ -48,10 +48,21 @@ export interface ReportePorAseguradora {
   crecimientoMensual: number;
 }
 
+export interface FiltrosReportes {
+  period?: string;
+  months?: number;
+  broker_id?: number;
+  aseguradora_id?: number;
+  ramo_id?: number;
+  vendedor_id?: number;
+  sede_id?: number;
+  cliente_id?: number;
+  fecha_inicio?: string;
+  fecha_fin?: string;
+}
+
 export default {
-  async monthly(
-    params: { period?: string; months?: number; broker_id?: number } = {},
-  ): Promise<ReporteFinanciero[]> {
+  async monthly(params: FiltrosReportes = {}): Promise<ReporteFinanciero[]> {
     const usp = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null) usp.append(k, String(v));
@@ -59,9 +70,7 @@ export default {
     const res = await req(`/saas/cartera/reportes-financieros/monthly?${usp.toString()}`);
     return res.json();
   },
-  async byAdvisor(
-    params: { period?: string; broker_id?: number } = {},
-  ): Promise<ReportePorAsesor[]> {
+  async byAdvisor(params: FiltrosReportes = {}): Promise<ReportePorAsesor[]> {
     const usp = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null) usp.append(k, String(v));
@@ -69,14 +78,36 @@ export default {
     const res = await req(`/saas/cartera/reportes-financieros/by-advisor?${usp.toString()}`);
     return res.json();
   },
-  async byInsurer(
-    params: { period?: string; broker_id?: number } = {},
-  ): Promise<ReportePorAseguradora[]> {
+  async byInsurer(params: FiltrosReportes = {}): Promise<ReportePorAseguradora[]> {
     const usp = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null) usp.append(k, String(v));
     });
     const res = await req(`/saas/cartera/reportes-financieros/by-insurer?${usp.toString()}`);
+    return res.json();
+  },
+  async byRamo(params: FiltrosReportes = {}): Promise<any[]> {
+    const usp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) usp.append(k, String(v));
+    });
+    const res = await req(`/saas/cartera/reportes-financieros/by-ramo?${usp.toString()}`);
+    return res.json();
+  },
+  async byCliente(params: FiltrosReportes = {}): Promise<any[]> {
+    const usp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) usp.append(k, String(v));
+    });
+    const res = await req(`/saas/cartera/reportes-financieros/by-cliente?${usp.toString()}`);
+    return res.json();
+  },
+  async topClientes(params: { period?: string; limit?: number } = {}): Promise<any[]> {
+    const usp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) usp.append(k, String(v));
+    });
+    const res = await req(`/saas/cartera/reportes-financieros/top-clientes?${usp.toString()}`);
     return res.json();
   },
 };
