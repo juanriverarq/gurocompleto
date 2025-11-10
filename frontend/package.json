@@ -10,7 +10,6 @@
     "preview": "vite preview",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run --headless",
-
     "deploy:ssh": "bash scripts/deploy-ssh.sh",
     "deploy:ssh:build": "BUILD_FIRST=true bash scripts/deploy-ssh.sh",
     "deploy:quick": "bash scripts/deploy-quick.sh"
@@ -148,13 +147,13 @@
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "copy-webpack-plugin": "^13.0.0",
+    "cypress": "^13.13.1",
     "eslint": "latest",
     "eslint-config-next": "latest",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "5.5.4",
-    "vite": "^5.4.11",
-    "cypress": "^13.13.1"
+    "vite": "^5.4.11"
   },
   "msw": {
     "workerDirectory": [

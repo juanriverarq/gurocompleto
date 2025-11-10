@@ -1,10 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import {
-  Select,
-  Button,
-  Textarea,
-  Spinner,
-} from 'flowbite-react';
+import { Button, Textarea, Spinner } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
@@ -13,7 +8,7 @@ import TitleCard from 'src/components/shared/TitleBorderCard';
 import CardBox from 'src/components/shared/CardBox';
 import FormField from 'src/components/shared/FormField';
 import { clienteService, Cliente } from 'src/services/clienteService';
-import { useToast } from 'src/hooks/use-toast';
+import {} from 'src/hooks/use-toast';
 import useClienteValidation, { ClienteFormData } from 'src/hooks/useClienteValidation';
 
 interface StepperProps {
@@ -44,20 +39,20 @@ const Stepper: React.FC<StepperProps> = ({ currentStep, steps, onStepClick }) =>
                 )}
               </button>
               <div className="text-center mt-2">
-                <p className={`text-xs font-medium leading-tight ${
-                  index <= currentStep ? 'text-primary' : 'text-gray-500'
-                }`}>
+                <p
+                  className={`text-xs font-medium leading-tight ${
+                    index <= currentStep ? 'text-primary' : 'text-gray-500'
+                  }`}
+                >
                   {step.title}
                 </p>
-                <p className="text-xs text-gray-400 leading-tight">
-                  {step.description}
-                </p>
+                <p className="text-xs text-gray-400 leading-tight">{step.description}</p>
               </div>
             </div>
             {index < steps.length - 1 && (
-              <div className={`w-16 h-0.5 mx-3 ${
-                index < currentStep ? 'bg-primary' : 'bg-gray-300'
-              }`} />
+              <div
+                className={`w-16 h-0.5 mx-3 ${index < currentStep ? 'bg-primary' : 'bg-gray-300'}`}
+              />
             )}
           </div>
         ))}
@@ -72,10 +67,10 @@ interface NuevoClienteProps {
   onSaveSuccess?: (clienteActualizado?: Cliente) => void;
 }
 
-const NuevoCliente: React.FC<NuevoClienteProps> = ({ 
-  clienteToEdit, 
-  isEditMode = false, 
-  onSaveSuccess 
+const NuevoCliente: React.FC<NuevoClienteProps> = ({
+  clienteToEdit,
+  isEditMode = false,
+  onSaveSuccess,
 }) => {
   const normalizeGeneroToUi = (value?: string) => {
     const v = (value || '').toString().trim().toUpperCase();
@@ -104,6 +99,13 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
     }
     return '';
   };
+  const normalizeEstadoToUi = (value?: string) => {
+    const v = (value || '').toString().trim().toLowerCase();
+    if (v === 'active' || v === 'activo') return 'activo';
+    if (v === 'inactive' || v === 'inactivo') return 'inactivo';
+    if (v === 'blocked' || v === 'bloqueado') return 'inactivo';
+    return 'prospecto'; // incluye 'prospect' o valores desconocidos
+  };
   const [formData, setFormData] = useState<ClienteFormData>({
     client_type: 'persona',
     nombre: clienteToEdit?.nombre || '',
@@ -118,9 +120,13 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
     email_principal: clienteToEdit?.email_principal || '',
     actividad: clienteToEdit?.actividad || '',
     ciudad: clienteToEdit?.ciudad || '',
-    state: (clienteToEdit as any)?.state || '',
-    sede: clienteToEdit?.sede || '',
-    estado: clienteToEdit?.estado || 'prospecto',
+    department:
+      (clienteToEdit as any)?.department ||
+      (clienteToEdit as any)?.state ||
+      (clienteToEdit as any)?.departamento ||
+      '',
+    branch_name: (clienteToEdit as any)?.branch_name || (clienteToEdit as any)?.sede || '',
+    estado: normalizeEstadoToUi(clienteToEdit?.estado || 'prospecto'),
     observaciones: clienteToEdit?.observaciones || '',
     razon_social: '',
     representante_legal: '',
@@ -133,7 +139,6 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
   const { errors, validateStepAndSetErrors, clearError } = useClienteValidation();
   const formRef = useRef<HTMLFormElement>(null);
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   // Sincronizar cuando se abre en modo edición desde la modal
   useEffect(() => {
@@ -143,18 +148,31 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
         nombre: clienteToEdit.nombre ?? '',
         apellidos: clienteToEdit.apellidos ?? '',
         cuit: clienteToEdit.cuit ?? '',
-        tipo_documento: clienteToEdit.tipo_documento ?? (clienteToEdit.client_type === 'empresa' ? 'NIT' : ''),
-        fecha_expedicion_documento: normalizeDateToISO((clienteToEdit as any).fecha_expedicion_documento ?? ''),
-        fecha_nacimiento: normalizeDateToISO((clienteToEdit as any).fecha_nacimiento ?? (clienteToEdit as any).persona?.fecha_nacimiento ?? ''),
-        genero: normalizeGeneroToUi(((clienteToEdit as any).genero ?? (clienteToEdit as any).persona?.genero ?? '') as string),
+        tipo_documento:
+          clienteToEdit.tipo_documento ?? (clienteToEdit.client_type === 'empresa' ? 'NIT' : ''),
+        fecha_expedicion_documento: normalizeDateToISO(
+          (clienteToEdit as any).fecha_expedicion_documento ?? '',
+        ),
+        fecha_nacimiento: normalizeDateToISO(
+          (clienteToEdit as any).fecha_nacimiento ??
+            (clienteToEdit as any).persona?.fecha_nacimiento ??
+            '',
+        ),
+        genero: normalizeGeneroToUi(
+          ((clienteToEdit as any).genero ?? (clienteToEdit as any).persona?.genero ?? '') as string,
+        ),
         domicilio_principal: clienteToEdit.domicilio_principal ?? '',
         celular_principal: clienteToEdit.celular_principal ?? '',
         email_principal: clienteToEdit.email_principal ?? '',
         actividad: clienteToEdit.actividad ?? '',
         ciudad: clienteToEdit.ciudad ?? '',
-        state: (clienteToEdit as any).state ?? '',
-        sede: clienteToEdit.sede ?? '',
-        estado: clienteToEdit.estado ?? 'prospecto',
+        department:
+          (clienteToEdit as any).department ??
+          (clienteToEdit as any).state ??
+          (clienteToEdit as any).departamento ??
+          '',
+        branch_name: (clienteToEdit as any).branch_name ?? (clienteToEdit as any).sede ?? '',
+        estado: normalizeEstadoToUi(clienteToEdit.estado ?? 'prospecto'),
         observaciones: clienteToEdit.observaciones ?? '',
         razon_social: clienteToEdit.razon_social ?? '',
         representante_legal: clienteToEdit.representante_legal ?? '',
@@ -169,40 +187,46 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
     { title: 'Tipo y Básicos', description: 'Persona o empresa y datos base' },
     { title: 'Contacto y Ubicación', description: 'Información de contacto' },
   ];
-  
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    // Ajuste: si cambia el tipo de cliente, autoajustar tipo_documento
-    if (name === 'client_type') {
-      setFormData(prev => ({
-        ...prev,
-        client_type: value as any,
-        tipo_documento: value === 'empresa' ? 'NIT' : '',
-      }));
-      clearError('client_type');
-      clearError('tipo_documento');
-      return;
-    }
 
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      // Ajuste: si cambia el tipo de cliente, autoajustar tipo_documento
+      if (name === 'client_type') {
+        setFormData((prev) => ({
+          ...prev,
+          client_type: value as any,
+          tipo_documento: value === 'empresa' ? 'NIT' : '',
+        }));
+        clearError('client_type');
+        clearError('tipo_documento');
+        return;
+      }
 
-    if (errors[name as keyof ClienteFormData]) {
-      clearError(name);
-    }
-  }, [errors, clearError]);
+      setFormData((prev) => ({ ...prev, [name]: value }));
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (currentStep < steps.length - 1) {
-        nextStep();
-      } else {
-        if (formRef.current) {
-          formRef.current.requestSubmit();
+      if (errors[name as keyof ClienteFormData]) {
+        clearError(name);
+      }
+    },
+    [errors, clearError],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (currentStep < steps.length - 1) {
+          nextStep();
+        } else {
+          if (formRef.current) {
+            formRef.current.requestSubmit();
+          }
         }
       }
-    }
-  }, [currentStep, steps.length]);
+    },
+    [currentStep, steps.length],
+  );
 
   const validateStep = (step: number): boolean => {
     return validateStepAndSetErrors(step, formData);
@@ -214,7 +238,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
       e.stopPropagation();
     }
     if (validateStep(currentStep)) {
-      setCurrentStep(prev => Math.min(prev + 1, steps.length - 1));
+      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
     }
   };
 
@@ -223,7 +247,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
       e.preventDefault();
       e.stopPropagation();
     }
-    setCurrentStep(prev => Math.max(prev - 1, 0));
+    setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
   const handleStepClick = (step: number) => {
@@ -234,12 +258,12 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (currentStep < steps.length - 1) {
       nextStep();
       return;
     }
-    
+
     if (validateStep(currentStep)) {
       setIsLoading(true);
       try {
@@ -250,22 +274,28 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
           cuit: formData.cuit,
           tipo_documento: formData.tipo_documento,
           fecha_expedicion_documento: formData.fecha_expedicion_documento || undefined,
-          fecha_nacimiento: formData.client_type === 'persona' ? (formData.fecha_nacimiento || undefined) : undefined,
-          genero: formData.client_type === 'persona' ? (formData.genero || undefined) : undefined,
+          fecha_nacimiento:
+            formData.client_type === 'persona' ? formData.fecha_nacimiento || undefined : undefined,
+          genero: formData.client_type === 'persona' ? formData.genero || undefined : undefined,
           domicilio_principal: formData.domicilio_principal,
           celular_principal: formData.celular_principal,
           email_principal: formData.email_principal,
           actividad: formData.actividad || undefined,
           ciudad: formData.ciudad || undefined,
-          state: (formData as any).state || undefined,
-          sede: formData.sede || undefined,
+          department: (formData as any).department || undefined,
+          branch_name: (formData as any).branch_name || undefined,
           estado: formData.estado,
           observaciones: formData.observaciones || undefined,
           // Empresa
           razon_social: formData.client_type === 'empresa' ? formData.razon_social : undefined,
-          representante_legal: formData.client_type === 'empresa' ? formData.representante_legal : undefined,
-          representante_legal_tipo_documento: formData.client_type === 'empresa' ? formData.representante_legal_tipo_documento : undefined,
-          representante_legal_documento: formData.client_type === 'empresa' ? formData.representante_legal_documento : undefined,
+          representante_legal:
+            formData.client_type === 'empresa' ? formData.representante_legal : undefined,
+          representante_legal_tipo_documento:
+            formData.client_type === 'empresa'
+              ? formData.representante_legal_tipo_documento
+              : undefined,
+          representante_legal_documento:
+            formData.client_type === 'empresa' ? formData.representante_legal_documento : undefined,
         };
 
         let response;
@@ -274,7 +304,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
         } else {
           response = await clienteService.createCliente(clienteData);
         }
-        
+
         if (response.success) {
           // Preferir callback si está definido (uso en modal desde crear póliza)
           if (onSaveSuccess) {
@@ -295,8 +325,8 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
               email_principal: '',
               actividad: '',
               ciudad: '',
-              state: '',
-              sede: '',
+              department: '',
+              branch_name: '',
               estado: 'prospecto',
               observaciones: '',
               razon_social: '',
@@ -314,20 +344,21 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
       }
     }
   };
-  
+
   return (
     <>
       <div className="grid gap-4">
         <div className="col-span-12">
           <CardBox className="mb-4">
-            <Stepper 
-              currentStep={currentStep} 
-              steps={steps} 
-              onStepClick={handleStepClick}
-            />
+            <Stepper currentStep={currentStep} steps={steps} onStepClick={handleStepClick} />
           </CardBox>
 
-          <form ref={formRef} onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
+          <form
+            ref={formRef}
+            onSubmit={handleSubmit}
+            onKeyDown={handleKeyDown}
+            className="space-y-4"
+          >
             <div>
               {/* Paso 1: Información Personal */}
               {currentStep === 0 && (
@@ -352,27 +383,27 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
 
                       {formData.client_type !== 'empresa' && (
                         <>
-                      <FormField
-                        id="nombre"
-                        name="nombre"
-                        label="Nombre"
-                        value={formData.nombre}
-                        onChange={handleInputChange}
-                        error={errors.nombre}
-                        required
-                        placeholder="Nombre del cliente"
-                      />
-                      
-                      <FormField
-                        id="apellidos"
-                        name="apellidos"
-                        label="Apellidos"
-                        value={formData.apellidos}
-                        onChange={handleInputChange}
-                        error={errors.apellidos}
-                        required
-                        placeholder="Apellidos del cliente"
-                      />
+                          <FormField
+                            id="nombre"
+                            name="nombre"
+                            label="Nombre"
+                            value={formData.nombre}
+                            onChange={handleInputChange}
+                            error={errors.nombre}
+                            required
+                            placeholder="Nombre del cliente"
+                          />
+
+                          <FormField
+                            id="apellidos"
+                            name="apellidos"
+                            label="Apellidos"
+                            value={formData.apellidos}
+                            onChange={handleInputChange}
+                            error={errors.apellidos}
+                            required
+                            placeholder="Apellidos del cliente"
+                          />
                         </>
                       )}
 
@@ -426,7 +457,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                           />
                         </>
                       )}
-                      
+
                       {/* Tipo de documento primero, luego número */}
                       <FormField
                         id="tipo_documento"
@@ -439,9 +470,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                         type="select"
                         options={
                           formData.client_type === 'empresa'
-                            ? [
-                                { value: 'NIT', label: 'NIT' },
-                              ]
+                            ? [{ value: 'NIT', label: 'NIT' }]
                             : [
                                 { value: '', label: 'Seleccionar tipo' },
                                 { value: 'CC', label: 'Cédula de Ciudadanía' },
@@ -460,12 +489,19 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                         onChange={handleInputChange}
                         error={errors.cuit}
                         required
-                        placeholder={formData.client_type === 'empresa' ? 'NIT' : 'Número de documento'}
+                        placeholder={
+                          formData.client_type === 'empresa' ? 'NIT' : 'Número de documento'
+                        }
                         helperText="Solo números, 6-15 dígitos"
                       />
 
                       <div>
-                        <Label htmlFor="fecha_expedicion_documento" className="text-sm font-medium text-gray-900 dark:text-white">Fecha de Expedición del Documento</Label>
+                        <Label
+                          htmlFor="fecha_expedicion_documento"
+                          className="text-sm font-medium text-gray-900 dark:text-white"
+                        >
+                          Fecha de Expedición del Documento
+                        </Label>
                         <Input
                           id="fecha_expedicion_documento"
                           name="fecha_expedicion_documento"
@@ -478,39 +514,44 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                       </div>
 
                       {formData.client_type !== 'empresa' && (
-                      <div>
-                        <Label htmlFor="fecha_nacimiento" className="text-sm font-medium text-gray-900 dark:text-white">Fecha de Nacimiento</Label>
-                        <Input
-                          id="fecha_nacimiento"
-                          name="fecha_nacimiento"
-                          type="date"
-                          value={formData.fecha_nacimiento}
-                          onChange={handleInputChange}
-                          className={`mt-1 ${errors.fecha_nacimiento ? 'border-red-500' : ''}`}
-                        />
-                        {errors.fecha_nacimiento && (
-                          <p className="text-red-500 text-xs mt-1">{errors.fecha_nacimiento}</p>
-                        )}
-                      </div>
+                        <div>
+                          <Label
+                            htmlFor="fecha_nacimiento"
+                            className="text-sm font-medium text-gray-900 dark:text-white"
+                          >
+                            Fecha de Nacimiento
+                          </Label>
+                          <Input
+                            id="fecha_nacimiento"
+                            name="fecha_nacimiento"
+                            type="date"
+                            value={formData.fecha_nacimiento}
+                            onChange={handleInputChange}
+                            className={`mt-1 ${errors.fecha_nacimiento ? 'border-red-500' : ''}`}
+                          />
+                          {errors.fecha_nacimiento && (
+                            <p className="text-red-500 text-xs mt-1">{errors.fecha_nacimiento}</p>
+                          )}
+                        </div>
                       )}
 
                       {formData.client_type !== 'empresa' && (
-                      <FormField
-                        id="genero"
-                        name="genero"
-                        label="Género"
-                        value={formData.genero}
-                        onChange={handleInputChange}
-                        error={errors.genero}
-                        required
-                        type="select"
-                        options={[
-                          { value: '', label: 'Seleccionar género' },
-                          { value: 'masculino', label: 'Masculino' },
-                          { value: 'femenino', label: 'Femenino' },
-                          { value: 'otro', label: 'Otro' },
-                        ]}
-                      />
+                        <FormField
+                          id="genero"
+                          name="genero"
+                          label="Género"
+                          value={formData.genero}
+                          onChange={handleInputChange}
+                          error={errors.genero}
+                          required
+                          type="select"
+                          options={[
+                            { value: '', label: 'Seleccionar género' },
+                            { value: 'masculino', label: 'Masculino' },
+                            { value: 'femenino', label: 'Femenino' },
+                            { value: 'otro', label: 'Otro' },
+                          ]}
+                        />
                       )}
 
                       <FormField
@@ -571,18 +612,23 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                       />
 
                       <FormField
-                        id="state"
-                        name="state"
+                        id="department"
+                        name="department"
                         label="Departamento"
-                        value={(formData as any).state || ''}
+                        value={(formData as any).department || ''}
                         onChange={handleInputChange}
-                        error={(errors as any).state}
+                        error={(errors as any).department}
                         required
                         placeholder="Departamento (estado)"
                       />
 
                       <div>
-                        <Label htmlFor="actividad" className="text-sm font-medium text-gray-900 dark:text-white">Actividad</Label>
+                        <Label
+                          htmlFor="actividad"
+                          className="text-sm font-medium text-gray-900 dark:text-white"
+                        >
+                          Actividad
+                        </Label>
                         <Input
                           id="actividad"
                           name="actividad"
@@ -594,11 +640,16 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                       </div>
 
                       <div>
-                        <Label htmlFor="sede" className="text-sm font-medium text-gray-900 dark:text-white">Sede</Label>
+                        <Label
+                          htmlFor="branch_name"
+                          className="text-sm font-medium text-gray-900 dark:text-white"
+                        >
+                          Sede
+                        </Label>
                         <Input
-                          id="sede"
-                          name="sede"
-                          value={formData.sede}
+                          id="branch_name"
+                          name="branch_name"
+                          value={(formData as any).branch_name || ''}
                           onChange={handleInputChange}
                           placeholder="Sede de atención"
                           className="mt-1"
@@ -623,7 +674,12 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                     </div>
 
                     <div className="mt-4">
-                      <Label htmlFor="observaciones" className="text-sm font-medium text-gray-900 dark:text-white">Observaciones</Label>
+                      <Label
+                        htmlFor="observaciones"
+                        className="text-sm font-medium text-gray-900 dark:text-white"
+                      >
+                        Observaciones
+                      </Label>
                       <Textarea
                         id="observaciones"
                         name="observaciones"
@@ -686,9 +742,11 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
 
               {/* Indicador de progreso */}
               <div className="flex items-center gap-2 text-sm text-gray-500 order-1 sm:order-2">
-                <span>Paso {currentStep + 1} de {steps.length}</span>
+                <span>
+                  Paso {currentStep + 1} de {steps.length}
+                </span>
                 <div className="w-20 bg-gray-200 rounded-full h-2">
-                  <div 
+                  <div
                     className="bg-primary h-2 rounded-full transition-all duration-300"
                     style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
                   />

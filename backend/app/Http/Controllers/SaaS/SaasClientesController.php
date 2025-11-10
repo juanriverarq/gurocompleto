@@ -197,9 +197,9 @@ class SaasClientesController extends Controller
                 \Log::info('🔍 [DEBUG] Filtro de ciudad aplicado', ['ciudad' => $request->ciudad]);
             }
 
-            // Filtro por departamento (state)
+            // Filtro por departamento (department)
             if ($request->has('departamento') && !empty($request->departamento)) {
-                $query->where('state', $request->departamento);
+                $query->where('department', $request->departamento);
                 \Log::info('🔍 [DEBUG] Filtro de departamento aplicado', ['departamento' => $request->departamento]);
             }
 
@@ -422,8 +422,11 @@ class SaasClientesController extends Controller
             if ($request->has('ciudad') || $request->has('city')) {
                 $mappedData['city'] = $request->input('ciudad', $request->input('city'));
             }
-            if ($request->has('departamento') || $request->has('state')) {
-                $mappedData['state'] = $request->input('departamento', $request->input('state'));
+            if ($request->has('departamento') || $request->has('department') || $request->has('state')) {
+                $mappedData['department'] = $request->input('departamento', $request->input('department', $request->input('state')));
+            }
+            if ($request->has('branch_name') || $request->has('sede')) {
+                $mappedData['branch_name'] = $request->input('branch_name', $request->input('sede'));
             }
             if ($request->has('pais') || $request->has('country')) {
                 $mappedData['country'] = $request->input('pais', $request->input('country'));
@@ -468,6 +471,8 @@ class SaasClientesController extends Controller
                 'email' => 'required|email|max:255',
                 'occupation' => 'nullable|string|max:255',
                 'city' => 'nullable|string|max:255',
+                'department' => 'nullable|string|max:255',
+                'branch_name' => 'nullable|string|max:255',
                 'status' => 'required|in:active,inactive,prospect,blocked',
                 'notes' => 'nullable|string',
                 'phone' => 'nullable|string|max:50',
@@ -618,7 +623,12 @@ class SaasClientesController extends Controller
             if ($request->has('city') || $request->has('ciudad')) {
                 $mappedData['city'] = $request->input('city', $request->input('ciudad'));
             }
-            if ($request->has('state')) $mappedData['state'] = $request->input('state');
+            if ($request->has('department') || $request->has('departamento') || $request->has('state')) {
+                $mappedData['department'] = $request->input('department', $request->input('departamento', $request->input('state')));
+            }
+            if ($request->has('branch_name') || $request->has('sede')) {
+                $mappedData['branch_name'] = $request->input('branch_name', $request->input('sede'));
+            }
 
             // Datos adicionales
             if ($request->has('occupation') || $request->has('actividad')) {
@@ -700,7 +710,8 @@ class SaasClientesController extends Controller
                 'email' => 'sometimes|required|email|max:255',
                 'occupation' => 'nullable|string|max:255',
                 'city' => 'nullable|string|max:255',
-                'state' => 'nullable|string|max:255',
+                'department' => 'nullable|string|max:255',
+                'branch_name' => 'nullable|string|max:255',
                 'status' => 'sometimes|required|in:active,inactive,prospect,blocked',
                 'notes' => 'nullable|string',
                 'phone' => 'nullable|string|max:50',
@@ -1047,8 +1058,10 @@ class SaasClientesController extends Controller
             'email_principal' => $cliente->email,
             'actividad' => $cliente->occupation,
             'ciudad' => $cliente->city,
-            'departamento' => $cliente->state, // requerido por frontend (nuevo campo)
-            'state' => $cliente->state, // alias por compatibilidad
+            'departamento' => $cliente->department, // requerido por frontend (nuevo campo)
+            'department' => $cliente->department, // alias para clientes modernos
+            'branch_name' => $cliente->branch_name,
+            'sede' => $cliente->branch_name, // alias por compatibilidad
             'estado' => $cliente->status,
             'observaciones' => $cliente->notes,
             'telefono' => $cliente->phone,
@@ -1144,7 +1157,7 @@ class SaasClientesController extends Controller
             }
 
             if ($request->has('departamento') && !empty($request->departamento)) {
-                $query->where('state', $request->departamento);
+                $query->where('department', $request->departamento);
             }
 
             if ($request->has('priority') && !empty($request->priority)) {
@@ -1273,7 +1286,7 @@ class SaasClientesController extends Controller
                 $cliente->mobile_phone,
                 $cliente->address,
                 $cliente->city,
-                $cliente->state,
+                $cliente->department,
                 $cliente->status,
                 $cliente->priority,
                 $cliente->birth_date ? $cliente->birth_date->format('Y-m-d') : '',
@@ -1369,7 +1382,7 @@ class SaasClientesController extends Controller
             $sheet->setCellValue('H' . $row, $cliente->mobile_phone);
             $sheet->setCellValue('I' . $row, $cliente->address);
             $sheet->setCellValue('J' . $row, $cliente->city);
-            $sheet->setCellValue('K' . $row, $cliente->state);
+            $sheet->setCellValue('K' . $row, $cliente->department);
             $sheet->setCellValue('L' . $row, $cliente->status);
             $sheet->setCellValue('M' . $row, $cliente->priority);
             $sheet->setCellValue('N' . $row, $cliente->birth_date ? $cliente->birth_date->format('Y-m-d') : '');
