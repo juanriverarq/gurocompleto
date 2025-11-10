@@ -38,13 +38,14 @@ class Cliente extends Model
         'document_issue_date',
         'email',
         'phone',
+        'branch_name',
         'mobile_phone',
         'birth_date',
         'gender',
         'marital_status',
         'address',
         'city',
-        'state',
+        'department',
         'country',
         'postal_code',
         'occupation',
@@ -447,7 +448,7 @@ class Cliente extends Model
         $parts = array_filter([
             $this->address,
             $this->city,
-            $this->state,
+            $this->department,
             $this->country,
         ]);
         

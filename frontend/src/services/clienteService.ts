@@ -17,8 +17,8 @@ export interface Cliente {
   email_principal: string;
   actividad?: string;
   ciudad?: string;
-  state?: string; // Departamento
-  sede?: string;
+  department?: string; // Departamento
+  branch_name?: string;
   estado: 'activo' | 'inactivo' | 'prospecto' | 'active' | 'inactive' | 'prospect' | 'blocked';
   observaciones?: string;
   razon_social?: string;
@@ -55,16 +55,14 @@ const API_PREFIX = '/saas/clientes';
 // Helper para obtener el token de autenticación Firebase (CON DEBUG COMO WHATSAPP SERVICE)
 const getAuthToken = async (): Promise<string | null> => {
   try {
-    
-    
     const user = auth.currentUser;
-    
+
     if (!user) {
       return null;
     }
-    
+
     const token = await user.getIdToken();
-    
+
     return token;
   } catch (error) {
     return null;
@@ -73,16 +71,15 @@ const getAuthToken = async (): Promise<string | null> => {
 
 // Helper para hacer peticiones HTTP con autenticación
 async function makeRequest<T>(
-  endpoint: string, 
-  options: RequestInit = {}
+  endpoint: string,
+  options: RequestInit = {},
 ): Promise<ApiResponse<T>> {
   try {
-    
     const token = await getAuthToken();
-    
+
     const defaultHeaders: HeadersInit = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     };
 
     if (token) {
@@ -130,31 +127,53 @@ export const clienteService = {
     const d = res.data as any;
     const mapped: Cliente = {
       id: d.id?.toString?.() || clienteId,
-      client_type: (d.client_type || d.tipo || (d.empresa || d.company ? 'empresa' : 'persona'))?.toString()?.toLowerCase?.(),
-      nombre: d.nombre || d.first_name || d.persona?.nombres || d.empresa?.razon_social || d.company_legal_name || '',
+      client_type: (d.client_type || d.tipo || (d.empresa || d.company ? 'empresa' : 'persona'))
+        ?.toString()
+        ?.toLowerCase?.(),
+      nombre:
+        d.nombre ||
+        d.first_name ||
+        d.persona?.nombres ||
+        d.empresa?.razon_social ||
+        d.company_legal_name ||
+        '',
       apellidos: d.apellidos || d.last_name || d.persona?.apellidos || '',
       cuit: d.cuit || d.documento || d.document_number || d.empresa?.nit || '',
-      tipo_documento: d.tipo_documento || d.document_type || d.persona?.tipo_documento || (d.client_type === 'empresa' || d.tipo === 'EMPRESA' ? 'NIT' : ''),
-      fecha_expedicion_documento: d.fecha_expedicion_documento || d.document_issue_date || undefined,
-      fecha_nacimiento: d.fecha_nacimiento || d.birth_date || d.persona?.fecha_nacimiento || undefined,
+      tipo_documento:
+        d.tipo_documento ||
+        d.document_type ||
+        d.persona?.tipo_documento ||
+        (d.client_type === 'empresa' || d.tipo === 'EMPRESA' ? 'NIT' : ''),
+      fecha_expedicion_documento:
+        d.fecha_expedicion_documento || d.document_issue_date || undefined,
+      fecha_nacimiento:
+        d.fecha_nacimiento || d.birth_date || d.persona?.fecha_nacimiento || undefined,
       genero: d.genero || d.gender || d.persona?.genero || undefined,
       domicilio_principal: d.domicilio_principal || d.address || '',
       celular_principal: d.celular_principal || d.mobile_phone || '',
       email_principal: d.email_principal || d.email || '',
       actividad: d.actividad || d.empresa?.actividad_economica || '',
       ciudad: d.ciudad || d.city || '',
-      state: d.state || d.departamento || '',
-      sede: d.sede || '',
+      department: d.department || d.state || d.departamento || '',
+      branch_name: d.branch_name || d.sede || '',
       estado: (d.estado || d.status || 'prospecto').toString().toLowerCase(),
       observaciones: d.observaciones || d.notes || '',
       razon_social: d.razon_social || d.company_legal_name || d.empresa?.razon_social || undefined,
-      representante_legal: d.representante_legal || d.legal_representative_name || d.empresa?.representante_legal || undefined,
-      representante_legal_tipo_documento: d.representante_legal_tipo_documento || d.legal_representative_document_type || undefined,
-      representante_legal_documento: d.representante_legal_documento || d.legal_representative_document_number || undefined,
+      representante_legal:
+        d.representante_legal ||
+        d.legal_representative_name ||
+        d.empresa?.representante_legal ||
+        undefined,
+      representante_legal_tipo_documento:
+        d.representante_legal_tipo_documento || d.legal_representative_document_type || undefined,
+      representante_legal_documento:
+        d.representante_legal_documento || d.legal_representative_document_number || undefined,
     };
     return { success: true, data: mapped } as ApiResponse<Cliente>;
   },
-  async createCliente(cliente: Omit<Cliente, 'id' | 'created_at' | 'updated_at'>): Promise<ApiResponse<Cliente>> {
+  async createCliente(
+    cliente: Omit<Cliente, 'id' | 'created_at' | 'updated_at'>,
+  ): Promise<ApiResponse<Cliente>> {
     try {
       const endpoint = `${API_PREFIX}`;
       // Mapear payload según tipo y estructura esperada por el backend
@@ -172,7 +191,8 @@ export const clienteService = {
         email: cliente.email_principal,
         occupation: cliente.actividad,
         city: cliente.ciudad,
-        state: cliente.state,
+        department: cliente.department,
+        branch_name: cliente.branch_name,
         status: cliente.estado,
         notes: cliente.observaciones,
       };
@@ -191,34 +211,38 @@ export const clienteService = {
       });
 
       toast({
-        variant: "primary",
-        title: "Cliente creado",
-        description: "El cliente se ha creado exitosamente.",
+        variant: 'primary',
+        title: 'Cliente creado',
+        description: 'El cliente se ha creado exitosamente.',
       });
 
       return response;
     } catch (error) {
       toast({
-        variant: "destructive",
-        title: "Error al crear cliente",
-        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: 'destructive',
+        title: 'Error al crear cliente',
+        description: error instanceof Error ? error.message : 'Error desconocido',
       });
       throw error;
     }
   },
 
-  async updateCliente(clienteId: string, cliente: Partial<Omit<Cliente, 'id' | 'created_at' | 'updated_at'>>): Promise<ApiResponse<Cliente>> {
+  async updateCliente(
+    clienteId: string,
+    cliente: Partial<Omit<Cliente, 'id' | 'created_at' | 'updated_at'>>,
+  ): Promise<ApiResponse<Cliente>> {
     try {
       const endpoint = `${API_PREFIX}/${clienteId}`;
       // Mapear payload según estructura esperada por el backend
       const payload: any = {};
-      
+
       if (cliente.client_type !== undefined) payload.client_type = cliente.client_type;
       if (cliente.nombre !== undefined) payload.first_name = cliente.nombre;
       if (cliente.apellidos !== undefined) payload.last_name = cliente.apellidos;
       if (cliente.cuit !== undefined) payload.document_number = cliente.cuit;
       if (cliente.tipo_documento !== undefined) payload.document_type = cliente.tipo_documento;
-      if (cliente.fecha_expedicion_documento !== undefined) payload.document_issue_date = cliente.fecha_expedicion_documento;
+      if (cliente.fecha_expedicion_documento !== undefined)
+        payload.document_issue_date = cliente.fecha_expedicion_documento;
       if (cliente.fecha_nacimiento !== undefined) payload.birth_date = cliente.fecha_nacimiento;
       if (cliente.genero !== undefined) payload.gender = cliente.genero;
       if (cliente.domicilio_principal !== undefined) payload.address = cliente.domicilio_principal;
@@ -226,7 +250,8 @@ export const clienteService = {
       if (cliente.email_principal !== undefined) payload.email = cliente.email_principal;
       if (cliente.actividad !== undefined) payload.occupation = cliente.actividad;
       if (cliente.ciudad !== undefined) payload.city = cliente.ciudad;
-      if (cliente.state !== undefined) payload.state = cliente.state;
+      if (cliente.department !== undefined) payload.department = cliente.department;
+      if (cliente.branch_name !== undefined) payload.branch_name = cliente.branch_name;
       if (cliente.estado !== undefined) payload.status = cliente.estado;
       if (cliente.observaciones !== undefined) payload.notes = cliente.observaciones;
 
@@ -235,9 +260,12 @@ export const clienteService = {
           payload.company = cliente.razon_social;
           payload.company_legal_name = cliente.razon_social;
         }
-        if (cliente.representante_legal !== undefined) payload.legal_representative_name = cliente.representante_legal;
-        if (cliente.representante_legal_tipo_documento !== undefined) payload.legal_representative_document_type = cliente.representante_legal_tipo_documento;
-        if (cliente.representante_legal_documento !== undefined) payload.legal_representative_document_number = cliente.representante_legal_documento;
+        if (cliente.representante_legal !== undefined)
+          payload.legal_representative_name = cliente.representante_legal;
+        if (cliente.representante_legal_tipo_documento !== undefined)
+          payload.legal_representative_document_type = cliente.representante_legal_tipo_documento;
+        if (cliente.representante_legal_documento !== undefined)
+          payload.legal_representative_document_number = cliente.representante_legal_documento;
       }
 
       const response = await makeRequest<Cliente>(endpoint, {
@@ -246,17 +274,17 @@ export const clienteService = {
       });
 
       toast({
-        variant: "primary",
-        title: "Cliente actualizado",
-        description: "El cliente se ha actualizado correctamente.",
+        variant: 'primary',
+        title: 'Cliente actualizado',
+        description: 'El cliente se ha actualizado correctamente.',
       });
 
       return response;
     } catch (error) {
       toast({
-        variant: "destructive",
-        title: "Error al actualizar cliente",
-        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: 'destructive',
+        title: 'Error al actualizar cliente',
+        description: error instanceof Error ? error.message : 'Error desconocido',
       });
       throw error;
     }
@@ -264,7 +292,7 @@ export const clienteService = {
 
   async getClientes(
     filters: Record<string, any> = {},
-    options: RequestInit = {}
+    options: RequestInit = {},
   ): Promise<ApiResponse<PaginatedResponse<Cliente>>> {
     try {
       const queryParams = new URLSearchParams();
@@ -290,15 +318,19 @@ export const clienteService = {
 
       // Caso 1: Estructura Laravel Paginator directa (sin envolvente)
       // { data: [...], current_page, last_page, per_page, total, from, to }
-      if (raw && Array.isArray(raw.data) && (raw.current_page !== undefined || raw.last_page !== undefined)) {
+      if (
+        raw &&
+        Array.isArray(raw.data) &&
+        (raw.current_page !== undefined || raw.last_page !== undefined)
+      ) {
         paginated = {
           data: raw.data || [],
           current_page: Number(raw.current_page ?? 1),
           last_page: Number(raw.last_page ?? 1),
-          per_page: Number(raw.per_page ?? (raw.data?.length ?? 0)),
-          total: Number(raw.total ?? (raw.data?.length ?? 0)),
+          per_page: Number(raw.per_page ?? raw.data?.length ?? 0),
+          total: Number(raw.total ?? raw.data?.length ?? 0),
           from: Number(raw.from ?? (raw.data?.length ? 1 : 0)),
-          to: Number(raw.to ?? (raw.data?.length ?? 0)),
+          to: Number(raw.to ?? raw.data?.length ?? 0),
         };
       }
       // Caso 2: Envolvente con data.data (Laravel Resource)
@@ -309,10 +341,10 @@ export const clienteService = {
           data: d.data || [],
           current_page: Number(d.current_page ?? 1),
           last_page: Number(d.last_page ?? 1),
-          per_page: Number(d.per_page ?? (d.data?.length ?? 0)),
-          total: Number(d.total ?? (d.data?.length ?? 0)),
+          per_page: Number(d.per_page ?? d.data?.length ?? 0),
+          total: Number(d.total ?? d.data?.length ?? 0),
           from: Number(d.from ?? (d.data?.length ? 1 : 0)),
-          to: Number(d.to ?? (d.data?.length ?? 0)),
+          to: Number(d.to ?? d.data?.length ?? 0),
         };
       }
       // Caso 3: Array plano (sin metadatos)
@@ -330,24 +362,24 @@ export const clienteService = {
 
       // Si no fue posible normalizar, intentar fallback mínimo
       if (!paginated) {
-        const maybeArray = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : []);
+        const maybeArray = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
         paginated = {
           data: maybeArray || [],
           current_page: Number(raw?.current_page ?? 1),
           last_page: Number(raw?.last_page ?? 1),
-          per_page: Number(raw?.per_page ?? (maybeArray?.length ?? 0)),
-          total: Number(raw?.total ?? (maybeArray?.length ?? 0)),
+          per_page: Number(raw?.per_page ?? maybeArray?.length ?? 0),
+          total: Number(raw?.total ?? maybeArray?.length ?? 0),
           from: Number(raw?.from ?? (maybeArray?.length ? 1 : 0)),
-          to: Number(raw?.to ?? (maybeArray?.length ?? 0)),
+          to: Number(raw?.to ?? maybeArray?.length ?? 0),
         };
       }
 
       return { success: true, data: paginated };
     } catch (error) {
       toast({
-        variant: "destructive",
-        title: "Error al cargar clientes",
-        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: 'destructive',
+        title: 'Error al cargar clientes',
+        description: error instanceof Error ? error.message : 'Error desconocido',
       });
       throw error;
     }
@@ -388,12 +420,15 @@ export const clienteService = {
       return {
         success: false,
         data: [],
-        message: error instanceof Error ? error.message : 'Error desconocido'
+        message: error instanceof Error ? error.message : 'Error desconocido',
       };
     }
   },
 
-  async exportarClientes(filters: Record<string, any> = {}, formato: 'excel' | 'csv' = 'excel'): Promise<void> {
+  async exportarClientes(
+    filters: Record<string, any> = {},
+    formato: 'excel' | 'csv' = 'excel',
+  ): Promise<void> {
     try {
       const queryParams = new URLSearchParams();
 
@@ -416,9 +451,10 @@ export const clienteService = {
 
       // Crear headers
       const headers: HeadersInit = {
-        'Accept': formato === 'excel'
-          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-          : 'text/csv',
+        Accept:
+          formato === 'excel'
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'text/csv',
       };
 
       if (token) {
@@ -447,7 +483,9 @@ export const clienteService = {
       // Crear elemento de enlace para descarga
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = `clientes_${new Date().toISOString().split('T')[0]}.${formato === 'excel' ? 'xlsx' : 'csv'}`;
+      link.download = `clientes_${new Date().toISOString().split('T')[0]}.${
+        formato === 'excel' ? 'xlsx' : 'csv'
+      }`;
 
       // Agregar al DOM y hacer clic
       document.body.appendChild(link);
@@ -458,18 +496,17 @@ export const clienteService = {
       window.URL.revokeObjectURL(downloadUrl);
 
       toast({
-        variant: "primary",
-        title: "Exportación completada",
+        variant: 'primary',
+        title: 'Exportación completada',
         description: `Los clientes se han exportado exitosamente en formato ${formato.toUpperCase()}.`,
       });
-
     } catch (error) {
       toast({
-        variant: "destructive",
-        title: "Error en exportación",
-        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: 'destructive',
+        title: 'Error en exportación',
+        description: error instanceof Error ? error.message : 'Error desconocido',
       });
       throw error;
     }
   },
-}
+};
