@@ -575,13 +575,17 @@ class SaasSiniestroController extends Controller
                 'fecha_reporte' => 'date',
                 'monto_reclamado' => 'numeric|min:0|max:999999999999',
                 'descripcion_evento' => 'string|min:10|max:2000',
+                'resolucion' => 'nullable|string|max:2000',
                 'lugar_ocurrencia' => 'string|max:255',
                 'ciudad_ocurrencia' => 'string|max:100',
                 'departamento_ocurrencia' => 'string|max:100',
                 'pais_ocurrencia' => 'string|max:100',
                 'aseguradora' => 'string|max:100',
+                'proveedor_asignado' => 'nullable|string|max:255',
                 'prioridad' => 'in:baja,media,alta,critica',
                 'estado' => 'in:reportado,asignado,en_revision,investigacion,peritaje,documentos_pendientes,aprobado,aprobado_parcial,rechazado,pagado,cerrado',
+                // Permitir actualizar número de siniestro de compañía (único por broker)
+                'numero_siniestro_compania' => 'nullable|string|max:100|unique:siniestros,numero_siniestro_compania,' . $id . ',id,broker_id,' . $brokerId,
                 
                 // Campos relacionados
                 'assigned_adjuster_id' => 'nullable|exists:users,id',
@@ -604,6 +608,10 @@ class SaasSiniestroController extends Controller
                 'monto_reserva' => 'nullable|numeric|min:0|max:999999999999',
                 'monto_deducible' => 'nullable|numeric|min:0|max:999999999999',
                 'monto_coaseguro' => 'nullable|numeric|min:0|max:999999999999',
+                // Montos visibles en UI
+                'valor_indemnizacion' => 'nullable|numeric|min:0|max:999999999999',
+                'deducible' => 'nullable|numeric|min:0|max:999999999999',
+                'coaseguros' => 'nullable|numeric|min:0|max:100',
                 
                 // Campos de evaluación
                 'evaluacion_inicial' => 'nullable|string|max:2000',
@@ -669,6 +677,7 @@ class SaasSiniestroController extends Controller
                 'calificacion_servicio.max' => 'La calificación debe ser entre 1 y 5',
                 'email_aseguradora.email' => 'El email de la aseguradora debe ser válido',
                 'email_ajustador.email' => 'El email del ajustador debe ser válido',
+                'numero_siniestro_compania.unique' => 'Este número de siniestro ya existe para este broker',
             ]);
 
             if ($validator->fails()) {
