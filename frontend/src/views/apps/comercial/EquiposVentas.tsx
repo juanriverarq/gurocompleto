@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
   SelectContent,
-  SelectItem
+  SelectItem,
 } from 'src/components/shadcn-ui/Default-Ui/select';
 import { salesFunnelService } from 'src/services/salesFunnelService';
 import salesTeamsService from 'src/services/salesTeamsService';
@@ -61,7 +61,7 @@ const EquiposVentas = () => {
     lider: '',
     territorio: '',
     especialidad: '',
-    metaEquipo: ''
+    metaEquipo: '',
   });
 
   const [editarEquipo, setEditarEquipo] = useState({
@@ -70,14 +70,19 @@ const EquiposVentas = () => {
     descripcion: '',
     territorio: '',
     especialidad: '',
-    estado: 'Activo'
+    estado: 'Activo',
   });
 
   // Estado no usado: nuevoMiembro
 
   const { vendedores: vendedoresHook } = useVendedores();
-  const [availableUsers, setAvailableUsers] = useState<Array<{ id: number; first_name: string; last_name: string; email?: string }>>([]);
+  const [availableUsers, setAvailableUsers] = useState<
+    Array<{ id: number; first_name: string; last_name: string; email?: string }>
+  >([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [selectedRole, setSelectedRole] = useState<
+    'Líder' | 'Asesor Senior' | 'Asesor Junior' | 'Trainee'
+  >('Asesor Junior');
   const [selectedLeaderId, setSelectedLeaderId] = useState<string>('');
   const [selectedEditLeaderId, setSelectedEditLeaderId] = useState<string>('');
   const [monthlyGoal, setMonthlyGoal] = useState<string>('');
@@ -103,28 +108,30 @@ const EquiposVentas = () => {
   const [filtroRol, setFiltroRol] = useState<string>('todos');
   const [filtroEstadoMiembro, setFiltroEstadoMiembro] = useState<string>('todos');
   const [pageMiembros, setPageMiembros] = useState<number>(1);
-  const [sortKey, setSortKey] = useState<'miembro' | 'rol' | 'equipo' | 'metaMes' | 'ventasMes' | 'porcentajeMeta' | 'estado'>('miembro');
+  const [sortKey, setSortKey] = useState<
+    'miembro' | 'rol' | 'equipo' | 'metaMes' | 'ventasMes' | 'porcentajeMeta' | 'estado'
+  >('miembro');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const estadoColors = {
-    'Activo': 'success',
-    'Inactivo': 'failure',
-    'Vacaciones': 'warning',
-    'Reestructuración': 'info'
+    Activo: 'success',
+    Inactivo: 'failure',
+    Vacaciones: 'warning',
+    Reestructuración: 'info',
   };
 
   const rolColors = {
-    'Líder': 'purple',
+    Líder: 'purple',
     'Asesor Senior': 'info',
     'Asesor Junior': 'success',
-    'Trainee': 'warning'
+    Trainee: 'warning',
   };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
     }).format(value);
   };
 
@@ -142,13 +149,19 @@ const EquiposVentas = () => {
 
   // Export helpers
   const downloadCsv = (filename: string, rows: string[][]) => {
-    const csv = rows.map(r => r.map(cell => {
-      const s = String(cell ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
-      return s;
-    }).join(',')).join('\n');
+    const csv = rows
+      .map((r) =>
+        r
+          .map((cell) => {
+            const s = String(cell ?? '');
+            if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+              return '"' + s.replace(/"/g, '""') + '"';
+            }
+            return s;
+          })
+          .join(','),
+      )
+      .join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -159,8 +172,17 @@ const EquiposVentas = () => {
   };
 
   const exportEquiposCsv = () => {
-    const headers = ['Equipo','Lider','Miembros','Territorio','Especialidad','Meta Equipo','Ventas Equipo','% Cumplimiento'];
-    const rows = equipos.map(e => [
+    const headers = [
+      'Equipo',
+      'Lider',
+      'Miembros',
+      'Territorio',
+      'Especialidad',
+      'Meta Equipo',
+      'Ventas Equipo',
+      '% Cumplimiento',
+    ];
+    const rows = equipos.map((e) => [
       e.nombre,
       e.lider,
       String(e.miembros.length),
@@ -168,14 +190,23 @@ const EquiposVentas = () => {
       e.especialidad,
       String(e.metaEquipo),
       String(e.ventasEquipo),
-      e.porcentajeEquipo.toFixed(1)
+      e.porcentajeEquipo.toFixed(1),
     ]);
     downloadCsv('equipos.csv', [headers, ...rows]);
   };
 
   const exportTeamMembersCsv = (equipo: Equipo) => {
-    const headers = ['Equipo','Miembro','Email','Rol','Meta Mes','Ventas Mes','% Meta','Estado'];
-    const rows = equipo.miembros.map(m => [
+    const headers = [
+      'Equipo',
+      'Miembro',
+      'Email',
+      'Rol',
+      'Meta Mes',
+      'Ventas Mes',
+      '% Meta',
+      'Estado',
+    ];
+    const rows = equipo.miembros.map((m) => [
       equipo.nombre,
       m.nombre,
       m.email || '',
@@ -183,14 +214,23 @@ const EquiposVentas = () => {
       String(m.metaMes || 0),
       String(m.ventasMes || 0),
       (m.porcentajeMeta ?? 0).toFixed(1),
-      m.estado
+      m.estado,
     ]);
-    downloadCsv(`equipo_${equipo.nombre.replace(/\s+/g,'_')}_miembros.csv`, [headers, ...rows]);
+    downloadCsv(`equipo_${equipo.nombre.replace(/\s+/g, '_')}_miembros.csv`, [headers, ...rows]);
   };
 
   const exportTeamMembersXls = (equipo: Equipo) => {
-    const headers = ['Equipo','Miembro','Email','Rol','Meta Mes','Ventas Mes','% Meta','Estado'];
-    const rows = equipo.miembros.map(m => [
+    const headers = [
+      'Equipo',
+      'Miembro',
+      'Email',
+      'Rol',
+      'Meta Mes',
+      'Ventas Mes',
+      '% Meta',
+      'Estado',
+    ];
+    const rows = equipo.miembros.map((m) => [
       equipo.nombre,
       m.nombre,
       m.email || '',
@@ -198,17 +238,23 @@ const EquiposVentas = () => {
       String(m.metaMes || 0),
       String(m.ventasMes || 0),
       (m.porcentajeMeta ?? 0).toFixed(1),
-      m.estado
+      m.estado,
     ]);
-    const escapeHtml = (s: string) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const thead = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
-    const tbody = rows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
+    const escapeHtml = (s: string) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const thead = `<tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
+    const tbody = rows
+      .map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`)
+      .join('');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body><table>${thead}${tbody}</table></body></html>`;
     const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `equipo_${equipo.nombre.replace(/\s+/g,'_')}_miembros.xls`;
+    a.download = `equipo_${equipo.nombre.replace(/\s+/g, '_')}_miembros.xls`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -216,7 +262,7 @@ const EquiposVentas = () => {
   // Derivados: filtros, orden y paginación
   const especialidades = useMemo(() => {
     const set = new Set<string>();
-    equipos.forEach(e => set.add(e.especialidad));
+    equipos.forEach((e) => set.add(e.especialidad));
     return Array.from(set);
   }, [equipos]);
 
@@ -224,26 +270,29 @@ const EquiposVentas = () => {
     return (vendedoresHook || []).map((v: any) => ({
       id: String(v.id),
       nombre: v.nombres || v.nombre || v.name,
-      email: v.email
+      email: v.email,
     }));
   }, [vendedoresHook]);
 
   const usuariosOptions = useMemo(() => {
-    return availableUsers.map(u => ({
+    return availableUsers.map((u) => ({
       id: String(u.id),
       nombre: `${u.first_name} ${u.last_name}`,
-      email: u.email
+      email: u.email,
     }));
   }, [availableUsers]);
 
   const filteredEquipos = useMemo(() => {
-    return equipos.filter(e => {
-      const matchesSearch = searchEquipo.trim() === ''
-        || e.nombre.toLowerCase().includes(searchEquipo.toLowerCase())
-        || e.descripcion.toLowerCase().includes(searchEquipo.toLowerCase())
-        || e.territorio.toLowerCase().includes(searchEquipo.toLowerCase());
-      const matchesEstado = filtroEstadoEquipo === 'todos' || e.estado === filtroEstadoEquipo as any;
-      const matchesEspecialidad = filtroEspecialidad === 'todas' || e.especialidad === filtroEspecialidad;
+    return equipos.filter((e) => {
+      const matchesSearch =
+        searchEquipo.trim() === '' ||
+        e.nombre.toLowerCase().includes(searchEquipo.toLowerCase()) ||
+        e.descripcion.toLowerCase().includes(searchEquipo.toLowerCase()) ||
+        e.territorio.toLowerCase().includes(searchEquipo.toLowerCase());
+      const matchesEstado =
+        filtroEstadoEquipo === 'todos' || e.estado === (filtroEstadoEquipo as any);
+      const matchesEspecialidad =
+        filtroEspecialidad === 'todas' || e.especialidad === filtroEspecialidad;
       return matchesSearch && matchesEstado && matchesEspecialidad;
     });
   }, [equipos, searchEquipo, filtroEstadoEquipo, filtroEspecialidad]);
@@ -260,15 +309,19 @@ const EquiposVentas = () => {
 
   type MiembroRow = Miembro & { equipoNombre: string };
   const allMiembros: MiembroRow[] = useMemo(() => {
-    return equipos.flatMap(equipo => equipo.miembros.map(m => ({ ...m, equipoNombre: equipo.nombre })));
+    return equipos.flatMap((equipo) =>
+      equipo.miembros.map((m) => ({ ...m, equipoNombre: equipo.nombre })),
+    );
   }, [equipos]);
 
   const filteredMiembros = useMemo(() => {
-    return allMiembros.filter(m => {
+    return allMiembros.filter((m) => {
       const s = searchMiembro.trim().toLowerCase();
-      const matchesSearch = s === '' || m.nombre.toLowerCase().includes(s) || m.email.toLowerCase().includes(s);
-      const matchesRol = filtroRol === 'todos' || m.rol === filtroRol as any;
-      const matchesEstado = filtroEstadoMiembro === 'todos' || m.estado === filtroEstadoMiembro as any;
+      const matchesSearch =
+        s === '' || m.nombre.toLowerCase().includes(s) || m.email.toLowerCase().includes(s);
+      const matchesRol = filtroRol === 'todos' || m.rol === (filtroRol as any);
+      const matchesEstado =
+        filtroEstadoMiembro === 'todos' || m.estado === (filtroEstadoMiembro as any);
       return matchesSearch && matchesRol && matchesEstado;
     });
   }, [allMiembros, searchMiembro, filtroRol, filtroEstadoMiembro]);
@@ -303,6 +356,17 @@ const EquiposVentas = () => {
     setPageMiembros(1);
   }, [searchMiembro, filtroRol, filtroEstadoMiembro]);
 
+  // Sincronizar rol seleccionado cuando cambia el usuario seleccionado o el equipo
+  useEffect(() => {
+    if (!selectedUserId) {
+      setSelectedRole('Asesor Junior');
+      return;
+    }
+    const equipo = equipos.find((e) => e.id === equipoIdGestion);
+    const miembro = equipo?.miembros.find((m) => m.id === selectedUserId);
+    setSelectedRole((miembro?.rol as any) || 'Asesor Junior');
+  }, [selectedUserId, equipoIdGestion, equipos]);
+
   const totalMiembrosPages = Math.max(1, Math.ceil(sortedMiembros.length / perPage));
   const paginatedMiembros = useMemo(() => {
     const start = (pageMiembros - 1) * perPage;
@@ -311,7 +375,7 @@ const EquiposVentas = () => {
 
   const handleSort = (key: typeof sortKey) => {
     if (key === sortKey) {
-      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortKey(key);
       setSortDir('asc');
@@ -319,10 +383,19 @@ const EquiposVentas = () => {
   };
 
   const exportAllMembersCsv = () => {
-    const headers = ['Equipo','Miembro','Email','Rol','Meta Mes','Ventas Mes','% Meta','Estado'];
+    const headers = [
+      'Equipo',
+      'Miembro',
+      'Email',
+      'Rol',
+      'Meta Mes',
+      'Ventas Mes',
+      '% Meta',
+      'Estado',
+    ];
     const rows: string[][] = [];
-    equipos.forEach(equipo => {
-      equipo.miembros.forEach(m => {
+    equipos.forEach((equipo) => {
+      equipo.miembros.forEach((m) => {
         rows.push([
           equipo.nombre,
           m.nombre,
@@ -331,7 +404,7 @@ const EquiposVentas = () => {
           String(m.metaMes || 0),
           String(m.ventasMes || 0),
           (m.porcentajeMeta ?? 0).toFixed(1),
-          m.estado
+          m.estado,
         ]);
       });
     });
@@ -339,10 +412,19 @@ const EquiposVentas = () => {
   };
 
   const exportAllMembersXls = () => {
-    const headers = ['Equipo','Miembro','Email','Rol','Meta Mes','Ventas Mes','% Meta','Estado'];
+    const headers = [
+      'Equipo',
+      'Miembro',
+      'Email',
+      'Rol',
+      'Meta Mes',
+      'Ventas Mes',
+      '% Meta',
+      'Estado',
+    ];
     const rows: string[][] = [];
-    equipos.forEach(equipo => {
-      equipo.miembros.forEach(m => {
+    equipos.forEach((equipo) => {
+      equipo.miembros.forEach((m) => {
         rows.push([
           equipo.nombre,
           m.nombre,
@@ -351,13 +433,19 @@ const EquiposVentas = () => {
           String(m.metaMes || 0),
           String(m.ventasMes || 0),
           (m.porcentajeMeta ?? 0).toFixed(1),
-          m.estado
+          m.estado,
         ]);
       });
     });
-    const escapeHtml = (s: string) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const thead = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
-    const tbody = rows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
+    const escapeHtml = (s: string) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const thead = `<tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
+    const tbody = rows
+      .map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`)
+      .join('');
     const html = `<!DOCTYPE html><html><head><meta charset=\"utf-8\" /></head><body><table>${thead}${tbody}</table></body></html>`;
     const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
@@ -381,9 +469,9 @@ const EquiposVentas = () => {
       territorio: nuevoEquipo.territorio,
       especialidad: nuevoEquipo.especialidad,
       fechaCreacion: new Date().toISOString().split('T')[0],
-      estado: 'Activo'
+      estado: 'Activo',
     };
-    
+
     setEquipos([nuevo, ...equipos]);
     setShowModalEquipo(false);
     setNuevoEquipo({
@@ -392,7 +480,7 @@ const EquiposVentas = () => {
       lider: '',
       territorio: '',
       especialidad: '',
-      metaEquipo: ''
+      metaEquipo: '',
     });
   };
 
@@ -412,23 +500,24 @@ const EquiposVentas = () => {
             liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
             miembros: (t.members || []).map((m: any) => ({
               id: String(m.user_id),
-              nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`,
+              nombre:
+                m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`,
               email: m.vendedor?.email || m.user?.email || '',
               telefono: '',
-              rol: 'Asesor Junior',
+              rol: (m.role as any) || 'Asesor Junior',
               ventasMes: 0,
               metaMes: Number(m.monthly_goal || 0),
               porcentajeMeta: 0,
               fechaIngreso: '',
-              estado: m.status === 'inactive' ? 'Inactivo' : 'Activo'
+              estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
             })),
             metaEquipo: 0,
             ventasEquipo: 0,
             porcentajeEquipo: 0,
             territorio: t.territory || 'N/A',
             especialidad: t.specialty || 'Comercial',
-            fechaCreacion: (t.created_at || '').slice(0,10),
-            estado: t.status === 'inactive' ? 'Inactivo' : 'Activo'
+            fechaCreacion: (t.created_at || '').slice(0, 10),
+            estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
           }));
           setEquipos(equiposApi);
           return;
@@ -447,8 +536,16 @@ const EquiposVentas = () => {
         const miembros: Miembro[] = [];
         for (const u of users) {
           try {
-            const res = await salesFunnelService.getLeads({ assigned_agent_id: u.id, per_page: 100, created_from, created_to });
-            const ventasMes = (res.data || []).reduce((acc, l) => acc + (l.potential_value || 0), 0);
+            const res = await salesFunnelService.getLeads({
+              assigned_agent_id: u.id,
+              per_page: 100,
+              created_from,
+              created_to,
+            });
+            const ventasMes = (res.data || []).reduce(
+              (acc, l) => acc + (l.potential_value || 0),
+              0,
+            );
             const metaMes = Math.max(ventasMes * 1.1, 1); // objetivo simple (10% por encima)
             const porcentajeMeta = (ventasMes / metaMes) * 100;
             miembros.push({
@@ -461,10 +558,9 @@ const EquiposVentas = () => {
               metaMes,
               porcentajeMeta,
               fechaIngreso: '',
-              estado: 'Activo'
+              estado: 'Activo',
             });
-          } catch (_) {
-          }
+          } catch (_) {}
         }
 
         const ventasEquipo = miembros.reduce((s, m) => s + m.ventasMes, 0);
@@ -483,7 +579,7 @@ const EquiposVentas = () => {
           territorio: 'Nacional',
           especialidad: 'Comercial',
           fechaCreacion: new Date().toISOString().slice(0, 10),
-          estado: 'Activo'
+          estado: 'Activo',
         };
 
         setEquipos([equipo]);
@@ -512,16 +608,21 @@ const EquiposVentas = () => {
             <Card>
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <Icon icon="solar:users-group-rounded-bold-duotone" className="h-8 w-8 text-blue-500" />
+                  <Icon
+                    icon="solar:users-group-rounded-bold-duotone"
+                    className="h-8 w-8 text-blue-500"
+                  />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-500">Equipos Activos</p>
-                  <p className="text-2xl font-bold text-gray-900">{equipos.filter(e => e.estado === 'Activo').length}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {equipos.filter((e) => e.estado === 'Activo').length}
+                  </p>
                   <p className="text-sm text-blue-600">de {equipos.length} totales</p>
                 </div>
               </div>
             </Card>
-            
+
             <Card>
               <div className="flex items-center">
                 <div className="flex-shrink-0">
@@ -534,11 +635,14 @@ const EquiposVentas = () => {
                 </div>
               </div>
             </Card>
-            
+
             <Card>
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <Icon icon="solar:dollar-minimalistic-bold-duotone" className="h-8 w-8 text-purple-500" />
+                  <Icon
+                    icon="solar:dollar-minimalistic-bold-duotone"
+                    className="h-8 w-8 text-purple-500"
+                  />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-500">Ventas Totales</p>
@@ -547,7 +651,7 @@ const EquiposVentas = () => {
                 </div>
               </div>
             </Card>
-            
+
             <Card>
               <div className="flex items-center">
                 <div className="flex-shrink-0">
@@ -568,14 +672,14 @@ const EquiposVentas = () => {
           <Card>
             <div className="flex justify-between items-center">
               <div className="flex space-x-4">
-                <Button 
+                <Button
                   color={vistaActual === 'equipos' ? 'blue' : 'light'}
                   onClick={() => setVistaActual('equipos')}
                 >
                   <Icon icon="solar:users-group-rounded-bold-duotone" className="mr-2 h-4 w-4" />
                   Equipos
                 </Button>
-                <Button 
+                <Button
                   color={vistaActual === 'miembros' ? 'blue' : 'light'}
                   onClick={() => setVistaActual('miembros')}
                 >
@@ -612,12 +716,22 @@ const EquiposVentas = () => {
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="md:col-span-2">
                   <ShLabel htmlFor="buscar-equipo">Buscar</ShLabel>
-                  <Input id="buscar-equipo" placeholder="Nombre, territorio o descripción" value={searchEquipo} onChange={(e) => setSearchEquipo(e.target.value)} />
+                  <Input
+                    id="buscar-equipo"
+                    placeholder="Nombre, territorio o descripción"
+                    value={searchEquipo}
+                    onChange={(e) => setSearchEquipo(e.target.value)}
+                  />
                 </div>
                 <div>
                   <ShLabel>Estado</ShLabel>
-                  <ShSelect value={filtroEstadoEquipo} onValueChange={(v) => setFiltroEstadoEquipo(v)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <ShSelect
+                    value={filtroEstadoEquipo}
+                    onValueChange={(v) => setFiltroEstadoEquipo(v)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="Activo">Activo</SelectItem>
@@ -628,23 +742,37 @@ const EquiposVentas = () => {
                 </div>
                 <div>
                   <ShLabel>Especialidad</ShLabel>
-                  <ShSelect value={filtroEspecialidad} onValueChange={(v) => setFiltroEspecialidad(v)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <ShSelect
+                    value={filtroEspecialidad}
+                    onValueChange={(v) => setFiltroEspecialidad(v)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todas">Todas</SelectItem>
-                      {especialidades.map(es => (
-                        <SelectItem key={es} value={es}>{es}</SelectItem>
+                      {especialidades.map((es) => (
+                        <SelectItem key={es} value={es}>
+                          {es}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </ShSelect>
                 </div>
                 <div>
                   <ShLabel>Por página</ShLabel>
-                  <ShSelect value={String(perPage)} onValueChange={(v) => setPerPage(parseInt(v, 10))}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <ShSelect
+                    value={String(perPage)}
+                    onValueChange={(v) => setPerPage(parseInt(v, 10))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      {[10, 20, 50, 100].map(n => (
-                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                      {[10, 20, 50, 100].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </ShSelect>
@@ -654,12 +782,19 @@ const EquiposVentas = () => {
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="md:col-span-2">
                   <ShLabel htmlFor="buscar-miembro">Buscar</ShLabel>
-                  <Input id="buscar-miembro" placeholder="Nombre o correo" value={searchMiembro} onChange={(e) => setSearchMiembro(e.target.value)} />
+                  <Input
+                    id="buscar-miembro"
+                    placeholder="Nombre o correo"
+                    value={searchMiembro}
+                    onChange={(e) => setSearchMiembro(e.target.value)}
+                  />
                 </div>
                 <div>
                   <ShLabel>Rol</ShLabel>
                   <ShSelect value={filtroRol} onValueChange={(v) => setFiltroRol(v)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Todos" /></SelectTrigger>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="Líder">Líder</SelectItem>
@@ -671,8 +806,13 @@ const EquiposVentas = () => {
                 </div>
                 <div>
                   <ShLabel>Estado</ShLabel>
-                  <ShSelect value={filtroEstadoMiembro} onValueChange={(v) => setFiltroEstadoMiembro(v)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <ShSelect
+                    value={filtroEstadoMiembro}
+                    onValueChange={(v) => setFiltroEstadoMiembro(v)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       <SelectItem value="Activo">Activo</SelectItem>
@@ -683,11 +823,18 @@ const EquiposVentas = () => {
                 </div>
                 <div>
                   <ShLabel>Por página</ShLabel>
-                  <ShSelect value={String(perPage)} onValueChange={(v) => setPerPage(parseInt(v, 10))}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <ShSelect
+                    value={String(perPage)}
+                    onValueChange={(v) => setPerPage(parseInt(v, 10))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      {[10, 20, 50, 100].map(n => (
-                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                      {[10, 20, 50, 100].map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </ShSelect>
@@ -703,140 +850,232 @@ const EquiposVentas = () => {
             {paginatedEquipos.length === 0 ? (
               <Card>
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Icon icon="solar:users-group-two-rounded-bold-duotone" className="h-10 w-10 text-gray-400 mb-2" />
+                  <Icon
+                    icon="solar:users-group-two-rounded-bold-duotone"
+                    className="h-10 w-10 text-gray-400 mb-2"
+                  />
                   <p className="text-gray-600">No hay equipos que coincidan con los filtros.</p>
                 </div>
               </Card>
             ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {paginatedEquipos.map((equipo) => (
-                <Card key={equipo.id}>
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{equipo.nombre}</h3>
-                      <p className="text-sm text-gray-600">{equipo.descripcion}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {paginatedEquipos.map((equipo) => (
+                  <Card key={equipo.id}>
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{equipo.nombre}</h3>
+                        <p className="text-sm text-gray-600">{equipo.descripcion}</p>
+                      </div>
+                      <Badge color={estadoColors[equipo.estado]} size="sm">
+                        {equipo.estado}
+                      </Badge>
                     </div>
-                    <Badge color={estadoColors[equipo.estado]} size="sm">
-                      {equipo.estado}
-                    </Badge>
-                  </div>
 
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Líder:</span>
-                      <span className="font-medium">{equipo.lider}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Miembros:</span>
-                      <span className="font-medium">{equipo.miembros.length}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Territorio:</span>
-                      <span className="font-medium">{equipo.territorio}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Especialidad:</span>
-                      <span className="font-medium">{equipo.especialidad}</span>
-                    </div>
-                    
-                    <hr className="my-3" />
-                    
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Meta del Equipo:</span>
-                        <span className="font-semibold">{formatCurrency(equipo.metaEquipo)}</span>
+                        <span className="text-gray-600">Líder:</span>
+                        <span className="font-medium">{equipo.lider}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Ventas Actuales:</span>
-                        <span className="font-semibold text-green-600">{formatCurrency(equipo.ventasEquipo)}</span>
+                        <span className="text-gray-600">Miembros:</span>
+                        <span className="font-medium">{equipo.miembros.length}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">% Cumplimiento:</span>
-                        <span className="font-semibold">{equipo.porcentajeEquipo.toFixed(1)}%</span>
+                        <span className="text-gray-600">Territorio:</span>
+                        <span className="font-medium">{equipo.territorio}</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${getProgressColor(equipo.porcentajeEquipo) === 'green' ? 'bg-green-500' : getProgressColor(equipo.porcentajeEquipo) === 'blue' ? 'bg-blue-500' : getProgressColor(equipo.porcentajeEquipo) === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'}`}
-                          style={{ width: `${Math.min(equipo.porcentajeEquipo, 100)}%` }}
-                        ></div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Especialidad:</span>
+                        <span className="font-medium">{equipo.especialidad}</span>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="flex justify-between items-center mt-4 pt-4 border-t">
-                    <div className="flex -space-x-2">
-                      {equipo.miembros.slice(0, 3).map((miembro, index) => (
-                        <Avatar
-                          key={miembro.id}
-                          alt={miembro.nombre}
-                          img={`https://ui-avatars.com/api/?name=${encodeURIComponent(miembro.nombre)}&background=random`}
-                          rounded
-                          size="sm"
-                          className="border-2 border-white"
-                        />
-                      ))}
-                      {equipo.miembros.length > 3 && (
-                        <div className="flex items-center justify-center w-8 h-8 text-xs font-medium text-white bg-gray-700 border-2 border-white rounded-full">
-                          +{equipo.miembros.length - 3}
+                      <hr className="my-3" />
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Meta del Equipo:</span>
+                          <span className="font-semibold">{formatCurrency(equipo.metaEquipo)}</span>
                         </div>
-                      )}
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Ventas Actuales:</span>
+                          <span className="font-semibold text-green-600">
+                            {formatCurrency(equipo.ventasEquipo)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">% Cumplimiento:</span>
+                          <span className="font-semibold">
+                            {equipo.porcentajeEquipo.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full ${
+                              getProgressColor(equipo.porcentajeEquipo) === 'green'
+                                ? 'bg-green-500'
+                                : getProgressColor(equipo.porcentajeEquipo) === 'blue'
+                                ? 'bg-blue-500'
+                                : getProgressColor(equipo.porcentajeEquipo) === 'yellow'
+                                ? 'bg-yellow-500'
+                                : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(equipo.porcentajeEquipo, 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex space-x-1">
-                      <Button size="sm" color="light" onClick={() => {
-                        setEquipoIdGestion(equipo.id);
-                        setSelectedUserId('');
-                        setMonthlyGoal('');
-                        setShowModalMiembro(true);
-                      }}>
-                        <Icon icon="solar:users-group-two-rounded-bold-duotone" className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" color="light" onClick={() => exportTeamMembersCsv(equipo)}>
-                        <Icon icon="solar:export-bold-duotone" className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" color="light" onClick={() => exportTeamMembersXls(equipo)}>
-                        <Icon icon="solar:export-bold-duotone" className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" color="light" onClick={() => {
-                        setEditarEquipo({
-                          id: equipo.id,
-                          nombre: equipo.nombre,
-                          descripcion: equipo.descripcion,
-                          territorio: equipo.territorio,
-                          especialidad: equipo.especialidad,
-                          estado: equipo.estado
-                        });
-                        setSelectedEditLeaderId(equipo.liderUserId ? String(equipo.liderUserId) : '');
-                        setShowModalEditar(true);
-                      }}>
-                        <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" color="light" onClick={async () => {
-                        if (!confirm('¿Eliminar este equipo?')) return;
-                        try {
-                          await salesTeamsService.remove(Number(equipo.id));
-                          const refreshed = await salesTeamsService.list({ per_page: 50 });
-                          const equiposApi: any[] = refreshed?.data || [];
-                          setEquipos(equiposApi.map((t: any) => ({
-                            id: String(t.id), nombre: t.name, descripcion: t.description || '',
-                            lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-', liderUserId: t.leader_user_id || (t.leader?.id ?? undefined), miembros: (t.members || []).map((m: any) => ({ id: String(m.user_id), nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`, email: m.vendedor?.email || m.user?.email || '', telefono: '', rol: m.role || 'Asesor Junior', ventasMes: 0, metaMes: Number(m.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: m.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
-                        } catch (_) {}
-                      }}>
-                        <Icon icon="solar:trash-bin-minimalistic-bold-duotone" className="h-4 w-4" />
-                      </Button>
+
+                    <div className="flex justify-between items-center mt-4 pt-4 border-t">
+                      <div className="flex -space-x-2">
+                        {equipo.miembros.slice(0, 3).map((miembro, index) => (
+                          <Avatar
+                            key={miembro.id}
+                            alt={miembro.nombre}
+                            img={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                              miembro.nombre,
+                            )}&background=random`}
+                            rounded
+                            size="sm"
+                            className="border-2 border-white"
+                          />
+                        ))}
+                        {equipo.miembros.length > 3 && (
+                          <div className="flex items-center justify-center w-8 h-8 text-xs font-medium text-white bg-gray-700 border-2 border-white rounded-full">
+                            +{equipo.miembros.length - 3}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex space-x-1">
+                        <Button
+                          size="sm"
+                          color="light"
+                          onClick={() => {
+                            setEquipoIdGestion(equipo.id);
+                            setSelectedUserId('');
+                            setMonthlyGoal('');
+                            setShowModalMiembro(true);
+                          }}
+                        >
+                          <Icon
+                            icon="solar:users-group-two-rounded-bold-duotone"
+                            className="h-4 w-4"
+                          />
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="light"
+                          onClick={() => exportTeamMembersCsv(equipo)}
+                        >
+                          <Icon icon="solar:export-bold-duotone" className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="light"
+                          onClick={() => exportTeamMembersXls(equipo)}
+                        >
+                          <Icon icon="solar:export-bold-duotone" className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="light"
+                          onClick={() => {
+                            setEditarEquipo({
+                              id: equipo.id,
+                              nombre: equipo.nombre,
+                              descripcion: equipo.descripcion,
+                              territorio: equipo.territorio,
+                              especialidad: equipo.especialidad,
+                              estado: equipo.estado,
+                            });
+                            setSelectedEditLeaderId(
+                              equipo.liderUserId ? String(equipo.liderUserId) : '',
+                            );
+                            setShowModalEditar(true);
+                          }}
+                        >
+                          <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="light"
+                          onClick={async () => {
+                            if (!confirm('¿Eliminar este equipo?')) return;
+                            try {
+                              await salesTeamsService.remove(Number(equipo.id));
+                              const refreshed = await salesTeamsService.list({ per_page: 50 });
+                              const equiposApi: any[] = refreshed?.data || [];
+                              setEquipos(
+                                equiposApi.map((t: any) => ({
+                                  id: String(t.id),
+                                  nombre: t.name,
+                                  descripcion: t.description || '',
+                                  lider:
+                                    t.leader_name ||
+                                    t.leader?.name ||
+                                    t.leaderVendedor?.nombres ||
+                                    '-',
+                                  liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                                  miembros: (t.members || []).map((m: any) => ({
+                                    id: String(m.user_id),
+                                    nombre:
+                                      m.vendedor_name ||
+                                      m.vendedor?.nombres ||
+                                      m.user?.name ||
+                                      `Vendedor ${m.user_id}`,
+                                    email: m.vendedor?.email || m.user?.email || '',
+                                    telefono: '',
+                                    rol: m.role || 'Asesor Junior',
+                                    ventasMes: 0,
+                                    metaMes: Number(m.monthly_goal || 0),
+                                    porcentajeMeta: 0,
+                                    fechaIngreso: '',
+                                    estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                                  })),
+                                  metaEquipo: 0,
+                                  ventasEquipo: 0,
+                                  porcentajeEquipo: 0,
+                                  territorio: t.territory || 'Nacional',
+                                  especialidad: t.specialty || 'Comercial',
+                                  fechaCreacion: (t.created_at || '').slice(0, 10),
+                                  estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
+                                })),
+                              );
+                            } catch (_) {}
+                          }}
+                        >
+                          <Icon
+                            icon="solar:trash-bin-minimalistic-bold-duotone"
+                            className="h-4 w-4"
+                          />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
+                  </Card>
+                ))}
+              </div>
             )}
             {/* Paginación Equipos */}
             <div className="flex items-center justify-between mt-6">
               <p className="text-sm text-gray-600">
-                Mostrando {Math.min((pageEquipos - 1) * perPage + 1, filteredEquipos.length)}–{Math.min(pageEquipos * perPage, filteredEquipos.length)} de {filteredEquipos.length}
+                Mostrando {Math.min((pageEquipos - 1) * perPage + 1, filteredEquipos.length)}–
+                {Math.min(pageEquipos * perPage, filteredEquipos.length)} de{' '}
+                {filteredEquipos.length}
               </p>
               <div className="flex space-x-2">
-                <Button color="light" onClick={() => setPageEquipos(p => Math.max(1, p - 1))} disabled={pageEquipos === 1}>Anterior</Button>
-                <Button color="light" onClick={() => setPageEquipos(p => Math.min(totalEquiposPages, p + 1))} disabled={pageEquipos === totalEquiposPages}>Siguiente</Button>
+                <Button
+                  color="light"
+                  onClick={() => setPageEquipos((p) => Math.max(1, p - 1))}
+                  disabled={pageEquipos === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  color="light"
+                  onClick={() => setPageEquipos((p) => Math.min(totalEquiposPages, p + 1))}
+                  disabled={pageEquipos === totalEquiposPages}
+                >
+                  Siguiente
+                </Button>
               </div>
             </div>
           </div>
@@ -863,86 +1102,145 @@ const EquiposVentas = () => {
                     <p className="text-gray-600">No hay miembros que coincidan con los filtros.</p>
                   </div>
                 ) : (
-                <Table striped>
-                  <Table.Head className="sticky top-0 z-10 bg-gray-50 shadow-sm">
-                    <Table.HeadCell className="cursor-pointer" onClick={() => handleSort('miembro')}>Miembro {sortKey==='miembro' ? (sortDir==='asc'?'▲':'▼') : ''}</Table.HeadCell>
-                    <Table.HeadCell className="cursor-pointer" onClick={() => handleSort('rol')}>Rol {sortKey==='rol' ? (sortDir==='asc'?'▲':'▼') : ''}</Table.HeadCell>
-                    <Table.HeadCell className="cursor-pointer" onClick={() => handleSort('equipo')}>Equipo {sortKey==='equipo' ? (sortDir==='asc'?'▲':'▼') : ''}</Table.HeadCell>
-                    <Table.HeadCell className="cursor-pointer" onClick={() => handleSort('metaMes')}>Meta Mes {sortKey==='metaMes' ? (sortDir==='asc'?'▲':'▼') : ''}</Table.HeadCell>
-                    <Table.HeadCell className="cursor-pointer" onClick={() => handleSort('ventasMes')}>Ventas Mes {sortKey==='ventasMes' ? (sortDir==='asc'?'▲':'▼') : ''}</Table.HeadCell>
-                    <Table.HeadCell className="cursor-pointer" onClick={() => handleSort('porcentajeMeta')}>% Meta {sortKey==='porcentajeMeta' ? (sortDir==='asc'?'▲':'▼') : ''}</Table.HeadCell>
-                    <Table.HeadCell className="cursor-pointer" onClick={() => handleSort('estado')}>Estado {sortKey==='estado' ? (sortDir==='asc'?'▲':'▼') : ''}</Table.HeadCell>
-                    <Table.HeadCell>Acciones</Table.HeadCell>
-                  </Table.Head>
-                  <Table.Body className="divide-y">
-                    {paginatedMiembros.map(miembro => (
-                      <Table.Row key={miembro.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                        <Table.Cell className="whitespace-nowrap">
-                          <div className="flex items-center">
-                            <Avatar
-                              alt={miembro.nombre}
-                              img={`https://ui-avatars.com/api/?name=${encodeURIComponent(miembro.nombre)}&background=random`}
-                              rounded
-                              size="sm"
-                              className="mr-3"
-                            />
-                            <div>
-                              <div className="font-medium text-gray-900 dark:text-white">
-                                {miembro.nombre}
+                  <Table striped>
+                    <Table.Head className="sticky top-0 z-10 bg-gray-50 shadow-sm">
+                      <Table.HeadCell
+                        className="cursor-pointer"
+                        onClick={() => handleSort('miembro')}
+                      >
+                        Miembro {sortKey === 'miembro' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </Table.HeadCell>
+                      <Table.HeadCell className="cursor-pointer" onClick={() => handleSort('rol')}>
+                        Rol {sortKey === 'rol' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </Table.HeadCell>
+                      <Table.HeadCell
+                        className="cursor-pointer"
+                        onClick={() => handleSort('equipo')}
+                      >
+                        Equipo {sortKey === 'equipo' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </Table.HeadCell>
+                      <Table.HeadCell
+                        className="cursor-pointer"
+                        onClick={() => handleSort('metaMes')}
+                      >
+                        Meta Mes {sortKey === 'metaMes' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </Table.HeadCell>
+                      <Table.HeadCell
+                        className="cursor-pointer"
+                        onClick={() => handleSort('ventasMes')}
+                      >
+                        Ventas Mes {sortKey === 'ventasMes' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </Table.HeadCell>
+                      <Table.HeadCell
+                        className="cursor-pointer"
+                        onClick={() => handleSort('porcentajeMeta')}
+                      >
+                        % Meta {sortKey === 'porcentajeMeta' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </Table.HeadCell>
+                      <Table.HeadCell
+                        className="cursor-pointer"
+                        onClick={() => handleSort('estado')}
+                      >
+                        Estado {sortKey === 'estado' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                      </Table.HeadCell>
+                      <Table.HeadCell>Acciones</Table.HeadCell>
+                    </Table.Head>
+                    <Table.Body className="divide-y">
+                      {paginatedMiembros.map((miembro) => (
+                        <Table.Row
+                          key={miembro.id}
+                          className="bg-white dark:border-gray-700 dark:bg-gray-800"
+                        >
+                          <Table.Cell className="whitespace-nowrap">
+                            <div className="flex items-center">
+                              <Avatar
+                                alt={miembro.nombre}
+                                img={`https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                  miembro.nombre,
+                                )}&background=random`}
+                                rounded
+                                size="sm"
+                                className="mr-3"
+                              />
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">
+                                  {miembro.nombre}
+                                </div>
+                                <div className="text-sm text-gray-500">{miembro.email}</div>
                               </div>
-                              <div className="text-sm text-gray-500">{miembro.email}</div>
                             </div>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Badge color={rolColors[miembro.rol]} size="sm">
-                            {miembro.rol}
-                          </Badge>
-                        </Table.Cell>
-                        <Table.Cell>{miembro.equipoNombre}</Table.Cell>
-                        <Table.Cell className="font-semibold">
-                          {formatCurrency(miembro.metaMes)}
-                        </Table.Cell>
-                        <Table.Cell className="font-semibold text-green-600">
-                          {formatCurrency(miembro.ventasMes)}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex items-center">
-                            <span className={`font-semibold mr-2 ${miembro.porcentajeMeta >= 100 ? 'text-green-600' : miembro.porcentajeMeta >= 80 ? 'text-blue-600' : 'text-red-600'}`}>
-                              {miembro.porcentajeMeta.toFixed(1)}%
-                            </span>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Badge color={estadoColors[miembro.estado]} size="sm">
-                            {miembro.estado}
-                          </Badge>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex space-x-1">
-                            <Button size="sm" color="light">
-                              <Icon icon="solar:eye-bold-duotone" className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" color="light">
-                              <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Badge color={rolColors[miembro.rol]} size="sm">
+                              {miembro.rol}
+                            </Badge>
+                          </Table.Cell>
+                          <Table.Cell>{miembro.equipoNombre}</Table.Cell>
+                          <Table.Cell className="font-semibold">
+                            {formatCurrency(miembro.metaMes)}
+                          </Table.Cell>
+                          <Table.Cell className="font-semibold text-green-600">
+                            {formatCurrency(miembro.ventasMes)}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex items-center">
+                              <span
+                                className={`font-semibold mr-2 ${
+                                  miembro.porcentajeMeta >= 100
+                                    ? 'text-green-600'
+                                    : miembro.porcentajeMeta >= 80
+                                    ? 'text-blue-600'
+                                    : 'text-red-600'
+                                }`}
+                              >
+                                {miembro.porcentajeMeta.toFixed(1)}%
+                              </span>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Badge color={estadoColors[miembro.estado]} size="sm">
+                              {miembro.estado}
+                            </Badge>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex space-x-1">
+                              <Button size="sm" color="light">
+                                <Icon icon="solar:eye-bold-duotone" className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" color="light">
+                                <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table>
                 )}
               </div>
 
               {/* Paginación Miembros */}
               <div className="flex items-center justify-between mt-6">
                 <p className="text-sm text-gray-600">
-                  Mostrando {Math.min((pageMiembros - 1) * perPage + 1, sortedMiembros.length)}–{Math.min(pageMiembros * perPage, sortedMiembros.length)} de {sortedMiembros.length}
+                  Mostrando {Math.min((pageMiembros - 1) * perPage + 1, sortedMiembros.length)}–
+                  {Math.min(pageMiembros * perPage, sortedMiembros.length)} de{' '}
+                  {sortedMiembros.length}
                 </p>
                 <div className="flex space-x-2">
-                  <Button color="light" onClick={() => setPageMiembros(p => Math.max(1, p - 1))} disabled={pageMiembros === 1}>Anterior</Button>
-                  <Button color="light" onClick={() => setPageMiembros(p => Math.min(totalMiembrosPages, p + 1))} disabled={pageMiembros === totalMiembrosPages}>Siguiente</Button>
+                  <Button
+                    color="light"
+                    onClick={() => setPageMiembros((p) => Math.max(1, p - 1))}
+                    disabled={pageMiembros === 1}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    color="light"
+                    onClick={() => setPageMiembros((p) => Math.min(totalMiembrosPages, p + 1))}
+                    disabled={pageMiembros === totalMiembrosPages}
+                  >
+                    Siguiente
+                  </Button>
                 </div>
               </div>
             </Card>
@@ -960,7 +1258,7 @@ const EquiposVentas = () => {
               <Input
                 id="nombre"
                 value={nuevoEquipo.nombre}
-                onChange={(e) => setNuevoEquipo({...nuevoEquipo, nombre: e.target.value})}
+                onChange={(e) => setNuevoEquipo({ ...nuevoEquipo, nombre: e.target.value })}
                 placeholder="Ej: Equipo Seguros Generales"
               />
             </div>
@@ -969,20 +1267,28 @@ const EquiposVentas = () => {
               <Input
                 id="descripcion"
                 value={nuevoEquipo.descripcion}
-                onChange={(e) => setNuevoEquipo({...nuevoEquipo, descripcion: e.target.value})}
+                onChange={(e) => setNuevoEquipo({ ...nuevoEquipo, descripcion: e.target.value })}
                 placeholder="Descripción del equipo"
               />
             </div>
             <div>
               <ShLabel htmlFor="lider">Líder del Equipo</ShLabel>
               <ShSelect value={selectedLeaderId} onValueChange={(v) => setSelectedLeaderId(v)}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar líder" /></SelectTrigger>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleccionar líder" />
+                </SelectTrigger>
                 <SelectContent>
                   {vendedoresOptions.length === 0 ? (
-                    <SelectItem value="no-vendedores" disabled>Cargando vendedores...</SelectItem>
-                  ) : vendedoresOptions.map(v => (
-                    <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
-                  ))}
+                    <SelectItem value="no-vendedores" disabled>
+                      Cargando vendedores...
+                    </SelectItem>
+                  ) : (
+                    vendedoresOptions.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.nombre}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </ShSelect>
             </div>
@@ -992,14 +1298,19 @@ const EquiposVentas = () => {
                 <Input
                   id="territorio"
                   value={nuevoEquipo.territorio}
-                  onChange={(e) => setNuevoEquipo({...nuevoEquipo, territorio: e.target.value})}
+                  onChange={(e) => setNuevoEquipo({ ...nuevoEquipo, territorio: e.target.value })}
                   placeholder="Ej: Bogotá y Cundinamarca"
                 />
               </div>
               <div>
                 <ShLabel htmlFor="especialidad">Especialidad</ShLabel>
-                <ShSelect value={nuevoEquipo.especialidad} onValueChange={(v) => setNuevoEquipo({...nuevoEquipo, especialidad: v})}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar especialidad" /></SelectTrigger>
+                <ShSelect
+                  value={nuevoEquipo.especialidad}
+                  onValueChange={(v) => setNuevoEquipo({ ...nuevoEquipo, especialidad: v })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccionar especialidad" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Seguros Generales">Seguros Generales</SelectItem>
                     <SelectItem value="SOAT y Vida">SOAT y Vida</SelectItem>
@@ -1015,58 +1326,68 @@ const EquiposVentas = () => {
                 id="metaEquipo"
                 type="number"
                 value={nuevoEquipo.metaEquipo}
-                onChange={(e) => setNuevoEquipo({...nuevoEquipo, metaEquipo: e.target.value})}
+                onChange={(e) => setNuevoEquipo({ ...nuevoEquipo, metaEquipo: e.target.value })}
                 placeholder="0"
               />
             </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button onClick={async () => {
-            try {
-              // El líder se selecciona desde vendedores, pero necesitamos enviar como leader_user_id
-              // Por ahora, enviar el ID del vendedor directamente (asumiendo que vendedor.id puede usarse)
-              const payload = {
-                name: nuevoEquipo.nombre,
-                description: nuevoEquipo.descripcion,
-                territory: nuevoEquipo.territorio,
-                specialty: nuevoEquipo.especialidad,
-                leader_user_id: selectedLeaderId ? Number(selectedLeaderId) : undefined,
-                status: 'active',
-              };
-              await salesTeamsService.create(payload);
-              const refreshed = await salesTeamsService.list({ per_page: 50 });
-              const equiposApi: any[] = refreshed?.data || [];
-              setEquipos(equiposApi.map((t: any) => ({
-                id: String(t.id),
-                nombre: t.name,
-                descripcion: t.description || '',
-                lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
-                liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
-                miembros: (t.members || []).map((m: any) => ({
-                  id: String(m.user_id),
-                  nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`,
-                  email: m.vendedor?.email || m.user?.email || '',
-                  telefono: '',
-                  rol: 'Asesor Junior',
-                  ventasMes: 0,
-                  metaMes: Number(m.monthly_goal || 0),
-                  porcentajeMeta: 0,
-                  fechaIngreso: '',
-                  estado: m.status === 'inactive' ? 'Inactivo' : 'Activo'
-                })),
-                metaEquipo: 0,
-                ventasEquipo: 0,
-                porcentajeEquipo: 0,
-                territorio: t.territory || 'Nacional',
-                especialidad: t.specialty || 'Comercial',
-                fechaCreacion: (t.created_at || '').slice(0,10),
-                estado: t.status === 'inactive' ? 'Inactivo' : 'Activo'
-              })));
-              setShowModalEquipo(false);
-              setSelectedLeaderId('');
-            } catch (_) {}
-          }}>Crear Equipo</Button>
+          <Button
+            onClick={async () => {
+              try {
+                // El líder se selecciona desde vendedores, pero necesitamos enviar como leader_user_id
+                // Por ahora, enviar el ID del vendedor directamente (asumiendo que vendedor.id puede usarse)
+                const payload = {
+                  name: nuevoEquipo.nombre,
+                  description: nuevoEquipo.descripcion,
+                  territory: nuevoEquipo.territorio,
+                  specialty: nuevoEquipo.especialidad,
+                  leader_user_id: selectedLeaderId ? Number(selectedLeaderId) : undefined,
+                  status: 'active',
+                };
+                await salesTeamsService.create(payload);
+                const refreshed = await salesTeamsService.list({ per_page: 50 });
+                const equiposApi: any[] = refreshed?.data || [];
+                setEquipos(
+                  equiposApi.map((t: any) => ({
+                    id: String(t.id),
+                    nombre: t.name,
+                    descripcion: t.description || '',
+                    lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+                    liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                    miembros: (t.members || []).map((m: any) => ({
+                      id: String(m.user_id),
+                      nombre:
+                        m.vendedor_name ||
+                        m.vendedor?.nombres ||
+                        m.user?.name ||
+                        `Vendedor ${m.user_id}`,
+                      email: m.vendedor?.email || m.user?.email || '',
+                      telefono: '',
+                      rol: 'Asesor Junior',
+                      ventasMes: 0,
+                      metaMes: Number(m.monthly_goal || 0),
+                      porcentajeMeta: 0,
+                      fechaIngreso: '',
+                      estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                    })),
+                    metaEquipo: 0,
+                    ventasEquipo: 0,
+                    porcentajeEquipo: 0,
+                    territorio: t.territory || 'Nacional',
+                    especialidad: t.specialty || 'Comercial',
+                    fechaCreacion: (t.created_at || '').slice(0, 10),
+                    estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
+                  })),
+                );
+                setShowModalEquipo(false);
+                setSelectedLeaderId('');
+              } catch (_) {}
+            }}
+          >
+            Crear Equipo
+          </Button>
           <Button color="gray" onClick={() => setShowModalEquipo(false)}>
             Cancelar
           </Button>
@@ -1080,39 +1401,73 @@ const EquiposVentas = () => {
           <div className="space-y-4">
             <div>
               <ShLabel htmlFor="e_nombre">Nombre</ShLabel>
-              <Input id="e_nombre" value={editarEquipo.nombre} onChange={(e) => setEditarEquipo({ ...editarEquipo, nombre: e.target.value })} />
+              <Input
+                id="e_nombre"
+                value={editarEquipo.nombre}
+                onChange={(e) => setEditarEquipo({ ...editarEquipo, nombre: e.target.value })}
+              />
             </div>
             <div>
               <ShLabel htmlFor="e_desc">Descripción</ShLabel>
-              <Input id="e_desc" value={editarEquipo.descripcion} onChange={(e) => setEditarEquipo({ ...editarEquipo, descripcion: e.target.value })} />
+              <Input
+                id="e_desc"
+                value={editarEquipo.descripcion}
+                onChange={(e) => setEditarEquipo({ ...editarEquipo, descripcion: e.target.value })}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <ShLabel htmlFor="e_terr">Territorio</ShLabel>
-                <Input id="e_terr" value={editarEquipo.territorio} onChange={(e) => setEditarEquipo({ ...editarEquipo, territorio: e.target.value })} />
+                <Input
+                  id="e_terr"
+                  value={editarEquipo.territorio}
+                  onChange={(e) => setEditarEquipo({ ...editarEquipo, territorio: e.target.value })}
+                />
               </div>
               <div>
                 <ShLabel htmlFor="e_espec">Especialidad</ShLabel>
-                <Input id="e_espec" value={editarEquipo.especialidad} onChange={(e) => setEditarEquipo({ ...editarEquipo, especialidad: e.target.value })} />
+                <Input
+                  id="e_espec"
+                  value={editarEquipo.especialidad}
+                  onChange={(e) =>
+                    setEditarEquipo({ ...editarEquipo, especialidad: e.target.value })
+                  }
+                />
               </div>
             </div>
             <div>
               <ShLabel>Líder del Equipo</ShLabel>
-              <ShSelect value={selectedEditLeaderId} onValueChange={(v) => setSelectedEditLeaderId(v)}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar líder" /></SelectTrigger>
+              <ShSelect
+                value={selectedEditLeaderId}
+                onValueChange={(v) => setSelectedEditLeaderId(v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleccionar líder" />
+                </SelectTrigger>
                 <SelectContent>
                   {vendedoresOptions.length === 0 ? (
-                    <SelectItem value="no-vendedores" disabled>Cargando vendedores...</SelectItem>
-                  ) : vendedoresOptions.map(v => (
-                    <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
-                  ))}
+                    <SelectItem value="no-vendedores" disabled>
+                      Cargando vendedores...
+                    </SelectItem>
+                  ) : (
+                    vendedoresOptions.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.nombre}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </ShSelect>
             </div>
             <div>
               <ShLabel>Estado</ShLabel>
-              <ShSelect value={editarEquipo.estado} onValueChange={(v) => setEditarEquipo({ ...editarEquipo, estado: v })}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Estado" /></SelectTrigger>
+              <ShSelect
+                value={editarEquipo.estado}
+                onValueChange={(v) => setEditarEquipo({ ...editarEquipo, estado: v })}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Activo">Activo</SelectItem>
                   <SelectItem value="Inactivo">Inactivo</SelectItem>
@@ -1123,49 +1478,66 @@ const EquiposVentas = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button onClick={async () => {
-            try {
-              // El líder se selecciona desde vendedores
-              await salesTeamsService.update(Number(editarEquipo.id), {
-                name: editarEquipo.nombre,
-                description: editarEquipo.descripcion,
-                territory: editarEquipo.territorio,
-                specialty: editarEquipo.especialidad,
-                leader_user_id: selectedEditLeaderId ? Number(selectedEditLeaderId) : undefined,
-                status: editarEquipo.estado === 'Inactivo' ? 'inactive' : (editarEquipo.estado === 'Reestructuración' ? 'restructuring' : 'active')
-              });
-              const refreshed = await salesTeamsService.list({ per_page: 50 });
-              const equiposApi: any[] = refreshed?.data || [];
-              setEquipos(equiposApi.map((t: any) => ({
-                id: String(t.id),
-                nombre: t.name,
-                descripcion: t.description || '',
-                lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
-                liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
-                miembros: (t.members || []).map((m: any) => ({
-                  id: String(m.user_id),
-                  nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`,
-                  email: m.vendedor?.email || m.user?.email || '',
-                  telefono: '',
-                  rol: 'Asesor Junior',
-                  ventasMes: 0,
-                  metaMes: Number(m.monthly_goal || 0),
-                  porcentajeMeta: 0,
-                  fechaIngreso: '',
-                  estado: m.status === 'inactive' ? 'Inactivo' : 'Activo'
-                })),
-                metaEquipo: 0,
-                ventasEquipo: 0,
-                porcentajeEquipo: 0,
-                territorio: t.territory || 'Nacional',
-                especialidad: t.specialty || 'Comercial',
-                fechaCreacion: (t.created_at || '').slice(0,10),
-                estado: t.status === 'inactive' ? 'Inactivo' : 'Activo'
-              })));
-              setShowModalEditar(false);
-            } catch (_) {}
-          }}>Guardar Cambios</Button>
-          <Button color="gray" onClick={() => setShowModalEditar(false)}>Cancelar</Button>
+          <Button
+            onClick={async () => {
+              try {
+                // El líder se selecciona desde vendedores
+                await salesTeamsService.update(Number(editarEquipo.id), {
+                  name: editarEquipo.nombre,
+                  description: editarEquipo.descripcion,
+                  territory: editarEquipo.territorio,
+                  specialty: editarEquipo.especialidad,
+                  leader_user_id: selectedEditLeaderId ? Number(selectedEditLeaderId) : undefined,
+                  status:
+                    editarEquipo.estado === 'Inactivo'
+                      ? 'inactive'
+                      : editarEquipo.estado === 'Reestructuración'
+                      ? 'restructuring'
+                      : 'active',
+                });
+                const refreshed = await salesTeamsService.list({ per_page: 50 });
+                const equiposApi: any[] = refreshed?.data || [];
+                setEquipos(
+                  equiposApi.map((t: any) => ({
+                    id: String(t.id),
+                    nombre: t.name,
+                    descripcion: t.description || '',
+                    lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+                    liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                    miembros: (t.members || []).map((m: any) => ({
+                      id: String(m.user_id),
+                      nombre:
+                        m.vendedor_name ||
+                        m.vendedor?.nombres ||
+                        m.user?.name ||
+                        `Vendedor ${m.user_id}`,
+                      email: m.vendedor?.email || m.user?.email || '',
+                      telefono: '',
+                      rol: 'Asesor Junior',
+                      ventasMes: 0,
+                      metaMes: Number(m.monthly_goal || 0),
+                      porcentajeMeta: 0,
+                      fechaIngreso: '',
+                      estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                    })),
+                    metaEquipo: 0,
+                    ventasEquipo: 0,
+                    porcentajeEquipo: 0,
+                    territorio: t.territory || 'Nacional',
+                    especialidad: t.specialty || 'Comercial',
+                    fechaCreacion: (t.created_at || '').slice(0, 10),
+                    estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
+                  })),
+                );
+                setShowModalEditar(false);
+              } catch (_) {}
+            }}
+          >
+            Guardar Cambios
+          </Button>
+          <Button color="gray" onClick={() => setShowModalEditar(false)}>
+            Cancelar
+          </Button>
         </Modal.Footer>
       </Modal>
 
@@ -1178,28 +1550,41 @@ const EquiposVentas = () => {
               <ShLabel>Agregar vendedor al equipo</ShLabel>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-2">
                 <div className="md:col-span-2">
-                  <ShSelect value={selectedUserId || ''} onValueChange={(v) => setSelectedUserId(v)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar vendedor" /></SelectTrigger>
+                  <ShSelect
+                    value={selectedUserId || ''}
+                    onValueChange={(v) => setSelectedUserId(v)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Seleccionar vendedor" />
+                    </SelectTrigger>
                     <SelectContent>
-                      {vendedoresOptions.filter(v => {
-                        const equipo = equipos.find(e => e.id === equipoIdGestion);
-                        return !equipo?.miembros.some(m => m.id === v.id);
+                      {vendedoresOptions.filter((v) => {
+                        const equipo = equipos.find((e) => e.id === equipoIdGestion);
+                        return !equipo?.miembros.some((m) => m.id === v.id);
                       }).length === 0 ? (
-                        <SelectItem value="no-disponibles" disabled>No hay vendedores disponibles</SelectItem>
-                      ) : vendedoresOptions.filter(v => {
-                        const equipo = equipos.find(e => e.id === equipoIdGestion);
-                        return !equipo?.miembros.some(m => m.id === v.id);
-                      }).map(v => (
-                        <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
-                      ))}
+                        <SelectItem value="no-disponibles" disabled>
+                          No hay vendedores disponibles
+                        </SelectItem>
+                      ) : (
+                        vendedoresOptions
+                          .filter((v) => {
+                            const equipo = equipos.find((e) => e.id === equipoIdGestion);
+                            return !equipo?.miembros.some((m) => m.id === v.id);
+                          })
+                          .map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.nombre}
+                            </SelectItem>
+                          ))
+                      )}
                     </SelectContent>
                   </ShSelect>
                 </div>
                 <div>
-                  <ShSelect value={selectedUserId ? (equipos.find(e => e.id === equipoIdGestion)?.miembros.find(m => m.id === selectedUserId)?.rol || 'Asesor Junior') : 'Asesor Junior'} onValueChange={(v) => {
-                    // Guardar rol seleccionado en estado temporal si es necesario
-                  }}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Rol" /></SelectTrigger>
+                  <ShSelect value={selectedRole} onValueChange={(v) => setSelectedRole(v as any)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Rol" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Líder">Líder</SelectItem>
                       <SelectItem value="Asesor Senior">Asesor Senior</SelectItem>
@@ -1209,33 +1594,76 @@ const EquiposVentas = () => {
                   </ShSelect>
                 </div>
                 <div>
-                  <Input type="number" placeholder="Meta mensual" value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} />
+                  <Input
+                    type="number"
+                    placeholder="Meta mensual"
+                    value={monthlyGoal}
+                    onChange={(e) => setMonthlyGoal(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="mt-2">
-                <Button disabled={!selectedUserId} onClick={async () => {
-                  try {
-                    const equipo = equipos.find(e => e.id === equipoIdGestion);
-                    if (equipo?.miembros.some(m => m.id === selectedUserId)) {
-                      alert('Este vendedor ya es miembro del equipo');
-                      return;
+                <Button
+                  disabled={!selectedUserId}
+                  onClick={async () => {
+                    try {
+                      const equipo = equipos.find((e) => e.id === equipoIdGestion);
+                      if (equipo?.miembros.some((m) => m.id === selectedUserId)) {
+                        alert('Este vendedor ya es miembro del equipo');
+                        return;
+                      }
+                      await salesTeamsService.addMember(Number(equipoIdGestion), {
+                        user_id: Number(selectedUserId),
+                        role: selectedRole,
+                        monthly_goal: parseFloat(monthlyGoal || '0'),
+                      });
+                      const refreshed = await salesTeamsService.list({ per_page: 50 });
+                      const equiposApi: any[] = refreshed?.data || [];
+                      setEquipos(
+                        equiposApi.map((t: any) => ({
+                          id: String(t.id),
+                          nombre: t.name,
+                          descripcion: t.description || '',
+                          lider:
+                            t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+                          liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                          miembros: (t.members || []).map((m: any) => ({
+                            id: String(m.user_id),
+                            nombre:
+                              m.vendedor_name ||
+                              m.vendedor?.nombres ||
+                              m.user?.name ||
+                              `Vendedor ${m.user_id}`,
+                            email: m.vendedor?.email || m.user?.email || '',
+                            telefono: '',
+                            rol: m.role || 'Asesor Junior',
+                            ventasMes: 0,
+                            metaMes: Number(m.monthly_goal || 0),
+                            porcentajeMeta: 0,
+                            fechaIngreso: '',
+                            estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                          })),
+                          metaEquipo: 0,
+                          ventasEquipo: 0,
+                          porcentajeEquipo: 0,
+                          territorio: t.territory || 'Nacional',
+                          especialidad: t.specialty || 'Comercial',
+                          fechaCreacion: (t.created_at || '').slice(0, 10),
+                          estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
+                        })),
+                      );
+                      setSelectedUserId('');
+                      setSelectedRole('Asesor Junior');
+                      setMonthlyGoal('');
+                    } catch (err: any) {
+                      if (err?.response?.data?.message) {
+                        alert(err.response.data.message);
+                      }
                     }
-                    await salesTeamsService.addMember(Number(equipoIdGestion), {
-                      user_id: Number(selectedUserId),
-                      monthly_goal: parseFloat(monthlyGoal || '0')
-                    });
-                    const refreshed = await salesTeamsService.list({ per_page: 50 });
-                    const equiposApi: any[] = refreshed?.data || [];
-                    setEquipos(equiposApi.map((t: any) => ({
-                      id: String(t.id), nombre: t.name, descripcion: t.description || '',
-                      lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-', liderUserId: t.leader_user_id || (t.leader?.id ?? undefined), miembros: (t.members || []).map((m: any) => ({ id: String(m.user_id), nombre: m.vendedor_name || m.vendedor?.nombres || m.user?.name || `Vendedor ${m.user_id}`, email: m.vendedor?.email || m.user?.email || '', telefono: '', rol: m.role || 'Asesor Junior', ventasMes: 0, metaMes: Number(m.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: m.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
-                    setSelectedUserId(''); setMonthlyGoal('');
-                  } catch (err: any) {
-                    if (err?.response?.data?.message) {
-                      alert(err.response.data.message);
-                    }
-                  }
-                }}>Agregar</Button>
+                  }}
+                >
+                  Agregar
+                </Button>
               </div>
             </div>
 
@@ -1249,27 +1677,72 @@ const EquiposVentas = () => {
                     <Table.HeadCell>Acciones</Table.HeadCell>
                   </Table.Head>
                   <Table.Body>
-                    {equipos.find(e => e.id === equipoIdGestion)?.miembros.map(m => (
-                      <Table.Row key={m.id}>
-                        <Table.Cell>{m.nombre}</Table.Cell>
-                        <Table.Cell>{formatCurrency(m.metaMes || 0)}</Table.Cell>
-                        <Table.Cell>
-                          <Button size="xs" color="light" onClick={async () => {
-                            if (!confirm('¿Quitar miembro del equipo?')) return;
-                            try {
-                              await salesTeamsService.removeMember(Number(equipoIdGestion), Number(m.id));
-                              const refreshed = await salesTeamsService.list({ per_page: 50 });
-                              const equiposApi: any[] = refreshed?.data || [];
-                              setEquipos(equiposApi.map((t: any) => ({
-                                id: String(t.id), nombre: t.name, descripcion: t.description || '',
-                                lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-', liderUserId: t.leader_user_id || (t.leader?.id ?? undefined), miembros: (t.members || []).map((x: any) => ({ id: String(x.user_id), nombre: x.vendedor_name || x.vendedor?.nombres || x.user?.name || `Vendedor ${x.user_id}`, email: x.vendedor?.email || x.user?.email || '', telefono: '', rol: x.role || 'Asesor Junior', ventasMes: 0, metaMes: Number(x.monthly_goal || 0), porcentajeMeta: 0, fechaIngreso: '', estado: x.status === 'inactive' ? 'Inactivo' : 'Activo' })), metaEquipo: 0, ventasEquipo: 0, porcentajeEquipo: 0, territorio: t.territory || 'Nacional', especialidad: t.specialty || 'Comercial', fechaCreacion: (t.created_at || '').slice(0,10), estado: t.status === 'inactive' ? 'Inactivo' : 'Activo' })));
-                            } catch (_) {}
-                          }}>
-                            <Icon icon="solar:trash-bin-minimalistic-bold-duotone" className="h-4 w-4" />
-                          </Button>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
+                    {equipos
+                      .find((e) => e.id === equipoIdGestion)
+                      ?.miembros.map((m) => (
+                        <Table.Row key={m.id}>
+                          <Table.Cell>{m.nombre}</Table.Cell>
+                          <Table.Cell>{formatCurrency(m.metaMes || 0)}</Table.Cell>
+                          <Table.Cell>
+                            <Button
+                              size="xs"
+                              color="light"
+                              onClick={async () => {
+                                if (!confirm('¿Quitar miembro del equipo?')) return;
+                                try {
+                                  await salesTeamsService.removeMember(
+                                    Number(equipoIdGestion),
+                                    Number(m.id),
+                                  );
+                                  const refreshed = await salesTeamsService.list({ per_page: 50 });
+                                  const equiposApi: any[] = refreshed?.data || [];
+                                  setEquipos(
+                                    equiposApi.map((t: any) => ({
+                                      id: String(t.id),
+                                      nombre: t.name,
+                                      descripcion: t.description || '',
+                                      lider:
+                                        t.leader_name ||
+                                        t.leader?.name ||
+                                        t.leaderVendedor?.nombres ||
+                                        '-',
+                                      liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                                      miembros: (t.members || []).map((x: any) => ({
+                                        id: String(x.user_id),
+                                        nombre:
+                                          x.vendedor_name ||
+                                          x.vendedor?.nombres ||
+                                          x.user?.name ||
+                                          `Vendedor ${x.user_id}`,
+                                        email: x.vendedor?.email || x.user?.email || '',
+                                        telefono: '',
+                                        rol: x.role || 'Asesor Junior',
+                                        ventasMes: 0,
+                                        metaMes: Number(x.monthly_goal || 0),
+                                        porcentajeMeta: 0,
+                                        fechaIngreso: '',
+                                        estado: x.status === 'inactive' ? 'Inactivo' : 'Activo',
+                                      })),
+                                      metaEquipo: 0,
+                                      ventasEquipo: 0,
+                                      porcentajeEquipo: 0,
+                                      territorio: t.territory || 'Nacional',
+                                      especialidad: t.specialty || 'Comercial',
+                                      fechaCreacion: (t.created_at || '').slice(0, 10),
+                                      estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
+                                    })),
+                                  );
+                                } catch (_) {}
+                              }}
+                            >
+                              <Icon
+                                icon="solar:trash-bin-minimalistic-bold-duotone"
+                                className="h-4 w-4"
+                              />
+                            </Button>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
                   </Table.Body>
                 </Table>
               </div>
@@ -1277,11 +1750,13 @@ const EquiposVentas = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button color="gray" onClick={() => setShowModalMiembro(false)}>Cerrar</Button>
+          <Button color="gray" onClick={() => setShowModalMiembro(false)}>
+            Cerrar
+          </Button>
         </Modal.Footer>
       </Modal>
     </>
   );
 };
 
-export default EquiposVentas; 
+export default EquiposVentas;
