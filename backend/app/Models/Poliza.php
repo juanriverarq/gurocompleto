@@ -61,6 +61,7 @@ class Poliza extends Model
         'payment_frequency',
         'payment_method',
         'bank_name',
+        'half_payment',
         'installments_count',
         'card_last4',
         'cheque_number',

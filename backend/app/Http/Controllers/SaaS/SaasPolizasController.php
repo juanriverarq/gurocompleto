@@ -1085,7 +1085,7 @@ class SaasPolizasController extends Controller
             // Periodicidad (códigos UI: mensual/trimestral/semestral/anual)
             'periodicidad_pago' => $this->mapPaymentFrequencyToCode($poliza->payment_frequency),
             // Medio de pago (códigos UI: tarjeta_credito/transferencia/cheque/convenio/efectivo)
-            'medio_pago' => $this->mapPaymentMethodToCode($poliza->payment_method),
+            'medio_pago' => ($poliza->half_payment ?: $this->mapPaymentMethodToCode($poliza->payment_method)),
 
             // Datos de pago adicionales requeridos por el formulario de edición
             'bank_name' => $poliza->bank_name,
@@ -1606,6 +1606,7 @@ class SaasPolizasController extends Controller
                 // Placas (edición)
                 'placas' => 'nullable|array',
                 'placas.*' => ['nullable','string','max:20','regex:/^[A-Za-z0-9-]{3,20}$/'],
+                'renovable' => 'nullable|boolean',
                 // Datos de pago adicionales
                 'banco' => 'nullable|string|max:255',
                 'cuotas' => 'nullable|integer|min:1|required_if:medio_pago,tarjeta_credito',
@@ -1724,10 +1725,24 @@ class SaasPolizasController extends Controller
             $customFields = null;
             $__cf = [];
             if (isset($validated['sede'])) { $__cf['sede'] = $validated['sede']; }
+            if (isset($validated['forma_pago'])) { $__cf['forma_pago'] = strtolower((string)$validated['forma_pago']); }
             if (isset($validated['fecha_expedicion_dni'])) { $__cf['cliente_fecha_expedicion_dni'] = $validated['fecha_expedicion_dni']; }
             if (isset($validated['correos_secundarios'])) { $__cf['cliente_correos_secundarios'] = $validated['correos_secundarios']; }
             if (isset($validated['observaciones_cliente'])) { $__cf['cliente_observaciones'] = $validated['observaciones_cliente']; }
             if (!empty($__cf)) { $customFields = $__cf; }
+
+            // Resolver método de pago: primero desde medio_pago; si viene forma_pago, tiene prioridad
+            $paymentMethod = $this->mapPaymentMethodFromFrontend($validated['medio_pago'] ?? null);
+            if (isset($validated['forma_pago'])) {
+                $fp = strtolower((string)$validated['forma_pago']);
+                if ($fp === 'contado') {
+                    $paymentMethod = 'cash';
+                } elseif ($fp === 'credito') {
+                    $paymentMethod = 'card';
+                } elseif ($fp === 'financiado') {
+                    $paymentMethod = 'financing';
+                }
+            }
 
             $poliza = Poliza::create([
                 'policy_number' => $validated['numero_poliza'],
@@ -1746,7 +1761,8 @@ class SaasPolizasController extends Controller
                 'commission_percentage' => $validated['porcentaje_comision'] ?? 0,
                 'commission_amount' => $validated['comision'] ?? 0,
                 'payment_frequency' => $this->mapPaymentFrequencyFromFrontend($validated['periodicidad_pago'] ?? null),
-                'payment_method' => $this->mapPaymentMethodFromFrontend($validated['medio_pago'] ?? null),
+                'payment_method' => $paymentMethod,
+                'half_payment' => $validated['medio_pago'] ?? null,
                 'bank_name' => $validated['banco'] ?? null,
                 'installments_count' => $validated['cuotas'] ?? null,
                 'card_last4' => isset($validated['numero_tarjeta']) && strlen($validated['numero_tarjeta']) >= 4 ? substr(preg_replace('/\D+/', '', $validated['numero_tarjeta']), -4) : null,
@@ -2019,6 +2035,7 @@ class SaasPolizasController extends Controller
             }
             if (isset($validated['medio_pago'])) {
                 $updateData['payment_method'] = $this->mapPaymentMethodFromFrontend($validated['medio_pago']);
+                $updateData['half_payment'] = $validated['medio_pago'];
             }
             // Si llega forma_pago, tomarlo como fuente de verdad y sobreescribir payment_method
             if (isset($validated['forma_pago'])) {
