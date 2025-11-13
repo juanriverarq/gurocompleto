@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use App\Models\Broker;
+use App\Models\SubscriptionIntent;
 
 class AuthController extends Controller
 {
@@ -40,6 +41,42 @@ class AuthController extends Controller
             // Actualizar información del usuario
             $user->updateLastLogin();
 
+            // Si el cliente envía una selección de pricing durante el registro/login, persistirla
+            $selection = $request->input('pricing_selection') ?? $request->input('selection');
+            $intentCreatedId = null;
+            if (is_array($selection)) {
+                try {
+                    $validator = Validator::make($selection, [
+                        'users' => 'required|integer|min:1',
+                        'period' => 'required|in:monthly,annual',
+                        'storageGB' => 'nullable|integer|min:5',
+                        'modules' => 'required|array',
+                        'totals' => 'required|array',
+                    ]);
+                    if ($validator->fails()) {
+                        Log::warning('pricing_selection inválida en syncFirebaseUser', [
+                            'errors' => $validator->errors()->toArray(),
+                        ]);
+                    } else {
+                        $intent = SubscriptionIntent::create([
+                            'user_id' => $user->id,
+                            'users_count' => (int) ($selection['users'] ?? 1),
+                            'period' => (string) $selection['period'],
+                            'storage_gb' => (int) ($selection['storageGB'] ?? 5),
+                            'modules' => $selection['modules'] ?? [],
+                            'totals' => $selection['totals'] ?? [],
+                            'status' => 'pending',
+                            'source' => (string) ($selection['source'] ?? 'sync_firebase_user'),
+                        ]);
+                        $intentCreatedId = $intent->id;
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Error creando SubscriptionIntent en syncFirebaseUser', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Usuario sincronizado correctamente',
@@ -58,7 +95,8 @@ class AuthController extends Controller
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                 ],
-                'firebase_claims' => $firebaseClaims ?? []
+                'firebase_claims' => $firebaseClaims ?? [],
+                'subscription_intent_id' => $intentCreatedId,
             ]);
 
         } catch (\Exception $e) {
