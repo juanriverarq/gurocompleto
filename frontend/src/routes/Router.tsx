@@ -1,6 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import  { lazy } from 'react';
+import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import Loadable from '../layouts/full/shared/loadable/Loadable';
 import TrialExpired from '../views/saas/billing/TrialExpired';
@@ -9,7 +9,9 @@ import ProtectedRoute from '../components/ProtectedRoute';
 
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
-const UnifiedProtectedFullLayout = Loadable(lazy(() => import('../layouts/full/UnifiedProtectedFullLayout')));
+const UnifiedProtectedFullLayout = Loadable(
+  lazy(() => import('../layouts/full/UnifiedProtectedFullLayout')),
+);
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
 
 /* ****Pages***** */
@@ -25,7 +27,9 @@ const Login = Loadable(lazy(() => import('../views/authentication/auth1/Login'))
 const Register = Loadable(lazy(() => import('../views/authentication/auth1/Register')));
 const ForgotPassword = Loadable(lazy(() => import('../views/authentication/auth1/ForgotPassword')));
 const TwoSteps = Loadable(lazy(() => import('../views/authentication/auth1/TwoSteps')));
-const EmailVerification = Loadable(lazy(() => import('../views/authentication/auth1/EmailVerification')));
+const EmailVerification = Loadable(
+  lazy(() => import('../views/authentication/auth1/EmailVerification')),
+);
 const Maintainance = Loadable(lazy(() => import('../views/authentication/Maintainance')));
 
 // SaaS Authentication
@@ -57,9 +61,13 @@ const SaasDetalleLead = Loadable(lazy(() => import('../views/saas/sales-funnel/D
 const SaasEditarLead = Loadable(lazy(() => import('../views/saas/sales-funnel/EditarLead')));
 const SaasListaTareas = Loadable(lazy(() => import('../views/saas/commercial-tasks/ListaTareas')));
 const SaasNuevaTarea = Loadable(lazy(() => import('../views/saas/commercial-tasks/NuevaTarea')));
-const SaasDetalleTarea = Loadable(lazy(() => import('../views/saas/commercial-tasks/DetalleTarea')));
+const SaasDetalleTarea = Loadable(
+  lazy(() => import('../views/saas/commercial-tasks/DetalleTarea')),
+);
 const SaasEditarTarea = Loadable(lazy(() => import('../views/saas/commercial-tasks/EditarTarea')));
-const ConfiguracionMasiva = Loadable(lazy(() => import('../views/saas/configuracion-masiva/ConfiguracionMasiva')));
+const ConfiguracionMasiva = Loadable(
+  lazy(() => import('../views/saas/configuracion-masiva/ConfiguracionMasiva')),
+);
 
 // front end pages
 const Homepage = Loadable(lazy(() => import('../views/pages/frontend-pages/Homepage')));
@@ -67,7 +75,10 @@ const About = Loadable(lazy(() => import('../views/pages/frontend-pages/About'))
 const ContactPage = Loadable(lazy(() => import('../views/pages/frontend-pages/Contact')));
 const Portfolio = Loadable(lazy(() => import('../views/pages/frontend-pages/Portfolio')));
 const PagePricing = Loadable(lazy(() => import('../views/pages/frontend-pages/Pricing')));
-const PricingCalculatorPage = Loadable(lazy(() => import('../views/pages/frontend-pages/PricingCalculatorPage')));
+const CheckoutPage = Loadable(lazy(() => import('../views/pages/frontend-pages/Checkout')));
+const PricingCalculatorPage = Loadable(
+  lazy(() => import('../views/pages/frontend-pages/PricingCalculatorPage')),
+);
 const BlogPage = Loadable(lazy(() => import('../views/pages/frontend-pages/Blog')));
 const BlogPost = Loadable(lazy(() => import('../views/pages/frontend-pages/BlogPost')));
 
@@ -81,25 +92,41 @@ const Polizas = Loadable(lazy(() => import('../views/apps/seguros/polizas/Poliza
 const Automoviles = Loadable(lazy(() => import('../views/apps/seguros/automoviles/Automoviles')));
 const NuevaPoliza = Loadable(lazy(() => import('../views/apps/seguros/polizas/NuevaPoliza')));
 const NuevaPolizaColectiva = Loadable(
-  lazy(() => import('../views/apps/seguros/polizas/NuevaPolizaColectiva'))
+  lazy(() => import('../views/apps/seguros/polizas/NuevaPolizaColectiva')),
 );
 const EditarPoliza = Loadable(lazy(() => import('../views/apps/seguros/polizas/EditarPoliza')));
 const Clientes = Loadable(lazy(() => import('../views/apps/seguros/clientes/Clientes')));
 const NuevoCliente = Loadable(lazy(() => import('../views/apps/seguros/clientes/NuevoCliente')));
 const EditarCliente = Loadable(lazy(() => import('../views/apps/seguros/clientes/EditarCliente')));
 const Siniestros = Loadable(lazy(() => import('../views/apps/seguros/siniestros/Siniestros')));
-const SiniestrosActivos = Loadable(lazy(() => import('../views/apps/seguros/siniestros/SiniestrosActivos')));
-const NuevoSiniestro = Loadable(lazy(() => import('../views/apps/seguros/siniestros/NuevoSiniestroMejorado')));
-const EditarSiniestro = Loadable(lazy(() => import('../views/apps/seguros/siniestros/EditarSiniestro')));
-const Renovaciones = Loadable(lazy(() => import('../views/apps/seguros/renovaciones/Renovaciones')));
+const SiniestrosActivos = Loadable(
+  lazy(() => import('../views/apps/seguros/siniestros/SiniestrosActivos')),
+);
+const NuevoSiniestro = Loadable(
+  lazy(() => import('../views/apps/seguros/siniestros/NuevoSiniestroMejorado')),
+);
+const EditarSiniestro = Loadable(
+  lazy(() => import('../views/apps/seguros/siniestros/EditarSiniestro')),
+);
+const Renovaciones = Loadable(
+  lazy(() => import('../views/apps/seguros/renovaciones/Renovaciones')),
+);
 const Seguimiento = Loadable(lazy(() => import('../views/apps/seguros/seguimiento/Seguimiento')));
 
 // IA Apps
 const AsistenteIA = Loadable(lazy(() => import('../views/apps/ia/asistente/AsistenteDeepSeek')));
-const VentasCruzadas = Loadable(lazy(() => import('../views/apps/ia/ventas-cruzadas/VentasCruzadas')));
-const Predicciones = Loadable(lazy(() => import('../views/apps/ia/analisis-predictivo/Predicciones')));
-const AnalisisPrediccion = Loadable(lazy(() => import('../views/apps/ia/analisis-predictivo/AnalisisPrediccion')));
-const RecomendacionesProducto = Loadable(lazy(() => import('../views/apps/ia/recomendaciones/RecomendacionesProducto')));
+const VentasCruzadas = Loadable(
+  lazy(() => import('../views/apps/ia/ventas-cruzadas/VentasCruzadas')),
+);
+const Predicciones = Loadable(
+  lazy(() => import('../views/apps/ia/analisis-predictivo/Predicciones')),
+);
+const AnalisisPrediccion = Loadable(
+  lazy(() => import('../views/apps/ia/analisis-predictivo/AnalisisPrediccion')),
+);
+const RecomendacionesProducto = Loadable(
+  lazy(() => import('../views/apps/ia/recomendaciones/RecomendacionesProducto')),
+);
 
 // Voice AI
 const VoiceAIDashboard = Loadable(lazy(() => import('../views/voice-ai/VoiceAIDashboard')));
@@ -114,8 +141,10 @@ const Reclutamiento = Loadable(lazy(() => import('../views/apps/rrhh/Reclutamien
 const Desempeno = Loadable(lazy(() => import('../views/apps/rrhh/Desempeno')));
 const Clima = Loadable(lazy(() => import('../views/apps/rrhh/Clima')));
 
- // Marketing Apps
-const EnlacesCotizacion = Loadable(lazy(() => import('../views/apps/marketing/enlaces-cotizacion/EnlacesCotizacion')));
+// Marketing Apps
+const EnlacesCotizacion = Loadable(
+  lazy(() => import('../views/apps/marketing/enlaces-cotizacion/EnlacesCotizacion')),
+);
 const Plantillas = Loadable(lazy(() => import('../views/apps/marketing/plantillas/Plantillas')));
 const MiniWeb = Loadable(lazy(() => import('../views/apps/marketing/mini-web/MiniWeb')));
 const MiniWebPublic = Loadable(lazy(() => import('../views/public/MiniWebPublic')));
@@ -124,32 +153,50 @@ const QuoteForm = Loadable(lazy(() => import('../views/public/QuoteForm')));
 // Admin Apps
 const Usuarios = Loadable(lazy(() => import('../views/apps/admin/usuarios/Usuarios')));
 const Roles = Loadable(lazy(() => import('../views/apps/admin/roles/Roles')));
-const DemoPermisosLoadable = Loadable(lazy(() => import('../views/apps/admin/demo-permisos/DemoPermisos')));
-const InformacionAgencia = Loadable(lazy(() => import('../views/apps/admin/informacion-agencia/InformacionAgencia')));
+const DemoPermisosLoadable = Loadable(
+  lazy(() => import('../views/apps/admin/demo-permisos/DemoPermisos')),
+);
+const InformacionAgencia = Loadable(
+  lazy(() => import('../views/apps/admin/informacion-agencia/InformacionAgencia')),
+);
 const Sedes = Loadable(lazy(() => import('../views/apps/admin/sedes/Sedes')));
 const Aseguradoras = Loadable(lazy(() => import('../views/apps/admin/aseguradoras/Aseguradoras')));
 const Ramos = Loadable(lazy(() => import('../views/apps/admin/ramos/Ramos')));
 const Vendedores = Loadable(lazy(() => import('../views/apps/admin/vendedores/Vendedores')));
-const EstadosSiniestros = Loadable(lazy(() => import('../views/apps/admin/estados-siniestros/EstadosSiniestros')));
+const EstadosSiniestros = Loadable(
+  lazy(() => import('../views/apps/admin/estados-siniestros/EstadosSiniestros')),
+);
 const EstadosARL = Loadable(lazy(() => import('../views/apps/admin/estados-arl/EstadosARL')));
-const MotivosEstadosPoliza = Loadable(lazy(() => import('../views/apps/admin/motivos-estados-poliza/MotivosEstadosPoliza')));
-const TipoAfiliacion = Loadable(lazy(() => import('../views/apps/admin/tipo-afiliacion/TipoAfiliacion')));
+const MotivosEstadosPoliza = Loadable(
+  lazy(() => import('../views/apps/admin/motivos-estados-poliza/MotivosEstadosPoliza')),
+);
+const TipoAfiliacion = Loadable(
+  lazy(() => import('../views/apps/admin/tipo-afiliacion/TipoAfiliacion')),
+);
 const Mensajeros = Loadable(lazy(() => import('../views/apps/admin/mensajeros/Mensajeros')));
 const Coberturas = Loadable(lazy(() => import('../views/apps/admin/coberturas/Coberturas')));
 const ImportacionMasiva = Loadable(lazy(() => import('../views/apps/admin/ImportacionMasiva')));
 
 // Configuración del Sistema Apps
-const AuditoriaAccesos = Loadable(lazy(() => import('../views/apps/admin/auditoria/AuditoriaAccesos')));
+const AuditoriaAccesos = Loadable(
+  lazy(() => import('../views/apps/admin/auditoria/AuditoriaAccesos')),
+);
 const FirmaElectronica = Loadable(lazy(() => import('../views/apps/admin/firma/FirmaElectronica')));
-const SeguridadDosFactores = Loadable(lazy(() => import('../views/apps/admin/2fa/SeguridadDosFactores')));
+const SeguridadDosFactores = Loadable(
+  lazy(() => import('../views/apps/admin/2fa/SeguridadDosFactores')),
+);
 const CopiasSeguridad = Loadable(lazy(() => import('../views/apps/admin/backup/CopiasSeguridad')));
 
- // Comisiones y Cartera Apps
-const ComisionesPorPoliza = Loadable(lazy(() => import('../views/apps/comisiones/ComisionesPorPoliza')));
+// Comisiones y Cartera Apps
+const ComisionesPorPoliza = Loadable(
+  lazy(() => import('../views/apps/comisiones/ComisionesPorPoliza')),
+);
 const AnticiposAjustes = Loadable(lazy(() => import('../views/apps/comisiones/AnticiposAjustes')));
 const CarteraClientes = Loadable(lazy(() => import('../views/apps/cartera/CarteraClientes')));
 const ReciboCaja = Loadable(lazy(() => import('../views/apps/cartera/ReciboCaja')));
-const ReportesFinancieros = Loadable(lazy(() => import('../views/apps/cartera/ReportesFinancieros')));
+const ReportesFinancieros = Loadable(
+  lazy(() => import('../views/apps/cartera/ReportesFinancieros')),
+);
 const LiquidarVendedores = Loadable(lazy(() => import('../views/apps/cartera/LiquidarVendedores')));
 
 // Gestión Comercial Apps
@@ -159,16 +206,30 @@ const Rendimiento = Loadable(lazy(() => import('../views/apps/comercial/rendimie
 
 // Gestión Legal Apps
 const Contratos = Loadable(lazy(() => import('../views/apps/legal/contratos/Contratos')));
-const DocumentosCliente = Loadable(lazy(() => import('../views/apps/legal/documentos-cliente/DocumentosCliente')));
-const DocumentosPoliza = Loadable(lazy(() => import('../views/apps/seguros/documentos-poliza/DocumentosPoliza')));
-const DocumentosSiniestro = Loadable(lazy(() => import('../views/apps/seguros/documentos-siniestro/DocumentosSiniestro')));
-const DocumentosInternos = Loadable(lazy(() => import('../views/apps/legal/documentos-internos/DocumentosInternos')));
+const DocumentosCliente = Loadable(
+  lazy(() => import('../views/apps/legal/documentos-cliente/DocumentosCliente')),
+);
+const DocumentosPoliza = Loadable(
+  lazy(() => import('../views/apps/seguros/documentos-poliza/DocumentosPoliza')),
+);
+const DocumentosSiniestro = Loadable(
+  lazy(() => import('../views/apps/seguros/documentos-siniestro/DocumentosSiniestro')),
+);
+const DocumentosInternos = Loadable(
+  lazy(() => import('../views/apps/legal/documentos-internos/DocumentosInternos')),
+);
 
 // Integraciones Apps
-const ApisAseguradoras = Loadable(lazy(() => import('../views/apps/integraciones/apis-aseguradoras/ApisAseguradoras')));
+const ApisAseguradoras = Loadable(
+  lazy(() => import('../views/apps/integraciones/apis-aseguradoras/ApisAseguradoras')),
+);
 const Webhooks = Loadable(lazy(() => import('../views/apps/integraciones/webhooks/Webhooks')));
-const BasesDatos = Loadable(lazy(() => import('../views/apps/integraciones/bases-datos/BasesDatos')));
-const ServiciosTerceros = Loadable(lazy(() => import('../views/apps/integraciones/servicios-terceros/ServiciosTerceros')));
+const BasesDatos = Loadable(
+  lazy(() => import('../views/apps/integraciones/bases-datos/BasesDatos')),
+);
+const ServiciosTerceros = Loadable(
+  lazy(() => import('../views/apps/integraciones/servicios-terceros/ServiciosTerceros')),
+);
 
 // Mobile Auth
 const MobileAuthPage = Loadable(lazy(() => import('../pages/MobileAuth')));
@@ -197,15 +258,14 @@ const Router = [
     element: <UnifiedProtectedFullLayout />,
     children: [
       { path: '/apps/', exact: true, element: <CombinedDashboard /> },
-      
-      
+
       // Seguros Routes
       { path: '/apps/seguros/polizas', element: <Polizas /> },
       { path: '/apps/seguros/automoviles', element: <Automoviles /> },
-      
-                  { path: '/apps/seguros/polizas/nueva', element: <NuevaPoliza /> },
-                  { path: '/apps/seguros/polizas/nueva-colectiva', element: <NuevaPolizaColectiva /> },
-            { path: '/apps/seguros/polizas/editar/:id', element: <EditarPoliza /> },
+
+      { path: '/apps/seguros/polizas/nueva', element: <NuevaPoliza /> },
+      { path: '/apps/seguros/polizas/nueva-colectiva', element: <NuevaPolizaColectiva /> },
+      { path: '/apps/seguros/polizas/editar/:id', element: <EditarPoliza /> },
       { path: '/apps/seguros/clientes', element: <Clientes /> },
       { path: '/apps/seguros/clientes/nuevo', element: <NuevoCliente /> },
       { path: '/apps/seguros/clientes/editar/:id', element: <EditarCliente /> },
@@ -217,7 +277,7 @@ const Router = [
       { path: '/apps/seguros/seguimiento', element: <Seguimiento /> },
       // Ruta removida: /apps/seguros/adjuntos-condiciones
       // Rutas de embudo de ventas eliminadas
-      
+
       // RRHH Route
       { path: '/apps/recursos-humanos', element: <RecursosHumanos /> },
       { path: '/apps/recursos-humanos/personas', element: <Personas /> },
@@ -229,7 +289,7 @@ const Router = [
 
       // Nuevas rutas de Gestión de Seguros
       // Rutas removidas: siniestros/documentos, siniestros/estadisticas
-      
+
       // IA Routes
       { path: '/apps/ia/asistente', element: <AsistenteIA /> },
       { path: '/apps/ia/ventas-cruzadas', element: <VentasCruzadas /> },
@@ -262,26 +322,26 @@ const Router = [
       { path: '/apps/admin/tipo-afiliacion', element: <TipoAfiliacion /> },
       { path: '/apps/admin/mensajeros', element: <Mensajeros /> },
       { path: '/apps/admin/coberturas', element: <Coberturas /> },
-      
+
       // Configuración del Sistema Routes
       { path: '/apps/admin/auditoria', element: <AuditoriaAccesos /> },
       { path: '/apps/admin/firma', element: <FirmaElectronica /> },
       { path: '/apps/admin/2fa', element: <SeguridadDosFactores /> },
-      { path: '/apps/admin/backup', element: <CopiasSeguridad /> },      
-      { path: '/apps/admin/importacion-masiva', element: <ImportacionMasiva /> },      
-       // Comisiones y Cartera Routes
-            { path: '/apps/comisiones/por-poliza', element: <ComisionesPorPoliza /> },
-            { path: '/apps/comisiones/anticipos-ajustes', element: <AnticiposAjustes /> },
-            { path: '/apps/cartera/clientes', element: <CarteraClientes /> },
-            { path: '/apps/cartera/liquidar-vendedores', element: <LiquidarVendedores /> },
-            { path: '/apps/cartera/reportes-financieros', element: <ReportesFinancieros /> },
-      
+      { path: '/apps/admin/backup', element: <CopiasSeguridad /> },
+      { path: '/apps/admin/importacion-masiva', element: <ImportacionMasiva /> },
+      // Comisiones y Cartera Routes
+      { path: '/apps/comisiones/por-poliza', element: <ComisionesPorPoliza /> },
+      { path: '/apps/comisiones/anticipos-ajustes', element: <AnticiposAjustes /> },
+      { path: '/apps/cartera/clientes', element: <CarteraClientes /> },
+      { path: '/apps/cartera/liquidar-vendedores', element: <LiquidarVendedores /> },
+      { path: '/apps/cartera/reportes-financieros', element: <ReportesFinancieros /> },
+
       // Gestión Comercial Routes
       { path: '/apps/comercial/metas-objetivos', element: <MetasObjetivos /> },
       { path: '/apps/comercial/equipos-ventas', element: <EquiposVentas /> },
       // Eliminada ruta /apps/comercial/pipeline
       { path: '/apps/comercial/rendimiento', element: <Rendimiento /> },
-      
+
       // Gestión Documental Routes
       { path: '/apps/legal/contratos', element: <Contratos /> },
       { path: '/apps/legal/documentos-cliente', element: <DocumentosCliente /> },
@@ -294,7 +354,7 @@ const Router = [
       { path: '/apps/integraciones/webhooks', element: <Webhooks /> },
       { path: '/apps/integraciones/bases-datos', element: <BasesDatos /> },
       { path: '/apps/integraciones/servicios-terceros', element: <ServiciosTerceros /> },
-      
+
       // SaaS Routes
       { path: '/apps/saas/dashboard', element: <SaasDashboard /> },
       { path: '/apps/saas/trial-expired', element: <TrialExpired /> },
@@ -305,7 +365,10 @@ const Router = [
       { path: '/apps/saas/empleados', element: <SaasListaEmpleados /> },
       { path: '/apps/saas/empleados/nuevo', element: <SaasNuevoEmpleado /> },
       { path: '/apps/saas/empleados/:id/editar', element: <SaasEditarEmpleado /> },
-      { path: '/apps/saas/sales-funnel', element: <Navigate to="/apps/saas/sales-funnel/kanban" /> },
+      {
+        path: '/apps/saas/sales-funnel',
+        element: <Navigate to="/apps/saas/sales-funnel/kanban" />,
+      },
       { path: '/apps/saas/sales-funnel/kanban', element: <SaasKanbanLeads /> },
       { path: '/apps/saas/sales-funnel/lista', element: <SaasListaLeads /> },
       { path: '/apps/saas/sales-funnel/nuevo', element: <SaasNuevoLead /> },
@@ -316,7 +379,7 @@ const Router = [
       { path: '/apps/saas/commercial-tasks/:id', element: <SaasDetalleTarea /> },
       { path: '/apps/saas/commercial-tasks/:id/editar', element: <SaasEditarTarea /> },
       { path: '/apps/saas/configuracion-masiva', element: <ConfiguracionMasiva /> },
-      
+
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],
   },
@@ -329,7 +392,11 @@ const Router = [
       { path: '/apps/cartera/recibo-caja/:id', element: <ReciboCaja /> },
       // Redirect público a la ubicación en dashboard
       { path: '/ayuda/faq', element: <Navigate to="/apps/ayuda/faq" /> },
-      { path: '/precios', element: <FrontendLayout />, children: [{ path: '', element: <PricingCalculatorPage /> }] },
+      {
+        path: '/precios',
+        element: <FrontendLayout />,
+        children: [{ path: '', element: <PricingCalculatorPage /> }],
+      },
       {
         path: '/frontend-pages',
         element: <FrontendLayout />,
@@ -339,9 +406,10 @@ const Router = [
           { path: 'contact', element: <ContactPage /> },
           { path: 'portfolio', element: <Portfolio /> },
           { path: 'pricing', element: <PagePricing /> },
+          { path: 'checkout', element: <CheckoutPage /> },
           { path: 'blog', element: <BlogPage /> },
           { path: 'blog/detail/:id', element: <BlogPost /> },
-        ]
+        ],
       },
       { path: '/web/:slug', element: <MiniWebPublic /> },
       { path: '/web/:slug/:tipo', element: <QuoteForm /> },
@@ -352,7 +420,7 @@ const Router = [
       { path: '/auth/forgot-password', element: <ForgotPassword /> },
       { path: '/auth/two-steps', element: <TwoSteps /> },
       { path: '/auth/email-verification', element: <EmailVerification /> },
-      
+
       // Email Verification
       { path: '/auth/verification-prompt', element: <VerificationPrompt /> },
       { path: '/wallet/return', element: <WalletReturn /> },

@@ -33,13 +33,13 @@ const WalletReturn: React.FC = () => {
       try {
         setStatus('processing');
         setMessage('Confirmando tu pago con Wompi...');
-        const resp = await fetch(`${API_BASE_URL}/saas/wallet/confirm/wompi`, {
+        const resp = await fetch(`${API_BASE_URL}/billing/wompi/confirm`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ reference: ref, transaction_id: txId })
+          body: JSON.stringify({ reference: ref, transaction_id: txId }),
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -82,27 +82,43 @@ const WalletReturn: React.FC = () => {
     };
 
     ensureAuthAndConfirm();
-    return () => { if (unsub) unsub(); };
+    return () => {
+      if (unsub) unsub();
+    };
   }, [params, navigate]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
       <div className="text-center max-w-md">
         {status === 'processing' && (
-          <Icon icon="solar:loading-line-duotone" width="48" className="mx-auto animate-spin text-primary mb-4" />
+          <Icon
+            icon="solar:loading-line-duotone"
+            width="48"
+            className="mx-auto animate-spin text-primary mb-4"
+          />
         )}
         {status === 'success' && (
           <Icon icon="solar:check-circle-bold" width="48" className="mx-auto text-green-500 mb-4" />
         )}
         {status === 'error' && (
-          <Icon icon="solar:danger-triangle-bold" width="48" className="mx-auto text-red-500 mb-4" />
+          <Icon
+            icon="solar:danger-triangle-bold"
+            width="48"
+            className="mx-auto text-red-500 mb-4"
+          />
         )}
         <h2 className="text-2xl font-bold mb-2">Estado de Pago</h2>
         <p className="text-bodytext">{message}</p>
         {reference && (
           <div className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-            <div><strong>Referencia:</strong> {reference}</div>
-            {amount && <div><strong>Total:</strong> {amount}</div>}
+            <div>
+              <strong>Referencia:</strong> {reference}
+            </div>
+            {amount && (
+              <div>
+                <strong>Total:</strong> {amount}
+              </div>
+            )}
           </div>
         )}
         <p className="text-xs text-bodytext mt-4">Serás redirigido automáticamente...</p>
@@ -112,5 +128,3 @@ const WalletReturn: React.FC = () => {
 };
 
 export default WalletReturn;
-
-

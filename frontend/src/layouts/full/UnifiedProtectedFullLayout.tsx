@@ -6,21 +6,22 @@ import { useUnifiedAuth } from '../../context/UnifiedAuthContext';
 import Sidebar from './vertical/sidebar/Sidebar';
 import Header from './vertical/header/Header';
 import PartialTransitioning from 'src/components/headless-ui/Transition/PartialTransitioning';
+import api from 'src/config/api';
 import ScrollToTop from 'src/components/shared/ScrollToTop';
 
 const UnifiedProtectedFullLayout: React.FC = () => {
   const { activeLayout, isLayout } = useContext(CustomizerContext);
-  const { 
-    isAuthenticated, 
-    loading, 
-    hasCompleteSaasAccess, 
+  const {
+    isAuthenticated,
+    loading,
+    hasCompleteSaasAccess,
     needsOnboarding,
     user,
     empleado,
     isEmpleado,
     usuarioSaas,
     tenant,
-    saasChecked
+    saasChecked,
   } = useUnifiedAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,10 +37,19 @@ const UnifiedProtectedFullLayout: React.FC = () => {
         needsOnboarding,
         saasChecked,
         hasTenant: !!tenant,
-        path: location.pathname
+        path: location.pathname,
       });
     } catch {}
-  }, [isAuthenticated, loading, isEmpleado, hasCompleteSaasAccess, needsOnboarding, saasChecked, tenant, location.pathname]);
+  }, [
+    isAuthenticated,
+    loading,
+    isEmpleado,
+    hasCompleteSaasAccess,
+    needsOnboarding,
+    saasChecked,
+    tenant,
+    location.pathname,
+  ]);
 
   // Todos los efectos deben ejecutarse antes de cualquier retorno condicional
   // Redirigir si no está autenticado
@@ -47,8 +57,10 @@ const UnifiedProtectedFullLayout: React.FC = () => {
     if (!loading && !isAuthenticated) {
       const currentPath = location.pathname + location.search;
       // Solo considerar sesión válida de empleado si hay TOKEN
-      const hasEmpleadoToken = typeof window !== 'undefined' && !!localStorage.getItem('empleado_token');
-      const hasEmpleadoData = typeof window !== 'undefined' && !!localStorage.getItem('empleado_data');
+      const hasEmpleadoToken =
+        typeof window !== 'undefined' && !!localStorage.getItem('empleado_token');
+      const hasEmpleadoData =
+        typeof window !== 'undefined' && !!localStorage.getItem('empleado_data');
 
       // Si hay datos antiguos sin token, limpiarlos para evitar pantallas muertas
       if (!hasEmpleadoToken && hasEmpleadoData) {
@@ -63,20 +75,54 @@ const UnifiedProtectedFullLayout: React.FC = () => {
       }
 
       // Si parece un flujo de empleado, enviar a /empleados/login; caso contrario a auth1
-      const isEmpContext = location.pathname.startsWith('/empleados') || location.pathname.startsWith('/auth/auth2');
+      const isEmpContext =
+        location.pathname.startsWith('/empleados') || location.pathname.startsWith('/auth/auth2');
       const target = isEmpContext ? '/empleados/login' : '/auth/auth1/login';
       navigate(`${target}?redirect=${encodeURIComponent(currentPath)}`);
     }
   }, [isAuthenticated, loading, location, navigate]);
 
-  // Redirigir si necesita onboarding (solo para usuarios Firebase)
+  // Redirigir: si hay intención pendiente sin plan activo, ir a checkout primero; de lo contrario onboarding
   useEffect(() => {
-    if (!loading && isAuthenticated && !isEmpleado && saasChecked && (needsOnboarding || (!tenant && user && user.emailVerified))) {
-      // Usar replace para evitar que puedan volver atrás
-      const currentPath = location.pathname + location.search;
-      window.location.replace(`/onboarding/create-broker?returnTo=${encodeURIComponent(currentPath)}`);
-    }
-  }, [needsOnboarding, loading, isAuthenticated, isEmpleado, tenant, user, saasChecked]);
+    const maybeRedirect = async () => {
+      if (
+        !loading &&
+        isAuthenticated &&
+        !isEmpleado &&
+        saasChecked &&
+        (needsOnboarding || (!tenant && user && user.emailVerified))
+      ) {
+        try {
+          // Consultar estado de billing
+          const resp = await api.get('/billing/status', { validateStatus: () => true });
+          if (resp.status === 200 && resp.data?.success) {
+            const hasActive = !!resp.data.data?.has_active_subscription;
+            const pending = resp.data.data?.pending_intent;
+            if (!hasActive && pending) {
+              window.location.replace('/frontend-pages/checkout');
+              return;
+            }
+          }
+        } catch {}
+        // Fallback: onboarding de broker
+        const currentPath = location.pathname + location.search;
+        window.location.replace(
+          `/onboarding/create-broker?returnTo=${encodeURIComponent(currentPath)}`,
+        );
+      }
+    };
+    maybeRedirect();
+  }, [
+    needsOnboarding,
+    loading,
+    isAuthenticated,
+    isEmpleado,
+    tenant,
+    user,
+    saasChecked,
+    location.pathname,
+    location.search,
+  ]);
 
   // Verificar acceso completo (Firebase users necesitan tenant + usuarioSaas)
   // PARA empleados: permitir acceso aunque aún no haya tenant (evitar bloqueo infinito)
@@ -85,14 +131,23 @@ const UnifiedProtectedFullLayout: React.FC = () => {
       if (isEmpleado) {
         return; // empleados pueden continuar sin tenant cargado aún
       }
-      const hasSavedEmpleado = typeof window !== 'undefined' && !!localStorage.getItem('empleado_data');
+      const hasSavedEmpleado =
+        typeof window !== 'undefined' && !!localStorage.getItem('empleado_data');
       if (hasSavedEmpleado) {
         return;
       }
       const currentPath = location.pathname + location.search;
       navigate(`/dashboard-building?returnTo=${encodeURIComponent(currentPath)}`);
     }
-  }, [hasCompleteSaasAccess, loading, isAuthenticated, needsOnboarding, navigate, isEmpleado, tenant]);
+  }, [
+    hasCompleteSaasAccess,
+    loading,
+    isAuthenticated,
+    needsOnboarding,
+    navigate,
+    isEmpleado,
+    tenant,
+  ]);
 
   // Mostrar loading mientras verifica autenticación
   if (loading) {
@@ -125,7 +180,8 @@ const UnifiedProtectedFullLayout: React.FC = () => {
   }
 
   if (!hasCompleteSaasAccess && !isEmpleado) {
-    const hasSavedEmpleado = typeof window !== 'undefined' && !!localStorage.getItem('empleado_data');
+    const hasSavedEmpleado =
+      typeof window !== 'undefined' && !!localStorage.getItem('empleado_data');
     if (hasSavedEmpleado) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -139,39 +195,38 @@ const UnifiedProtectedFullLayout: React.FC = () => {
     return null;
   }
 
-
   return (
     <div className="flex w-full min-h-screen dark:bg-darkgray">
       <div className="page-wrapper flex w-full min-w-0">
         {/* Header/sidebar */}
-        {activeLayout == "vertical" ? <Sidebar /> : null}
+        {activeLayout == 'vertical' ? <Sidebar /> : null}
         <div className="page-wrapper-sub flex flex-col w-full min-w-0 dark:bg-darkgray">
           {/* Top Header  */}
-          {activeLayout == "horizontal" ? (
+          {activeLayout == 'horizontal' ? (
             <Header layoutType="horizontal" />
           ) : (
             <Header layoutType="vertical" />
           )}
-          
+
           <div
             className={`bg-lightgray dark:bg-dark h-full ${
-              activeLayout != "horizontal" ? "rounded-bb" : "rounded-none"
+              activeLayout != 'horizontal' ? 'rounded-bb' : 'rounded-none'
             }`}
           >
             {/* Body Content  */}
             <div
               className={`${
-                isLayout == "full"
-                  ? "w-full py-8 md:py-10 px-4 md:px-6 xl:px-8 2xl:px-10"
-                  : "container mx-auto py-8 md:py-10"
-              } ${activeLayout == "horizontal" ? "xl:mt-3" : ""} min-w-0 overflow-x-auto`}
+                isLayout == 'full'
+                  ? 'w-full py-8 md:py-10 px-4 md:px-6 xl:px-8 2xl:px-10'
+                  : 'container mx-auto py-8 md:py-10'
+              } ${activeLayout == 'horizontal' ? 'xl:mt-3' : ''} min-w-0 overflow-x-auto`}
             >
               <ScrollToTop>
-                <Outlet/>
+                <Outlet />
               </ScrollToTop>
             </div>
             <Customizer />
-            <PartialTransitioning/>
+            <PartialTransitioning />
           </div>
         </div>
       </div>
@@ -179,4 +234,4 @@ const UnifiedProtectedFullLayout: React.FC = () => {
   );
 };
 
-export default UnifiedProtectedFullLayout; 
+export default UnifiedProtectedFullLayout;
