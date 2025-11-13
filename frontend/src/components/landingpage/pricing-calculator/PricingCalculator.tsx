@@ -2,15 +2,23 @@ import { useState, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 import { MODULES, calculateTotals, numberFormat } from './modules';
 import { ModuleKey, BillingPeriod } from './modules';
+import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import api from 'src/config/api';
+import { auth } from 'src/config/firebase';
 // import VideoDemoModal from './VideoDemoModal';
 // import ModuleInfoModal from './ModuleInfoModal';
 
 interface Props {
   defaultUsers?: number;
-  onCheckout?: (payload: { users: number; modules: ModuleKey[]; totals: ReturnType<typeof calculateTotals> }) => void;
-};
+  onCheckout?: (payload: {
+    users: number;
+    modules: ModuleKey[];
+    totals: ReturnType<typeof calculateTotals>;
+  }) => void;
+}
 
 const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
+  const { user } = useUnifiedAuth();
   const [users, setUsers] = useState(defaultUsers);
   // const [openVideo, setOpenVideo] = useState(false);
   // const [openInfo, setOpenInfo] = useState(false);
@@ -21,14 +29,14 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
   const [showMobileSummary, setShowMobileSummary] = useState(false);
   // Se removió comparación y buscador para simplificar la UI
   // Preseleccionar todos los módulos obligatorios
-  const mandatoryKeys = useMemo(() => MODULES.filter(m => m.mandatory).map(m => m.key), []);
+  const mandatoryKeys = useMemo(() => MODULES.filter((m) => m.mandatory).map((m) => m.key), []);
   const [selected, setSelected] = useState<Set<ModuleKey>>(new Set(mandatoryKeys));
 
   // Garantizar que los obligatorios siempre estén presentes (por seguridad)
   useMemo(() => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
-      mandatoryKeys.forEach(k => next.add(k));
+      mandatoryKeys.forEach((k) => next.add(k));
       return next;
     });
   }, [mandatoryKeys]);
@@ -36,9 +44,9 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
   // Si se cambia a mensual, deseleccionar módulos solo-anual automáticamente
   useMemo(() => {
     if (period === 'monthly') {
-      setSelected(prev => {
+      setSelected((prev) => {
         const next = new Set(prev);
-        MODULES.filter(m => m.annualOnly).forEach(m => next.delete(m.key));
+        MODULES.filter((m) => m.annualOnly).forEach((m) => next.delete(m.key));
         return next;
       });
     }
@@ -61,18 +69,18 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
 
   // Módulos adicionales ordenados: primero los disponibles en mensual, al final los 'solo anual'
   const additionalModules = useMemo(() => {
-    return MODULES
-      .filter(m => !m.mandatory)
+    return MODULES.filter((m) => !m.mandatory)
       .slice()
       .sort((a, b) => (a.annualOnly ? 1 : 0) - (b.annualOnly ? 1 : 0)); // false(0) primero, true(1) al final
   }, []);
 
   const toggle = (key: ModuleKey) => {
-    const mod = MODULES.find(m => m.key === key);
+    const mod = MODULES.find((m) => m.key === key);
     if (mod?.mandatory) return; // no se puede desactivar
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -82,17 +90,43 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
   //   setOpenInfo(true);
   // };
 
-  const handleCheckout = () => {
-    const payload = { users, modules: Array.from(selected), totals };
+  const handleCheckout = async () => {
+    const payload = { users, modules: Array.from(selected), totals, storageGB, period };
     if (onCheckout) onCheckout(payload);
-    // Persist selection for contact/checkout page
+    // Guardar selección localmente
     localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
-    window.location.href = '/frontend-pages/pricing';
+
+    try {
+      if (user) {
+        // Crear intención de suscripción en backend (requiere Firebase Auth)
+        try {
+          await auth.currentUser?.getIdToken(true);
+        } catch {}
+        await api.post('/pricing/subscription-intents', {
+          users,
+          period,
+          storageGB,
+          modules: Array.from(selected),
+          totals,
+          source: 'pricing_calculator',
+        });
+        alert('¡Listo! Guardamos tu selección y te enviamos un correo con el detalle.');
+        // Opcional: redirigir a contacto para finalizar onboarding/compra
+        window.location.href = '/frontend-pages/contact';
+      } else {
+        // Forzar registro antes de continuar
+        const redirect = encodeURIComponent('/precios');
+        window.location.href = `/auth/register?redirect=${redirect}`;
+      }
+    } catch (e) {
+      // Si falla por auth o red, enviar a registro como fallback
+      const redirect = encodeURIComponent('/precios');
+      window.location.href = `/auth/register?redirect=${redirect}`;
+    }
   };
 
   // Sin buscador: usamos la lista completa de módulos
   const filteredModules = MODULES;
-
 
   return (
     <section className="py-16 bg-gradient-to-b from-white to-gray-50">
@@ -103,17 +137,37 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
           <p className="text-gray-600">Selecciona los módulos y recursos que necesites</p>
           {/* Toggle de periodo centrado y llamativo */}
           <div className="mt-4 flex items-center justify-center gap-3">
-            <span className={`text-sm ${period==='monthly' ? 'font-semibold text-primary' : 'text-gray-500'}`}>Mensual</span>
+            <span
+              className={`text-sm ${
+                period === 'monthly' ? 'font-semibold text-primary' : 'text-gray-500'
+              }`}
+            >
+              Mensual
+            </span>
             <button
               type="button"
-              onClick={() => setPeriod(p => p==='monthly'?'annual':'monthly')}
-              className={`relative inline-flex h-8 w-16 items-center rounded-full transition shadow-sm ${period==='annual' ? 'bg-primary' : 'bg-gray-300'}`}
+              onClick={() => setPeriod((p) => (p === 'monthly' ? 'annual' : 'monthly'))}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition shadow-sm ${
+                period === 'annual' ? 'bg-primary' : 'bg-gray-300'
+              }`}
               aria-label="Cambiar periodo de facturación"
             >
-              <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${period==='annual'?'translate-x-8':'translate-x-1'}`}/>
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${
+                  period === 'annual' ? 'translate-x-8' : 'translate-x-1'
+                }`}
+              />
             </button>
-            <span className={`text-sm ${period==='annual' ? 'font-semibold text-primary' : 'text-gray-500'}`}>Anual</span>
-            <span className="ml-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">-12%</span>
+            <span
+              className={`text-sm ${
+                period === 'annual' ? 'font-semibold text-primary' : 'text-gray-500'
+              }`}
+            >
+              Anual
+            </span>
+            <span className="ml-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+              -12%
+            </span>
           </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -128,57 +182,87 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
             {/* Operaciones incluidas */}
             <h4 className="mt-4 mb-2 text-sm font-semibold text-gray-700">Operaciones incluidas</h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {filteredModules.filter(m => m.mandatory).map(m => {
-                const active = selected.has(m.key);
-                return (
-                  <button
-                    key={m.key}
-                    onClick={() => toggle(m.key)}
-                    disabled={!!m.mandatory}
-                    className={`group rounded-xl border p-3 text-left transition shadow-sm hover:shadow-md bg-white relative overflow-hidden ${active ? 'border-primary bg-primary/5' : 'border-gray-200'} ${m.mandatory ? 'cursor-not-allowed opacity-95' : ''}`}
-                  >
-                    {/* Icono de fondo (estilo anterior) */}
-                    <Icon icon={m.icon} className="absolute -right-4 -bottom-2 text-6xl opacity-10 pointer-events-none" />
-                    {/* Indicador 'Incluido' con botón info al lado */}
-                    {m.mandatory && (
-                      <div className="absolute top-2 right-2 flex items-center gap-1">
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-primary text-white font-semibold shadow-sm">Incluido</span>
+              {filteredModules
+                .filter((m) => m.mandatory)
+                .map((m) => {
+                  const active = selected.has(m.key);
+                  return (
+                    <button
+                      key={m.key}
+                      onClick={() => toggle(m.key)}
+                      disabled={!!m.mandatory}
+                      className={`group rounded-xl border p-3 text-left transition shadow-sm hover:shadow-md bg-white relative overflow-hidden ${
+                        active ? 'border-primary bg-primary/5' : 'border-gray-200'
+                      } ${m.mandatory ? 'cursor-not-allowed opacity-95' : ''}`}
+                    >
+                      {/* Icono de fondo (estilo anterior) */}
+                      <Icon
+                        icon={m.icon}
+                        className="absolute -right-4 -bottom-2 text-6xl opacity-10 pointer-events-none"
+                      />
+                      {/* Indicador 'Incluido' con botón info al lado */}
+                      {m.mandatory && (
+                        <div className="absolute top-2 right-2 flex items-center gap-1">
+                          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-primary text-white font-semibold shadow-sm">
+                            Incluido
+                          </span>
+                        </div>
+                      )}
+                      <span
+                        className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${m.color} mb-1.5 relative z-[1]`}
+                      >
+                        <Icon icon={m.icon} className="text-xl text-gray-700" />
+                      </span>
+                      <div className="flex items-center justify-between gap-2 relative z-[1]">
+                        <div className="font-medium text-sm leading-tight">{m.name}</div>
                       </div>
-                    )}
-                    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${m.color} mb-1.5 relative z-[1]`}>
-                      <Icon icon={m.icon} className="text-xl text-gray-700" />
-                    </span>
-                    <div className="flex items-center justify-between gap-2 relative z-[1]">
-                      <div className="font-medium text-sm leading-tight">{m.name}</div>
-                    </div>
-                    {/* Indicador por consumo removido para simplificar la UI */}
-                    {active && !m.mandatory && <Icon icon="solar:check-circle-bold" className="text-primary absolute top-2 right-2" />}
-                  </button>
-                );
-              })}
+                      {/* Indicador por consumo removido para simplificar la UI */}
+                      {active && !m.mandatory && (
+                        <Icon
+                          icon="solar:check-circle-bold"
+                          className="text-primary absolute top-2 right-2"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
             </div>
 
             {/* Módulos adicionales */}
             <h4 className="mt-6 mb-2 text-sm font-semibold text-gray-700">Módulos adicionales</h4>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {additionalModules.map(m => {
+              {additionalModules.map((m) => {
                 const active = selected.has(m.key);
                 const disabledAnnualOnly = period === 'monthly' && !!m.annualOnly;
                 return (
                   <button
                     key={m.key}
-                    onClick={(e) => { e.stopPropagation(); if (!disabledAnnualOnly) toggle(m.key); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!disabledAnnualOnly) toggle(m.key);
+                    }}
                     disabled={disabledAnnualOnly}
                     aria-disabled={disabledAnnualOnly}
-                    className={`group rounded-xl border p-3 text-left transition shadow-sm hover:shadow-md bg-white relative overflow-hidden ${active ? 'border-primary bg-primary/5' : 'border-gray-200'} ${disabledAnnualOnly ? 'opacity-60 cursor-not-allowed hover:shadow-none' : ''}`}
+                    className={`group rounded-xl border p-3 text-left transition shadow-sm hover:shadow-md bg-white relative overflow-hidden ${
+                      active ? 'border-primary bg-primary/5' : 'border-gray-200'
+                    } ${
+                      disabledAnnualOnly ? 'opacity-60 cursor-not-allowed hover:shadow-none' : ''
+                    }`}
                   >
                     {/* Icono de fondo (estilo anterior) */}
-                    <Icon icon={m.icon} className="absolute -right-4 -bottom-2 text-6xl opacity-10 pointer-events-none" />
+                    <Icon
+                      icon={m.icon}
+                      className="absolute -right-4 -bottom-2 text-6xl opacity-10 pointer-events-none"
+                    />
                     {/* Badge Solo anual */}
                     {disabledAnnualOnly && (
-                      <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium opacity-60">Solo anual</span>
+                      <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium opacity-60">
+                        Solo anual
+                      </span>
                     )}
-                    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${m.color} mb-1.5 relative z-[1]`}>
+                    <span
+                      className={`inline-flex items-center justify-center w-10 h-10 rounded-lg ${m.color} mb-1.5 relative z-[1]`}
+                    >
                       <Icon icon={m.icon} className="text-xl text-gray-700" />
                     </span>
                     <div className="flex items-center justify-between gap-2 relative z-[1]">
@@ -188,7 +272,8 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                     <div className="relative z-[1] text-sm font-semibold text-primary">
                       {(() => {
                         if (m.annualOnly) {
-                          if (period === 'annual' && m.annualPrice && m.annualPrice > 0) return `${numberFormat(m.annualPrice)}/año`;
+                          if (period === 'annual' && m.annualPrice && m.annualPrice > 0)
+                            return `${numberFormat(m.annualPrice)}/año`;
                           return '';
                         }
                         // no es solo anual
@@ -197,35 +282,72 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                         return `${numberFormat(m.pricePerUser * 12)}/año`;
                       })()}
                     </div>
-                    {active && <Icon icon="solar:check-circle-bold" className="text-primary absolute top-2 right-2" />}
-                </button>
-              );
-            })}
-          </div>
+                    {active && (
+                      <Icon
+                        icon="solar:check-circle-bold"
+                        className="text-primary absolute top-2 right-2"
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* Configuración compacta */}
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Usuarios</label>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setUsers(v => Math.max(1, v - 1))} className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center">-</button>
-                  <input type="number" min={1} value={users} onChange={(e) => setUsers(Math.max(1, Number(e.target.value) || 1))} className="w-16 text-center border rounded py-1 text-sm" />
-                  <button onClick={() => setUsers(v => v + 1)} className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center">+</button>
+            {/* Configuración compacta */}
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Usuarios</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setUsers((v) => Math.max(1, v - 1))}
+                      className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      value={users}
+                      onChange={(e) => setUsers(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-16 text-center border rounded py-1 text-sm"
+                    />
+                    <button
+                      onClick={() => setUsers((v) => v + 1)}
+                      className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Almacenamiento (GB)</label>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setStorageGB(v => Math.max(5, v - 1))} className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center">-</button>
-                  <input type="number" min={5} value={storageGB} onChange={(e) => setStorageGB(Math.max(5, Number(e.target.value) || 5))} className="w-16 text-center border rounded py-1 text-sm" />
-                  <button onClick={() => setStorageGB(v => v + 1)} className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center">+</button>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Almacenamiento (GB)</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setStorageGB((v) => Math.max(5, v - 1))}
+                      className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min={5}
+                      value={storageGB}
+                      onChange={(e) => setStorageGB(Math.max(5, Number(e.target.value) || 5))}
+                      className="w-16 text-center border rounded py-1 text-sm"
+                    />
+                    <button
+                      onClick={() => setStorageGB((v) => v + 1)}
+                      className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Cerrar primera columna */}
+            {/* Cerrar primera columna */}
           </div>
 
           {/* Resumen - Sticky en desktop */}
@@ -244,12 +366,32 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
               let lines: Line[] = [];
               if (period === 'monthly') {
                 lines.push({ concepto: 'Base de plataforma', total: (totals as any).baseMonthly });
-                if (billableUsers > 0) lines.push({ concepto: `Usuarios adicionales (${billableUsers} × ${numberFormat(perUserMonthly)}/mes)`, total: (totals as any).users.usersMonthly });
+                if (billableUsers > 0)
+                  lines.push({
+                    concepto: `Usuarios adicionales (${billableUsers} × ${numberFormat(
+                      perUserMonthly,
+                    )}/mes)`,
+                    total: (totals as any).users.usersMonthly,
+                  });
                 // Módulos cobrables en mensual (agregado)
-                const monthlyModules = MODULES.filter(m => (selected as any).has(m.key) && !m.mandatory && !m.annualOnly && m.pricePerUser > 0);
+                const monthlyModules = MODULES.filter(
+                  (m) =>
+                    (selected as any).has(m.key) &&
+                    !m.mandatory &&
+                    !m.annualOnly &&
+                    m.pricePerUser > 0,
+                );
                 const modulesMonthlyTotal = monthlyModules.reduce((s, m) => s + m.pricePerUser, 0);
-                if (modulesMonthlyTotal > 0) lines.push({ concepto: `Módulos adicionales (${monthlyModules.length})`, total: modulesMonthlyTotal });
-                if (storageMonthly > 0) lines.push({ concepto: `Almacenamiento extra (${extraGB} GB × ${numberFormat(2000)}/mes)`, total: storageMonthly });
+                if (modulesMonthlyTotal > 0)
+                  lines.push({
+                    concepto: `Módulos adicionales (${monthlyModules.length})`,
+                    total: modulesMonthlyTotal,
+                  });
+                if (storageMonthly > 0)
+                  lines.push({
+                    concepto: `Almacenamiento extra (${extraGB} GB × ${numberFormat(2000)}/mes)`,
+                    total: storageMonthly,
+                  });
                 // Render tabla
                 const subtotal = ((totals as any).subtotalMonthly as number) + storageMonthly;
                 return (
@@ -259,28 +401,55 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                         <div className="px-3 py-2">Concepto</div>
                         <div className="px-3 py-2 text-right">Total</div>
                       </div>
-                      {lines.filter(l => l.total > 0).map((l, i) => (
-                        <div key={i} className="grid grid-cols-2 text-[13px] border-t border-gray-100">
-                          <div className="px-3 py-1.5 truncate" title={l.concepto}>{l.concepto}</div>
-                          <div className="px-3 py-1.5 text-right" title={numberFormat(l.total)}>{numberFormat(l.total)}</div>
-                        </div>
-                      ))}
+                      {lines
+                        .filter((l) => l.total > 0)
+                        .map((l, i) => (
+                          <div
+                            key={i}
+                            className="grid grid-cols-2 text-[13px] border-t border-gray-100"
+                          >
+                            <div className="px-3 py-1.5 truncate" title={l.concepto}>
+                              {l.concepto}
+                            </div>
+                            <div className="px-3 py-1.5 text-right" title={numberFormat(l.total)}>
+                              {numberFormat(l.total)}
+                            </div>
+                          </div>
+                        ))}
                     </div>
                     {/* Toggler detalle módulos */}
                     {(() => {
-                      const monthlyModules = MODULES.filter(m => (selected as any).has(m.key) && !m.mandatory && !m.annualOnly && m.pricePerUser > 0);
+                      const monthlyModules = MODULES.filter(
+                        (m) =>
+                          (selected as any).has(m.key) &&
+                          !m.mandatory &&
+                          !m.annualOnly &&
+                          m.pricePerUser > 0,
+                      );
                       if (monthlyModules.length === 0) return null;
                       return (
                         <div className="mt-2">
-                          <button className="text-[11px] text-primary hover:underline" onClick={() => setShowModuleLines(v => !v)}>
-                            {showModuleLines ? 'Ocultar detalle de módulos' : 'Ver detalle de módulos'}
+                          <button
+                            className="text-[11px] text-primary hover:underline"
+                            onClick={() => setShowModuleLines((v) => !v)}
+                          >
+                            {showModuleLines
+                              ? 'Ocultar detalle de módulos'
+                              : 'Ver detalle de módulos'}
                           </button>
                           {showModuleLines && (
                             <ul className="mt-1 space-y-0.5 pl-3">
-                              {monthlyModules.map(m => (
-                                <li key={m.key} className="flex justify-between text-[12px] text-gray-600">
-                                  <span className="truncate" title={m.name}>{m.name}</span>
-                                  <span title={`${numberFormat(m.pricePerUser)}/mes`}>{numberFormat(m.pricePerUser)}/mes</span>
+                              {monthlyModules.map((m) => (
+                                <li
+                                  key={m.key}
+                                  className="flex justify-between text-[12px] text-gray-600"
+                                >
+                                  <span className="truncate" title={m.name}>
+                                    {m.name}
+                                  </span>
+                                  <span title={`${numberFormat(m.pricePerUser)}/mes`}>
+                                    {numberFormat(m.pricePerUser)}/mes
+                                  </span>
                                 </li>
                               ))}
                             </ul>
@@ -293,7 +462,9 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                       <div className="w-full sm:w-1/2">
                         <div className="flex justify-between text-[13px]">
                           <span className="text-gray-600">Ahorro mensual total</span>
-                          <span className="text-green-700">-{numberFormat(ahorroMensualTotal)}</span>
+                          <span className="text-green-700">
+                            -{numberFormat(ahorroMensualTotal)}
+                          </span>
                         </div>
                         <div className="border-t my-2"></div>
                         <div className="flex justify-between text-sm font-semibold">
@@ -306,18 +477,49 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                 );
               } else {
                 // anual
-                lines.push({ concepto: 'Base de plataforma (año)', total: (totals as any).baseAnnual });
+                lines.push({
+                  concepto: 'Base de plataforma (año)',
+                  total: (totals as any).baseAnnual,
+                });
                 if (billableUsers > 0) {
                   const usersAnnualUnit = perUserMonthly * 12;
-                  lines.push({ concepto: `Usuarios adicionales (año) (${billableUsers} × ${numberFormat(usersAnnualUnit)})`, total: (totals as any).users.usersAnnualTotal });
+                  lines.push({
+                    concepto: `Usuarios adicionales (año) (${billableUsers} × ${numberFormat(
+                      usersAnnualUnit,
+                    )})`,
+                    total: (totals as any).users.usersAnnualTotal,
+                  });
                 }
-                const annualModules = MODULES.filter(m => (selected as any).has(m.key) && !m.mandatory);
-                const modulesAnnualTotal = annualModules.reduce((s, m) => s + (m.annualOnly ? (m.annualPrice || 0) : m.pricePerUser * 12), 0);
-                const modulesAnnualCount = annualModules.filter(m => (m.annualOnly ? (m.annualPrice || 0) : m.pricePerUser * 12) > 0).length;
-                if (modulesAnnualTotal > 0) lines.push({ concepto: `Módulos adicionales (año) (${modulesAnnualCount})`, total: modulesAnnualTotal });
-                if (storageAnnualBefore > 0) lines.push({ concepto: `Almacenamiento extra (año) (${extraGB} GB × ${numberFormat(2000 * 12)})`, total: storageAnnualBefore });
-                const subtotalAnnualBefore = (totals as any).baseAnnual + (totals as any).modulesAnnual + (totals as any).users.usersAnnualTotal + storageAnnualBefore;
-                const discount = ((totals as any).discountAnnual as number) + (storageAnnualBefore - storageAnnualAfter);
+                const annualModules = MODULES.filter(
+                  (m) => (selected as any).has(m.key) && !m.mandatory,
+                );
+                const modulesAnnualTotal = annualModules.reduce(
+                  (s, m) => s + (m.annualOnly ? m.annualPrice || 0 : m.pricePerUser * 12),
+                  0,
+                );
+                const modulesAnnualCount = annualModules.filter(
+                  (m) => (m.annualOnly ? m.annualPrice || 0 : m.pricePerUser * 12) > 0,
+                ).length;
+                if (modulesAnnualTotal > 0)
+                  lines.push({
+                    concepto: `Módulos adicionales (año) (${modulesAnnualCount})`,
+                    total: modulesAnnualTotal,
+                  });
+                if (storageAnnualBefore > 0)
+                  lines.push({
+                    concepto: `Almacenamiento extra (año) (${extraGB} GB × ${numberFormat(
+                      2000 * 12,
+                    )})`,
+                    total: storageAnnualBefore,
+                  });
+                const subtotalAnnualBefore =
+                  (totals as any).baseAnnual +
+                  (totals as any).modulesAnnual +
+                  (totals as any).users.usersAnnualTotal +
+                  storageAnnualBefore;
+                const discount =
+                  ((totals as any).discountAnnual as number) +
+                  (storageAnnualBefore - storageAnnualAfter);
                 const totalAnnual = ((totals as any).subtotalAnnual as number) + storageAnnualAfter;
                 return (
                   <div>
@@ -326,31 +528,53 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                         <div className="px-3 py-2">Concepto</div>
                         <div className="px-3 py-2 text-right">Total</div>
                       </div>
-                      {lines.filter(l => l.total > 0).map((l, i) => (
-                        <div key={i} className="grid grid-cols-2 text-[13px] border-t border-gray-100">
-                          <div className="px-3 py-1.5 truncate">{l.concepto}</div>
-                          <div className="px-3 py-1.5 text-right">{numberFormat(l.total)}</div>
-                        </div>
-                      ))}
+                      {lines
+                        .filter((l) => l.total > 0)
+                        .map((l, i) => (
+                          <div
+                            key={i}
+                            className="grid grid-cols-2 text-[13px] border-t border-gray-100"
+                          >
+                            <div className="px-3 py-1.5 truncate">{l.concepto}</div>
+                            <div className="px-3 py-1.5 text-right">{numberFormat(l.total)}</div>
+                          </div>
+                        ))}
                     </div>
                     {/* Toggler detalle módulos */}
                     {(() => {
-                      const annualModulesDetailed = MODULES.filter(m => (selected as any).has(m.key) && !m.mandatory);
+                      const annualModulesDetailed = MODULES.filter(
+                        (m) => (selected as any).has(m.key) && !m.mandatory,
+                      );
                       const detail = annualModulesDetailed
-                        .map(m => ({ name: m.name, unit: (m.annualOnly ? (m.annualPrice || 0) : m.pricePerUser * 12) }))
-                        .filter(x => x.unit > 0);
+                        .map((m) => ({
+                          name: m.name,
+                          unit: m.annualOnly ? m.annualPrice || 0 : m.pricePerUser * 12,
+                        }))
+                        .filter((x) => x.unit > 0);
                       if (detail.length === 0) return null;
                       return (
                         <div className="mt-2">
-                          <button className="text-[11px] text-primary hover:underline" onClick={() => setShowModuleLines(v => !v)}>
-                            {showModuleLines ? 'Ocultar detalle de módulos' : 'Ver detalle de módulos'}
+                          <button
+                            className="text-[11px] text-primary hover:underline"
+                            onClick={() => setShowModuleLines((v) => !v)}
+                          >
+                            {showModuleLines
+                              ? 'Ocultar detalle de módulos'
+                              : 'Ver detalle de módulos'}
                           </button>
                           {showModuleLines && (
                             <ul className="mt-1 space-y-0.5 pl-3">
-                              {detail.map(d => (
-                                <li key={d.name} className="flex justify-between text-[12px] text-gray-600">
-                                  <span className="truncate" title={d.name}>{d.name}</span>
-                                  <span title={`${numberFormat(d.unit)}/año`}>{numberFormat(d.unit)}/año</span>
+                              {detail.map((d) => (
+                                <li
+                                  key={d.name}
+                                  className="flex justify-between text-[12px] text-gray-600"
+                                >
+                                  <span className="truncate" title={d.name}>
+                                    {d.name}
+                                  </span>
+                                  <span title={`${numberFormat(d.unit)}/año`}>
+                                    {numberFormat(d.unit)}/año
+                                  </span>
                                 </li>
                               ))}
                             </ul>
@@ -379,54 +603,91 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                 );
               }
             })()}
-            
+
             {/* CTAs mejorados */}
             <div className="mt-6 space-y-3">
-              <button onClick={() => {
-                const payload = { users, modules: Array.from(selected), totals, storageGB, period };
-                localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
-                window.location.href = '/frontend-pages/contact';
-              }} className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-semibold flex items-center justify-center gap-2">
+              <button
+                onClick={() => {
+                  const payload = {
+                    users,
+                    modules: Array.from(selected),
+                    totals,
+                    storageGB,
+                    period,
+                  };
+                  localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
+                  window.location.href = '/frontend-pages/contact';
+                }}
+                className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-semibold flex items-center justify-center gap-2"
+              >
                 <Icon icon="solar:calendar-bold" />
                 Solicitar demo gratuita
               </button>
-              <button onClick={handleCheckout} className="w-full px-6 py-3 border-2 border-primary text-primary rounded-lg hover:bg-primary/5 transition font-semibold flex items-center justify-center gap-2">
+              <button
+                onClick={handleCheckout}
+                className="w-full px-6 py-3 border-2 border-primary text-primary rounded-lg hover:bg-primary/5 transition font-semibold flex items-center justify-center gap-2"
+              >
                 <Icon icon="solar:cart-large-bold" />
                 Comprar ahora
               </button>
             </div>
-            
+
             {/* Acciones adicionales */}
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <button onClick={() => {
-                const payload = { users, modules: Array.from(selected), totals, storageGB, period };
-                const json = JSON.stringify(payload, null, 2);
-                const blob = new Blob([json], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `cotizacion-guro-${new Date().toISOString().split('T')[0]}.json`;
-                a.click();
-              }} className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+              <button
+                onClick={() => {
+                  const payload = {
+                    users,
+                    modules: Array.from(selected),
+                    totals,
+                    storageGB,
+                    period,
+                  };
+                  const json = JSON.stringify(payload, null, 2);
+                  const blob = new Blob([json], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `cotizacion-guro-${new Date().toISOString().split('T')[0]}.json`;
+                  a.click();
+                }}
+                className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+              >
                 <Icon icon="solar:download-bold" />
                 Guardar cotización
               </button>
-              <button onClick={() => {
-                const payload = { users, modules: Array.from(selected), totals, storageGB, period };
-                const url = `${window.location.origin}${window.location.pathname}?config=${btoa(JSON.stringify(payload))}`;
-                navigator.clipboard.writeText(url);
-                alert('Link copiado al portapapeles');
-              }} className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+              <button
+                onClick={() => {
+                  const payload = {
+                    users,
+                    modules: Array.from(selected),
+                    totals,
+                    storageGB,
+                    period,
+                  };
+                  const url = `${window.location.origin}${window.location.pathname}?config=${btoa(
+                    JSON.stringify(payload),
+                  )}`;
+                  navigator.clipboard.writeText(url);
+                  alert('Link copiado al portapapeles');
+                }}
+                className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+              >
                 <Icon icon="solar:share-bold" />
                 Compartir
               </button>
-              <button onClick={() => window.print()} className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+              >
                 <Icon icon="solar:printer-bold" />
                 Imprimir
               </button>
             </div>
-            
-            <p className="text-[10px] text-gray-500 mt-2">Precios en COP. Sujetos a ajuste. IVA no incluido.</p>
+
+            <p className="text-[10px] text-gray-500 mt-2">
+              Precios en COP. Sujetos a ajuste. IVA no incluido.
+            </p>
           </div>
           {/* Cerrar grid */}
         </div>
@@ -442,30 +703,59 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
 
       {/* Modal resumen móvil */}
       {showMobileSummary && (
-        <div className="lg:hidden fixed inset-0 bg-black/50 z-50 flex items-end" onClick={() => setShowMobileSummary(false)}>
-          <div className="bg-white rounded-t-2xl p-6 w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-50 flex items-end"
+          onClick={() => setShowMobileSummary(false)}
+        >
+          <div
+            className="bg-white rounded-t-2xl p-6 w-full max-h-[80vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold">Resumen</h3>
-              <button onClick={() => setShowMobileSummary(false)} className="p-2 hover:bg-gray-100 rounded-full">
+              <button
+                onClick={() => setShowMobileSummary(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
                 <Icon icon="solar:close-circle-bold" className="text-2xl" />
               </button>
             </div>
             {/* Aquí iría el mismo contenido del resumen */}
-            <p className="text-sm text-gray-600 mb-4">Total: {numberFormat(period === 'monthly' ? ((totals as any).subtotalMonthly + Math.max(storageGB - 5, 0) * 2000) : ((totals as any).subtotalAnnual + Math.round(Math.max(storageGB - 5, 0) * 2000 * 12 * 0.75)))}</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Total:{' '}
+              {numberFormat(
+                period === 'monthly'
+                  ? (totals as any).subtotalMonthly + Math.max(storageGB - 5, 0) * 2000
+                  : (totals as any).subtotalAnnual +
+                      Math.round(Math.max(storageGB - 5, 0) * 2000 * 12 * 0.75),
+              )}
+            </p>
             <div className="space-y-3">
-              <button onClick={() => {
-                setShowMobileSummary(false);
-                const payload = { users, modules: Array.from(selected), totals, storageGB, period };
-                localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
-                window.location.href = '/frontend-pages/contact';
-              }} className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-semibold flex items-center justify-center gap-2">
+              <button
+                onClick={() => {
+                  setShowMobileSummary(false);
+                  const payload = {
+                    users,
+                    modules: Array.from(selected),
+                    totals,
+                    storageGB,
+                    period,
+                  };
+                  localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
+                  window.location.href = '/frontend-pages/contact';
+                }}
+                className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-semibold flex items-center justify-center gap-2"
+              >
                 <Icon icon="solar:calendar-bold" />
                 Solicitar demo gratuita
               </button>
-              <button onClick={() => {
-                setShowMobileSummary(false);
-                handleCheckout();
-              }} className="w-full px-6 py-3 border-2 border-primary text-primary rounded-lg hover:bg-primary/5 transition font-semibold flex items-center justify-center gap-2">
+              <button
+                onClick={() => {
+                  setShowMobileSummary(false);
+                  handleCheckout();
+                }}
+                className="w-full px-6 py-3 border-2 border-primary text-primary rounded-lg hover:bg-primary/5 transition font-semibold flex items-center justify-center gap-2"
+              >
                 <Icon icon="solar:cart-large-bold" />
                 Comprar ahora
               </button>
@@ -477,6 +767,6 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
       {/* Bloques de comparación y modales removidos para simplificación */}
     </section>
   );
-}
+};
 
 export default PricingCalculator;

@@ -29,6 +29,13 @@ api.interceptors.request.use(
       const base = config.baseURL || '';
       const fullUrl = base && urlPath && urlPath.startsWith('http') ? urlPath : `${base}${urlPath}`;
 
+      // Endpoints que EXIGEN token de Firebase (no permiten DEV_BYPASS)
+      const mustUseFirebase = (path: string) => {
+        if (!path) return false;
+        // Soporta rutas con o sin prefijo /api
+        return path.includes('/pricing/') || path.endsWith('/auth/sync-firebase-user');
+      };
+
       // Espera breve para que Firebase inicialice al navegar/recargar
       const maxWait = 1200;
       const start = Date.now();
@@ -67,6 +74,18 @@ api.interceptors.request.use(
         const devBypass = (import.meta as any).env?.VITE_DEV_AUTH_BYPASS === 'true';
         const devBrokerId = (import.meta as any).env?.VITE_DEV_BROKER_ID || '2';
 
+        // Si el endpoint requiere Firebase, NO permitir DEV_BYPASS ni token de empleado
+        if (mustUseFirebase(urlPath) || mustUseFirebase(fullUrl)) {
+          console.warn('🚫 [REQ] Endpoint requiere Firebase. Bloqueando DEV_BYPASS/empleado.', {
+            method,
+            url: urlPath,
+          });
+          // Forzar error temprano para que el caller redirija a registro/login
+          const err: any = new Error('NEEDS_FIREBASE_AUTH');
+          err.code = 'NEEDS_FIREBASE_AUTH';
+          throw err;
+        }
+
         // Soporte DEV_BYPASS (empleado_token='DEV_BYPASS' o flag de entorno activo)
         if (empleadoToken === 'DEV_BYPASS' || (!empleadoToken && devBypass)) {
           (config.headers as any).Authorization = 'Bearer DEV_BYPASS';
@@ -101,7 +120,11 @@ api.interceptors.request.use(
           console.warn('🟨 [REQ] sin token', { method, url: urlPath });
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Si explicitamente requiere Firebase, abortar la request
+      if (error?.code === 'NEEDS_FIREBASE_AUTH') {
+        return Promise.reject(error);
+      }
       console.error('🔐 Request interceptor - Error obteniendo token:', error);
     }
     return config;

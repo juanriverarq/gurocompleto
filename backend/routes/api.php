@@ -129,6 +129,13 @@ Route::prefix('auth')->group(function () {
 });
 
 // =============================================================
+// Pricing / Suscripciones - requiere Firebase Auth
+// =============================================================
+Route::middleware(['firebase.auth'])->prefix('pricing')->group(function () {
+    Route::post('/subscription-intents', [\App\Http\Controllers\Api\SubscriptionIntentController::class, 'store']);
+});
+
+// =============================================================
 // Webhook ElevenLabs público (fuera de cualquier middleware)
 // =============================================================
 Route::post('/saas/voice-campaigns/webhooks/elevenlabs', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'receiveElevenLabsWebhook']);
