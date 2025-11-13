@@ -91,6 +91,29 @@ const syncUserWithLaravel = async (user: User, isNewUser: boolean = false) => {
     try {
       if (result?.subscription_intent_id) {
         localStorage.setItem('guro_pricing_selection_sent', '1');
+        // Consultar estado de suscripción para decidir redirección al checkout
+        try {
+          const { API_CONFIG } = await import('../config/constants');
+          const statusResp = await fetch(`${API_CONFIG.BASE_URL}/billing/status`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          });
+          if (statusResp.ok) {
+            const statusData = await statusResp.json();
+            const hasActive = statusData?.data?.has_active_subscription;
+            const pending = statusData?.data?.pending_intent;
+            if (!hasActive && pending) {
+              // Redirigir al checkout solo si estamos en páginas públicas
+              const currentPath = window.location.pathname;
+              const inCheckout = currentPath.includes('/frontend-pages/checkout');
+              if (!inCheckout) {
+                window.location.href = '/frontend-pages/checkout';
+              }
+            }
+          }
+        } catch {}
       }
     } catch {}
 

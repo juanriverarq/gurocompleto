@@ -136,6 +136,15 @@ Route::middleware(['firebase.auth'])->prefix('pricing')->group(function () {
 });
 
 // =============================================================
+// Billing - estado de suscripción
+// =============================================================
+Route::middleware(['firebase.auth'])->prefix('billing')->group(function () {
+    Route::get('/status', [\App\Http\Controllers\Api\BillingController::class, 'status']);
+    Route::post('/checkout-link', [\App\Http\Controllers\Api\BillingController::class, 'createCheckoutLink']);
+    Route::post('/wompi/confirm', [\App\Http\Controllers\Api\BillingController::class, 'confirmWompi']);
+});
+
+// =============================================================
 // Webhook ElevenLabs público (fuera de cualquier middleware)
 // =============================================================
 Route::post('/saas/voice-campaigns/webhooks/elevenlabs', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'receiveElevenLabsWebhook']);
