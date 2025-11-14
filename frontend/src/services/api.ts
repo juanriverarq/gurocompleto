@@ -76,7 +76,7 @@ class ApiService {
         params.append('end_date', endDate);
       }
       
-      const url = params.toString() ? `/dashboard-data?${params.toString()}` : '/dashboard-data';
+      const url = params.toString() ? `/dashboard/data?${params.toString()}` : '/dashboard/data';
       const response = await api.get(url);
       
       const result: ApiResponse<DashboardData> = response.data;

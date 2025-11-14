@@ -712,8 +712,8 @@ Route::middleware('firebase.auth')->group(function () {
     });
     
 // Rutas de Wallet (expuestas también en api.php para compatibilidad)
-// Usamos SecurityAuthMiddleware para autenticación unificada y segura
-Route::middleware(['security.auth','global.broker.auth'])->prefix('saas')->group(function () {
+// Usamos Firebase Auth + SecurityAuthMiddleware para autenticación unificada y segura
+Route::middleware(['firebase.auth','security.auth','global.broker.auth'])->prefix('saas')->group(function () {
     Route::prefix('wallet')->group(function () {
         Route::get('/balance', [WalletController::class, 'getBalance']);
         Route::get('/transactions', [WalletController::class, 'getTransactionHistory']);
@@ -2193,6 +2193,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::post('/polizas/{id}/anexos', [\App\Http\Controllers\SaaS\AnexosController::class, 'store']);
     Route::put('/polizas/{id}/anexos/{anexoId}', [\App\Http\Controllers\SaaS\AnexosController::class, 'update']);
     Route::delete('/polizas/{id}/anexos/{anexoId}', [\App\Http\Controllers\SaaS\AnexosController::class, 'destroy']);
+    Route::post('/polizas/{id}/anexos/{anexoId}/documents', [\App\Http\Controllers\SaaS\AnexosController::class, 'uploadDocuments']);
     Route::get('/renovaciones/export', [SaasPolizasController::class, 'exportarRenovaciones']);
     
     // Ruta de debug para verificar el middleware Firebase
@@ -3045,7 +3046,7 @@ Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group
 });
 
 // ===== HOTFIX COMPAT: Endpoints de Dashboard sin prefijo /saas para evitar 404 en UI legacy =====
-Route::middleware(['security.auth','global.broker.auth'])->group(function () {
+Route::middleware(['firebase.auth','security.auth','global.broker.auth'])->group(function () {
     // Primas por Mes (alias de /saas/dashboard/primas-chart)
     Route::get('/dashboard/primas-chart', [\App\Http\Controllers\Api\DashboardController::class, 'getPrimasChart']);
     // Aliases de data/metrics usados por versiones anteriores del frontend
