@@ -17,7 +17,13 @@ class SaasClientesController extends Controller
      */
     private function getBrokerId(Request $request)
     {
-        // 1) Usar broker_id proporcionado por autenticación unificada (empleado o firebase)
+        // 1) Verificar si GlobalBrokerAuth ya estableció el broker_id
+        $authenticatedBrokerId = $request->get('authenticated_broker_id');
+        if ($authenticatedBrokerId) {
+            return $authenticatedBrokerId;
+        }
+
+        // 2) Usar broker_id proporcionado por autenticación unificada (empleado o firebase)
         if (method_exists(\App\Http\Middleware\UnifiedAuthMiddleware::class, 'getBrokerId')) {
             $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request);
             if ($brokerId) {
@@ -25,10 +31,10 @@ class SaasClientesController extends Controller
             }
         }
 
-        // 2) Intentar obtener el usuario autenticado (Firebase middleware lo asigna)
+        // 3) Intentar obtener el usuario autenticado (Firebase middleware lo asigna)
         $user = $request->user();
 
-        // 3) Fallback a Auth::user()
+        // 4) Fallback a Auth::user()
         if (!$user) {
             $user = Auth::user();
         }
@@ -926,18 +932,11 @@ class SaasClientesController extends Controller
     /**
      * Get clientes statistics (Production version with auth) - OPTIMIZED
      */
-    public function estadisticas()
+    public function estadisticas(Request $request)
     {
         try {
-            $user = Auth::user();
-            if (!$user || !$user->broker_id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no tiene un broker asignado',
-                ], 403);
-            }
-
-            $brokerId = $user->broker_id;
+            // Usar el método getBrokerId que maneja correctamente empleados y Firebase
+            $brokerId = $this->getBrokerId($request);
 
             // OPTIMIZACIÓN: Estadísticas básicas de clientes en una sola consulta
             $basicStats = Cliente::where('broker_id', $brokerId)

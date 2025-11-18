@@ -627,7 +627,7 @@ export const polizaService = {
     });
   },
 
-  async actualizarAnexo(_polizaId: string, _anexoId: string, _input: Partial<{
+  async actualizarAnexo(polizaId: string, anexoId: string, input: Partial<{
     aseguradora: string;
     ramo: string;
     anexo: string;
@@ -653,16 +653,54 @@ export const polizaService = {
     accesorios?: string;
     estado: 'ACTIVA' | 'VENCIDA' | 'CANCELADA' | 'SUSPENDIDA' | 'PENDIENTE';
   }>): Promise<ApiResponse<any>> {
-    // El backend no expone ruta para actualizar anexos (PUT). Se deshabilita temporalmente.
-    const message = 'Actualizar anexo no está disponible actualmente (ruta backend no implementada).';
-    toast({ variant: 'destructive', title: 'Acción no disponible', description: message });
-    throw new Error(message);
+    return makeRequest<any>(`${API_PREFIX}/${polizaId}/anexos/${anexoId}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
   },
 
   async eliminarAnexo(polizaId: string, anexoId: string): Promise<ApiResponse<any>> {
     return makeRequest<any>(`${API_PREFIX}/${polizaId}/anexos/${anexoId}`, {
       method: 'DELETE',
     });
+  },
+
+  async subirDocumentosAnexo(polizaId: string, anexoId: string, files: File[]): Promise<ApiResponse<any>> {
+    try {
+      const token = await getAuthToken();
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append('files[]', file);
+      });
+
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_BASE_URL}${API_PREFIX}/${polizaId}/anexos/${anexoId}/documents`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!res.ok) {
+        let message = 'Error al subir archivos';
+        if (res.status === 401) message = 'No autorizado. Inicia sesión para subir archivos.';
+        else if (res.status === 403) message = 'Permisos insuficientes para subir archivos.';
+        else if (res.status === 413) message = 'Archivo demasiado grande (máx 20MB).';
+        toast({ variant: 'destructive', title: 'Subir archivos', description: message });
+        throw new Error(message);
+      }
+      
+      const result = await res.json();
+      toast({ 
+        title: 'Archivos subidos', 
+        description: 'Los archivos se han subido correctamente al anexo y a la póliza.',
+        variant: 'default'
+      });
+      return result;
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      toast({ variant: 'destructive', title: 'Subir archivos', description: error.message || 'Error desconocido' });
+      throw error;
+    }
   },
 
   // ===== Documentos (Firebase Storage vía backend) =====

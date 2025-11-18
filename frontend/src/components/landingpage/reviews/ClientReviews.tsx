@@ -44,14 +44,14 @@ const ClientReviews = () => {
   return (
     <>
       <div className="bg-white dark:bg-dark" id="testimonios">
-        <div className="container md:py-20 py-12 ">
+        <div className="container md:py-20 py-12 px-4">
           <div
             className="lg:w-3/5 w-full mx-auto"
             data-aos="fade-up"
             data-aos-duration="500"
           >
             <h2
-              className="text-center sm:text-4xl text-2xl mt-8 font-bold sm:!leading-[45px]"
+              className="text-center sm:text-4xl text-xl mt-8 font-bold sm:!leading-[45px] leading-tight"
               data-aos="fade-up"
               data-aos-delay="200"
               data-aos-duration="1000"

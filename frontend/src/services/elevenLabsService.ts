@@ -10,7 +10,7 @@ try {
   ElevenLabsSDK = elevenLabsModule.ElevenLabs || elevenLabsModule.default;
   OutboundCallType = elevenLabsModule.OutboundCall;
 } catch (error) {
-  console.warn('⚠️ SDK de ElevenLabs no disponible, usando solo método directo de API');
+  // SDK no disponible, usando solo método directo de API
 }
 interface Voice {
   voice_id: string;

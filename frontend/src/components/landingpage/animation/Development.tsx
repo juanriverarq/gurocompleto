@@ -5,7 +5,7 @@ const Development = () => {
   return (
     <>
       <div className="bg-lightgray dark:bg-darkgray md:py-20 py-12">
-                <div className="container">
+                <div className="container px-4">
          
 
           <div
@@ -13,7 +13,7 @@ const Development = () => {
             data-aos="fade-up"
             data-aos-duration="500"
           >
-            <h2 className="text-center sm:text-4xl text-2xl mt-8 font-bold sm:!leading-[45px]">
+            <h2 className="text-center sm:text-4xl text-xl mt-8 font-bold sm:!leading-[45px] leading-tight">
               Plataforma Todo-en-Uno & Potenciada por IA para el Sector Asegurador
             </h2>
           </div>

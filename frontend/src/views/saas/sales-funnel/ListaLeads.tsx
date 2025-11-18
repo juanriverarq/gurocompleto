@@ -1,19 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Button, Table, Dropdown, Spinner, Alert, Modal, Badge } from 'flowbite-react';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'src/components/shadcn-ui/Default-Ui/select';
 import { useNavigate } from 'react-router-dom';
 import { Icon as IconifyIcon } from '@iconify/react';
 import { IconDots } from '@tabler/icons-react';
-import salesFunnelService, { SalesFunnelFilters, SalesFunnelLead, STAGES, INSURANCE_TYPES, LEAD_SOURCES, QUALITY_RATINGS } from 'src/services/salesFunnelService';
+import salesFunnelService, { SalesFunnelFilters, SalesFunnelLead, STAGES } from 'src/services/salesFunnelService';
+import NuevoNegocioModal from 'src/components/saas/sales-funnel/NuevoNegocioModal';
+import EditarNegocioModal from 'src/components/saas/sales-funnel/EditarNegocioModal';
+import DetalleNegocioModal from 'src/components/saas/sales-funnel/DetalleNegocioModal';
 
-// Estados dinámicos del negocio
-const BUSINESS_STATES = {
-  'nuevo': { label: 'Nuevo', color: 'bg-blue-100 text-blue-800', icon: 'solar:star-bold-duotone' },
-  'contactado': { label: 'Contactado', color: 'bg-green-100 text-green-800', icon: 'solar:phone-bold-duotone' },
-  'interesado': { label: 'Interesado', color: 'bg-orange-100 text-orange-800', icon: 'solar:heart-bold-duotone' },
-  'negociando': { label: 'Negociando', color: 'bg-purple-100 text-purple-800', icon: 'solar:handshake-bold-duotone' },
-  'cerrado': { label: 'Cerrado', color: 'bg-gray-100 text-gray-800', icon: 'solar:check-circle-bold-duotone' }
+// Configuración visual para cada etapa
+const STAGE_CONFIG = {
+  'lead': { label: 'Lead', color: 'bg-gray-100 text-gray-800', icon: 'solar:user-bold-duotone' },
+  'contacted': { label: 'Contactado', color: 'bg-blue-100 text-blue-800', icon: 'solar:phone-bold-duotone' },
+  'qualified': { label: 'Calificado', color: 'bg-indigo-100 text-indigo-800', icon: 'solar:check-circle-bold-duotone' },
+  'presentation': { label: 'Presentación', color: 'bg-purple-100 text-purple-800', icon: 'solar:presentation-graph-bold-duotone' },
+  'proposal': { label: 'Propuesta', color: 'bg-yellow-100 text-yellow-800', icon: 'solar:document-text-bold-duotone' },
+  'negotiation': { label: 'Negociación', color: 'bg-orange-100 text-orange-800', icon: 'solar:handshake-bold-duotone' },
+  'closed_won': { label: 'Ganado', color: 'bg-green-100 text-green-800', icon: 'solar:star-bold-duotone' },
+  'closed_lost': { label: 'Perdido', color: 'bg-red-100 text-red-800', icon: 'solar:close-circle-bold-duotone' }
 };
 
 const ListaLeads: React.FC = () => {
@@ -32,6 +37,14 @@ const ListaLeads: React.FC = () => {
   const [leadToChangeState, setLeadToChangeState] = useState<SalesFunnelLead | null>(null);
   const [newState, setNewState] = useState<string>('');
   const [changingState, setChangingState] = useState(false);
+  
+  // Estado para modal de nuevo negocio
+  const [showNuevoNegocioModal, setShowNuevoNegocioModal] = useState(false);
+  
+  // Estados para modales de editar y detalle
+  const [showEditarModal, setShowEditarModal] = useState(false);
+  const [showDetalleModal, setShowDetalleModal] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
 
   const [filters, setFilters] = useState<SalesFunnelFilters>({
     search: '',
@@ -42,11 +55,6 @@ const ListaLeads: React.FC = () => {
     per_page: 10,
     page: 1,
   });
-
-  const stageOptions = useMemo(() => Object.entries(STAGES), []);
-  const insuranceOptions = useMemo(() => Object.entries(INSURANCE_TYPES), []);
-  const sourceOptions = useMemo(() => Object.entries(LEAD_SOURCES), []);
-  const qualityOptions = useMemo(() => Object.entries(QUALITY_RATINGS), []);
 
   // Efecto para cargar per_page persistido solo al montar
   useEffect(() => {
@@ -121,28 +129,26 @@ const ListaLeads: React.FC = () => {
     }
   };
 
-  // Función para cambiar estado del negocio
+  // Función para cambiar etapa del negocio
   const handleChangeState = (lead: SalesFunnelLead) => {
     setLeadToChangeState(lead);
-    setNewState(lead.business_state || 'nuevo');
+    setNewState(lead.stage);
     setShowStateModal(true);
   };
 
-  // Confirmar cambio de estado
+  // Confirmar cambio de etapa
   const confirmStateChange = async () => {
     if (!leadToChangeState || !newState) return;
     
     try {
       setChangingState(true);
-      // Usar notes para almacenar el estado por ahora (hasta que se añada business_state al backend)
-      await salesFunnelService.updateLead(leadToChangeState.id, { 
-        notes: `Estado: ${newState}` 
-      });
+      // Cambiar la etapa
+      await salesFunnelService.moveToStage(leadToChangeState.id, newState);
       
       // Actualizar el lead en la lista local
       setLeads(prev => prev.map(lead => 
         lead.id === leadToChangeState.id 
-          ? { ...lead, business_state: newState }
+          ? { ...lead, stage: newState }
           : lead
       ));
       
@@ -150,7 +156,7 @@ const ListaLeads: React.FC = () => {
       setLeadToChangeState(null);
       setNewState('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al cambiar estado');
+      setError(e instanceof Error ? e.message : 'Error al cambiar etapa');
     } finally {
       setChangingState(false);
     }
@@ -298,7 +304,7 @@ const ListaLeads: React.FC = () => {
                 <IconifyIcon icon="solar:refresh-bold-duotone" className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               
-              <Button onClick={() => navigate('/apps/saas/sales-funnel/nuevo')} color="primary" className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]">
+              <Button onClick={() => setShowNuevoNegocioModal(true)} color="primary" className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]">
                 <IconifyIcon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
                 <span className="hidden sm:inline">Nuevo Negocio</span>
                 <span className="sm:hidden">Nuevo</span>
@@ -316,7 +322,7 @@ const ListaLeads: React.FC = () => {
               <IconifyIcon icon="solar:target-bold-duotone" className="w-16 h-16 text-gray-300" />
               <p className="text-gray-500 text-lg font-medium">No hay negocios</p>
               <p className="text-gray-400 text-sm">Comienza creando tu primer negocio</p>
-              <Button onClick={() => navigate('/apps/saas/sales-funnel/nuevo')} color="primary" className="mt-2">
+              <Button onClick={() => setShowNuevoNegocioModal(true)} color="primary" className="mt-2">
                 <IconifyIcon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
                 Crear primer negocio
               </Button>
@@ -370,8 +376,7 @@ const ListaLeads: React.FC = () => {
                     </Table.Row>
                   ) : (
                     sortedLeads.map(lead => {
-                      const currentState = lead.business_state || 'nuevo';
-                      const stateConfig = BUSINESS_STATES[currentState as keyof typeof BUSINESS_STATES] || BUSINESS_STATES.nuevo;
+                      const stageConfig = STAGE_CONFIG[lead.stage as keyof typeof STAGE_CONFIG] || STAGE_CONFIG.lead;
                       
                       return (
                         <Table.Row key={lead.id}>
@@ -388,9 +393,9 @@ const ListaLeads: React.FC = () => {
                           </Table.Cell>
                           <Table.Cell className="whitespace-nowrap pr-8">
                             <div className="flex items-center gap-2">
-                              <IconifyIcon icon={stateConfig.icon} className="w-4 h-4" />
-                              <Badge className={`${stateConfig.color} px-2 py-1 rounded-full text-xs font-medium`}>
-                                {stateConfig.label}
+                              <IconifyIcon icon={stageConfig.icon} className="w-4 h-4" />
+                              <Badge className={`${stageConfig.color} px-2 py-1 rounded-full text-xs font-medium`}>
+                                {stageConfig.label}
                               </Badge>
                             </div>
                           </Table.Cell>
@@ -410,14 +415,20 @@ const ListaLeads: React.FC = () => {
                               >
                                 <Dropdown.Item 
                                   className="flex gap-3 w-full justify-start text-left"
-                                  onClick={() => navigate(`/apps/saas/sales-funnel/${lead.id}`)}
+                                  onClick={() => {
+                                    setSelectedLeadId(lead.id);
+                                    setShowDetalleModal(true);
+                                  }}
                                 >
                                   <IconifyIcon icon="solar:eye-bold-duotone" height={18} />
                                   <span>Ver Detalles</span>
                                 </Dropdown.Item>
                                 <Dropdown.Item 
                                   className="flex gap-3 w-full justify-start text-left"
-                                  onClick={() => navigate(`/apps/saas/sales-funnel/${lead.id}/editar`)}
+                                  onClick={() => {
+                                    setSelectedLeadId(lead.id);
+                                    setShowEditarModal(true);
+                                  }}
                                 >
                                   <IconifyIcon icon="solar:pen-new-square-bold-duotone" height={18} />
                                   <span>Editar</span>
@@ -489,19 +500,19 @@ const ListaLeads: React.FC = () => {
         )}
       </Card>
 
-      {/* Modal para cambiar estado */}
+      {/* Modal para cambiar etapa */}
       <Modal show={showStateModal} onClose={() => setShowStateModal(false)} size="md">
-        <Modal.Header>Cambiar Estado del Negocio</Modal.Header>
+        <Modal.Header>Cambiar Etapa del Negocio</Modal.Header>
         <Modal.Body>
           <div className="space-y-4">
             <div>
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                Selecciona el nuevo estado para: <strong>{leadToChangeState?.full_name || `${leadToChangeState?.first_name} ${leadToChangeState?.last_name}`}</strong>
+                Selecciona la nueva etapa para: <strong>{leadToChangeState?.full_name || `${leadToChangeState?.first_name} ${leadToChangeState?.last_name}`}</strong>
               </p>
             </div>
             
             <div className="grid grid-cols-1 gap-3">
-              {Object.entries(BUSINESS_STATES).map(([key, state]) => (
+              {Object.entries(STAGE_CONFIG).map(([key, stage]) => (
                 <div
                   key={key}
                   className={`p-3 border rounded-lg cursor-pointer transition-all ${
@@ -512,15 +523,18 @@ const ListaLeads: React.FC = () => {
                   onClick={() => setNewState(key)}
                 >
                   <div className="flex items-center gap-3">
-                    <IconifyIcon icon={state.icon} className="w-5 h-5" />
+                    <IconifyIcon icon={stage.icon} className="w-5 h-5" />
                     <div>
-                      <div className="font-medium text-gray-900 dark:text-white">{state.label}</div>
+                      <div className="font-medium text-gray-900 dark:text-white">{stage.label}</div>
                       <div className="text-xs text-gray-500">
-                        {key === 'nuevo' && 'Negocio recién creado'}
-                        {key === 'contactado' && 'Se ha establecido contacto inicial'}
-                        {key === 'interesado' && 'Cliente muestra interés en el producto'}
-                        {key === 'negociando' && 'En proceso de negociación activa'}
-                        {key === 'cerrado' && 'Negocio finalizado (ganado o perdido)'}
+                        {key === 'lead' && 'Lead inicial sin contactar'}
+                        {key === 'contacted' && 'Se ha establecido contacto inicial'}
+                        {key === 'qualified' && 'Lead calificado con potencial'}
+                        {key === 'presentation' && 'Presentación del producto realizada'}
+                        {key === 'proposal' && 'Propuesta comercial enviada'}
+                        {key === 'negotiation' && 'En proceso de negociación activa'}
+                        {key === 'closed_won' && 'Negocio ganado y cerrado'}
+                        {key === 'closed_lost' && 'Negocio perdido'}
                       </div>
                     </div>
                     {newState === key && (
@@ -548,11 +562,58 @@ const ListaLeads: React.FC = () => {
                 Cambiando...
               </>
             ) : (
-              'Cambiar Estado'
+              'Cambiar Etapa'
             )}
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Modal para crear nuevo negocio */}
+      <NuevoNegocioModal
+        show={showNuevoNegocioModal}
+        onClose={() => setShowNuevoNegocioModal(false)}
+        onSuccess={(newLead) => {
+          setShowNuevoNegocioModal(false);
+          // Recargar la lista actualizando los filtros
+          setFilters(prev => ({ ...prev }));
+          if (newLead?.id) {
+            setSelectedLeadId(newLead.id);
+            setShowDetalleModal(true);
+          }
+        }}
+      />
+
+      {/* Modal para editar negocio */}
+      {selectedLeadId && (
+        <EditarNegocioModal
+          show={showEditarModal}
+          onClose={() => {
+            setShowEditarModal(false);
+            setSelectedLeadId(null);
+          }}
+          leadId={selectedLeadId}
+          onSuccess={() => {
+            setShowEditarModal(false);
+            setFilters(prev => ({ ...prev })); // Recargar la lista
+          }}
+        />
+      )}
+
+      {/* Modal para ver detalle del negocio */}
+      {selectedLeadId && (
+        <DetalleNegocioModal
+          show={showDetalleModal}
+          onClose={() => {
+            setShowDetalleModal(false);
+            setSelectedLeadId(null);
+          }}
+          leadId={selectedLeadId}
+          onEdit={() => {
+            setShowDetalleModal(false);
+            setShowEditarModal(true);
+          }}
+        />
+      )}
     </div>
   );
 };

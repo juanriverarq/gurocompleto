@@ -272,7 +272,6 @@ class VoiceCampaignService {
       return null;
     }
 
-    console.log(`💾 [CACHE] Hit for key: ${key}`);
     return entry.data;
   }
 
@@ -756,13 +755,9 @@ class VoiceCampaignService {
                 if (elevenLabsData) {
                   this.setCachedData(cacheKey, elevenLabsData);
                 }
-              } else {
-                console.log(`💾 [HYBRID] Using cached data for call ${call.id}`);
               }
 
               if (elevenLabsData) {
-                console.log(`✅ [HYBRID] Enriched call ${call.id} with ElevenLabs data`);
-
                 // Combinar datos de BD con datos de ElevenLabs
                 return {
                   ...call,

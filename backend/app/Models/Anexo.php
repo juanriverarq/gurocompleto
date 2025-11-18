@@ -40,6 +40,8 @@ class Anexo extends Model
         'motivo',
         'fawf',
         'observaciones',
+        'accesorios',
+        'documents',
         'status',
         'created_by',
         'updated_by',
@@ -60,6 +62,7 @@ class Anexo extends Model
         'commission_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'comision_pagada' => 'boolean',
+        'documents' => 'array',
     ];
 
     public function poliza(): BelongsTo

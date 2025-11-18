@@ -39,21 +39,21 @@ const Demos: DemoTypes[] = [
     type: true,
     img: img1,
     name: "Dashboard Principal",
-    link: "/",
+    link: "/apps/",
     include: "Demo",
   },
   {
     type: true,
     img: defaultdemo,
     name: "Gestión de Pólizas",
-    link: "/apps/polizas",
+    link: "/apps/seguros/polizas",
     include: "Demo",
   },
   {
     type: true,
     img: img3,
-    name: "CRM de Leads",
-    link: "/apps/marketing/leads",
+    name: "CRM y Embudo de Ventas",
+    link: "/apps/saas/sales-funnel",
     include: "Demo",
   },
 ];
@@ -62,100 +62,176 @@ interface ListFeatureTypes {
   featureicon: string;
   title: string;
   subtitle: string;
+  category: string;
 }
 
 const listFeature: ListFeatureTypes[] = [
+  // Módulos Core (Obligatorios)
+  {
+    featureicon: "solar:users-group-two-rounded-bold-duotone",
+    title: "Gestión de Clientes",
+    subtitle: "Base de datos completa de clientes y contactos con historial y seguimiento.",
+    category: "Core",
+  },
   {
     featureicon: "solar:shield-check-bold-duotone",
     title: "Gestión de Pólizas",
-    subtitle: "Sistema completo para crear, gestionar y renovar pólizas de seguros.",
-  },
-  {
-    featureicon: "solar:users-group-two-rounded-bold-duotone",
-    title: "CRM de Leads",
-    subtitle: "Herramientas avanzadas para capturar, calificar y convertir leads.",
+    subtitle: "Creación, administración y control del ciclo completo de pólizas.",
+    category: "Core",
   },
   {
     featureicon: "solar:danger-triangle-bold-duotone",
     title: "Gestión de Siniestros",
-    subtitle: "Seguimiento completo del proceso de siniestros y reclamaciones.",
+    subtitle: "Registro, seguimiento y validación de reclamaciones con SLA.",
+    category: "Core",
+  },
+  {
+    featureicon: "solar:refresh-bold-duotone",
+    title: "Control de Renovaciones",
+    subtitle: "Alertas automáticas de vencimientos y seguimiento de renovaciones.",
+    category: "Core",
+  },
+  {
+    featureicon: "solar:transmission-circle-bold-duotone",
+    title: "Módulo de Automóviles",
+    subtitle: "Gestión especializada para seguros de autos con catálogo de vehículos.",
+    category: "Core",
+  },
+  {
+    featureicon: "solar:clipboard-check-bold-duotone",
+    title: "Seguimiento y Tareas",
+    subtitle: "Agenda compartida, tareas automáticas y recordatorios inteligentes.",
+    category: "Core",
+  },
+  {
+    featureicon: "solar:folder-with-files-bold-duotone",
+    title: "Gestión Documental",
+    subtitle: "Repositorio central de documentos con versiones y permisos.",
+    category: "Core",
+  },
+  
+  // Módulos de IA
+  {
+    featureicon: "solar:cpu-bolt-bold-duotone",
+    title: "Chatbot con IA",
+    subtitle: "Asistente inteligente para ventas, soporte y automatización de tareas.",
+    category: "IA",
+  },
+  {
+    featureicon: "solar:phone-calling-rounded-outline",
+    title: "Call Center IA",
+    subtitle: "Agentes de voz con IA para llamadas entrantes y salientes.",
+    category: "IA",
   },
   {
     featureicon: "solar:chart-square-bold-duotone",
-    title: "Reportes Inteligentes",
-    subtitle: "Dashboards y reportes automatizados con insights de negocio.",
+    title: "Predicciones con IA",
+    subtitle: "Analítica predictiva para anticipar comportamiento de clientes.",
+    category: "IA",
   },
-  {
-    featureicon: "solar:cpu-bolt-bold-duotone",
-    title: "Asistente IA",
-    subtitle: "Guro AI te ayuda con consultas, análisis y automatización.",
-  },
-  {
-    featureicon: "solar:smartphone-bold-duotone",
-    title: "App Móvil Personalizable",
-    subtitle:
-      "Customiza tu app móvil con colores, logos y configuraciones específicas.",
-  },
-  {
-    featureicon: "solar:link-bold-duotone",
-    title: "Enlaces de Cotización",
-    subtitle: "Genera y gestiona enlaces personalizados para cotizaciones rápidas.",
-  },
-  {
-    featureicon: "solar:mailbox-bold-duotone",
-    title: "Email Marketing",
-    subtitle: "Campañas automatizadas, recordatorios y templates personalizados.",
-  },
-  {
-    featureicon: "solar:buildings-2-bold-duotone",
-    title: "Multi-Sede",
-    subtitle:
-      "Gestiona múltiples sedes, vendedores y aseguradoras desde un solo lugar.",
-  },
-
-  {
-    featureicon: "solar:document-text-bold-duotone",
-    title: "Gestión de Documentos",
-    subtitle:
-      "Almacena, organiza y gestiona todos los documentos de pólizas y siniestros.",
-  },
-  {
-    featureicon: "solar:calendar-mark-bold-duotone",
-    title: "Calendario Integrado",
-    subtitle:
-      "Programa citas, seguimientos y recordatorios automáticos para clientes.",
-  },
-  {
-    featureicon: "solar:notification-unread-bold-duotone",
-    title: "Notificaciones Smart",
-    subtitle:
-      "Sistema de alertas inteligentes para vencimientos, pagos y seguimientos.",
-  },
-
   {
     featureicon: "solar:graph-up-bold-duotone",
-    title: "Analytics Avanzado",
-    subtitle: "Métricas detalladas de ventas, conversión y rendimiento del negocio.",
-  },
-
-  {
-    featureicon: "solar:shield-star-bold-duotone",
-    title: "Seguridad Empresarial",
-    subtitle:
-      "Protección de datos con encriptación y cumplimiento de normativas.",
-  },
-
-  {
-    featureicon: "solar:headphones-round-sound-bold-duotone",
-    title: "Soporte 24/7",
-    subtitle:
-      "Asistencia técnica especializada y capacitación continua para tu equipo.",
+    title: "Ventas Cruzadas IA",
+    subtitle: "Recomendaciones automáticas de productos para cada cliente.",
+    category: "IA",
   },
   {
-    featureicon: "solar:widget-4-bold-duotone",
-    title: "Integraciones API",
-    subtitle:
-      "Conecta con sistemas existentes, bancos y plataformas de pago fácilmente.",
+    featureicon: "solar:document-text-bold-duotone",
+    title: "Lector PDF con IA",
+    subtitle: "Extrae datos de pólizas y documentos automáticamente con IA.",
+    category: "IA",
+  },
+  
+  // Módulos Comerciales
+  {
+    featureicon: "solar:target-bold-duotone",
+    title: "CRM y Embudo de Ventas",
+    subtitle: "Gestiona leads, oportunidades y pipeline con métricas de conversión.",
+    category: "Comercial",
+  },
+  {
+    featureicon: "solar:wallet-bold-duotone",
+    title: "Gestión de Cartera",
+    subtitle: "Control de recaudos, estados de cuenta y reportes de morosidad.",
+    category: "Comercial",
+  },
+  {
+    featureicon: "solar:dollar-minimalistic-bold-duotone",
+    title: "Comisiones Automáticas",
+    subtitle: "Cálculo y liquidación de comisiones para vendedores.",
+    category: "Comercial",
+  },
+  {
+    featureicon: "solar:chart-square-bold-duotone",
+    title: "Reportes y Dashboards",
+    subtitle: "KPIs en tiempo real y reportes personalizables para toma de decisiones.",
+    category: "Comercial",
+  },
+  
+  // Módulos de Marketing
+  {
+    featureicon: "solar:chat-round-dots-bold-duotone",
+    title: "WhatsApp Marketing",
+    subtitle: "Campañas masivas y automatizaciones por WhatsApp.",
+    category: "Marketing",
+  },
+  {
+    featureicon: "solar:letter-bold-duotone",
+    title: "Email Marketing",
+    subtitle: "Campañas de email y recordatorios automáticos.",
+    category: "Marketing",
+  },
+  {
+    featureicon: "solar:smartphone-2-bold-duotone",
+    title: "Mini Web de Cotización",
+    subtitle: "Landing page personalizada para cotizaciones online.",
+    category: "Marketing",
+  },
+  
+  // Módulos de Integración
+  {
+    featureicon: "solar:refresh-bold-duotone",
+    title: "Sincronización con Aseguradoras",
+    subtitle: "Sincronización automática de pólizas, clientes y cartera entre aseguradoras.",
+    category: "Integración",
+  },
+  {
+    featureicon: "solar:calculator-minimalistic-bold-duotone",
+    title: "Cotizador de Autos",
+    subtitle: "Conectado con más de 10 compañías de seguros para cotizaciones en menos de 2 minutos.",
+    category: "Integración",
+  },
+  
+  // Módulos Premium
+  {
+    featureicon: "solar:palette-round-line-duotone",
+    title: "Marca Blanca",
+    subtitle: "Personaliza logotipo, colores y dominio con tu marca.",
+    category: "Premium",
+  },
+  {
+    featureicon: "solar:bill-bold-duotone",
+    title: "Facturación Electrónica",
+    subtitle: "Emisión y envío de facturas electrónicas.",
+    category: "Premium",
+  },
+  {
+    featureicon: "solar:bill-list-bold-duotone",
+    title: "Nómina Electrónica",
+    subtitle: "Generación y soporte de nómina electrónica.",
+    category: "Premium",
+  },
+  {
+    featureicon: "solar:smartphone-2-bold-duotone",
+    title: "App Móvil Personalizada",
+    subtitle: "Aplicación móvil con acceso a pólizas y notificaciones push.",
+    category: "Premium",
+  },
+  {
+    featureicon: "solar:global-line-duotone",
+    title: "Sitio Web Institucional",
+    subtitle: "Sitio web completo con productos, blog y captación de leads.",
+    category: "Premium",
   },
 ];
 
@@ -270,44 +346,7 @@ const demosMegamenu: DemosMegaMenuTypes[] = [
   },
 ];
 
-const FrontMenu: DemosMegaMenuTypes[] = [
-  {
-    img: front1,
-    name: "Homepage",
-    link: "/frontend-pages/homepage",
-    include: "Frontend Pages",
-  },
-  {
-    img: front2,
-    name: "About Us",
-    link: "/frontend-pages/aboutus",
-    include: "Frontend Pages",
-  },
-  {
-    img: front3,
-    name: "Contact Us",
-    link: "/frontend-pages/contact",
-    include: "Frontend Pages",
-  },
-  {
-    img: front4,
-    name: "Portfolio",
-    link: "/frontend-pages/portfolio",
-    include: "Frontend Pages",
-  },
-  {
-    img: front5,
-    name: "Pricing",
-    link: "/frontend-pages/pricing",
-    include: "Frontend Pages",
-  },
-  {
-    img: front6,
-    name: "Blog",
-    link: "/frontend-pages/blog",
-    include: "Frontend Pages",
-  },
-];
+const FrontMenu: DemosMegaMenuTypes[] = [];
 
 const appsMegamenu: DemosMegaMenuTypes[] = [
   {

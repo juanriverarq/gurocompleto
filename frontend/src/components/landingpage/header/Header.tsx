@@ -32,7 +32,7 @@ const Header = () => {
             : "bg-white dark:bg-dark"
         }`}
       >
-        <Navbar className="fluid py-6">
+        <Navbar className="fluid py-4 sm:py-6 px-4">
           <FullLogo />
           <MobileDrawer/>
           <Navbar.Collapse className="xl:block hidden">

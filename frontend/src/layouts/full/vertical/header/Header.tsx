@@ -177,6 +177,17 @@ const Header = ({ layoutType }: HeaderPropsType) => {
                {/* Widget de Wallet */}
                <WalletWidget />
 
+              {/* Calendar Button */}
+              <Tooltip content="Calendario" placement="bottom" className="flowbite-tooltip">
+                <a
+                  href="/apps/calendar"
+                  title="Calendario"
+                  className="h-10 w-10 hover:text-primary hover:bg-lightprimary dark:hover:bg-darkminisidebar dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-darklink dark:text-white"
+                >
+                  <Icon icon="solar:calendar-bold-duotone" width="20" />
+                </a>
+              </Tooltip>
+
               {/* Theme Toggle */}
 
               {/* Light Mode Button */}

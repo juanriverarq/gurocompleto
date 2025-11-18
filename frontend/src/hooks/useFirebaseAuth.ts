@@ -105,11 +105,11 @@ const syncUserWithLaravel = async (user: User, isNewUser: boolean = false) => {
             const hasActive = statusData?.data?.has_active_subscription;
             const pending = statusData?.data?.pending_intent;
             if (!hasActive && pending) {
-              // Redirigir al checkout solo si estamos en páginas públicas
+              // Redirigir a precios si hay intención pendiente
               const currentPath = window.location.pathname;
-              const inCheckout = currentPath.includes('/frontend-pages/checkout');
-              if (!inCheckout) {
-                window.location.href = '/frontend-pages/checkout';
+              const inPrecios = currentPath.includes('/precios');
+              if (!inPrecios) {
+                window.location.href = '/precios';
               }
             }
           }

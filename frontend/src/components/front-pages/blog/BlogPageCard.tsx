@@ -23,7 +23,7 @@ const BlogPageCard = ({ post }: Btype) => {
       <div className="lg:col-span-4 md:col-span-6 col-span-12">
         <CardBox className="p-0 overflow-hidden group card-hover ">
           <div className="relative">
-            <Link to={`/frontend-pages/blog/detail/${linkTo}`}>
+            <Link to={`#`}>
               <div className="overflow-hidden h-60">
                 <img
                   src={coverImg}
@@ -51,7 +51,7 @@ const BlogPageCard = ({ post }: Btype) => {
             </Badge>
             <h5 className="text-xl py-6 group-hover:text-primary">
               <Link
-                to={`/frontend-pages/blog/detail/${linkTo}`}
+                to={`#`}
                 className="line-clamp-2"
               >
                 {" "}

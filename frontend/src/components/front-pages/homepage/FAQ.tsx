@@ -44,8 +44,8 @@ export const FAQ = () => {
   return (
     <>
       <div className="dark:bg-dark" id="faq">
-        <div className="max-w-[800px] mx-auto px-5 lg:py-24 py-12">
-          <h2 className="sm:text-44 text-3xl font-bold !leading-[48px] text-darklink dark:text-white text-center mb-14">
+        <div className="max-w-[800px] mx-auto px-4 lg:py-24 py-12">
+          <h2 className="sm:text-44 text-2xl font-bold sm:!leading-[48px] leading-tight text-darklink dark:text-white text-center mb-10 sm:mb-14">
             Preguntas Frecuentes sobre Guro
           </h2>
           <Accordion className="shadow-none dark:shadow-none divide-y-1 divide-b-0 divided:border-ld !rounded-none flex flex-col gap-4">

@@ -552,4 +552,63 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Verificar estado de email (para debugging/admin)
+     */
+    public function checkEmailVerification(Request $request)
+    {
+        try {
+            $email = $request->input('email');
+            
+            if (!$email) {
+                // Si no se proporciona email, devolver info del usuario autenticado
+                $user = $request->user();
+                
+                if (!$user) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se proporcionó email y no hay usuario autenticado'
+                    ], 400);
+                }
+            } else {
+                // Buscar usuario por email
+                $user = User::where('email', $email)->first();
+                
+                if (!$user) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Usuario no encontrado'
+                    ], 404);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'firebase_uid' => $user->firebase_uid,
+                    'provider' => $user->provider,
+                    'email_verified' => $user->hasVerifiedEmail(),
+                    'email_verified_at' => $user->email_verified_at,
+                    'user_type' => $user->user_type,
+                    'status' => $user->status,
+                    'created_at' => $user->created_at,
+                    'last_login_at' => $user->last_login_at,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error verificando email', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error verificando email: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

@@ -199,6 +199,73 @@ class AnexosController extends Controller
         $anexo->delete();
         return response()->json(['success'=>true,'message'=>'Anexo eliminado']);
     }
+
+    /**
+     * Upload documents to anexo (stores in anexo.documents JSON field and poliza.documents)
+     */
+    public function uploadDocuments(Request $request, int $polizaId, int $anexoId)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $poliza = Poliza::where('broker_id', $brokerId)->find($polizaId);
+            if (!$poliza) return response()->json(['success'=>false,'message'=>'Póliza no encontrada'],404);
+            
+            $anexo = Anexo::where('broker_id',$brokerId)->where('poliza_id',$poliza->id)->find($anexoId);
+            if (!$anexo) return response()->json(['success'=>false,'message'=>'Anexo no encontrado'],404);
+
+            $request->validate([
+                'files' => 'required|array',
+                'files.*' => 'file|max:20480', // 20MB
+            ]);
+
+            // Usar el controlador de documentos de pólizas para subir a Firebase
+            $polizaDocsController = app(\App\Http\Controllers\SaaS\PolizaDocumentsController::class);
+            
+            // Crear un request temporal con los archivos
+            $uploadRequest = new Request();
+            $uploadRequest->files->set('files', $request->file('files'));
+            $uploadRequest->merge(['type' => 'anexo']);
+            $uploadRequest->setUserResolver($request->getUserResolver());
+            $uploadRequest->merge(['authenticated_broker_id' => $brokerId]);
+            
+            // Subir archivos usando el controlador de documentos de pólizas
+            $uploadResponse = $polizaDocsController->upload($uploadRequest, $polizaId);
+            $uploadData = json_decode($uploadResponse->getContent(), true);
+            
+            if (!$uploadData['success']) {
+                return response()->json(['success'=>false,'message'=>'Error al subir archivos'],500);
+            }
+
+            // Agregar los archivos al anexo también
+            $existingDocs = $anexo->documents ?? [];
+            if (!is_array($existingDocs)) {
+                $existingDocs = [];
+            }
+            
+            $newDocs = $uploadData['data'] ?? [];
+            foreach ($newDocs as &$doc) {
+                $doc['anexo_id'] = $anexoId;
+                $doc['anexo_number'] = $anexo->anexo_number;
+            }
+            
+            $anexo->documents = array_values(array_merge($existingDocs, $newDocs));
+            $anexo->save();
+
+            return response()->json([
+                'success'=>true,
+                'message'=>'Archivos subidos exitosamente',
+                'data'=>$newDocs
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error uploading anexo documents', [
+                'poliza_id' => $polizaId,
+                'anexo_id' => $anexoId,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['success'=>false,'message'=>'Error al subir archivos: '.$e->getMessage()],500);
+        }
+    }
 }
 
 

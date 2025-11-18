@@ -34,13 +34,13 @@ const Renovaciones: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Filtros
+  // Filtros - inicializar con el estado del tab "pendientes" por defecto
   const [filters, setFilters] = useState<RenovacionFilters>({
     search: '',
-    estado: '',
+    estado: 'PENDIENTE,EN_PROCESO,CRITICO', // Tab pendientes por defecto
     prioridad: '',
     agente: '',
-    diasVencimiento: 'proximo', // Por defecto mostrar próximas (30 días)
+    diasVencimiento: '',
     per_page: 15,
     page: 1,
     sort_field: 'fechaVencimiento',
@@ -146,9 +146,9 @@ const Renovaciones: React.FC = () => {
     let nuevoDiasV: string | undefined = undefined;
     switch (activeTab) {
       case 'pendientes':
-        // Pendientes = próximas a vencer (0..30) incluyendo críticas (0..7)
+        // Pendientes = próximas a vencer incluyendo críticas (sin limitación de días)
         nuevoEstado = 'PENDIENTE,EN_PROCESO,CRITICO';
-        nuevoDiasV = 'proximo';
+        nuevoDiasV = '';
         break;
       case 'renovadas':
         // Renovadas no dependen de ventana de días
@@ -162,9 +162,9 @@ const Renovaciones: React.FC = () => {
         break;
       case 'todas':
       default:
-        // Todas: ventana explícita de 2 meses (-30..60) para consistencia con backend
+        // Todas: sin limitaciones de fecha - mostrar todas las renovaciones
         nuevoEstado = '';
-        nuevoDiasV = 'proximo_2m';
+        nuevoDiasV = '';
         break;
     }
 
@@ -757,7 +757,7 @@ const Renovaciones: React.FC = () => {
                       </Table.Cell>
                       <Table.Cell className="whitespace-nowrap">
                         <Badge
-                          color={`light${getEstadoBadge(renovacion.estado)}`}
+                          color={activeTab === 'renovadas' && renovacion.estado === 'RENOVADO' ? 'success' : `light${getEstadoBadge(renovacion.estado)}`}
                           className="capitalize text-xs"
                         >
                           {estadosRenovacion.find(e => e.value === renovacion.estado)?.label || renovacion.estado}
@@ -1057,9 +1057,9 @@ const Renovaciones: React.FC = () => {
                   <div>
                     <p className="text-sm text-blue-800 dark:text-blue-200"><strong>Información:</strong> Estás a punto de procesar la renovación de esta póliza.</p>
                     <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                      • La nueva fecha debe ser al menos 6 meses mayor<br/>
+                      • La nueva fecha debe ser posterior a la fecha de vencimiento actual<br/>
                       • El cambio de prima no puede superar el 50%<br/>
-                      • La póliza debe tener mínimo 30 días de vigencia
+                      • La fecha máxima permitida es 2 años desde hoy
                     </p>
                   </div>
                 </div>
