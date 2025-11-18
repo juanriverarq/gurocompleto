@@ -948,7 +948,7 @@ Route::prefix('master/auth')->group(function () {
 // =============================================================================
 
 // Rutas SaaS - ONBOARDING (solo autenticación unificada, sin broker requerido)
-Route::middleware(['security.auth'])->prefix('saas')->group(function () {
+Route::middleware(['unified.auth', 'security.auth'])->prefix('saas')->group(function () {
     Route::post('onboarding/create-broker', [OnboardingController::class, 'createBrokerWithFirebase']);
 });
 
