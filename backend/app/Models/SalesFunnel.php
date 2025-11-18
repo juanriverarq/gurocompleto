@@ -35,6 +35,7 @@ class SalesFunnel extends Model
         'department',
         'address',
         'stage',
+        'business_state',
         'lead_source',
         'insurance_type',
         'potential_value',
@@ -145,6 +146,14 @@ class SalesFunnel extends Model
         'small' => 'Pequeña (1-50)',
         'medium' => 'Mediana (51-200)',
         'large' => 'Grande (200+)'
+    ];
+
+    const BUSINESS_STATES = [
+        'nuevo' => 'Nuevo',
+        'contactado' => 'Contactado',
+        'interesado' => 'Interesado',
+        'negociando' => 'Negociando',
+        'cerrado' => 'Cerrado'
     ];
 
     // Relaciones

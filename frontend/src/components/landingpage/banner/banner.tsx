@@ -4,7 +4,7 @@ import { Button } from "flowbite-react";
 import { IconShield } from "@tabler/icons-react";
 import { Link } from "react-router";
 import { useState } from "react";
-import VideoDemoModal from "@/components/landingpage/VideoDemoModal";
+import VideoDemoModal from "src/components/landingpage/VideoDemoModal";
 const banner = () => {
   const [openDemo, setOpenDemo] = useState(false);
   return (
@@ -13,7 +13,7 @@ const banner = () => {
       <div className="bg-lightgray dark:bg-darkgray relative overflow-hidden">
         <div className="container relative">
           <div className="grid grid-cols-12 gap-6 items-center">
-            <div className="xl:col-span-6 col-span-12 xl:py-0 py-12 xl:px-0 sm:px-6 px-3">
+            <div className="xl:col-span-6 col-span-12 xl:py-0 py-8 xl:px-0 px-4">
               <h6
                 className="flex items-center gap-2 text-base opacity-80 mb-3"
                 data-aos="fade-up"
@@ -24,7 +24,7 @@ const banner = () => {
                 la gestión de seguros
               </h6>
               <h1
-                className="font-bold mb-7 sm:text-40 text-3xl sm:leading-[55px]"
+                className="font-bold mb-6 sm:text-40 text-2xl sm:leading-[55px] leading-tight"
                 data-aos="fade-up"
                 data-aos-delay="400"
                 data-aos-duration="1000"
@@ -37,14 +37,14 @@ const banner = () => {
                 data-aos="fade-up"
                 data-aos-delay="600"
                 data-aos-duration="1000"
-                className="text-ld text-lg"
+                className="text-ld sm:text-lg text-base leading-relaxed"
               >
                 Guro es el software de seguros más avanzado con inteligencia artificial. 
                 Transforma tu agencia de seguros con automatización inteligente, gestión 
                 de pólizas, procesamiento de siniestros, CRM y análisis predictivo.
               </p>
               <div
-                className="sm:flex gap-3 mt-8"
+                className="flex flex-col sm:flex-row gap-3 mt-6"
                 data-aos="fade-up"
                 data-aos-delay="800"
                 data-aos-duration="1000"
@@ -54,11 +54,11 @@ const banner = () => {
                   to="/auth/auth1/login"
                   size={"lg"}
                   color={"primary"}
-                  className="sm:mb-0 mb-3"
+                  className="w-full sm:w-auto"
                 >
                   Iniciar Sesión
                 </Button>
-                <button onClick={() => setOpenDemo(true)} type="button" className="group relative flex items-stretch justify-center p-0.5 text-center font-medium border border-primary bg-transparent text-primary hover:bg-primary dark:hover:bg-primary hover:text-white rounded-md" data-discover="true"><span className="flex items-center gap-2 transition-all duration-150 justify-center rounded-md px-9 py-2.5 text-sm">Ver Demo</span></button>
+                <button onClick={() => setOpenDemo(true)} type="button" className="w-full sm:w-auto group relative flex items-stretch justify-center p-0.5 text-center font-medium border border-primary bg-transparent text-primary hover:bg-primary dark:hover:bg-primary hover:text-white rounded-md" data-discover="true"><span className="flex items-center gap-2 transition-all duration-150 justify-center rounded-md px-9 py-2.5 text-sm">Ver Demo</span></button>
               </div>
             </div>
             <div className="lg:col-span-6 col-span-12 xl:block hidden">

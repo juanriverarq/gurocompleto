@@ -87,6 +87,7 @@ export interface SalesFunnelLead {
   days_since_last_contact?: number;
   is_overdue_follow_up?: boolean;
   stage_progress_percentage?: number;
+  business_state?: string;
 }
 
 export interface ContactRecord {
@@ -201,6 +202,7 @@ export interface CreateLeadData {
   close_probability: number;
   expected_close_date?: string;
   assigned_agent_id?: number;
+  client_id?: number;
   preferred_contact_method: string;
   preferred_contact_time?: string;
   notes?: string;
@@ -215,6 +217,7 @@ export interface UpdateLeadData extends Partial<CreateLeadData> {
   qualifying_notes?: string;
   presentation_notes?: string;
   negotiation_notes?: string;
+  business_state?: string;
 }
 
 export interface PaginatedResponse<T> {

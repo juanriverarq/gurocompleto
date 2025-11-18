@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Modal, Table, TextInput, Select, Badge, Spinner, Checkbox, Textarea } from 'flowbite-react';
 import { polizaService } from 'src/services/polizaService';
-import { useMotivosEstadosPoliza } from 'src/hooks/useAdminCrudApi';
-import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 
 type Props = { polizaId: string; numeroPoliza: string };
 
@@ -43,12 +41,12 @@ const AnexosPoliza: React.FC<Props> = ({ polizaId, numeroPoliza }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Anexo | null>(null);
   const [filters, setFilters] = useState({ search: '', estado: '' });
-  const { motivosEstadosPoliza } = useMotivosEstadosPoliza();
   const [autoCalcularIva, setAutoCalcularIva] = useState(true);
   const [editarPorcentajeComision, setEditarPorcentajeComision] = useState(false);
   const [editarComision, setEditarComision] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     numero_poliza: numeroPoliza,
@@ -143,6 +141,8 @@ const AnexosPoliza: React.FC<Props> = ({ polizaId, numeroPoliza }) => {
       accesorios: a.accesorios || '',
       estado: a.status,
     });
+    setFiles([]);
+    setFormErrors({});
     setAutoCalcularIva(false);
     setEditarPorcentajeComision(true);
     setEditarComision(false);
@@ -167,34 +167,47 @@ const AnexosPoliza: React.FC<Props> = ({ polizaId, numeroPoliza }) => {
     }
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    const payload: any = {
-      ...form,
-      prima: Number(form.prima || 0),
-      gastos_expedicion: (form as any).gastos_expedicion !== ('' as unknown as number) ? Number((form as any).gastos_expedicion) : undefined,
-      porcentaje_iva: form.porcentaje_iva !== ('' as unknown as number) ? Number(form.porcentaje_iva) : undefined,
-      pri_a_pre: form.pri_a_pre !== ('' as unknown as number) ? Number(form.pri_a_pre) : undefined,
-      iva: form.iva !== ('' as unknown as number) ? Number(form.iva) : undefined,
-      porcentaje_comision: form.porcentaje_comision !== ('' as unknown as number) ? Number(form.porcentaje_comision) : undefined,
-      comision: form.comision !== ('' as unknown as number) ? Number(form.comision) : undefined,
-      total: form.total !== ('' as unknown as number) ? Number(form.total) : undefined,
-    };
-    if (editing) {
-      await polizaService.actualizarAnexo(polizaId, String((editing as any).id), payload);
-    } else {
-      await polizaService.crearAnexo(polizaId, payload);
+    
+    setSaving(true);
+    try {
+      const payload: any = {
+        ...form,
+        prima: Number(form.prima || 0),
+        gastos_expedicion: (form as any).gastos_expedicion !== ('' as unknown as number) ? Number((form as any).gastos_expedicion) : undefined,
+        porcentaje_iva: form.porcentaje_iva !== ('' as unknown as number) ? Number(form.porcentaje_iva) : undefined,
+        pri_a_pre: form.pri_a_pre !== ('' as unknown as number) ? Number(form.pri_a_pre) : undefined,
+        iva: form.iva !== ('' as unknown as number) ? Number(form.iva) : undefined,
+        porcentaje_comision: form.porcentaje_comision !== ('' as unknown as number) ? Number(form.porcentaje_comision) : undefined,
+        comision: form.comision !== ('' as unknown as number) ? Number(form.comision) : undefined,
+        total: form.total !== ('' as unknown as number) ? Number(form.total) : undefined,
+      };
+      
+      let anexoId: string;
+      if (editing) {
+        await polizaService.actualizarAnexo(polizaId, String((editing as any).id), payload);
+        anexoId = String((editing as any).id);
+      } else {
+        const response = await polizaService.crearAnexo(polizaId, payload);
+        anexoId = response.data?.id ? String(response.data.id) : '';
+      }
+      
+      // Subir archivos si hay alguno seleccionado
+      if (files.length > 0 && anexoId) {
+        try {
+          await polizaService.subirDocumentosAnexo(polizaId, anexoId, files);
+        } catch (error) {
+          console.error('Error al subir archivos:', error);
+          // No bloqueamos el flujo si falla la subida de archivos
+        }
+      }
+      
+      setModalOpen(false);
+      await load();
+    } catch (error) {
+      console.error('Error al guardar anexo:', error);
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    await load();
-  };
-
-  const calcular = () => {
-    const prima = Number(form.prima || 0);
-    const pIva = Number(form.porcentaje_iva || 0);
-    const pCom = Number(form.porcentaje_comision || 0);
-    const iva = +(prima * pIva / 100).toFixed(2);
-    const comision = +(prima * pCom / 100).toFixed(2);
-    const total = +(prima + iva).toFixed(2);
-    setForm(f=>({ ...f, iva: iva as any, comision: comision as any, total: total as any }));
   };
 
   const removeItem = async (a: Anexo) => {
@@ -468,13 +481,33 @@ const AnexosPoliza: React.FC<Props> = ({ polizaId, numeroPoliza }) => {
                     className="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
                   />
                   <p className="text-xs text-gray-500 mt-1">PDF, imágenes, Office, CSV • Máx 20MB</p>
+                  {files.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs font-medium text-gray-600">Archivos seleccionados:</p>
+                      {files.map((file, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-xs text-gray-600">
+                          <span className="truncate">{file.name}</span>
+                          <span className="text-gray-400">({(file.size / 1024).toFixed(1)} KB)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </Modal.Body>
           <Modal.Footer>
-            <Button color="light" onClick={()=>setModalOpen(false)}>Cancelar</Button>
-            <Button color="primary" onClick={save}>{editing ? 'Guardar cambios' : 'Crear anexo'}</Button>
+            <Button color="light" onClick={()=>setModalOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button color="primary" onClick={save} disabled={saving}>
+              {saving ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  {files.length > 0 ? 'Guardando y subiendo archivos...' : 'Guardando...'}
+                </>
+              ) : (
+                editing ? 'Guardar cambios' : 'Crear anexo'
+              )}
+            </Button>
           </Modal.Footer>
         </Modal>
       </div>

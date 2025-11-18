@@ -99,7 +99,7 @@ const UnifiedProtectedFullLayout: React.FC = () => {
             const hasActive = !!resp.data.data?.has_active_subscription;
             const pending = resp.data.data?.pending_intent;
             if (!hasActive && pending) {
-              window.location.replace('/frontend-pages/checkout');
+              window.location.replace('/precios');
               return;
             }
           }

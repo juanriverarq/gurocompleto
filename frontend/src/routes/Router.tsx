@@ -55,7 +55,7 @@ const SaasListaEmpleados = Loadable(lazy(() => import('../views/saas/empleados/L
 const SaasNuevoEmpleado = Loadable(lazy(() => import('../views/saas/empleados/NuevoEmpleado')));
 const SaasEditarEmpleado = Loadable(lazy(() => import('../views/saas/empleados/EditarEmpleado')));
 const SaasListaLeads = Loadable(lazy(() => import('../views/saas/sales-funnel/ListaLeads')));
-const SaasKanbanLeads = Loadable(lazy(() => import('../views/saas/sales-funnel/KanbanView')));
+const SaasKanbanLeads = Loadable(lazy(() => import('../views/saas/sales-funnel/SalesFunnelKanban')));
 const SaasNuevoLead = Loadable(lazy(() => import('../views/saas/sales-funnel/NuevoLead')));
 const SaasDetalleLead = Loadable(lazy(() => import('../views/saas/sales-funnel/DetalleLead')));
 const SaasEditarLead = Loadable(lazy(() => import('../views/saas/sales-funnel/EditarLead')));
@@ -69,18 +69,13 @@ const ConfiguracionMasiva = Loadable(
   lazy(() => import('../views/saas/configuracion-masiva/ConfiguracionMasiva')),
 );
 
-// front end pages
-const Homepage = Loadable(lazy(() => import('../views/pages/frontend-pages/Homepage')));
-const About = Loadable(lazy(() => import('../views/pages/frontend-pages/About')));
-const ContactPage = Loadable(lazy(() => import('../views/pages/frontend-pages/Contact')));
-const Portfolio = Loadable(lazy(() => import('../views/pages/frontend-pages/Portfolio')));
-const PagePricing = Loadable(lazy(() => import('../views/pages/frontend-pages/Pricing')));
-const CheckoutPage = Loadable(lazy(() => import('../views/pages/frontend-pages/Checkout')));
+// Calendar
+const CalendarPage = Loadable(lazy(() => import('../views/apps/calendar/CalendarPage')));
+
+// Pricing page
 const PricingCalculatorPage = Loadable(
-  lazy(() => import('../views/pages/frontend-pages/PricingCalculatorPage')),
+  lazy(() => import('../views/pages/PricingCalculatorPage')),
 );
-const BlogPage = Loadable(lazy(() => import('../views/pages/frontend-pages/Blog')));
-const BlogPost = Loadable(lazy(() => import('../views/pages/frontend-pages/BlogPost')));
 
 // Landing Page
 const LandingPages = Loadable(lazy(() => import('../views/pages/landingpages/LandingPages')));
@@ -379,6 +374,7 @@ const Router = [
       { path: '/apps/saas/commercial-tasks/:id', element: <SaasDetalleTarea /> },
       { path: '/apps/saas/commercial-tasks/:id/editar', element: <SaasEditarTarea /> },
       { path: '/apps/saas/configuracion-masiva', element: <ConfiguracionMasiva /> },
+      { path: '/apps/calendar', element: <CalendarPage /> },
 
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],
@@ -396,20 +392,6 @@ const Router = [
         path: '/precios',
         element: <FrontendLayout />,
         children: [{ path: '', element: <PricingCalculatorPage /> }],
-      },
-      {
-        path: '/frontend-pages',
-        element: <FrontendLayout />,
-        children: [
-          { path: 'homepage', element: <Homepage /> },
-          { path: 'aboutus', element: <About /> },
-          { path: 'contact', element: <ContactPage /> },
-          { path: 'portfolio', element: <Portfolio /> },
-          { path: 'pricing', element: <PagePricing /> },
-          { path: 'checkout', element: <CheckoutPage /> },
-          { path: 'blog', element: <BlogPage /> },
-          { path: 'blog/detail/:id', element: <BlogPost /> },
-        ],
       },
       { path: '/web/:slug', element: <MiniWebPublic /> },
       { path: '/web/:slug/:tipo', element: <QuoteForm /> },

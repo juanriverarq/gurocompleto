@@ -8,34 +8,8 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\PolizaController;
-// use App\Http\Controllers\Api\Auth\AuthController as ApiAuthController;
-// use App\Http\Controllers\Api\Clientes\ClientesController;
-// use App\Http\Controllers\Api\Cotizaciones\CotizacionesController;
-// use App\Http\Controllers\Api\Polizas\PolizasController;
-// use App\Http\Controllers\Api\Siniestros\SiniestrosController;
-// use App\Http\Controllers\Api\Comisiones\ComisionesController;
-// use App\Http\Controllers\Api\Reportes\ReportesController;
-// use App\Http\Controllers\Api\Usuarios\UsuariosController;
-// use App\Http\Controllers\Api\Configuracion\ConfiguracionController;
-// use App\Http\Controllers\Api\Catalogos\CatalogosController;
-// use App\Http\Controllers\Api\Dashboards\DashboardController;
-// use App\Http\Controllers\Api\Archivos\ArchivosController;
-// use App\Http\Controllers\Api\Notificaciones\NotificacionesController;
-// use App\Http\Controllers\Api\Auditoria\AuditoriaController;
-// use App\Http\Controllers\Api\Integraciones\IntegracionesController;
-// use App\Http\Controllers\Api\Backup\BackupController;
-// use App\Http\Controllers\Api\Seguimiento\SeguimientoController;
-// use App\Http\Controllers\Api\Tareas\TareasController;
-// use App\Http\Controllers\Api\Calendario\CalendarioController;
-// use App\Http\Controllers\Api\Comunicaciones\ComunicacionesController;
-// use App\Http\Controllers\Api\Documentos\DocumentosController;
-// use App\Http\Controllers\Api\Finanzas\FinanzasController;
-// use App\Http\Controllers\Api\Estadisticas\EstadisticasController;
-// use App\Http\Controllers\Api\Ayuda\AyudaController;
-// use App\Http\Controllers\Api\Perfil\PerfilController;
 use App\Http\Controllers\SaaS\OnboardingController;
 use App\Http\Controllers\SaaS\SaasClientesController;
-// use App\Http\Controllers\SaaS\AuthController as SaasAuthController; // Comentado temporalmente
 use App\Http\Controllers\SaaS\SaasPolizasController;
 use App\Http\Controllers\SaaS\PolizaDocumentsController;
 use App\Http\Controllers\SaaS\AutomovilesController;
@@ -123,8 +97,10 @@ Route::prefix('auth')->group(function () {
     // Ruta para sincronización Firebase + Backend (requiere ID Token)
     Route::post('/sync-firebase-user', [\App\Http\Controllers\Api\AuthController::class, 'syncFirebaseUser'])
         ->middleware('firebase.auth');
-
-
+    
+    // Ruta para verificar estado de email (requiere autenticación)
+    Route::post('/check-email-verification', [\App\Http\Controllers\Api\AuthController::class, 'checkEmailVerification'])
+        ->middleware('firebase.auth');
 
 });
 
@@ -834,10 +810,6 @@ Route::middleware(['firebase.auth','security.auth','global.broker.auth'])->prefi
         Route::get('/sucursales', [AdminController::class, 'getSucursales']);
     });
     
-    // ⚠️ RUTAS DE PÓLIZAS ELIMINADAS POR SEGURIDAD ⚠️
-    // Las rutas /polizas han sido eliminadas porque usaban el controlador viejo sin filtrado por broker
-    // Usar las rutas /saas/polizas que tienen aislamiento multi-tenant
-    
     // Ruta de dashboard de prueba con logging mejorado
     Route::get('/dashboard', function (Request $request) {
         $user = $request->user();
@@ -1005,51 +977,6 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             // Endpoint de debug
             Route::get('/debug/broker', [SaasPolizasController::class, 'debugBroker']);
         });
-    // Dashboard SaaS con Firebase Auth
-        Route::prefix('dashboard')->group(function () {
-            Route::get('/data', [\App\Http\Controllers\Api\DashboardController::class, 'getDashboardData']);
-            Route::get('/metrics', [\App\Http\Controllers\Api\DashboardController::class, 'getMetrics']);
-        });
-        
-        // Clientes SaaS - RUTA DELETE COMENTADA PARA EVITAR CONFLICTO CON FIREBASE AUTH
-        Route::prefix('clientes')->group(function () {
-            Route::get('/', [SaasClientesController::class, 'index']);
-            Route::post('/', [SaasClientesController::class, 'store'])->middleware('saas.auth:clientes.crear');
-            Route::get('{cliente}', [SaasClientesController::class, 'show'])->whereNumber('cliente');
-            Route::put('{cliente}', [SaasClientesController::class, 'update'])->middleware('saas.auth:clientes.editar')->whereNumber('cliente');
-            // Route::delete('{cliente}', [SaasClientesController::class, 'destroy'])->middleware('saas.auth:clientes.eliminar'); // COMENTADO - CONFLICTO CON FIREBASE AUTH
-            Route::post('{cliente}/asignar-asesor', [SaasClientesController::class, 'asignarAsesor'])->whereNumber('cliente');
-            Route::get('exportar/excel', [SaasClientesController::class, 'exportar'])->middleware('saas.auth:clientes.exportar');
-
-            // Documentos de clientes
-            Route::get('/{id}/documents', [\App\Http\Controllers\SaaS\ClienteDocumentsController::class, 'index'])->whereNumber('id');
-            Route::post('/{id}/documents', [\App\Http\Controllers\SaaS\ClienteDocumentsController::class, 'upload'])->whereNumber('id');
-            Route::delete('/{id}/documents', [\App\Http\Controllers\SaaS\ClienteDocumentsController::class, 'destroy'])->whereNumber('id');
-            Route::get('/{id}/documents/signed-url', [\App\Http\Controllers\SaaS\ClienteDocumentsController::class, 'signedUrl'])->whereNumber('id');
-        });
-        
-        // Empleados SaaS (DESHABILITADO - usar EmpleadosBrokerController más abajo)
-        // Route::prefix('empleados')->group(function () {
-        //     Route::get('/', [EmpleadosController::class, 'index'])->middleware('saas.auth:usuarios.ver');
-        //     Route::post('/', [EmpleadosController::class, 'store'])->middleware('saas.auth:usuarios.crear');
-        //     Route::get('/{empleado}', [EmpleadosController::class, 'show'])->middleware('saas.auth:usuarios.ver');
-        //     Route::put('/{empleado}', [EmpleadosController::class, 'update'])->middleware('saas.auth:usuarios.editar');
-        //     Route::delete('/{empleado}', [EmpleadosController::class, 'destroy'])->middleware('saas.auth:usuarios.eliminar');
-        // });
-        
-        // Pólizas SaaS - TEMPORALMENTE DESHABILITADAS (controlador no existe)
-        // Route::prefix('polizas')->middleware('saas.auth:polizas.*')->group(function () {
-        //     Route::get('/', [SaasPolizasController::class, 'index']);
-        //     Route::post('/', [SaasPolizasController::class, 'store'])->middleware('saas.auth:polizas.crear');
-        //     Route::get('/estadisticas', [SaasPolizasController::class, 'estadisticas']);
-        //     Route::get('/export', [SaasPolizasController::class, 'exportar'])->middleware('saas.auth:polizas.exportar');
-        //     Route::get('/cliente/{dni}', [SaasPolizasController::class, 'buscarPorCliente']);
-        //     Route::get('/{poliza}', [SaasPolizasController::class, 'show']);
-        //     Route::put('/{poliza}', [SaasPolizasController::class, 'update'])->middleware('saas.auth:polizas.editar');
-        //     Route::delete('/{poliza}', [SaasPolizasController::class, 'destroy'])->middleware('saas.auth:polizas.eliminar');
-        //     Route::put('/{poliza}/estado', [SaasPolizasController::class, 'cambiarEstado'])->middleware('saas.auth:polizas.gestionar');
-        //     Route::post('/{poliza}/renovar', [SaasPolizasController::class, 'renovar'])->middleware('saas.auth:polizas.renovar');
-        // });
         
         // Rutas para reportes
         Route::get('/reports/policies', [SaasPolizasController::class, 'reportsData']);
@@ -1247,30 +1174,7 @@ Route::prefix('saas/auth')->group(function () {
 });
 
 // Rutas protegidas SaaS - COMENTADO PARA EVITAR CONFLICTO CON FIREBASE AUTH
-/* Route::middleware(['auth:sanctum', 'saas.auth'])->prefix('saas')->group(function () {
-    
-    // Dashboard SaaS
-    Route::prefix('dashboard')->group(function () {
-        Route::get('metricas', [SaasDashboardController::class, 'getMetricas']);
-        Route::get('grafico-clientes', [SaasDashboardController::class, 'getGraficoClientes']);
-        Route::get('grafico-polizas', [SaasDashboardController::class, 'getGraficoPolizas']);
-        Route::get('actividad-reciente', [SaasDashboardController::class, 'getActividadReciente']);
-        Route::get('alertas', [SaasDashboardController::class, 'getAlertas']);
-        Route::get('accesos-rapidos', [SaasDashboardController::class, 'getAccesosRapidos']);
-    });
-    
-    // Clientes SaaS
-    Route::prefix('clientes')->group(function () {
-        Route::get('/', [SaasClientesController::class, 'index']);
-        Route::post('/', [SaasClientesController::class, 'store'])->middleware('saas.auth:clientes.crear');
-        Route::get('{cliente}', [SaasClientesController::class, 'show']);
-        Route::put('{cliente}', [SaasClientesController::class, 'update'])->middleware('saas.auth:clientes.editar');
-        Route::delete('{cliente}', [SaasClientesController::class, 'destroy'])->middleware('saas.auth:clientes.eliminar');
-        Route::post('{cliente}/asignar-asesor', [SaasClientesController::class, 'asignarAsesor']);
-        Route::get('exportar/excel', [SaasClientesController::class, 'exportar'])->middleware('saas.auth:clientes.exportar');
-    });
-    
-    // Empleados SaaS - Gestión de usuarios del broker
+// Empleados SaaS - Gestión de usuarios del broker
     Route::prefix('empleados')->group(function () {
         Route::get('/', [EmpleadosController::class, 'index']);
         Route::get('/usuarios', [EmpleadosController::class, 'getUsuarios']);
@@ -1280,20 +1184,6 @@ Route::prefix('saas/auth')->group(function () {
         Route::delete('/{empleado}', [EmpleadosController::class, 'destroy']); // Solo MASTER
     });
     
-            // Pólizas SaaS - SISTEMA MULTI-TENANT CON AISLAMIENTO
-        Route::prefix('polizas')->group(function () {
-            Route::get('/', [App\Http\Controllers\SaaS\SaasPolizasController::class, 'index']);
-Route::get('/estadisticas', [App\Http\Controllers\SaaS\SaasPolizasController::class, 'estadisticas']);
-Route::post('/', [App\Http\Controllers\SaaS\SaasPolizasController::class, 'store']);
-Route::get('/{id}', [App\Http\Controllers\SaaS\SaasPolizasController::class, 'show'])->whereNumber('id');
-Route::put('/{id}', [App\Http\Controllers\SaaS\SaasPolizasController::class, 'update'])->whereNumber('id');
-Route::delete('/{id}', [App\Http\Controllers\SaaS\SaasPolizasController::class, 'destroy'])->whereNumber('id');
-// Route::get('/export', [SaasPolizasController::class, 'exportar'])->middleware('saas.auth:polizas.exportar');
-// Route::get('/cliente/{dni}', [SaasPolizasController::class, 'buscarPorCliente']);
-// Route::put('/{poliza}/estado', [SaasPolizasController::class, 'cambiarEstado'])->middleware('saas.auth:polizas.gestionar');
-// Route::post('/{poliza}/renovar', [SaasPolizasController::class, 'renovar'])->middleware('saas.auth:polizas.renovar');
-        });
-
     // Facturación y Pagos
     Route::middleware('saas.auth')->group(function () {
         Route::get('billing/info', [BillingController::class, 'getBillingInfo']);
@@ -1332,7 +1222,6 @@ Route::post('/saas/voice-campaigns/webhooks/elevenlabs', [\App\Http\Controllers\
         Route::get('audit/export', [AuditController::class, 'exportAuditLogs']);
         Route::get('audit/security-alerts', [AuditController::class, 'getSecurityAlerts']);
     });
-}); */
 
 // Rutas para cuentas master (usuarios propietarios de brokers)
 Route::middleware('auth:sanctum')->prefix('master')->group(function () {
@@ -1379,28 +1268,9 @@ Route::middleware(['firebase.auth'])->get('/test-firebase', function (Request $r
 
 /*
 |--------------------------------------------------------------------------
-| Rutas temporales sin autenticación (para pruebas)
-|--------------------------------------------------------------------------
-*/
-
-// RUTAS TEMPORALES ELIMINADAS POR SEGURIDAD
-// Las rutas /temp/* han sido eliminadas por representar un riesgo de seguridad en producción
-
-// RUTAS TEMPORALES DE PÓLIZAS ELIMINADAS POR SEGURIDAD
-// Las rutas temporales que usaban User::first() han sido eliminadas
-// porque causaban problemas de autenticación al forzar siempre el primer usuario
-
-/*
-|--------------------------------------------------------------------------
 | Rutas de debugging (para identificar problemas)
 |--------------------------------------------------------------------------
 */
-
-// Ruta de debugging para verificar qué está devolviendo el backend - ELIMINADA POR SEGURIDAD
-
-// Ruta de debugging para onboarding automático - ELIMINADA POR SEGURIDAD
-
-// Debug routes
 Route::get('/debug/user-status', function(Request $request) {
     $authUser = auth('api')->user();
     
@@ -1512,412 +1382,23 @@ Route::get('/test-simple', function() {
     ]);
 });
 
-// Test routes for Voice Campaigns WITHOUT authentication
-Route::prefix('test/voice-campaigns')->group(function () {
-    
-    // Test: Listar campañas de voz
-    Route::get('/', function(Request $request) {
-        try {
-            Log::info('🔊 [TEST] GET voice-campaigns SIN autenticación');
-            
-            // Simular un usuario con broker para testing
-            $user = \App\Models\User::where('broker_id', 2)->first();
-            
-            if (!$user) {
-                return response()->json([
-                    'error' => 'No se encontró usuario con broker_id 2 para testing'
-                ], 404);
-            }
-            
-            // Simular request con usuario autenticado
-            $request->setUserResolver(function () use ($user) {
-                return $user;
-            });
-            
-            // Llamar al controlador real
-            $controller = new \App\Http\Controllers\Api\VoiceCampaignController();
-            return $controller->index($request);
-            
-        } catch (\Exception $e) {
-            Log::error('🚨 [ERROR] Error en GET voice-campaigns temporal:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'error' => 'Error al obtener voice campaigns: ' . $e->getMessage()
-            ], 500);
-        }
-    });
-    
-    // Test: Crear campaña inmediata de voz
-    Route::post('/immediate', function(Request $request) {
-        try {
-            Log::info('🔊 [TEST] POST voice-campaigns/immediate SIN autenticación');
-            Log::info('🔊 [TEST] Datos recibidos:', $request->all());
-            
-            // Simular un usuario con broker para testing
-            $user = \App\Models\User::where('broker_id', 2)->first();
-            
-            if (!$user) {
-                return response()->json([
-                    'error' => 'No se encontró usuario con broker_id 2 para testing'
-                ], 404);
-            }
-            
-            // Simular request con usuario autenticado
-            $request->setUserResolver(function () use ($user) {
-                return $user;
-            });
-            
-            // Llamar al controlador real
-            $controller = new \App\Http\Controllers\Api\VoiceCampaignController();
-            return $controller->createImmediate($request);
-            
-        } catch (\Exception $e) {
-            Log::error('🚨 [ERROR] Error en POST voice-campaigns/immediate temporal:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'error' => 'Error al crear voice campaign: ' . $e->getMessage()
-            ], 500);
-        }
-    });
-    
-    // Test: Prueba de llamada de voz
-    Route::post('/test-call', function(Request $request) {
-        try {
-            Log::info('🔊 [TEST] POST voice-campaigns/test-call SIN autenticación');
-            Log::info('🔊 [TEST] Datos recibidos:', $request->all());
-            
-            // No necesitamos usuario para test-call
-            $controller = new \App\Http\Controllers\Api\VoiceCampaignController();
-            return $controller->testCall($request);
-            
-        } catch (\Exception $e) {
-            Log::error('🚨 [ERROR] Error en POST voice-campaigns/test-call temporal:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'error' => 'Error en test call: ' . $e->getMessage()
-            ], 500);
-        }
-    });
-    
-    // Test: Estadísticas de voice campaigns
-    Route::get('/stats', function(Request $request) {
-        try {
-            Log::info('🔊 [TEST] GET voice-campaigns/stats SIN autenticación');
-            
-            // Simular un usuario con broker para testing
-            $user = \App\Models\User::where('broker_id', 2)->first();
-            
-            if (!$user) {
-                return response()->json([
-                    'error' => 'No se encontró usuario con broker_id 2 para testing'
-                ], 404);
-            }
-            
-            // Simular request con usuario autenticado
-            $request->setUserResolver(function () use ($user) {
-                return $user;
-            });
-            
-            // Llamar al controlador real
-            $controller = new \App\Http\Controllers\Api\VoiceCampaignController();
-            return $controller->getStats($request);
-            
-        } catch (\Exception $e) {
-            Log::error('🚨 [ERROR] Error en GET voice-campaigns/stats temporal:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'error' => 'Error al obtener stats: ' . $e->getMessage()
-            ], 500);
-        }
-    });
-    
-    // Test: Historial de llamadas
-    Route::get('/call-history', function(Request $request) {
-        try {
-            Log::info('🔊 [TEST] GET voice-campaigns/call-history SIN autenticación');
-            
-            // Simular un usuario con broker para testing
-            $user = \App\Models\User::where('broker_id', 2)->first();
-            
-            if (!$user) {
-                return response()->json([
-                    'error' => 'No se encontró usuario con broker_id 2 para testing'
-                ], 404);
-            }
-            
-            // Simular request con usuario autenticado
-            $request->setUserResolver(function () use ($user) {
-                return $user;
-            });
-            
-            // Llamar al controlador real
-            $controller = new \App\Http\Controllers\Api\VoiceCampaignController();
-            return $controller->getCallHistory($request);
-            
-        } catch (\Exception $e) {
-            Log::error('🚨 [ERROR] Error en GET voice-campaigns/call-history temporal:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'error' => 'Error al obtener call history: ' . $e->getMessage()
-            ], 500);
-        }
-    });
-});
+// ⚠️ RUTAS DE TESTING ELIMINADAS POR SEGURIDAD
+// Las rutas /test/voice-campaigns/* han sido eliminadas porque permitían
+// acceso sin autenticación a funcionalidad completa del sistema.
+// Para testing en desarrollo, usar las rutas protegidas con autenticación apropiada.
 
+// ⚠️ RUTAS DE TESTING DE WHATSAPP ELIMINADAS POR SEGURIDAD
+// Las rutas /test/whatsapp-instances/* han sido eliminadas porque permitían
+// acceso sin autenticación a instancias de WhatsApp y códigos QR.
+// Para testing, usar las rutas protegidas /saas/whatsapp-instances/* con autenticación.
 
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Test route for campaign WhatsApp instances WITHOUT authentication
-// Esta ruta fue eliminada porque permitía acceso sin autenticación a datos sensibles
+// ⚠️ RUTAS TEMPORALES ELIMINADAS POR SEGURIDAD
+// /temp/campaigns/send-history-debug y /campaign-templates eliminadas
+// Para plantillas de campañas usar: /saas/campaign-templates (con autenticación)
 
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Test route for WhatsApp instances WITHOUT authentication
-// Esta ruta fue eliminada porque permitía acceso sin autenticación a datos sensibles de WhatsApp
-
-// Test route for refresh-all-statuses WITHOUT authentication
-Route::post('/test/whatsapp-instances/refresh-all-statuses', function(Request $request) {
-    try {
-        Log::info('🧪 [TEST] POST refresh-all-statuses SIN autenticación');
-        
-        // Simular un usuario con broker para testing (usar broker_id 2 que existe)
-        $user = \App\Models\User::where('broker_id', 2)->first();
-        
-        if (!$user) {
-            return response()->json([
-                'error' => 'No se encontró usuario con broker_id 2 para testing'
-            ], 404);
-        }
-        
-        Log::info('🧪 [TEST] Usuario encontrado para refresh-all-statuses:', [
-            'id' => $user->id,
-            'email' => $user->email,
-            'broker_id' => $user->broker_id
-        ]);
-        
-        // Simular request con usuario autenticado
-        $request->setUserResolver(function () use ($user) {
-            return $user;
-        });
-        
-        // Llamar al controlador real
-        $controller = new \App\Http\Controllers\Api\WhatsAppInstanceController();
-        return $controller->refreshAllStatuses($request);
-        
-    } catch (\Exception $e) {
-        Log::error('🚨 [ERROR] Error en refresh-all-statuses temporal:', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'error' => 'Error al actualizar estados: ' . $e->getMessage()
-        ], 500);
-    }
-});
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Test route for WhatsApp instances POST WITHOUT authentication
-// Esta ruta fue eliminada porque permitía crear instancias de WhatsApp sin autenticación
-
-// Test routes para acciones específicas de instancias SIN autenticación
-// GET QR Code
-Route::get('/test/whatsapp-instances/{id}/qr', function(Request $request, $id) {
-    try {
-        Log::info('🧪 [TEST] GET QR para instancia ' . $id . ' SIN autenticación');
-        
-        $user = \App\Models\User::where('broker_id', 2)->first();
-        if (!$user) {
-            return response()->json(['error' => 'Usuario no encontrado'], 404);
-        }
-        
-        $request->setUserResolver(function () use ($user) {
-            return $user;
-        });
-        
-        // Buscar la instancia
-        $instance = \App\Models\WhatsAppInstance::find($id);
-        if (!$instance) {
-            return response()->json(['error' => 'Instancia no encontrada'], 404);
-        }
-        
-        $controller = new \App\Http\Controllers\Api\WhatsAppInstanceController();
-        return $controller->getQrCode($request, $instance);
-        
-    } catch (\Exception $e) {
-        Log::error('🚨 [ERROR] Error obteniendo QR:', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'error' => 'Error obteniendo QR: ' . $e->getMessage()
-        ], 500);
-    }
-});
-
-// GET Status
-Route::get('/test/whatsapp-instances/{id}/status', function(Request $request, $id) {
-    try {
-        Log::info('🧪 [TEST] GET Status para instancia ' . $id . ' SIN autenticación');
-        
-        $user = \App\Models\User::where('broker_id', 2)->first();
-        if (!$user) {
-            return response()->json(['error' => 'Usuario no encontrado'], 404);
-        }
-        
-        $request->setUserResolver(function () use ($user) {
-            return $user;
-        });
-        
-        // Buscar la instancia
-        $instance = \App\Models\WhatsAppInstance::find($id);
-        if (!$instance) {
-            return response()->json(['error' => 'Instancia no encontrada'], 404);
-        }
-        
-        $controller = new \App\Http\Controllers\Api\WhatsAppInstanceController();
-        return $controller->getStatus($request, $instance);
-        
-    } catch (\Exception $e) {
-        Log::error('🚨 [ERROR] Error obteniendo status:', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'error' => 'Error obteniendo status: ' . $e->getMessage()
-        ], 500);
-    }
-});
-
-// Ruta temporal para debugging send-history SIN autenticación
-Route::get('/temp/campaigns/send-history-debug', function(Request $request) {
-    \Log::info('🧪 [DEBUG] Ruta temporal send-history SIN autenticación');
-    
-    try {
-        // Simular un usuario autenticado (usar broker_id 3 que existe y tiene datos)
-        $user = \App\Models\User::where('broker_id', 3)->first();
-        
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No se encontró usuario con broker_id 3 para testing'
-            ], 404);
-        }
-        
-        // Simular request con usuario autenticado
-        $request->setUserResolver(function () use ($user) {
-            return $user;
-        });
-        
-        // Llamar al controlador real
-        $controller = new \App\Http\Controllers\Api\CampaignController();
-        return $controller->getSendHistory($request);
-        
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error en debug send-history: ' . $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ], 500);
-    }
-});
-
-// Ruta para plantillas de campañas (sin autenticación)
-Route::get('/campaign-templates', function() {
-    return response()->json([
-        'success' => true,
-        'data' => [
-            [
-                'id' => 1,
-                'name' => 'Recordatorio de Póliza',
-                'template' => 'Hola {{name}}, tu póliza {{policy_number}} vence el {{expiry_date}}. Contáctanos para renovarla.',
-                'category' => 'reminder'
-            ],
-            [
-                'id' => 2,
-                'name' => 'Póliza Vencida',
-                'template' => 'Estimado {{name}}, tu póliza {{policy_number}} ha vencido. Renuévala ya para mantener tu cobertura.',
-                'category' => 'expired'
-            ],
-            [
-                'id' => 3,
-                'name' => 'Promoción Nuevos Productos',
-                'template' => 'Hola {{name}}, tenemos nuevos productos de seguros que pueden interesarte. ¡Consulta sin compromiso!',
-                'category' => 'promotion'
-            ]
-        ]
-    ]);
-});
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Ruta para clientes sin middleware
-// Esta ruta fue eliminada porque permitía acceso sin autenticación a todos los datos de clientes
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Test endpoint para clientes/all SIN MIDDLEWARE
-// Esta ruta fue eliminada porque exponía información sensible sin autenticación
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Test endpoint que llama al controlador REAL SIN MIDDLEWARE
-// Esta ruta fue eliminada porque permitía acceso completo a datos de clientes sin autenticación
-
-// ======================================
-// RUTA TEMPORAL PARA CLIENTES/ALL COMPATIBLE CON EL FRONTEND
-// ======================================
-Route::get('/saas/clientes/all-temp', function(Request $request) {
-    \Log::info('🎯 [DEBUG] Ruta temporal /saas/clientes/all-temp llamada');
-    
-    try {
-        // Usar broker_id 2 que sabemos que existe y tiene clientes
-        $user = \App\Models\User::where('broker_id', 2)->first();
-        
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No se encontró usuario con broker_id 2'
-            ], 404);
-        }
-        
-        \Log::info('🎯 [DEBUG] Usuario encontrado:', [
-            'id' => $user->id,
-            'email' => $user->email,
-            'broker_id' => $user->broker_id
-        ]);
-        
-        // Simular request con usuario autenticado
-        $request->setUserResolver(function () use ($user) {
-            return $user;
-        });
-        
-        // Llamar al controlador real
-        $controller = new \App\Http\Controllers\SaaS\SaasClientesController();
-        $response = $controller->all($request);
-        
-        \Log::info('🎯 [DEBUG] Respuesta del controlador obtenida exitosamente');
-        
-        return $response;
-        
-    } catch (\Exception $e) {
-        \Log::error('🚨 [ERROR] Error en ruta temporal clientes/all:', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'success' => false,
-            'message' => 'Error al obtener clientes: ' . $e->getMessage()
-        ], 500);
-    }
-});
+// ⚠️ RUTA TEMPORAL DE CLIENTES ELIMINADA POR SEGURIDAD
+// /saas/clientes/all-temp eliminada - exponía datos de clientes sin autenticación
+// Usar ruta protegida: /saas/clientes/all (con middleware de autenticación)
 
 // Test route for unified middleware
 Route::middleware('unified.auth')->get('/test-unified-middleware', function(Request $request) {
@@ -1965,18 +1446,6 @@ Route::get('/debug-auth-status', function(Request $request) {
     ]);
 });
 
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Ruta temporal de campaigns sin autenticación
-// Esta ruta fue eliminada porque permitía acceso a datos de campañas sin autenticación
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Debug Firebase Token
-// Esta ruta fue eliminada porque exponía tokens JWT y datos sensibles de usuarios
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Debug check usuarios duplicados
-// Esta ruta fue eliminada porque exponía datos sensibles de usuarios y Firebase UIDs
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Debug auth flow
-// Esta ruta fue eliminada porque exponía tokens JWT decodificados y datos sensibles de usuarios
-
 // Ruta temporal de debug para diagnóstico de broker (protegida)
 Route::middleware(['security.auth'])->group(function () {
     Route::get('/debug/polizas/broker', [SaasPolizasController::class, 'debugBroker']);
@@ -2003,48 +1472,9 @@ Route::get('/test-auth-simple', function(Request $request) {
     ]);
 });
 
-// Debug route - ELIMINADA POR SEGURIDAD
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Ruta temporal de pólizas sin autenticación
-// Esta ruta fue eliminada porque permitía acceso a datos de pólizas sin autenticación
-
-// ❌ RUTA PELIGROSA ELIMINADA POR SEGURIDAD - Ruta temporal de dashboard sin autenticación
-// Esta ruta fue eliminada porque exponía datos sensibles del dashboard sin autenticación
-
-// ========================
-// RUTA TEMPORAL DE DASHBOARD CON CONTROLADOR REAL SIN AUTENTICACIÓN
-// ========================
-Route::get('/temp/dashboard-real', function(Request $request) {
-    \Log::info('🧪 [TEST] Ruta temporal de dashboard usando controlador REAL');
-    
-    try {
-        // Simular un usuario autenticado para el controlador (usar broker_id 2 que sí existe)
-        $user = \App\Models\User::where('broker_id', 2)->first();
-        
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No se encontró usuario con broker_id 1 para testing'
-            ], 404);
-        }
-        
-        // Simular request con usuario autenticado
-        $request->setUserResolver(function () use ($user) {
-            return $user;
-        });
-        
-        // Usar el controlador real
-        $controller = new \App\Http\Controllers\Api\DashboardController();
-        return $controller->getDashboardData($request);
-        
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Error en dashboard real: ' . $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ], 500);
-    }
-});
+// ⚠️ RUTA TEMPORAL DE DASHBOARD ELIMINADA POR SEGURIDAD
+// /temp/dashboard-real eliminada - exponía datos sensibles del dashboard
+// Usar ruta protegida: /saas/dashboard/data (con middleware de autenticación)
 
 // RUTA ESPECÍFICA ANTES DEL GRUPO SAAS GENERAL (orden crítico en Laravel)
 // Ruta temporal que DEBE usar el middleware UnifiedAuthMiddleware
@@ -2196,6 +1626,13 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::post('/polizas/{id}/anexos/{anexoId}/documents', [\App\Http\Controllers\SaaS\AnexosController::class, 'uploadDocuments']);
     Route::get('/renovaciones/export', [SaasPolizasController::class, 'exportarRenovaciones']);
     
+    // Rutas de Calendario
+    Route::get('/calendar/events', [\App\Http\Controllers\SaaS\CalendarEventController::class, 'index']);
+    Route::post('/calendar/events', [\App\Http\Controllers\SaaS\CalendarEventController::class, 'store']);
+    Route::get('/calendar/events/{id}', [\App\Http\Controllers\SaaS\CalendarEventController::class, 'show']);
+    Route::put('/calendar/events/{id}', [\App\Http\Controllers\SaaS\CalendarEventController::class, 'update']);
+    Route::delete('/calendar/events/{id}', [\App\Http\Controllers\SaaS\CalendarEventController::class, 'destroy']);
+    
     // Ruta de debug para verificar el middleware Firebase
     Route::middleware(['firebase.auth'])->get('/clientes/debug-auth', function (Request $request) {
         $user = $request->user();
@@ -2270,8 +1707,6 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
             ]);
         });
         
-        // RUTAS DE CLIENTES MOVIDAS MÁS ABAJO - Línea 1737+
-
     // Rutas para WhatsApp Instances
     Route::prefix('whatsapp-instances')->group(function () {
         Route::get('/', [WhatsAppInstanceController::class, 'index']);
@@ -2448,40 +1883,6 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
     });
 
     
-    
-    // Rutas temporales específicas para clientes
-    Route::get('/clientes/temp', [SaasClientesController::class, 'index']);
-    Route::post('/clientes/temp', [SaasClientesController::class, 'store']);
-    Route::get('/clientes/temp/{id}', [SaasClientesController::class, 'show']);
-    Route::put('/clientes/temp/{id}', [SaasClientesController::class, 'update']);
-    Route::delete('/clientes/temp/{id}', [SaasClientesController::class, 'destroy']);
-    
-    // Endpoint temporal para debug - acepta cualquier data
-    Route::post('/clientes/debug', function(Request $request) {
-        \Log::info('DEBUG - Datos recibidos del frontend:', $request->all());
-        return response()->json([
-            'success' => true,
-            'message' => 'Datos recibidos correctamente',
-            'received_data' => $request->all()
-        ]);
-    });
-    
-    // Debug route sin autenticación para probar el endpoint
-    Route::get('/clientes/debug-all', function(Request $request) {
-        \Log::info('🔍 [DEBUG] Ruta debug-all llamada');
-        return response()->json([
-            'success' => true,
-            'message' => 'Debug endpoint funcionando',
-            'real_all_endpoint' => '/api/saas/clientes/all',
-            'this_endpoint' => '/api/saas/clientes/debug-all',
-            'timestamp' => now()
-        ]);
-    });
-    
-    // Rutas de siniestros DEV duplicadas ELIMINADAS para evitar conflicto/ensombrecimiento.
-    // Usar únicamente las rutas protegidas definidas arriba bajo:
-    // Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->prefix('siniestros')...
-
     // Ruta de debug temporal para verificar póliza
     Route::get('/debug/poliza/{id}', function($id) {
         try {
@@ -2713,102 +2114,12 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
         Route::get('/exportar', [\App\Http\Controllers\SaaS\SaasComisionesController::class, 'exportar']);
         Route::get('/{id}', [\App\Http\Controllers\SaaS\SaasComisionesController::class, 'show'])->whereNumber('id');
     });
-
-    // Rutas temporales de comisiones (sin autenticación - solo para pruebas)
-    Route::prefix('temp/comisiones')->group(function () {
-        Route::get('/', function(Request $request) {
-            \Log::info('🧪 [TEST] Ruta temporal de comisiones SIN autenticación');
-            
-            try {
-                // Simular un usuario con broker para testing (usar broker_id 2 que existe)
-                $user = \App\Models\User::where('broker_id', 2)->first();
-                
-                if (!$user) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No se encontró usuario con broker_id 2 para testing'
-                    ], 404);
-                }
-                
-                \Log::info('🧪 [TEST] Usuario encontrado para comisiones:', [
-                    'id' => $user->id,
-                    'email' => $user->email,
-                    'broker_id' => $user->broker_id
-                ]);
-                
-                // Simular request con usuario autenticado
-                $request->setUserResolver(function () use ($user) {
-                    return $user;
-                });
-                
-                // Llamar al controlador real
-                $controller = new \App\Http\Controllers\SaaS\SaasComisionesController();
-                return $controller->index($request);
-                
-            } catch (\Exception $e) {
-                \Log::error('🚨 [ERROR] Error en ruta temporal comisiones:', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-                
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error al obtener comisiones: ' . $e->getMessage()
-                ], 500);
-            }
-        });
-        
-        Route::get('/estadisticas', function(Request $request) {
-            \Log::info('🧪 [TEST] Ruta temporal de estadísticas de comisiones SIN autenticación');
-            
-            try {
-                $user = \App\Models\User::where('broker_id', 2)->first();
-                
-                if (!$user) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No se encontró usuario con broker_id 2 para testing'
-                    ], 404);
-                }
-                
-                $request->setUserResolver(function () use ($user) {
-                    return $user;
-                });
-                
-                $controller = new \App\Http\Controllers\SaaS\SaasComisionesController();
-                return $controller->estadisticas($request);
-                
-            } catch (\Exception $e) {
-                \Log::error('🚨 [ERROR] Error en estadísticas comisiones temporal:', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-                
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error al obtener estadísticas: ' . $e->getMessage()
-                ], 500);
-            }
-        });
-    });
-
-    // Rutas temporales de debug para pólizas (sin autenticación - solo para pruebas)
-    Route::prefix('debug/polizas')->group(function () {
-        Route::get('/broker', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'debugBroker']);
-        Route::get('/', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'indexDev']);
-        Route::get('/exportar', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'exportar']);
-    });
-
-    // Rutas dev/no auth para automóviles (para pruebas locales)
-    Route::prefix('automoviles')->group(function () {
-        Route::get('/', [AutomovilesController::class, 'index']);
-        Route::post('/', [AutomovilesController::class, 'store']);
-        // Catálogos globales: definir antes de /{id}
-        Route::get('/catalogos', [AutomovilesController::class, 'catalogos']);
-        Route::get('/{id}', [AutomovilesController::class, 'show'])->whereNumber('id');
-        Route::put('/{id}', [AutomovilesController::class, 'update'])->whereNumber('id');
-        Route::delete('/{id}', [AutomovilesController::class, 'destroy'])->whereNumber('id');
-    });
+    
+    // ⚠️ RUTAS TEMPORALES ELIMINADAS POR SEGURIDAD
+    // /temp/comisiones/* - Exponían datos financieros sin autenticación
+    // /debug/polizas/* - Exponían datos de pólizas sin autenticación  
+    // /automoviles/* - Exponían datos de automóviles sin autenticación
+    // Usar rutas protegidas: /saas/comisiones/*, /saas/polizas/*, /saas/automoviles/* (con autenticación)
 });
 
 
@@ -3054,20 +2365,13 @@ Route::middleware(['firebase.auth','security.auth','global.broker.auth'])->group
     Route::get('/dashboard/metrics', [\App\Http\Controllers\Api\DashboardController::class, 'getMetrics']);
 });
 
-# ===== HOTFIX: Exponer endpoints faltantes de dashboard SaaS (clientes-chart, polizas-chart, metrics, data) =====
+# ===== Dashboard SaaS - Endpoints consolidados =====
 Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->group(function () {
     Route::prefix('dashboard')->group(function () {
+        Route::get('/data', [\App\Http\Controllers\Api\DashboardController::class, 'getDashboardData']);
+        Route::get('/metrics', [\App\Http\Controllers\Api\DashboardController::class, 'getMetrics']);
         Route::get('/clientes-chart', [\App\Http\Controllers\Api\DashboardController::class, 'getClientesChart']);
         Route::get('/polizas-chart', [\App\Http\Controllers\Api\DashboardController::class, 'getPolizasChart']);
-        // Alias compatibles usados por el frontend
-        Route::get('/metrics', [\App\Http\Controllers\Api\DashboardController::class, 'getMetrics']);
-        Route::get('/data', [\App\Http\Controllers\Api\DashboardController::class, 'getDashboardData']);
-    });
-});
-
-// ===== HOTFIX: Alinear endpoint /saas/dashboard/primas-chart con los otros charts =====
-Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->group(function () {
-    Route::prefix('dashboard')->group(function () {
         Route::get('/primas-chart', [\App\Http\Controllers\Api\DashboardController::class, 'getPrimasChart']);
     });
 });

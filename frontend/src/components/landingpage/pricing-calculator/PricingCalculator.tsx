@@ -111,8 +111,6 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
           source: 'pricing_calculator',
         });
         alert('¡Listo! Guardamos tu selección y te enviamos un correo con el detalle.');
-        // Opcional: redirigir a contacto para finalizar onboarding/compra
-        window.location.href = '/frontend-pages/contact';
       } else {
         // Forzar registro antes de continuar
         const redirect = encodeURIComponent('/precios');
@@ -616,7 +614,7 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                     period,
                   };
                   localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
-                  window.location.href = '/frontend-pages/contact';
+                  window.location.href = '/auth/register';
                 }}
                 className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-semibold flex items-center justify-center gap-2"
               >
@@ -742,7 +740,7 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                     period,
                   };
                   localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
-                  window.location.href = '/frontend-pages/contact';
+                  window.location.href = '/auth/register';
                 }}
                 className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-semibold flex items-center justify-center gap-2"
               >

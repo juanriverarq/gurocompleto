@@ -27,50 +27,6 @@ const Menuitems = [
       },
       
       {
-        id: uniqueId(),
-        title: "Front Pages",
-        icon: "solar:home-angle-linear",
-        href: "",
-        children: [
-          {
-            title: "Homepage",
-            id: uniqueId(),
-            href: "/frontend-pages/homepage",
-          },
-          {
-            title: "About Us",
-            id: uniqueId(),
-            href: "/frontend-pages/aboutus",
-          },
-          {
-            title: "Blog",
-            id: uniqueId(),
-            href: "/frontend-pages/blog",
-          },
-          {
-            title: "Blog Details",
-            id: uniqueId(),
-            href: "/frontend-pages/blog/detail/streaming-video-way-before-it-was-cool-go-dark-tomorrow",
-          },
-          {
-            title: "Contact Us",
-            id: uniqueId(),
-            href: "/frontend-pages/contact",
-          },
-          {
-            title: "Portfolio",
-            id: uniqueId(),
-            href: "/frontend-pages/portfolio",
-          },
-          {
-            title: "Pricing",
-            id: uniqueId(),
-            href: "/frontend-pages/pricing",
-          },
-          
-        ],
-      },
-      {
         title: "Landingpage",
         icon: "solar:bill-list-line-duotone",
         id: uniqueId(),

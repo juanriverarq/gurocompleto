@@ -1183,7 +1183,7 @@ class SaasPolizasController extends Controller
                 $query->where('status', $request->status);
             }
 
-            // Filtrar por días de vencimiento - lógica corregida
+            // Filtrar por días de vencimiento - sin limitaciones por defecto
             if ($request->has('dias_vencimiento') && !empty($request->dias_vencimiento)) {
                 $filtro = $request->dias_vencimiento;
                 $today = Carbon::now();
@@ -1198,20 +1198,10 @@ class SaasPolizasController extends Controller
                     // Próximos 2 meses: vencen en 60 días o menos
                     $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
                         [$today->toDateString(), $diasAdelantado, $today->toDateString(), -30]);
-                } elseif ($filtro === 'all') {
-                    // No aplicar ventana de días
-                } else {
-                    // Por defecto, mostrar solo las que vencen en los próximos 2 meses (60 días)
-                    // Incluir también las vencidas recientemente (hasta 30 días atrás) para seguimiento
-                    $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
-                        [Carbon::now()->toDateString(), $diasAdelantado, Carbon::now()->toDateString(), -30]);
                 }
-            } else {
-                // Por defecto, mostrar solo las que vencen en los próximos 2 meses (60 días)
-                // Incluir también las vencidas recientemente (hasta 30 días atrás) para seguimiento
-                $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
-                    [Carbon::now()->toDateString(), $diasAdelantado, Carbon::now()->toDateString(), -30]);
+                // Si es 'all' o cualquier otro valor, no aplicar filtro de días
             }
+            // Sin filtro de días por defecto - mostrar todas las renovaciones
 
             // Aplicar filtros adicionales
             if ($request->has('search') && !empty($request->search)) {
@@ -1235,9 +1225,9 @@ class SaasPolizasController extends Controller
             }
 
             // Filtro por estado de renovación (acepta múltiples separados por coma)
-            // VENCIDO: DATEDIFF(end_date, today) < 0
-            // CRITICO: 0..7 días
-            // PENDIENTE/EN_PROCESO: 8..30 días
+            // VENCIDO: DATEDIFF(end_date, today) < 0 AND status != 'renewed'
+            // CRITICO: 0..7 días AND status != 'renewed'
+            // PENDIENTE/EN_PROCESO: 8..30 días AND status != 'renewed'
             // RENOVADO: status = 'renewed'
             if ($request->filled('estado')) {
                 $today = Carbon::now();
@@ -1247,14 +1237,23 @@ class SaasPolizasController extends Controller
                         foreach ($estados as $estado) {
                             switch ($estado) {
                                 case 'VENCIDO':
-                                    $q->orWhereRaw('DATEDIFF(end_date, ?) < 0', [$today->toDateString()]);
+                                    $q->orWhere(function($subQ) use ($today) {
+                                        $subQ->whereRaw('DATEDIFF(end_date, ?) < 0', [$today->toDateString()])
+                                             ->where('status', '!=', 'renewed');
+                                    });
                                     break;
                                 case 'CRITICO':
-                                    $q->orWhereRaw('DATEDIFF(end_date, ?) >= 0 AND DATEDIFF(end_date, ?) <= 7', [$today->toDateString(), $today->toDateString()]);
+                                    $q->orWhere(function($subQ) use ($today) {
+                                        $subQ->whereRaw('DATEDIFF(end_date, ?) >= 0 AND DATEDIFF(end_date, ?) <= 7', [$today->toDateString(), $today->toDateString()])
+                                             ->where('status', '!=', 'renewed');
+                                    });
                                     break;
                                 case 'PENDIENTE':
                                 case 'EN_PROCESO':
-                                    $q->orWhereRaw('DATEDIFF(end_date, ?) > 7 AND DATEDIFF(end_date, ?) <= 30', [$today->toDateString(), $today->toDateString()]);
+                                    $q->orWhere(function($subQ) use ($today) {
+                                        $subQ->whereRaw('DATEDIFF(end_date, ?) > 7 AND DATEDIFF(end_date, ?) <= 30', [$today->toDateString(), $today->toDateString()])
+                                             ->where('status', '!=', 'renewed');
+                                    });
                                     break;
                                 case 'RENOVADO':
                                     $q->orWhere('status', 'renewed');
@@ -1320,45 +1319,39 @@ class SaasPolizasController extends Controller
             $brokerId = $this->getBrokerId($request);
             
             $today = Carbon::now();
-            $diasCritico = 7;
-            $diasProximo = 30;
-            $diasAdelantado = 60; // 2 meses - solo próximas a vencer
             
-            // Query base para pólizas activas que necesitan renovación en los próximos 2 meses
-            // Incluir también las vencidas recientemente para seguimiento
-            $baseQuery = Poliza::where('broker_id', $brokerId)
-                ->where('status', 'active')
-                ->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?', 
-                    [$today->toDateString(), $diasAdelantado, $today->toDateString(), -30]);
+            // Query base: todas las pólizas del broker (sin filtros de status ni fecha)
+            $baseQuery = Poliza::where('broker_id', $brokerId);
 
-            // Total renovaciones
-            $totalRenovaciones = $baseQuery->count();
+            // Total renovaciones: todas las pólizas
+            $totalRenovaciones = (clone $baseQuery)->count();
 
-            // Renovaciones críticas (≤7 días)
+            // Renovaciones críticas: 0-7 días y NO renovadas
             $renovacionesCriticas = (clone $baseQuery)
-                ->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= 0',
-                    [$today->toDateString(), $diasCritico, $today->toDateString()])
+                ->whereRaw('DATEDIFF(end_date, ?) >= 0 AND DATEDIFF(end_date, ?) <= 7', 
+                    [$today->toDateString(), $today->toDateString()])
+                ->where('status', '!=', 'renewed')
                 ->count();
 
-            // Renovaciones pendientes (8-30 días)
+            // Renovaciones pendientes: 8-30 días y NO renovadas
             $renovacionesPendientes = (clone $baseQuery)
-                ->whereRaw('DATEDIFF(end_date, ?) > ? AND DATEDIFF(end_date, ?) <= ?',
-                    [$today->toDateString(), $diasCritico, $today->toDateString(), $diasProximo])
+                ->whereRaw('DATEDIFF(end_date, ?) > 7 AND DATEDIFF(end_date, ?) <= 30',
+                    [$today->toDateString(), $today->toDateString()])
+                ->where('status', '!=', 'renewed')
                 ->count();
 
-            // Renovaciones vencidas
+            // Renovaciones vencidas: días negativos y NO renovadas
             $renovacionesVencidas = (clone $baseQuery)
                 ->whereRaw('DATEDIFF(end_date, ?) < 0', [$today->toDateString()])
+                ->where('status', '!=', 'renewed')
                 ->count();
 
-            // Renovaciones completadas (pólizas con status 'renewed')
-            $renovacionesCompletadas = Poliza::where('broker_id', $brokerId)
+            // Renovaciones completadas: todas las pólizas con status 'renewed'
+            $renovacionesCompletadas = (clone $baseQuery)
                 ->where('status', 'renewed')
-                ->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
-                    [$today->toDateString(), $diasAdelantado, $today->toDateString(), -30])
                 ->count();
 
-            // Valor total de primas de renovaciones
+            // Valor total de primas: suma de todas las pólizas
             $valorTotalPrimas = (clone $baseQuery)->sum('premium_amount');
 
             return response()->json([
@@ -1393,13 +1386,15 @@ class SaasPolizasController extends Controller
         $diasVencimiento = (int) round($today->diffInDays($endDate, false));
 
         // Determinar estado de renovación
-        $estado = 'PENDIENTE';
-        if ($diasVencimiento < 0) {
+        // Primero verificar si está renovada (tiene prioridad sobre todo)
+        if ($poliza->status === 'renewed') {
+            $estado = 'RENOVADO';
+        } elseif ($diasVencimiento < 0) {
             $estado = 'VENCIDO';
         } elseif ($diasVencimiento <= 7) {
             $estado = 'CRITICO';
-        } elseif ($poliza->status === 'renewed') {
-            $estado = 'RENOVADO';
+        } else {
+            $estado = 'PENDIENTE';
         }
 
         // Determinar prioridad con lógica más coherente
@@ -2974,7 +2969,7 @@ class SaasPolizasController extends Controller
             }
 
             $validated = $request->validate([
-                'nuevaFechaVencimiento' => 'required|date|after:today|max:' . Carbon::now()->addYears(2)->format('Y-m-d'),
+                'nuevaFechaVencimiento' => 'required|date|after:today|before:' . Carbon::now()->addYears(2)->format('Y-m-d'),
                 'nuevoValorPrima' => 'required|numeric|min:10000|max:100000000',
                 'observaciones' => 'nullable|string|max:1000',
                 'nuevoNumeroPoliza' => 'nullable|string|max:255|regex:/^[A-Z]{3}-\d{4}-\d{4}$/',
@@ -2984,19 +2979,12 @@ class SaasPolizasController extends Controller
             $fechaVencimientoActual = Carbon::parse($polizaOriginal->end_date);
             $nuevaFechaVencimiento = Carbon::parse($validated['nuevaFechaVencimiento']);
 
-            // No permitir renovaciones con menos de 30 días de vigencia actual
-            if ($fechaVencimientoActual->diffInDays(Carbon::now()) < 30) {
+            // Validar que la nueva fecha sea posterior a la fecha de vencimiento actual
+            // (permitir renovaciones anticipadas, la nueva fecha debe ser al menos 1 mes después del vencimiento actual)
+            if ($nuevaFechaVencimiento->lte($fechaVencimientoActual)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se puede renovar una póliza con menos de 30 días de vigencia restante.',
-                ], 422);
-            }
-
-            // Validar que la nueva fecha sea al menos 6 meses mayor que la actual
-            if ($nuevaFechaVencimiento->diffInMonths($fechaVencimientoActual) < 6) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'La nueva fecha de vencimiento debe ser al menos 6 meses mayor que la fecha actual.',
+                    'message' => 'La nueva fecha de vencimiento debe ser posterior a la fecha de vencimiento actual de la póliza (' . $fechaVencimientoActual->format('Y-m-d') . ').',
                 ], 422);
             }
 

@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router";
 const FrontNav = [
   {
     menu: "Inicio",
-    link: "/frontend-pages/homepage",
+    link: "/",
     badge: false,
   },
   {
@@ -14,12 +14,7 @@ const FrontNav = [
   },
   {
     menu: "Precios",
-    link: "/frontend-pages/pricing-calculator",
-    badge: false,
-  },
-  {
-    menu: "Contacto",
-    link: "/frontend-pages/contact",
+    link: "/precios",
     badge: false,
   },
 ];

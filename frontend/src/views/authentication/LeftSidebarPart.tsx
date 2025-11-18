@@ -52,7 +52,7 @@ const LeftSidebarPart = () => {
           <p className="opacity-75 text-white my-4 text-base font-medium">
             La plataforma de gestión de seguros más avanzada, potenciada por inteligencia artificial para transformar tu negocio.
           </p>
-          <Button as={Link} to="/frontend-pages/homepage" className="mt-6" color={"primary"}>
+          <Button as={Link} to="/" className="mt-6" color={"primary"}>
             Conocer Más
           </Button>
         </div>

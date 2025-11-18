@@ -13,8 +13,6 @@ import LpHeader from "./header/Header"
 import LpBanners from "./banner/banner"
 import InsuranceBenefits from "./insurance-benefits/InsuranceBenefits";
 import { FAQ } from "../front-pages/homepage/FAQ";
-import { Packages } from "../front-pages/homepage/Packages";
-import PricingCalculator from "./pricing-calculator/PricingCalculator";
 
 const Landingpage = () => {
   useEffect(() => {
@@ -31,8 +29,6 @@ const Landingpage = () => {
           <Development />
           <ClientReviews />
           <AllFeatures />
-          <PricingCalculator />
-          <Packages />
           <FAQ />
           <LoginReg />
           <Footer />

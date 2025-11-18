@@ -78,7 +78,6 @@ const InformacionAgencia: React.FC = () => {
         }
         
         const data = await info.json();
-        console.log('📊 Datos del broker recibidos:', data);
         
         if (!data.success || !data.data) {
           throw new Error('Respuesta inválida del servidor');

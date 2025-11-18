@@ -254,15 +254,8 @@ class RenovacionesService {
          message: data.message || 'Renovación procesada exitosamente',
        };
      } catch (error) {
-       // Fallback simulado para desarrollo
-       return new Promise((resolve) => {
-         setTimeout(() => {
-           resolve({
-             success: true,
-             message: 'Renovación procesada exitosamente (modo desarrollo)',
-           });
-         }, 500);
-       });
+       console.error('Error al procesar renovación:', error);
+       throw error;
      }
    }
 

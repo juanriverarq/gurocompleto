@@ -243,7 +243,7 @@ export const CONTACT_METHODS = {
 class CommercialTasksService {
   private baseUrl = `${
     import.meta.env.VITE_API_URL || 'http://localhost:8081/api'
-  }/commercial-tasks`;
+  }/saas/commercial-tasks`;
 
   private async getHeaders() {
     const { auth } = await import('../config/firebase');

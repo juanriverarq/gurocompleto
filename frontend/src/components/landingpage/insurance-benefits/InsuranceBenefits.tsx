@@ -43,10 +43,10 @@ const InsuranceBenefits = () => {
 
   return (
     <>
-      <div className="md:py-24 py-16 relative bg-gradient-to-br from-primary/5 via-white to-secondary/5 dark:from-primary/10 dark:via-dark dark:to-secondary/10" id="funciones">
+      <div className="md:py-24 py-12 relative bg-gradient-to-br from-primary/5 via-white to-secondary/5 dark:from-primary/10 dark:via-dark dark:to-secondary/10" id="funciones">
         <div className="container">
           {/* Header Principal */}
-          <div className="lg:w-3/5 w-full mx-auto text-center mb-20">
+          <div className="lg:w-3/5 w-full mx-auto text-center mb-12 px-4">
             <div 
               className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-semibold mb-6"
               data-aos="fade-up"
@@ -57,7 +57,7 @@ const InsuranceBenefits = () => {
               Potenciado por Inteligencia Artificial
             </div>
             <h2
-              className="text-center sm:text-5xl text-3xl font-bold sm:!leading-[55px] text-dark dark:text-white mb-6"
+              className="text-center sm:text-5xl text-2xl font-bold sm:!leading-[55px] leading-tight text-dark dark:text-white mb-6"
               data-aos="fade-up"
               data-aos-delay="200"
               data-aos-duration="1000"
@@ -65,7 +65,7 @@ const InsuranceBenefits = () => {
               Software de Seguros con IA para Agencias Digitales
             </h2>
             <p
-              className="text-ld text-xl leading-relaxed"
+              className="text-ld sm:text-xl text-base leading-relaxed"
               data-aos="fade-up"
               data-aos-delay="300"
               data-aos-duration="1000"
@@ -76,7 +76,7 @@ const InsuranceBenefits = () => {
           </div>
 
           {/* Funciones Principales */}
-          <div className="grid grid-cols-12 gap-8 mb-20">
+          <div className="grid grid-cols-12 gap-6 mb-12 px-4">
             {keyFeatures.map((feature, index) => (
               <div
                 className="xl:col-span-4 lg:col-span-6 col-span-12"
@@ -85,7 +85,7 @@ const InsuranceBenefits = () => {
                 data-aos-delay={200 + index * 100}
                 data-aos-duration="1000"
               >
-                <CardBox className={`p-8 h-full hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 ${feature.bgColor} border-0 relative overflow-hidden group`}>
+                <CardBox className={`p-6 sm:p-8 h-full hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 ${feature.bgColor} border-0 relative overflow-hidden group`}>
                   {/* Highlight Badge */}
                   <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-bold ${feature.color} bg-white dark:bg-gray-800 shadow-lg`}>
                     {feature.highlight}
@@ -116,8 +116,8 @@ const InsuranceBenefits = () => {
           </div>
 
           {/* Resultados Comprobados */}
-          <div className="bg-white dark:bg-darkgray rounded-3xl p-12 shadow-2xl">
-            <div className="text-center mb-12">
+          <div className="bg-white dark:bg-darkgray rounded-3xl p-6 sm:p-12 shadow-2xl mx-4">
+            <div className="text-center mb-8 sm:mb-12">
               <div className="flex justify-center items-center gap-3 mb-6">
                 <div className="flex">
                   <div className="-ms-2 h-8 w-8">
@@ -147,7 +147,7 @@ const InsuranceBenefits = () => {
                 </p>
               </div>
               <h3 
-                className="text-3xl font-bold text-dark dark:text-white mb-4"
+                className="sm:text-3xl text-2xl font-bold text-dark dark:text-white mb-4"
                 data-aos="fade-up"
                 data-aos-delay="100"
                 data-aos-duration="1000"
@@ -156,7 +156,7 @@ const InsuranceBenefits = () => {
               </h3>
             </div>
             
-            <div className="grid grid-cols-12 gap-8">
+            <div className="grid grid-cols-12 gap-6 sm:gap-8">
               {results.map((result, index) => (
                 <div 
                   className="lg:col-span-3 md:col-span-6 col-span-12 text-center"
@@ -171,7 +171,7 @@ const InsuranceBenefits = () => {
                       height={40} 
                       className="text-primary mx-auto mb-3" 
                     />
-                    <div className="text-4xl font-bold text-primary mb-2">
+                    <div className="sm:text-4xl text-3xl font-bold text-primary mb-2">
                       {result.metric}
                     </div>
                   </div>
@@ -182,9 +182,9 @@ const InsuranceBenefits = () => {
           </div>
 
           {/* Call to Action */}
-          <div className="text-center mt-16">
+          <div className="text-center mt-12 px-4">
             <div 
-              className="sm:flex gap-3 justify-center items-center"
+              className="flex flex-col sm:flex-row gap-3 justify-center items-center"
               data-aos="fade-up"
               data-aos-delay="300"
               data-aos-duration="1000"
@@ -194,14 +194,14 @@ const InsuranceBenefits = () => {
                 to="/auth/auth1/register"
                 size={"lg"}
                 color={"primary"}
-                className="sm:mb-0 mb-3"
+                className="w-full sm:w-auto"
               >
                 🚀 Comenzar Prueba Gratuita
               </Button>
               <a 
                 href="#demos" 
                 type="button" 
-                className="group relative flex items-stretch justify-center p-0.5 text-center font-medium border border-primary bg-transparent text-primary hover:bg-primary dark:hover:bg-primary hover:text-white rounded-md" 
+                className="w-full sm:w-auto group relative flex items-stretch justify-center p-0.5 text-center font-medium border border-primary bg-transparent text-primary hover:bg-primary dark:hover:bg-primary hover:text-white rounded-md" 
                 data-discover="true"
               >
                 <span className="flex items-center gap-2 transition-all duration-150 justify-center rounded-md px-9 py-2.5 text-sm">

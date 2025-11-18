@@ -50,7 +50,6 @@ api.interceptors.request.use(
       if (user) {
         const token = await user.getIdToken();
         (config.headers as any).Authorization = `Bearer ${token}`;
-        console.log('🔐 [REQ] token agregado', { src: 'firebase', method, url: urlPath });
 
         // Para empleados autenticados con Firebase, añadir header de broker
         const empleadoPerfil = localStorage.getItem('empleado_profile');
@@ -98,7 +97,6 @@ api.interceptors.request.use(
           });
         } else if (empleadoToken) {
           (config.headers as any).Authorization = `Bearer ${empleadoToken}`;
-          console.log('🔐 [REQ] token agregado', { src: 'empleado', method, url: urlPath });
 
           // Para empleados, añadir header de broker si está en perfil local
           const empleadoPerfil = localStorage.getItem('empleado_profile');
