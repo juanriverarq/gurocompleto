@@ -3050,6 +3050,11 @@ class SaasPolizasController extends Controller
                     // Relaciones
                     'broker_id' => $brokerId,
                     'assigned_user_id' => $user ? $user->id : $polizaOriginal->assigned_user_id,
+                    
+                    // Copiar ramo_id, aseguradora_id y auto_renewal de la póliza original
+                    'ramo_id' => $polizaOriginal->ramo_id,
+                    'aseguradora_id' => $polizaOriginal->aseguradora_id,
+                    'auto_renewal' => $polizaOriginal->auto_renewal,
                 ]);
 
                 // 3. Actualizar estadísticas del cliente si existe
