@@ -105,11 +105,11 @@ const syncUserWithLaravel = async (user: User, isNewUser: boolean = false) => {
             const hasActive = statusData?.data?.has_active_subscription;
             const pending = statusData?.data?.pending_intent;
             if (!hasActive && pending) {
-              // Redirigir a precios si hay intención pendiente
+              // Redirigir a checkout si hay intención pendiente
               const currentPath = window.location.pathname;
-              const inPrecios = currentPath.includes('/precios');
-              if (!inPrecios) {
-                window.location.href = '/precios';
+              const inCheckout = currentPath.includes('/checkout');
+              if (!inCheckout) {
+                window.location.href = '/checkout';
               }
             }
           }
@@ -222,8 +222,7 @@ export const useFirebaseAuth = (): FirebaseAuthHook => {
       // Enviar verificación de email
       await sendEmailVerification(userCredential.user);
 
-      // Hacer logout inmediatamente después del registro para que el usuario no quede autenticado
-      await signOut(auth);
+      // Mantener al usuario autenticado para permitir continuar al checkout
 
       return {
         success: true,
