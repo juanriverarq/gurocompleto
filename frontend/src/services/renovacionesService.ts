@@ -227,9 +227,9 @@ class RenovacionesService {
          throw new Error('La fecha de vencimiento no puede ser superior a 2 años');
        }
 
-       // Validar prima en rango razonable
-       if (datos.nuevoValorPrima < 10000 || datos.nuevoValorPrima > 100000000) {
-         throw new Error('El valor de la prima debe estar entre $10,000 y $100,000,000');
+       // Validar prima mínima (sin límite máximo)
+       if (datos.nuevoValorPrima < 0) {
+         throw new Error('El valor de la prima debe ser mayor o igual a 0');
        }
 
        // Validar formato de número de póliza si se proporciona
