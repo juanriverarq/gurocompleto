@@ -2970,7 +2970,7 @@ class SaasPolizasController extends Controller
 
             $validated = $request->validate([
                 'nuevaFechaVencimiento' => 'required|date|after:today|before:' . Carbon::now()->addYears(2)->format('Y-m-d'),
-                'nuevoValorPrima' => 'required|numeric|min:10000|max:100000000',
+                'nuevoValorPrima' => 'required|numeric|min:0',
                 'observaciones' => 'nullable|string|max:1000',
                 'nuevoNumeroPoliza' => 'nullable|string|max:255|regex:/^[A-Z]{3}-\d{4}-\d{4}$/',
             ]);
@@ -2988,14 +2988,7 @@ class SaasPolizasController extends Controller
                 ], 422);
             }
 
-            // Validar cambio de prima no excesivo (±50%)
-            $cambioPrima = abs($validated['nuevoValorPrima'] - $polizaOriginal->premium_amount) / $polizaOriginal->premium_amount;
-            if ($cambioPrima > 0.5) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'El cambio en el valor de la prima no puede ser superior al 50%.',
-                ], 422);
-            }
+            // Validación de cambio de prima removida - permitir cualquier cambio
 
             DB::beginTransaction();
 
