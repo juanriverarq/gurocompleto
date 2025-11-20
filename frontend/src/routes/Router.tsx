@@ -55,7 +55,9 @@ const SaasListaEmpleados = Loadable(lazy(() => import('../views/saas/empleados/L
 const SaasNuevoEmpleado = Loadable(lazy(() => import('../views/saas/empleados/NuevoEmpleado')));
 const SaasEditarEmpleado = Loadable(lazy(() => import('../views/saas/empleados/EditarEmpleado')));
 const SaasListaLeads = Loadable(lazy(() => import('../views/saas/sales-funnel/ListaLeads')));
-const SaasKanbanLeads = Loadable(lazy(() => import('../views/saas/sales-funnel/SalesFunnelKanban')));
+const SaasKanbanLeads = Loadable(
+  lazy(() => import('../views/saas/sales-funnel/SalesFunnelKanban')),
+);
 const SaasNuevoLead = Loadable(lazy(() => import('../views/saas/sales-funnel/NuevoLead')));
 const SaasDetalleLead = Loadable(lazy(() => import('../views/saas/sales-funnel/DetalleLead')));
 const SaasEditarLead = Loadable(lazy(() => import('../views/saas/sales-funnel/EditarLead')));
@@ -73,9 +75,10 @@ const ConfiguracionMasiva = Loadable(
 const CalendarPage = Loadable(lazy(() => import('../views/apps/calendar/CalendarPage')));
 
 // Pricing page
-const PricingCalculatorPage = Loadable(
-  lazy(() => import('../views/pages/PricingCalculatorPage')),
-);
+const PricingCalculatorPage = Loadable(lazy(() => import('../views/pages/PricingCalculatorPage')));
+
+// Checkout (Frontend)
+const Checkout = Loadable(lazy(() => import('../views/pages/frontend-pages/Checkout')));
 
 // Landing Page
 const LandingPages = Loadable(lazy(() => import('../views/pages/landingpages/LandingPages')));
@@ -392,6 +395,11 @@ const Router = [
         path: '/precios',
         element: <FrontendLayout />,
         children: [{ path: '', element: <PricingCalculatorPage /> }],
+      },
+      {
+        path: '/checkout',
+        element: <FrontendLayout />,
+        children: [{ path: '', element: <Checkout /> }],
       },
       { path: '/web/:slug', element: <MiniWebPublic /> },
       { path: '/web/:slug/:tipo', element: <QuoteForm /> },

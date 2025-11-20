@@ -110,15 +110,16 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
           totals,
           source: 'pricing_calculator',
         });
-        alert('¡Listo! Guardamos tu selección y te enviamos un correo con el detalle.');
+        // Ir directo al checkout
+        window.location.href = '/checkout';
       } else {
         // Forzar registro antes de continuar
-        const redirect = encodeURIComponent('/precios');
+        const redirect = encodeURIComponent('/checkout');
         window.location.href = `/auth/register?redirect=${redirect}`;
       }
     } catch (e) {
       // Si falla por auth o red, enviar a registro como fallback
-      const redirect = encodeURIComponent('/precios');
+      const redirect = encodeURIComponent('/checkout');
       window.location.href = `/auth/register?redirect=${redirect}`;
     }
   };

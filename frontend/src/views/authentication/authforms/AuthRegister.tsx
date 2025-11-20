@@ -1,6 +1,7 @@
 import { Button, Label, TextInput } from 'flowbite-react';
 import { Checkbox as UiCheckbox } from 'src/components/shadcn-ui/Default-Ui/checkbox';
 import { Link, useNavigate } from 'react-router';
+import { useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useUnifiedAuth } from '../../../context/UnifiedAuthContext';
 import api from 'src/config/api';
@@ -37,6 +38,7 @@ const EyeSlashIcon = () => (
 
 const AuthRegister = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { registerWithEmail } = useUnifiedAuth();
   const [formData, setFormData] = useState({
     name: '',
@@ -96,10 +98,11 @@ const AuthRegister = () => {
           // Ignorar errores aquí, el registro ya fue exitoso
         }
 
-        setSuccess(true);
-        // Firebase siempre requiere verificación de email para nuevos usuarios
-        // Solo mostrar mensaje de verificación, SIN redirección automática
-        // El usuario debe verificar su email y luego hacer login manualmente
+        // Redirigir al destino (por defecto /checkout)
+        const params = new URLSearchParams(location.search);
+        const redirect = params.get('redirect') || '/checkout';
+        navigate(redirect, { replace: true });
+        return;
       } else {
         setError(response.message || 'Error en el registro');
       }
