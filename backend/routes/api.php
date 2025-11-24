@@ -97,7 +97,7 @@ Route::prefix('auth')->group(function () {
     // Ruta para sincronización Firebase + Backend (requiere ID Token)
     Route::post('/sync-firebase-user', [\App\Http\Controllers\Api\AuthController::class, 'syncFirebaseUser'])
         ->middleware('firebase.auth');
-    
+
     // Ruta para verificar estado de email (requiere autenticación)
     Route::post('/check-email-verification', [\App\Http\Controllers\Api\AuthController::class, 'checkEmailVerification'])
         ->middleware('firebase.auth');
@@ -1174,7 +1174,7 @@ Route::prefix('saas/auth')->group(function () {
 });
 
 // Rutas protegidas SaaS - COMENTADO PARA EVITAR CONFLICTO CON FIREBASE AUTH
-// Empleados SaaS - Gestión de usuarios del broker
+    // Empleados SaaS - Gestión de usuarios del broker
     Route::prefix('empleados')->group(function () {
         Route::get('/', [EmpleadosController::class, 'index']);
         Route::get('/usuarios', [EmpleadosController::class, 'getUsuarios']);
@@ -1182,8 +1182,8 @@ Route::prefix('saas/auth')->group(function () {
         Route::get('/{empleado}', [EmpleadosController::class, 'show']);
         Route::put('/{empleado}', [EmpleadosController::class, 'update']);
         Route::delete('/{empleado}', [EmpleadosController::class, 'destroy']); // Solo MASTER
-    });
-    
+        });
+
     // Facturación y Pagos
     Route::middleware('saas.auth')->group(function () {
         Route::get('billing/info', [BillingController::class, 'getBillingInfo']);
@@ -1706,7 +1706,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
                 ]
             ]);
         });
-        
+
     // Rutas para WhatsApp Instances
     Route::prefix('whatsapp-instances')->group(function () {
         Route::get('/', [WhatsAppInstanceController::class, 'index']);
@@ -1882,7 +1882,7 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
         
     });
 
-    
+
     // Ruta de debug temporal para verificar póliza
     Route::get('/debug/poliza/{id}', function($id) {
         try {
@@ -2094,8 +2094,8 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
         Route::post('/{id}/completar', [TaskController::class, 'marcarCompletada'])->whereNumber('id');
     });
     
-    // Rutas de Sales Funnel
-    Route::prefix('sales-funnel')->group(function () {
+    // Rutas de Sales Funnel (protegidas)
+    Route::prefix('sales-funnel')->middleware(['unified.auth','global.broker.auth','saas.auth'])->group(function () {
         Route::get('/', [SaasSalesFunnelController::class, 'index']);
         Route::get('/statistics', [SaasSalesFunnelController::class, 'statistics']);
         Route::get('/constants', [SaasSalesFunnelController::class, 'getConstants']);
@@ -2114,7 +2114,7 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
         Route::get('/exportar', [\App\Http\Controllers\SaaS\SaasComisionesController::class, 'exportar']);
         Route::get('/{id}', [\App\Http\Controllers\SaaS\SaasComisionesController::class, 'show'])->whereNumber('id');
     });
-    
+
     // ⚠️ RUTAS TEMPORALES ELIMINADAS POR SEGURIDAD
     // /temp/comisiones/* - Exponían datos financieros sin autenticación
     // /debug/polizas/* - Exponían datos de pólizas sin autenticación  

@@ -7,7 +7,13 @@ import TitleCard from 'src/components/shared/TitleBorderCard';
 import FormField from 'src/components/shared/FormField';
 import NuevoCliente from 'src/views/apps/seguros/clientes/NuevoCliente';
 import { saasApi } from 'src/services/saasApi';
-import salesFunnelService, { CreateLeadData, STAGES, INSURANCE_TYPES, LEAD_SOURCES, QUALITY_RATINGS } from 'src/services/salesFunnelService';
+import salesFunnelService, {
+  CreateLeadData,
+  STAGES,
+  INSURANCE_TYPES,
+  LEAD_SOURCES,
+  QUALITY_RATINGS,
+} from 'src/services/salesFunnelService';
 
 interface NuevoNegocioModalProps {
   show: boolean;
@@ -36,13 +42,13 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
   const [clientQuery, setClientQuery] = useState('');
   const [clientResults, setClientResults] = useState<any[]>([]);
   const [clientLoading, setClientLoading] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<{ 
-    id?: string; 
-    nombre?: string; 
-    documento?: string; 
-    celular?: string; 
-    email?: string; 
-    raw?: any 
+  const [selectedClient, setSelectedClient] = useState<{
+    id?: string;
+    nombre?: string;
+    documento?: string;
+    celular?: string;
+    email?: string;
+    raw?: any;
   } | null>(null);
   const [showClientModal, setShowClientModal] = useState(false);
   const [clientModalMode, setClientModalMode] = useState<'new' | 'edit'>('new');
@@ -71,9 +77,11 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
     }
   }, [show]);
 
-  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const onChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+  ) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   // Buscar clientes por query (debounce)
@@ -86,10 +94,15 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
       try {
         setClientLoading(true);
         const resp = await saasApi.getClientes({ search: clientQuery, per_page: 10 });
-        const arr = Array.isArray(resp.data) ? (resp.data as any) : (resp.data?.data || []);
+        const arr = Array.isArray(resp.data) ? (resp.data as any) : resp.data?.data || [];
         const normalized = arr.map((c: any) => {
           const tipo = c.tipo;
-          const nombre = tipo === 'EMPRESA' ? (c.empresa?.razon_social || c.empresa?.nombre_comercial || 'Empresa') : `${c.persona?.nombres || c.nombre || ''} ${c.persona?.apellidos || c.apellidos || ''}`.trim();
+          const nombre =
+            tipo === 'EMPRESA'
+              ? c.empresa?.razon_social || c.empresa?.nombre_comercial || 'Empresa'
+              : `${c.persona?.nombres || c.nombre || ''} ${
+                  c.persona?.apellidos || c.apellidos || ''
+                }`.trim();
           const documento = tipo === 'EMPRESA' ? c.empresa?.nit : c.persona?.documento || c.cuit;
           const celular = c.celular || c.celular_principal;
           const email = c.email || c.email_principal;
@@ -110,15 +123,15 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
     setSelectedClient(client);
     setClientQuery('');
     setClientResults([]);
-    
+
     const c = client.raw;
     const tipo = c?.tipo;
-    
+
     let firstName = '';
     let lastName = '';
     let email = '';
     let phone = '';
-    
+
     if (tipo === 'EMPRESA') {
       firstName = c.empresa?.representante_legal || c.empresa?.razon_social || '';
       lastName = '';
@@ -130,13 +143,13 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
       email = c.email || c.email_principal || '';
       phone = c.celular || c.celular_principal || '';
     }
-    
-    setForm(prev => ({
+
+    setForm((prev) => ({
       ...prev,
       first_name: firstName,
       last_name: lastName,
       email: email,
-      phone: phone
+      phone: phone,
     }));
   };
 
@@ -153,7 +166,7 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
       setLoading(true);
       const dataToSend: CreateLeadData = {
         ...form,
-        client_id: selectedClient.id ? Number(selectedClient.id) : undefined
+        client_id: selectedClient.id ? Number(selectedClient.id) : undefined,
       };
       const res = await salesFunnelService.createLead(dataToSend);
       if (res?.data && onSuccess) {
@@ -174,7 +187,9 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
         <Modal.Body>
           <div className="max-h-[75vh] overflow-y-auto scrollbar-hide">
             {error && (
-              <Alert color="failure" className="mb-4">{error}</Alert>
+              <Alert color="failure" className="mb-4">
+                {error}
+              </Alert>
             )}
 
             <form onSubmit={onSubmit} className="space-y-6">
@@ -187,50 +202,54 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                     <div className="flex gap-2">
                       <Input
                         placeholder="Nombre, documento, teléfono o email"
-                        value={selectedClient ? `${selectedClient.nombre} (${selectedClient.documento || 'sin doc'})` : clientQuery}
-                        onChange={(e) => { 
-                          setSelectedClient(null); 
-                          setClientQuery(e.target.value); 
+                        value={
+                          selectedClient
+                            ? `${selectedClient.nombre} (${selectedClient.documento || 'sin doc'})`
+                            : clientQuery
+                        }
+                        onChange={(e) => {
+                          setSelectedClient(null);
+                          setClientQuery(e.target.value);
                           if (!e.target.value) {
-                            setForm(prev => ({
+                            setForm((prev) => ({
                               ...prev,
                               first_name: '',
                               last_name: '',
                               email: '',
-                              phone: ''
+                              phone: '',
                             }));
                           }
                         }}
                         className="flex-1"
                       />
-                      <Button 
-                        type="button" 
-                        color="primary" 
-                        onClick={() => { 
-                          setClientModalMode('new'); 
-                          setClienteToEdit(null); 
-                          setShowClientModal(true); 
+                      <Button
+                        type="button"
+                        color="primary"
+                        onClick={() => {
+                          setClientModalMode('new');
+                          setClienteToEdit(null);
+                          setShowClientModal(true);
                         }}
                       >
                         <Icon icon="solar:user-plus-bold" className="w-4 h-4 mr-1" /> Nuevo
                       </Button>
                       {selectedClient && (
-                        <Button 
-                          type="button" 
-                          color="light" 
-                          onClick={() => { 
-                            setClientModalMode('edit'); 
+                        <Button
+                          type="button"
+                          color="light"
+                          onClick={() => {
+                            setClientModalMode('edit');
                             setClienteToEdit({ id: selectedClient.id, ...selectedClient.raw });
-                            setShowClientModal(true); 
+                            setShowClientModal(true);
                           }}
                         >
                           <Icon icon="solar:pen-bold" className="w-4 h-4 mr-1" /> Editar
                         </Button>
                       )}
                     </div>
-                    
+
                     {/* Dropdown de resultados */}
-                    {(!selectedClient && clientQuery && clientResults.length > 0) && (
+                    {!selectedClient && clientQuery && clientResults.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-[10px] shadow-lg max-h-60 overflow-y-auto">
                         {clientResults.map((client) => (
                           <div
@@ -238,7 +257,9 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                             className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                             onClick={() => handleClientSelect(client)}
                           >
-                            <div className="font-medium text-gray-900 dark:text-white">{client.nombre}</div>
+                            <div className="font-medium text-gray-900 dark:text-white">
+                              {client.nombre}
+                            </div>
                             <div className="text-sm text-gray-500 dark:text-gray-400">
                               {client.documento && `Doc: ${client.documento}`}
                               {client.celular && ` • Tel: ${client.celular}`}
@@ -248,13 +269,15 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                         ))}
                       </div>
                     )}
-                    
+
                     {/* Loading de búsqueda */}
                     {clientLoading && (
                       <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-[10px] shadow-lg p-3">
                         <div className="flex items-center justify-center">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">Buscando clientes...</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Buscando clientes...
+                          </span>
                         </div>
                       </div>
                     )}
@@ -266,7 +289,10 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                 {!selectedClient && (
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
                     <div className="flex items-center">
-                      <Icon icon="solar:info-circle-bold" className="w-5 h-5 text-yellow-600 mr-2" />
+                      <Icon
+                        icon="solar:info-circle-bold"
+                        className="w-5 h-5 text-yellow-600 mr-2"
+                      />
                       <span className="text-sm text-yellow-800 dark:text-yellow-200">
                         Selecciona un cliente para habilitar los campos de contacto
                       </span>
@@ -341,7 +367,10 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                     value={form.insurance_type}
                     onChange={onChange}
                     required
-                    options={Object.entries(INSURANCE_TYPES).map(([k, v]) => ({ value: k, label: v }))}
+                    options={Object.entries(INSURANCE_TYPES).map(([k, v]) => ({
+                      value: k,
+                      label: v,
+                    }))}
                   />
                   <FormField
                     id="lead_source"
@@ -354,7 +383,7 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                     options={Object.entries(LEAD_SOURCES).map(([k, v]) => ({ value: k, label: v }))}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                   <FormField
                     id="potential_value"
@@ -382,7 +411,10 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                     value={form.quality_rating}
                     onChange={onChange}
                     required
-                    options={Object.entries(QUALITY_RATINGS).map(([k, v]) => ({ value: k, label: v }))}
+                    options={Object.entries(QUALITY_RATINGS).map(([k, v]) => ({
+                      value: k,
+                      label: v,
+                    }))}
                   />
                 </div>
               </TitleCard>
@@ -393,11 +425,11 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
           <Button type="button" color="light" onClick={onClose} className="rounded-[10px]">
             Cancelar
           </Button>
-          <Button 
+          <Button
             type="button"
             onClick={onSubmit}
-            disabled={loading || !selectedClient} 
-            color="primary" 
+            disabled={loading || !selectedClient}
+            color="primary"
             className="rounded-[10px] bg-blue-600 hover:bg-blue-700"
             title={!selectedClient ? 'Selecciona un cliente para continuar' : ''}
           >
@@ -408,7 +440,9 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
 
       {/* Modal para crear/editar cliente */}
       <Modal show={showClientModal} onClose={() => setShowClientModal(false)} size="7xl">
-        <Modal.Header>{clientModalMode === 'edit' ? 'Editar cliente' : 'Nuevo cliente'}</Modal.Header>
+        <Modal.Header>
+          {clientModalMode === 'edit' ? 'Editar cliente' : 'Nuevo cliente'}
+        </Modal.Header>
         <Modal.Body>
           <div className="max-h-[80vh] overflow-auto scrollbar-hide p-1">
             <NuevoCliente
@@ -418,7 +452,10 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                 setShowClientModal(false);
                 if (clienteActualizado) {
                   const c = clienteActualizado;
-                  const nombre = `${c?.nombre || ''} ${c?.apellidos || ''}`.trim() || c?.razon_social || 'Cliente';
+                  const nombre =
+                    `${c?.nombre || ''} ${c?.apellidos || ''}`.trim() ||
+                    c?.razon_social ||
+                    'Cliente';
                   const newSelectedClient = {
                     id: String(c.id),
                     nombre,
@@ -428,13 +465,13 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                     raw: c,
                   };
                   setSelectedClient(newSelectedClient);
-                  
-                  setForm(prev => ({
+
+                  setForm((prev) => ({
                     ...prev,
                     first_name: c?.nombre || '',
                     last_name: c?.apellidos || '',
                     email: c?.email_principal || c?.email || '',
-                    phone: c?.celular_principal || c?.phone || ''
+                    phone: c?.celular_principal || c?.phone || '',
                   }));
                 }
               }}
