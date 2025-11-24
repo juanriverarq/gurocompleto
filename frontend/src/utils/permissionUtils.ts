@@ -16,7 +16,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
 
   '/apps/seguros/polizas': 'polizas',
   '/apps/seguros/polizas/nueva': 'polizas',
-  '/apps/seguros/renovaciones': 'renovaciones',
+  // Renovaciones pertenece al módulo de pólizas (acción: renovar)
+  '/apps/seguros/renovaciones': 'polizas',
   '/apps/seguros/automoviles': 'automoviles',
 
   '/apps/seguros/siniestros': 'siniestros',
@@ -30,12 +31,12 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/comercial/equipos-ventas': 'equipos_ventas',
   '/apps/comercial/rendimiento': 'analisis_rendimiento',
 
-   // Marketing Digital
-    '/apps/marketing/sms': 'sms_marketing',
-    '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
-    '/apps/marketing/plantillas': 'plantillas_campana',
-    '/apps/marketing/mini-web': 'mini_web',
-    '/apps/saas/configuracion-masiva': 'configuracion_masiva',
+  // Marketing Digital
+  '/apps/marketing/sms': 'sms_marketing',
+  '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
+  '/apps/marketing/plantillas': 'plantillas_campana',
+  '/apps/marketing/mini-web': 'mini_web',
+  '/apps/saas/configuracion-masiva': 'configuracion_masiva',
 
   // Inteligencia Artificial
   '/apps/ia/asistente': 'asistentes_ia',
@@ -104,28 +105,38 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
 export const canAccessRoute = (
   route: string,
   hasPermission: (module: string, action: string) => boolean,
-  _canAccessModule: (module: string) => boolean
+  _canAccessModule: (module: string) => boolean,
+): boolean => {
+  // Mantener compatibilidad: por defecto checkea 'ver'
+  return canAccessRouteWithAction(route, 'ver', hasPermission, _canAccessModule);
+};
+
+// Versión con acción configurable (para usos del sidebar por ítem)
+export const canAccessRouteWithAction = (
+  route: string,
+  action: 'ver' | 'crear' | 'editar' | 'eliminar' | 'renovar' | 'emitir',
+  hasPermission: (module: string, action: string) => boolean,
+  _canAccessModule: (module: string) => boolean,
 ): boolean => {
   const module = ROUTE_PERMISSION_MAP[route];
   if (!module) {
     // Si la ruta no está mapeada aún, ocultamos por defecto en el sidebar
     return false;
   }
-  // Visibilidad del enlace en el sidebar: exigir permiso de "ver"
-  return hasPermission(module, 'ver');
+  return hasPermission(module, action);
 };
 
 // Función para verificar si un usuario puede realizar una acción específica
 export const canPerformAction = (
   route: string,
-  action: 'ver' | 'crear' | 'editar' | 'eliminar',
-  hasPermission: (module: string, action: string) => boolean
+  action: 'ver' | 'crear' | 'editar' | 'eliminar' | 'renovar' | 'emitir',
+  hasPermission: (module: string, action: string) => boolean,
 ): boolean => {
   const module = ROUTE_PERMISSION_MAP[route];
   if (!module) {
     return true;
   }
-  
+
   return hasPermission(module, action);
 };
 
@@ -133,7 +144,7 @@ export const canPerformAction = (
 export const filterMenuItemsByPermissions = (
   menuItems: MenuitemsType[],
   hasPermission: (module: string, action: string) => boolean,
-  canAccessModule: (module: string) => boolean
+  canAccessModule: (module: string) => boolean,
 ): MenuitemsType[] => {
   return menuItems.filter((item) => {
     // Mantener labels de sección si hay elementos válidos después (se limpia abajo)
@@ -141,15 +152,20 @@ export const filterMenuItemsByPermissions = (
 
     // Si tiene hijos, filtrar recursivamente
     if (item.children && item.children.length > 0) {
-      const filteredChildren = filterMenuItemsByPermissions(item.children, hasPermission, canAccessModule);
+      const filteredChildren = filterMenuItemsByPermissions(
+        item.children,
+        hasPermission,
+        canAccessModule,
+      );
       if (filteredChildren.length === 0) return false;
       item.children = filteredChildren;
       return true;
     }
 
-    // Si es una ruta, verificar permiso de "ver"
+    // Si es una ruta, verificar permiso requerido (default 'ver')
     if (item.href) {
-      return canAccessRoute(item.href, hasPermission, canAccessModule);
+      const requiredAction = (item as any).requiredAction || 'ver';
+      return canAccessRouteWithAction(item.href, requiredAction, hasPermission, canAccessModule);
     }
 
     return true;
@@ -159,10 +175,10 @@ export const filterMenuItemsByPermissions = (
 // Función para limpiar separadores huérfanos (navlabels sin elementos)
 export const cleanOrphanedNavLabels = (menuItems: any[]): any[] => {
   const result: any[] = [];
-  
+
   for (let i = 0; i < menuItems.length; i++) {
     const item = menuItems[i];
-    
+
     if (item.navlabel) {
       // Buscar el siguiente elemento que no sea navlabel
       let hasNextValidItem = false;
@@ -172,7 +188,7 @@ export const cleanOrphanedNavLabels = (menuItems: any[]): any[] => {
           break;
         }
       }
-      
+
       // Solo incluir el navlabel si hay elementos válidos después
       if (hasNextValidItem) {
         result.push(item);
@@ -181,6 +197,6 @@ export const cleanOrphanedNavLabels = (menuItems: any[]): any[] => {
       result.push(item);
     }
   }
-  
+
   return result;
-}; 
+};
