@@ -182,6 +182,10 @@ class EmpleadosBrokerController extends Controller
                     }),
                 ],
                 'observaciones' => 'nullable|string',
+                // Credenciales (opcionales en creación)
+                'password' => 'nullable|string|min:8|confirmed',
+                'password_confirmation' => 'nullable|string',
+                'requiere_cambio_password' => 'nullable|boolean',
             ]);
 
             if ($validator->fails()) {
@@ -214,9 +218,17 @@ class EmpleadosBrokerController extends Controller
                 'rol_id' => $request->rol_id,
                 'observaciones' => $request->observaciones,
                 'broker_id' => $brokerId,
-                'requiere_cambio_password' => true,
+                'requiere_cambio_password' => (bool) $request->get('requiere_cambio_password', true),
                 'creado_por' => Auth::id(),
             ]);
+
+            // Si llegó password, establecerla y marcar fecha de cambio
+            if ($request->filled('password')) {
+                $empleado->update([
+                    'password' => $request->password,
+                    'password_changed_at' => now(),
+                ]);
+            }
 
             return response()->json([
                 'success' => true,
@@ -330,6 +342,10 @@ class EmpleadosBrokerController extends Controller
                     }),
                 ],
                 'observaciones' => 'nullable|string',
+                // Credenciales (opcionales en edición)
+                'password' => 'nullable|string|min:8|confirmed',
+                'password_confirmation' => 'nullable|string',
+                'requiere_cambio_password' => 'nullable|boolean',
             ]);
 
             if ($validator->fails()) {
@@ -361,8 +377,19 @@ class EmpleadosBrokerController extends Controller
                 'acceso_activo' => $request->acceso_activo,
                 'rol_id' => $request->rol_id,
                 'observaciones' => $request->observaciones,
+                'requiere_cambio_password' => $request->has('requiere_cambio_password')
+                    ? (bool) $request->get('requiere_cambio_password')
+                    : $empleado->requiere_cambio_password,
                 'actualizado_por' => Auth::id(),
             ]);
+
+            // Si llegó password en la edición, actualizarla
+            if ($request->filled('password')) {
+                $empleado->update([
+                    'password' => $request->password,
+                    'password_changed_at' => now(),
+                ]);
+            }
 
             return response()->json([
                 'success' => true,

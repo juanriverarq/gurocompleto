@@ -1,9 +1,26 @@
 import React, { useState } from 'react';
-import { Card, Button, Alert, Spinner, Table, Modal, TextInput, Label, Select, Textarea, ToggleSwitch, Badge } from 'flowbite-react';
+import {
+  Card,
+  Button,
+  Alert,
+  Spinner,
+  Table,
+  Modal,
+  TextInput,
+  Label,
+  Select,
+  Textarea,
+  ToggleSwitch,
+  Badge,
+} from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { useEmpleadosBroker, useRolesBroker } from 'src/hooks/useAdminCrudApi';
 import type { EmpleadoBroker as EmpleadoBrokerType, EmpleadoBrokerCreate } from 'src/types/admin';
-import { usePagePermissions, PermissionGate, PermissionButton } from 'src/components/PermissionGate';
+import {
+  usePagePermissions,
+  PermissionGate,
+  PermissionButton,
+} from 'src/components/PermissionGate';
 import { useLocation } from 'react-router-dom';
 
 const tiposDocumento = [
@@ -30,11 +47,12 @@ const tiposVinculacion = [
 const Usuarios = () => {
   const location = useLocation();
   const currentRoute = location.pathname;
-  
+
   // Verificar permisos para esta página
   const { canView, canCreate, canEdit, canDelete } = usePagePermissions(currentRoute);
 
-  const { empleados, loading, error, createEmpleado, updateEmpleado, deleteEmpleado } = useEmpleadosBroker();
+  const { empleados, loading, error, createEmpleado, updateEmpleado, deleteEmpleado } =
+    useEmpleadosBroker();
   const { roles } = useRolesBroker();
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<EmpleadoBrokerType | null>(null);
@@ -60,6 +78,10 @@ const Usuarios = () => {
     acceso_activo: true,
     rol_id: undefined,
     observaciones: '',
+    // Credenciales (opcionales)
+    password: '',
+    password_confirmation: '',
+    requiere_cambio_password: true,
   });
 
   const handleCreate = () => {
@@ -86,6 +108,9 @@ const Usuarios = () => {
       acceso_activo: true,
       rol_id: undefined,
       observaciones: '',
+      password: '',
+      password_confirmation: '',
+      requiere_cambio_password: true,
     });
     setShowModal(true);
   };
@@ -114,62 +139,87 @@ const Usuarios = () => {
       acceso_activo: item.acceso_activo,
       rol_id: item.rol_id,
       observaciones: item.observaciones || '',
+      password: '',
+      password_confirmation: '',
+      requiere_cambio_password: item.requiere_cambio_password,
     });
     setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       let success = false;
-      
+
       if (isEditing && selectedItem) {
-        success = await updateEmpleado(selectedItem.id, formData);
+        // En edición, si password está vacío no lo enviamos
+        const payload = { ...formData };
+        if (!payload.password) {
+          delete (payload as any).password;
+          delete (payload as any).password_confirmation;
+        }
+        success = await updateEmpleado(selectedItem.id, payload);
       } else {
-        success = await createEmpleado(formData);
-        
+        // En creación, password es opcional; si viene lo enviamos
+        const payload = { ...formData };
+        if (!payload.password) {
+          delete (payload as any).password;
+          delete (payload as any).password_confirmation;
+        }
+        success = await createEmpleado(payload);
+
         // Si se creó exitosamente, generar contraseña temporal
         if (success) {
           try {
-            const response = await fetch(`http://127.0.0.1:8001/api/empleado-auth/generar-password-temporal`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
+            const response = await fetch(
+              `http://127.0.0.1:8001/api/empleado-auth/generar-password-temporal`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ usuario: formData.usuario }),
               },
-              body: JSON.stringify({ usuario: formData.usuario }),
-            });
-            
+            );
+
             const data = await response.json();
-            
+
             if (data.success) {
-              alert(`Usuario creado exitosamente.\nContraseña temporal: ${data.password}\n\nEl empleado deberá cambiar esta contraseña en su primer acceso.`);
+              alert(
+                `Usuario creado exitosamente.\nContraseña temporal: ${data.password}\n\nEl empleado deberá cambiar esta contraseña en su primer acceso.`,
+              );
             }
-          } catch (error) {
-          }
+          } catch (error) {}
         }
       }
-      
+
       if (success) {
         setShowModal(false);
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   };
 
   const handleDelete = async (item: EmpleadoBrokerType) => {
-    if (window.confirm(`¿Estás seguro de que quieres eliminar a ${item.nombres} ${item.apellidos}?`)) {
+    if (
+      window.confirm(`¿Estás seguro de que quieres eliminar a ${item.nombres} ${item.apellidos}?`)
+    ) {
       await deleteEmpleado(item.id);
     }
   };
 
   const getEstadoBadgeColor = (estado: string) => {
     switch (estado) {
-      case 'activo': return 'success';
-      case 'inactivo': return 'gray';
-      case 'suspendido': return 'warning';
-      case 'retirado': return 'failure';
-      default: return 'gray';
+      case 'activo':
+        return 'success';
+      case 'inactivo':
+        return 'gray';
+      case 'suspendido':
+        return 'warning';
+      case 'retirado':
+        return 'failure';
+      default:
+        return 'gray';
     }
   };
 
@@ -203,7 +253,7 @@ const Usuarios = () => {
               Administra los empleados y sus accesos al sistema.
             </p>
           </div>
-          <PermissionButton 
+          <PermissionButton
             route={currentRoute}
             action="crear"
             onClick={handleCreate}
@@ -236,7 +286,10 @@ const Usuarios = () => {
             </Table.Head>
             <Table.Body>
               {empleados.map((empleado) => (
-                <Table.Row key={empleado.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                <Table.Row
+                  key={empleado.id}
+                  className="bg-white dark:border-gray-700 dark:bg-gray-800"
+                >
                   <Table.Cell>
                     <div>
                       <div className="font-medium text-gray-900 dark:text-white">
@@ -270,9 +323,7 @@ const Usuarios = () => {
                     )}
                   </Table.Cell>
                   <Table.Cell>
-                    <Badge color={getEstadoBadgeColor(empleado.estado)}>
-                      {empleado.estado}
-                    </Badge>
+                    <Badge color={getEstadoBadgeColor(empleado.estado)}>{empleado.estado}</Badge>
                   </Table.Cell>
                   <Table.Cell>
                     <Badge color={empleado.acceso_activo ? 'success' : 'failure'}>
@@ -288,7 +339,7 @@ const Usuarios = () => {
                         variant="secondary"
                         onClick={() => handleEdit(empleado)}
                         icon={<Icon icon="solar:pen-bold-duotone" width={16} />}
-                        buttonProps={{ title: "Editar" }}
+                        buttonProps={{ title: 'Editar' }}
                       >
                         Editar
                       </PermissionButton>
@@ -299,7 +350,7 @@ const Usuarios = () => {
                         variant="danger"
                         onClick={() => handleDelete(empleado)}
                         icon={<Icon icon="solar:trash-bin-trash-bold-duotone" width={16} />}
-                        buttonProps={{ title: "Eliminar" }}
+                        buttonProps={{ title: 'Eliminar' }}
                       >
                         Eliminar
                       </PermissionButton>
@@ -311,7 +362,11 @@ const Usuarios = () => {
                 <Table.Row>
                   <Table.Cell colSpan={7} className="text-center py-8">
                     <div className="flex flex-col items-center justify-center text-gray-500">
-                      <Icon icon="solar:users-group-two-rounded-bold-duotone" width={48} className="mb-2" />
+                      <Icon
+                        icon="solar:users-group-two-rounded-bold-duotone"
+                        width={48}
+                        className="mb-2"
+                      />
                       <p>No hay usuarios registrados</p>
                     </div>
                   </Table.Cell>
@@ -324,9 +379,7 @@ const Usuarios = () => {
 
       {/* Modal para crear/editar */}
       <Modal show={showModal} onClose={() => setShowModal(false)} size="2xl">
-        <Modal.Header>
-          {isEditing ? 'Editar Usuario' : 'Nuevo Usuario'}
-        </Modal.Header>
+        <Modal.Header>{isEditing ? 'Editar Usuario' : 'Nuevo Usuario'}</Modal.Header>
         <Modal.Body>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Información Personal */}
@@ -343,7 +396,7 @@ const Usuarios = () => {
                     placeholder="Nombres"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="apellidos" value="Apellidos *" />
                   <TextInput
@@ -432,6 +485,17 @@ const Usuarios = () => {
               <h3 className="text-lg font-medium mb-3">Información Laboral</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                  <Label htmlFor="usuario" value="Usuario *" />
+                  <TextInput
+                    id="usuario"
+                    value={formData.usuario}
+                    onChange={(e) => setFormData({ ...formData, usuario: e.target.value })}
+                    required
+                    placeholder="nombreusuario"
+                  />
+                </div>
+
+                <div>
                   <Label htmlFor="cargo" value="Cargo" />
                   <TextInput
                     id="cargo"
@@ -469,7 +533,9 @@ const Usuarios = () => {
                     min="0"
                     step="0.01"
                     value={formData.salario}
-                    onChange={(e) => setFormData({ ...formData, salario: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, salario: parseFloat(e.target.value) || 0 })
+                    }
                     placeholder="0.00"
                   />
                 </div>
@@ -511,14 +577,21 @@ const Usuarios = () => {
                   <Select
                     id="rol_id"
                     value={formData.rol_id || ''}
-                    onChange={(e) => setFormData({ ...formData, rol_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        rol_id: e.target.value ? parseInt(e.target.value) : undefined,
+                      })
+                    }
                   >
                     <option value="">Sin rol asignado</option>
-                    {roles.filter(rol => rol.activo).map((rol) => (
-                      <option key={rol.id} value={rol.id}>
-                        {rol.nombre}
-                      </option>
-                    ))}
+                    {roles
+                      .filter((rol) => rol.activo)
+                      .map((rol) => (
+                        <option key={rol.id} value={rol.id}>
+                          {rol.nombre}
+                        </option>
+                      ))}
                   </Select>
                 </div>
 
@@ -528,6 +601,59 @@ const Usuarios = () => {
                     id="acceso_activo"
                     checked={formData.acceso_activo}
                     onChange={(checked) => setFormData({ ...formData, acceso_activo: checked })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Credenciales */}
+            <div>
+              <h3 className="text-lg font-medium mb-3">Credenciales</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label
+                    htmlFor="password"
+                    value={`${isEditing ? 'Nueva contraseña' : 'Contraseña'} ${
+                      isEditing ? '(opcional)' : ''
+                    }`}
+                  />
+                  <TextInput
+                    id="password"
+                    type="password"
+                    value={formData.password || ''}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder={
+                      isEditing ? 'Deja en blanco para no cambiar' : 'Mínimo 8 caracteres'
+                    }
+                  />
+                </div>
+                <div>
+                  <Label
+                    htmlFor="password_confirmation"
+                    value={`${isEditing ? 'Confirmar nueva contraseña' : 'Confirmar contraseña'}`}
+                  />
+                  <TextInput
+                    id="password_confirmation"
+                    type="password"
+                    value={formData.password_confirmation || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password_confirmation: e.target.value })
+                    }
+                    placeholder="Repite la contraseña"
+                  />
+                </div>
+                <div className="flex items-center">
+                  <Label
+                    htmlFor="requiere_cambio_password"
+                    value="Requerir cambio de contraseña al ingresar"
+                    className="mr-2"
+                  />
+                  <ToggleSwitch
+                    id="requiere_cambio_password"
+                    checked={!!formData.requiere_cambio_password}
+                    onChange={(checked) =>
+                      setFormData({ ...formData, requiere_cambio_password: checked })
+                    }
                   />
                 </div>
               </div>
@@ -559,4 +685,4 @@ const Usuarios = () => {
   );
 };
 
-export default Usuarios; 
+export default Usuarios;

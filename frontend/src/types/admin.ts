@@ -191,18 +191,18 @@ export const ROLES_SISTEMA = [
   'AGENTE_ASESOR',
   'ASISTENTE_OPERATIVO',
   'AUDITOR',
-  'CLIENTE_EXTERNO'
+  'CLIENTE_EXTERNO',
 ] as const;
 
 export const MODULOS_SISTEMA = [
   'CLIENTES',
-  'SINIESTROS', 
+  'SINIESTROS',
   'RENOVACIONES',
   'CRM',
   'COMISIONES',
   'CONFIGURACION',
   'BI',
-  'AUDITORIA'
+  'AUDITORIA',
 ] as const;
 
 export const PERMISOS_BASE = [
@@ -214,7 +214,7 @@ export const PERMISOS_BASE = [
   'ACCESO_REPORTES_FINANCIEROS',
   'CONFIGURACION_SISTEMA',
   'VER_COMISIONES',
-  'GESTION_USUARIOS'
+  'GESTION_USUARIOS',
 ] as const;
 
 // Tipo para estadísticas del dashboard administrativo
@@ -233,7 +233,7 @@ export interface AdminStats {
   usuarios_por_rol: {
     [key: string]: number;
   };
-} 
+}
 
 // Tipos de Afiliación
 export interface TipoAfiliacion {
@@ -415,7 +415,7 @@ export interface RamoCreate {
   calcular_iva_pri_a_pre: boolean;
   vista_mapa_oportunidad: boolean;
   comisiones_aseguradoras: Omit<ComisionAseguradora, 'aseguradora_nombre'>[];
-} 
+}
 
 // Mensajero types
 export interface Mensajero {
@@ -449,7 +449,7 @@ export interface MensajeroCreate {
   activo: boolean;
   tarifa_base?: number;
   observaciones?: string;
-} 
+}
 
 // RolBroker types
 export interface RolBroker {
@@ -549,4 +549,8 @@ export interface EmpleadoBrokerCreate {
   acceso_activo: boolean;
   rol_id?: number;
   observaciones?: string;
-} 
+  // Credenciales (opcionales)
+  password?: string;
+  password_confirmation?: string;
+  requiere_cambio_password?: boolean;
+}

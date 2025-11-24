@@ -1,5 +1,8 @@
-import { uniqueId } from "lodash";
-import { filterMenuItemsByPermissions, cleanOrphanedNavLabels } from "../../../../utils/permissionUtils";
+import { uniqueId } from 'lodash';
+import {
+  filterMenuItemsByPermissions,
+  cleanOrphanedNavLabels,
+} from '../../../../utils/permissionUtils';
 
 export interface MenuitemsType {
   [x: string]: any;
@@ -10,6 +13,8 @@ export interface MenuitemsType {
   icon?: any;
   href?: string;
   children?: MenuitemsType[];
+  // Acción requerida para visibilidad en el menú (por defecto 'ver')
+  requiredAction?: 'ver' | 'crear' | 'editar' | 'eliminar' | 'renovar' | 'emitir';
   chip?: string;
   chipColor?: string;
   variant?: string;
@@ -22,84 +27,88 @@ const BaseMenuitems: MenuitemsType[] = [
   // 🏠 PANEL DE CONTROL
   {
     navlabel: true,
-    subheader: "Panel de Control",
+    subheader: 'Panel de Control',
   },
   {
     id: uniqueId(),
-    title: "Dashboard",
-    icon: "solar:widget-2-bold-duotone",
-    href: "/apps/",
+    title: 'Dashboard',
+    icon: 'solar:widget-2-bold-duotone',
+    href: '/apps/',
   },
 
   // 🛡️ OPERACIONES DE SEGUROS
   {
     navlabel: true,
-    subheader: "Operaciones de Seguros",
+    subheader: 'Operaciones de Seguros',
   },
   {
     id: uniqueId(),
-    title: "Clientes",
-    icon: "solar:users-group-two-rounded-bold-duotone",
+    title: 'Clientes',
+    icon: 'solar:users-group-two-rounded-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: "Lista de Clientes",
-        href: "/apps/seguros/clientes",
+        title: 'Lista de Clientes',
+        href: '/apps/seguros/clientes',
       },
       {
         id: uniqueId(),
-        title: "Nuevo Cliente",
-        href: "/apps/seguros/clientes/nuevo",
+        title: 'Nuevo Cliente',
+        href: '/apps/seguros/clientes/nuevo',
+        requiredAction: 'crear',
       },
       {
         id: uniqueId(),
-        title: "Seguimiento Comercial",
-        href: "/apps/seguros/seguimiento",
+        title: 'Seguimiento Comercial',
+        href: '/apps/seguros/seguimiento',
       },
       // Ítem removido: Embudo de Conversión
     ],
   },
   {
     id: uniqueId(),
-    title: "Pólizas",
-    icon: "solar:shield-check-bold-duotone",
+    title: 'Pólizas',
+    icon: 'solar:shield-check-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: "Gestión de Pólizas",
-        href: "/apps/seguros/polizas",
+        title: 'Gestión de Pólizas',
+        href: '/apps/seguros/polizas',
       },
       {
         id: uniqueId(),
-        title: "Nueva Póliza",
-        href: "/apps/seguros/polizas/nueva",
+        title: 'Nueva Póliza',
+        href: '/apps/seguros/polizas/nueva',
+        requiredAction: 'crear',
       },
       {
         id: uniqueId(),
-        title: "Renovaciones",
-        href: "/apps/seguros/renovaciones",
+        title: 'Renovaciones',
+        href: '/apps/seguros/renovaciones',
+        requiredAction: 'renovar',
       },
       {
         id: uniqueId(),
-        title: "Automóviles",
-        href: "/apps/seguros/automoviles",
+        title: 'Automóviles',
+        href: '/apps/seguros/automoviles',
       },
     ],
   },
   {
     id: uniqueId(),
-    title: "Siniestros",
-    icon: "solar:danger-triangle-bold-duotone",
+    title: 'Siniestros',
+    icon: 'solar:danger-triangle-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: "Gestión de Siniestros",
-        href: "/apps/seguros/siniestros",
+        title: 'Gestión de Siniestros',
+        href: '/apps/seguros/siniestros',
       },
       {
         id: uniqueId(),
-        title: "Reportar Siniestro",
-        href: "/apps/seguros/siniestros/nuevo",
+        title: 'Reportar Siniestro',
+        href: '/apps/seguros/siniestros/nuevo',
+        requiredAction: 'crear',
       },
     ],
   },
@@ -107,212 +116,210 @@ const BaseMenuitems: MenuitemsType[] = [
   // 💼 GESTIÓN COMERCIAL
   {
     navlabel: true,
-    subheader: "Gestión Comercial",
+    subheader: 'Gestión Comercial',
   },
   // Orden propuesto: Embudo, Seguimiento, Metas, Equipos, Rendimiento
   {
     id: uniqueId(),
-    title: "Negocios",
-    icon: "solar:target-bold-duotone",
-    href: "/apps/saas/sales-funnel",
+    title: 'Negocios',
+    icon: 'solar:target-bold-duotone',
+    href: '/apps/saas/sales-funnel',
   },
   // Eliminado: Pipeline de Ventas (/apps/comercial/pipeline)
   {
     id: uniqueId(),
-    title: "Seguimiento Comercial",
-    icon: "solar:clipboard-check-bold-duotone",
-    href: "/apps/seguros/seguimiento",
+    title: 'Seguimiento Comercial',
+    icon: 'solar:clipboard-check-bold-duotone',
+    href: '/apps/seguros/seguimiento',
   },
   {
     id: uniqueId(),
-    title: "Metas y Objetivos",
-    icon: "solar:target-bold-duotone",
-    href: "/apps/comercial/metas-objetivos",
+    title: 'Metas y Objetivos',
+    icon: 'solar:target-bold-duotone',
+    href: '/apps/comercial/metas-objetivos',
   },
   {
     id: uniqueId(),
-    title: "Equipos de Ventas",
-    icon: "solar:users-group-rounded-bold-duotone",
-    href: "/apps/comercial/equipos-ventas",
+    title: 'Equipos de Ventas',
+    icon: 'solar:users-group-rounded-bold-duotone',
+    href: '/apps/comercial/equipos-ventas',
   },
   {
     id: uniqueId(),
-    title: "Análisis de Rendimiento",
-    icon: "solar:graph-up-bold-duotone",
-    href: "/apps/comercial/rendimiento",
+    title: 'Análisis de Rendimiento',
+    icon: 'solar:graph-up-bold-duotone',
+    href: '/apps/comercial/rendimiento',
   },
 
   // 💰 GESTIÓN FINANCIERA
   {
     navlabel: true,
-    subheader: "Gestión Financiera",
+    subheader: 'Gestión Financiera',
   },
   {
     id: uniqueId(),
-    title: "Cartera",
-    icon: "solar:wallet-bold-duotone",
-    href: "/apps/cartera/clientes",
+    title: 'Cartera',
+    icon: 'solar:wallet-bold-duotone',
+    href: '/apps/cartera/clientes',
   },
   {
     id: uniqueId(),
-    title: "Comisiones",
-    icon: "solar:dollar-minimalistic-bold-duotone",
-    href: "/apps/comisiones/por-poliza",
+    title: 'Comisiones',
+    icon: 'solar:dollar-minimalistic-bold-duotone',
+    href: '/apps/comisiones/por-poliza',
   },
   {
     id: uniqueId(),
-    title: "Liquidar Vendedores",
-    icon: "solar:calculator-bold-duotone",
-    href: "/apps/cartera/liquidar-vendedores",
+    title: 'Liquidar Vendedores',
+    icon: 'solar:calculator-bold-duotone',
+    href: '/apps/cartera/liquidar-vendedores',
   },
   {
     id: uniqueId(),
-    title: "Reportes Financieros",
-    icon: "solar:chart-square-bold-duotone",
-    href: "/apps/cartera/reportes-financieros",
+    title: 'Reportes Financieros',
+    icon: 'solar:chart-square-bold-duotone',
+    href: '/apps/cartera/reportes-financieros',
   },
   {
     id: uniqueId(),
-    title: "Anticipos y Ajustes",
-    icon: "solar:dollar-minimalistic-bold-duotone",
-    href: "/apps/comisiones/anticipos-ajustes",
+    title: 'Anticipos y Ajustes',
+    icon: 'solar:dollar-minimalistic-bold-duotone',
+    href: '/apps/comisiones/anticipos-ajustes',
   },
 
   // 📢 MARKETING DIGITAL
   {
     navlabel: true,
-    subheader: "Marketing Digital",
+    subheader: 'Marketing Digital',
   },
   {
     id: uniqueId(),
-    title: "WhatsApp Marketing",
-    icon: "solar:chat-round-dots-bold-duotone",
-    href: "/apps/saas/configuracion-masiva",
+    title: 'WhatsApp Marketing',
+    icon: 'solar:chat-round-dots-bold-duotone',
+    href: '/apps/saas/configuracion-masiva',
   },
   {
     id: uniqueId(),
-    title: "Email Marketing",
-    icon: "solar:letter-bold-duotone",
-    href: "/apps/marketing/plantillas",
+    title: 'Email Marketing',
+    icon: 'solar:letter-bold-duotone',
+    href: '/apps/marketing/plantillas',
   },
 
   {
     id: uniqueId(),
-    title: "Enlaces de Cotización",
-    icon: "solar:link-bold-duotone",
-    href: "/apps/marketing/enlaces-cotizacion",
+    title: 'Enlaces de Cotización',
+    icon: 'solar:link-bold-duotone',
+    href: '/apps/marketing/enlaces-cotizacion',
   },
   {
     id: uniqueId(),
-    title: "Mini Web",
-    icon: "solar:smartphone-2-bold-duotone",
-    href: "/apps/marketing/mini-web",
+    title: 'Mini Web',
+    icon: 'solar:smartphone-2-bold-duotone',
+    href: '/apps/marketing/mini-web',
   },
 
   // 🤖 INTELIGENCIA ARTIFICIAL
   {
     navlabel: true,
-    subheader: "Inteligencia Artificial",
+    subheader: 'Inteligencia Artificial',
   },
   {
     id: uniqueId(),
-    title: "Chatbot",
-    icon: "solar:cpu-bolt-bold-duotone",
-    href: "/apps/ia/asistente",
+    title: 'Chatbot',
+    icon: 'solar:cpu-bolt-bold-duotone',
+    href: '/apps/ia/asistente',
   },
   {
     id: uniqueId(),
-    title: "Call center IA",
-    icon: "solar:phone-calling-rounded-outline",
-    href: "/apps/voice-ai/dashboard",
+    title: 'Call center IA',
+    icon: 'solar:phone-calling-rounded-outline',
+    href: '/apps/voice-ai/dashboard',
   },
   {
     id: uniqueId(),
-    title: "Predicciones de venta",
-    icon: "solar:chart-square-bold-duotone",
-    href: "/apps/ia/analisis-predictivo/predicciones",
+    title: 'Predicciones de venta',
+    icon: 'solar:chart-square-bold-duotone',
+    href: '/apps/ia/analisis-predictivo/predicciones',
   },
   {
     id: uniqueId(),
-    title: "Ventas cruzadas",
-    icon: "solar:graph-up-bold-duotone",
-    href: "/apps/ia/ventas-cruzadas",
+    title: 'Ventas cruzadas',
+    icon: 'solar:graph-up-bold-duotone',
+    href: '/apps/ia/ventas-cruzadas',
   },
-
-  
 
   // 📚 GESTIÓN DOCUMENTAL
   {
     navlabel: true,
-    subheader: "Gestión Documental",
+    subheader: 'Gestión Documental',
   },
-  
+
   {
     id: uniqueId(),
-    title: "Clientes",
-    icon: "solar:folder-with-files-bold-duotone",
-    href: "/apps/legal/documentos-cliente",
-  },
-  {
-    id: uniqueId(),
-    title: "Pólizas",
-    icon: "solar:folder-with-files-bold-duotone",
-    href: "/apps/seguros/documentos-poliza",
+    title: 'Clientes',
+    icon: 'solar:folder-with-files-bold-duotone',
+    href: '/apps/legal/documentos-cliente',
   },
   {
     id: uniqueId(),
-    title: "Siniestros",
-    icon: "solar:folder-with-files-bold-duotone",
-    href: "/apps/seguros/documentos-siniestro",
+    title: 'Pólizas',
+    icon: 'solar:folder-with-files-bold-duotone',
+    href: '/apps/seguros/documentos-poliza',
   },
   {
     id: uniqueId(),
-    title: "Internos",
-    icon: "solar:archive-bold-duotone",
-    href: "/apps/legal/documentos-internos",
+    title: 'Siniestros',
+    icon: 'solar:folder-with-files-bold-duotone',
+    href: '/apps/seguros/documentos-siniestro',
+  },
+  {
+    id: uniqueId(),
+    title: 'Internos',
+    icon: 'solar:archive-bold-duotone',
+    href: '/apps/legal/documentos-internos',
   },
 
   // 🔗 INTEGRACIONES
   {
     navlabel: true,
-    subheader: "Integraciones",
+    subheader: 'Integraciones',
   },
   {
     id: uniqueId(),
-    title: "Integraciones Externas",
-    icon: "solar:programming-bold-duotone",
+    title: 'Integraciones Externas',
+    icon: 'solar:programming-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: "Conectores API",
-        href: "/apps/integraciones/conectores",
+        title: 'Conectores API',
+        href: '/apps/integraciones/conectores',
       },
       {
         id: uniqueId(),
-        title: "Webhooks",
-        href: "/apps/integraciones/webhooks",
+        title: 'Webhooks',
+        href: '/apps/integraciones/webhooks',
       },
       {
         id: uniqueId(),
-        title: "Documentación API",
-        href: "/apps/integraciones/documentacion",
+        title: 'Documentación API',
+        href: '/apps/integraciones/documentacion',
       },
     ],
   },
   {
     id: uniqueId(),
-    title: "Sincronización",
-    icon: "solar:refresh-bold-duotone",
+    title: 'Sincronización',
+    icon: 'solar:refresh-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: "Sincronización Auto",
-        href: "/apps/integraciones/sincronizacion",
+        title: 'Sincronización Auto',
+        href: '/apps/integraciones/sincronizacion',
       },
       {
         id: uniqueId(),
-        title: "Historial de Sync",
-        href: "/apps/integraciones/historial",
+        title: 'Historial de Sync',
+        href: '/apps/integraciones/historial',
       },
     ],
   },
@@ -320,97 +327,97 @@ const BaseMenuitems: MenuitemsType[] = [
   // ⚙️ ADMINISTRACIÓN
   {
     navlabel: true,
-    subheader: "Administración",
+    subheader: 'Administración',
   },
   {
     id: uniqueId(),
-    title: "Gestión de Usuarios",
-    icon: "solar:users-group-rounded-bold-duotone",
+    title: 'Gestión de Usuarios',
+    icon: 'solar:users-group-rounded-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: "Lista de Usuarios",
-        href: "/apps/admin/usuarios",
+        title: 'Lista de Usuarios',
+        href: '/apps/admin/usuarios',
       },
       {
         id: uniqueId(),
-        title: "Roles y Permisos",
-        href: "/apps/admin/roles",
+        title: 'Roles y Permisos',
+        href: '/apps/admin/roles',
       },
     ],
   },
   {
     id: uniqueId(),
-    title: "Configuración Agencia",
-    icon: "solar:buildings-3-bold-duotone",
+    title: 'Configuración Agencia',
+    icon: 'solar:buildings-3-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: "Información de Agencia",
-        href: "/apps/admin/informacion-agencia",
+        title: 'Información de Agencia',
+        href: '/apps/admin/informacion-agencia',
       },
       {
         id: uniqueId(),
-        title: "Sedes",
-        href: "/apps/admin/sedes",
+        title: 'Sedes',
+        href: '/apps/admin/sedes',
       },
       {
         id: uniqueId(),
-        title: "Aseguradoras",
-        href: "/apps/admin/aseguradoras",
+        title: 'Aseguradoras',
+        href: '/apps/admin/aseguradoras',
       },
       {
         id: uniqueId(),
-        title: "Ramos",
-        href: "/apps/admin/ramos",
+        title: 'Ramos',
+        href: '/apps/admin/ramos',
       },
       {
         id: uniqueId(),
-        title: "Vendedores",
-        href: "/apps/admin/vendedores",
+        title: 'Vendedores',
+        href: '/apps/admin/vendedores',
       },
       {
         id: uniqueId(),
-        title: "Coberturas",
-        href: "/apps/admin/coberturas",
+        title: 'Coberturas',
+        href: '/apps/admin/coberturas',
       },
       {
         id: uniqueId(),
-        title: "Tipos de Afiliación",
-        href: "/apps/admin/tipo-afiliacion",
+        title: 'Tipos de Afiliación',
+        href: '/apps/admin/tipo-afiliacion',
       },
       {
         id: uniqueId(),
-        title: "Estados de Siniestros",
-        href: "/apps/admin/estados-siniestros",
+        title: 'Estados de Siniestros',
+        href: '/apps/admin/estados-siniestros',
       },
       {
         id: uniqueId(),
-        title: "Motivos Estados Póliza",
-        href: "/apps/admin/motivos-estados-poliza",
+        title: 'Motivos Estados Póliza',
+        href: '/apps/admin/motivos-estados-poliza',
       },
       {
         id: uniqueId(),
-        title: "Mensajeros",
-        href: "/apps/admin/mensajeros",
+        title: 'Mensajeros',
+        href: '/apps/admin/mensajeros',
       },
     ],
   },
   {
     id: uniqueId(),
-    title: "Configuración del Sistema",
-    icon: "solar:settings-bold-duotone",
+    title: 'Configuración del Sistema',
+    icon: 'solar:settings-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: "Copias de Seguridad",
-        href: "/apps/admin/respaldos",
+        title: 'Copias de Seguridad',
+        href: '/apps/admin/respaldos',
       },
-          {
-            id: uniqueId(),
-            title: "Importación Masiva",
-            href: "/apps/admin/importacion-masiva",
-          },
+      {
+        id: uniqueId(),
+        title: 'Importación Masiva',
+        href: '/apps/admin/importacion-masiva',
+      },
     ],
   },
 ];
@@ -418,7 +425,7 @@ const BaseMenuitems: MenuitemsType[] = [
 // Función para obtener menú filtrado por permisos
 export const getFilteredMenuItems = (
   hasPermission: (module: string, action: string) => boolean,
-  canAccessModule: (module: string) => boolean
+  canAccessModule: (module: string) => boolean,
 ): MenuitemsType[] => {
   const filteredItems = filterMenuItemsByPermissions(BaseMenuitems, hasPermission, canAccessModule);
   const cleanedItems = cleanOrphanedNavLabels(filteredItems);
