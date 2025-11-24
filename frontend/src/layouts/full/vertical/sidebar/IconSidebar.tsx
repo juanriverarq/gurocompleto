@@ -15,20 +15,14 @@ export const IconSidebar = () => {
   // Mapeo de íconos a módulos que habilitan su visibilidad
   const iconAccessMap: Record<number, string[]> = {
     1: ['dashboard'],
-    2: [
-      'clientes',
-      'polizas',
-      'siniestros',
-      'renovaciones',
-      'anexos_condiciones',
-      'seguimiento_comercial',
-    ],
+    2: ['clientes', 'polizas', 'siniestros', 'renovaciones', 'anexos_condiciones'],
     3: [
       'pipeline_ventas',
       'metas_objetivos',
       'equipos_ventas',
       'analisis_rendimiento',
       'embudo_ventas',
+      'seguimiento_comercial',
     ],
     4: ['cartera_clientes', 'comisiones', 'reportes_financieros'],
     5: [
