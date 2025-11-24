@@ -27,6 +27,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
 
   // Gestión Comercial
   '/apps/saas/sales-funnel': 'embudo_ventas',
+  '/apps/saas/sales-funnel/kanban': 'embudo_ventas',
+  '/apps/saas/sales-funnel/lista': 'embudo_ventas',
   '/apps/comercial/metas-objetivos': 'metas_objetivos',
   '/apps/comercial/equipos-ventas': 'equipos_ventas',
   '/apps/comercial/rendimiento': 'analisis_rendimiento',

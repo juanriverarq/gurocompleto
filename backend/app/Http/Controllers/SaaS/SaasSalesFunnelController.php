@@ -19,7 +19,8 @@ class SaasSalesFunnelController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $query = SalesFunnel::forBroker($brokerId)
                                ->with(['assignedAgent', 'creator', 'client'])
@@ -136,10 +137,21 @@ class SaasSalesFunnelController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             $validated = $request->validate([
                 'first_name' => 'required|string|max:255',
                 'last_name' => 'required|string|max:255',
-                'email' => 'nullable|email|unique:sales_funnel,email',
+                'email' => [
+                    'nullable',
+                    'email',
+                    Rule::unique('sales_funnel', 'email')->where(function ($q) use ($brokerId) {
+                        if ($brokerId) {
+                            $q->where('broker_id', $brokerId);
+                        }
+                        return $q;
+                    }),
+                ],
                 'phone' => 'nullable|string|max:20',
                 'secondary_phone' => 'nullable|string|max:20',
                 'document_type' => 'nullable|string|max:10',
@@ -170,8 +182,9 @@ class SaasSalesFunnelController extends Controller
                 'next_follow_up_at' => 'nullable|date|after:now'
             ]);
 
-            $validated['broker_id'] = $request->user()->broker_id;
-            $validated['created_by'] = $request->user()->id;
+            $actor = \App\Http\Middleware\UnifiedAuthMiddleware::getAuthenticatedUser($request);
+            $validated['broker_id'] = $brokerId;
+            $validated['created_by'] = $actor ? $actor->id : (optional($request->user())->id);
             $validated['stage_changed_at'] = now();
             $validated['lead_score'] = $validated['lead_score'] ?? 50;
 
@@ -202,7 +215,8 @@ class SaasSalesFunnelController extends Controller
     public function show(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)
                               ->with(['assignedAgent', 'creator', 'client'])
@@ -237,7 +251,8 @@ class SaasSalesFunnelController extends Controller
                 'input_data' => $request->all()
             ]);
             
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -321,7 +336,8 @@ class SaasSalesFunnelController extends Controller
     public function destroy(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -350,7 +366,8 @@ class SaasSalesFunnelController extends Controller
     public function statistics(Request $request): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             $statistics = SalesFunnel::getStatistics($brokerId);
 
             return response()->json($statistics);
@@ -369,7 +386,8 @@ class SaasSalesFunnelController extends Controller
     public function needingAttention(Request $request): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $needingFollowUp = SalesFunnel::forBroker($brokerId)
                                          ->needingFollowUp()
@@ -406,7 +424,8 @@ class SaasSalesFunnelController extends Controller
     public function moveToNextStage(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -435,7 +454,8 @@ class SaasSalesFunnelController extends Controller
     public function moveToStage(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -465,7 +485,8 @@ class SaasSalesFunnelController extends Controller
     public function closeAsWon(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -496,7 +517,8 @@ class SaasSalesFunnelController extends Controller
     public function closeAsLost(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -526,7 +548,8 @@ class SaasSalesFunnelController extends Controller
     public function scheduleFollowUp(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -556,7 +579,8 @@ class SaasSalesFunnelController extends Controller
     public function recordContact(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -587,7 +611,8 @@ class SaasSalesFunnelController extends Controller
     public function updateScore(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
@@ -617,7 +642,8 @@ class SaasSalesFunnelController extends Controller
     public function convertToClient(Request $request, $id): JsonResponse
     {
         try {
-            $brokerId = $request->user()->broker_id;
+            $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
+                ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
