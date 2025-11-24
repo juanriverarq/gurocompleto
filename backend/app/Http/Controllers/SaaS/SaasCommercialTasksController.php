@@ -13,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class SaasCommercialTasksController extends Controller
 {
@@ -119,11 +120,36 @@ class SaasCommercialTasksController extends Controller
 
             $taskData = $validator->validated();
             $taskData['broker_id'] = $brokerId;
-            $taskData['created_by'] = auth()->id();
+            // Resolver created_by de forma robusta (usuario Firebase o fallback a usuario del broker)
+            $authUser = $request->get('authenticated_user') ?? Auth::user();
+            $createdById = $authUser?->id;
+            if (!$createdById) {
+                // Fallback: usar cualquier usuario del broker para mantener integridad referencial (FK a users.id)
+                $createdById = \App\Models\User::where('broker_id', $brokerId)->value('id');
+            }
+            if (!$createdById) {
+                \Log::error('❌ [CommercialTasks@store] No se encontró usuario para created_by', [
+                    'broker_id' => $brokerId,
+                    'auth_type' => $request->get('auth_type'),
+                    'has_authenticated_user' => (bool) $request->get('authenticated_user'),
+                    'has_empleado' => (bool) $request->get('authenticated_empleado')
+                ]);
+                return response()->json([
+                    'error' => 'Error al crear la tarea',
+                    'message' => 'No existe un usuario asociado al broker para created_by. Cree al menos un usuario del broker.'
+                ], 500);
+            }
+            $taskData['created_by'] = $createdById;
             
             // Si no se asigna a nadie, asignar al creador
             if (!isset($taskData['assigned_to'])) {
-                $taskData['assigned_to'] = auth()->id();
+                // Si el autenticado es empleado, asignar al empleado para reflejar correctamente en UI (assignedEmpleado)
+                $empleado = $request->get('authenticated_empleado');
+                if ($empleado) {
+                    $taskData['assigned_to'] = $empleado->id;
+                } else {
+                    $taskData['assigned_to'] = $createdById;
+                }
             }
 
             $task = CommercialTask::create($taskData);
