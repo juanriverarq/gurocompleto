@@ -13,6 +13,8 @@ import {
 import { salesFunnelService } from 'src/services/salesFunnelService';
 import salesTeamsService from 'src/services/salesTeamsService';
 import { useVendedores } from 'src/hooks/useAdminCrudApi';
+import PermissionGate from 'src/components/PermissionGate';
+import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 
 interface Miembro {
   id: string;
@@ -46,6 +48,10 @@ interface Equipo {
 const mockEquipos: Equipo[] = [];
 
 const EquiposVentas = () => {
+  const { hasPermission } = useUnifiedAuth();
+  const canCreate = hasPermission('equipos_ventas', 'crear');
+  const canEdit = hasPermission('equipos_ventas', 'editar');
+  const canDelete = hasPermission('equipos_ventas', 'eliminar');
   const [equipos, setEquipos] = useState<Equipo[]>(mockEquipos);
   const [loading, setLoading] = useState(false);
   const [showModalEquipo, setShowModalEquipo] = useState(false);
@@ -600,7 +606,15 @@ const EquiposVentas = () => {
   }
 
   return (
-    <>
+    <PermissionGate
+      route="/apps/comercial/equipos-ventas"
+      action="ver"
+      fallback={
+        <div className="p-6">
+          <Badge color="warning">No tienes permisos para ver Equipos de Ventas.</Badge>
+        </div>
+      }
+    >
       <div className="grid grid-cols-12 gap-6">
         {/* Estadísticas Generales */}
         <div className="col-span-12">
@@ -700,10 +714,12 @@ const EquiposVentas = () => {
                   <Icon icon="solar:export-bold-duotone" className="mr-2 h-4 w-4" />
                   Miembros XLS
                 </Button>
-                <Button onClick={() => setShowModalEquipo(true)}>
-                  <Icon icon="solar:add-circle-bold-duotone" className="mr-2 h-4 w-4" />
-                  Nuevo Equipo
-                </Button>
+                {canCreate && (
+                  <Button onClick={() => setShowModalEquipo(true)}>
+                    <Icon icon="solar:add-circle-bold-duotone" className="mr-2 h-4 w-4" />
+                    Nuevo Equipo
+                  </Button>
+                )}
               </div>
             </div>
           </Card>
@@ -946,21 +962,23 @@ const EquiposVentas = () => {
                         )}
                       </div>
                       <div className="flex space-x-1">
-                        <Button
-                          size="sm"
-                          color="light"
-                          onClick={() => {
-                            setEquipoIdGestion(equipo.id);
-                            setSelectedUserId('');
-                            setMonthlyGoal('');
-                            setShowModalMiembro(true);
-                          }}
-                        >
-                          <Icon
-                            icon="solar:users-group-two-rounded-bold-duotone"
-                            className="h-4 w-4"
-                          />
-                        </Button>
+                        {canEdit && (
+                          <Button
+                            size="sm"
+                            color="light"
+                            onClick={() => {
+                              setEquipoIdGestion(equipo.id);
+                              setSelectedUserId('');
+                              setMonthlyGoal('');
+                              setShowModalMiembro(true);
+                            }}
+                          >
+                            <Icon
+                              icon="solar:users-group-two-rounded-bold-duotone"
+                              className="h-4 w-4"
+                            />
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           color="light"
@@ -975,79 +993,83 @@ const EquiposVentas = () => {
                         >
                           <Icon icon="solar:export-bold-duotone" className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="sm"
-                          color="light"
-                          onClick={() => {
-                            setEditarEquipo({
-                              id: equipo.id,
-                              nombre: equipo.nombre,
-                              descripcion: equipo.descripcion,
-                              territorio: equipo.territorio,
-                              especialidad: equipo.especialidad,
-                              estado: equipo.estado,
-                            });
-                            setSelectedEditLeaderId(
-                              equipo.liderUserId ? String(equipo.liderUserId) : '',
-                            );
-                            setShowModalEditar(true);
-                          }}
-                        >
-                          <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          color="light"
-                          onClick={async () => {
-                            if (!confirm('¿Eliminar este equipo?')) return;
-                            try {
-                              await salesTeamsService.remove(Number(equipo.id));
-                              const refreshed = await salesTeamsService.list({ per_page: 50 });
-                              const equiposApi: any[] = refreshed?.data || [];
-                              setEquipos(
-                                equiposApi.map((t: any) => ({
-                                  id: String(t.id),
-                                  nombre: t.name,
-                                  descripcion: t.description || '',
-                                  lider:
-                                    t.leader_name ||
-                                    t.leader?.name ||
-                                    t.leaderVendedor?.nombres ||
-                                    '-',
-                                  liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
-                                  miembros: (t.members || []).map((m: any) => ({
-                                    id: String(m.user_id),
-                                    nombre:
-                                      m.vendedor_name ||
-                                      m.vendedor?.nombres ||
-                                      m.user?.name ||
-                                      `Vendedor ${m.user_id}`,
-                                    email: m.vendedor?.email || m.user?.email || '',
-                                    telefono: '',
-                                    rol: m.role || 'Asesor Junior',
-                                    ventasMes: 0,
-                                    metaMes: Number(m.monthly_goal || 0),
-                                    porcentajeMeta: 0,
-                                    fechaIngreso: '',
-                                    estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
-                                  })),
-                                  metaEquipo: 0,
-                                  ventasEquipo: 0,
-                                  porcentajeEquipo: 0,
-                                  territorio: t.territory || 'Nacional',
-                                  especialidad: t.specialty || 'Comercial',
-                                  fechaCreacion: (t.created_at || '').slice(0, 10),
-                                  estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
-                                })),
+                        {canEdit && (
+                          <Button
+                            size="sm"
+                            color="light"
+                            onClick={() => {
+                              setEditarEquipo({
+                                id: equipo.id,
+                                nombre: equipo.nombre,
+                                descripcion: equipo.descripcion,
+                                territorio: equipo.territorio,
+                                especialidad: equipo.especialidad,
+                                estado: equipo.estado,
+                              });
+                              setSelectedEditLeaderId(
+                                equipo.liderUserId ? String(equipo.liderUserId) : '',
                               );
-                            } catch (_) {}
-                          }}
-                        >
-                          <Icon
-                            icon="solar:trash-bin-minimalistic-bold-duotone"
-                            className="h-4 w-4"
-                          />
-                        </Button>
+                              setShowModalEditar(true);
+                            }}
+                          >
+                            <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button
+                            size="sm"
+                            color="light"
+                            onClick={async () => {
+                              if (!confirm('¿Eliminar este equipo?')) return;
+                              try {
+                                await salesTeamsService.remove(Number(equipo.id));
+                                const refreshed = await salesTeamsService.list({ per_page: 50 });
+                                const equiposApi: any[] = refreshed?.data || [];
+                                setEquipos(
+                                  equiposApi.map((t: any) => ({
+                                    id: String(t.id),
+                                    nombre: t.name,
+                                    descripcion: t.description || '',
+                                    lider:
+                                      t.leader_name ||
+                                      t.leader?.name ||
+                                      t.leaderVendedor?.nombres ||
+                                      '-',
+                                    liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                                    miembros: (t.members || []).map((m: any) => ({
+                                      id: String(m.user_id),
+                                      nombre:
+                                        m.vendedor_name ||
+                                        m.vendedor?.nombres ||
+                                        m.user?.name ||
+                                        `Vendedor ${m.user_id}`,
+                                      email: m.vendedor?.email || m.user?.email || '',
+                                      telefono: '',
+                                      rol: m.role || 'Asesor Junior',
+                                      ventasMes: 0,
+                                      metaMes: Number(m.monthly_goal || 0),
+                                      porcentajeMeta: 0,
+                                      fechaIngreso: '',
+                                      estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                                    })),
+                                    metaEquipo: 0,
+                                    ventasEquipo: 0,
+                                    porcentajeEquipo: 0,
+                                    territorio: t.territory || 'Nacional',
+                                    especialidad: t.specialty || 'Comercial',
+                                    fechaCreacion: (t.created_at || '').slice(0, 10),
+                                    estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
+                                  })),
+                                );
+                              } catch (_) {}
+                            }}
+                          >
+                            <Icon
+                              icon="solar:trash-bin-minimalistic-bold-duotone"
+                              className="h-4 w-4"
+                            />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </Card>
@@ -1089,10 +1111,12 @@ const EquiposVentas = () => {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Todos los Miembros
                 </h3>
-                <Button onClick={() => setShowModalMiembro(true)}>
-                  <Icon icon="solar:add-circle-bold-duotone" className="mr-2 h-4 w-4" />
-                  Nuevo Miembro
-                </Button>
+                {canEdit && (
+                  <Button onClick={() => setShowModalMiembro(true)}>
+                    <Icon icon="solar:add-circle-bold-duotone" className="mr-2 h-4 w-4" />
+                    Nuevo Miembro
+                  </Button>
+                )}
               </div>
 
               <div className="overflow-x-auto max-h-[60vh] overflow-y-auto rounded-b-[10px]">
@@ -1207,9 +1231,11 @@ const EquiposVentas = () => {
                               <Button size="sm" color="light">
                                 <Icon icon="solar:eye-bold-duotone" className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" color="light">
-                                <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
-                              </Button>
+                              {canEdit && (
+                                <Button size="sm" color="light">
+                                  <Icon icon="solar:pen-bold-duotone" className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </Table.Cell>
                         </Table.Row>
@@ -1333,61 +1359,63 @@ const EquiposVentas = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button
-            onClick={async () => {
-              try {
-                // El líder se selecciona desde vendedores, pero necesitamos enviar como leader_user_id
-                // Por ahora, enviar el ID del vendedor directamente (asumiendo que vendedor.id puede usarse)
-                const payload = {
-                  name: nuevoEquipo.nombre,
-                  description: nuevoEquipo.descripcion,
-                  territory: nuevoEquipo.territorio,
-                  specialty: nuevoEquipo.especialidad,
-                  leader_user_id: selectedLeaderId ? Number(selectedLeaderId) : undefined,
-                  status: 'active',
-                };
-                await salesTeamsService.create(payload);
-                const refreshed = await salesTeamsService.list({ per_page: 50 });
-                const equiposApi: any[] = refreshed?.data || [];
-                setEquipos(
-                  equiposApi.map((t: any) => ({
-                    id: String(t.id),
-                    nombre: t.name,
-                    descripcion: t.description || '',
-                    lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
-                    liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
-                    miembros: (t.members || []).map((m: any) => ({
-                      id: String(m.user_id),
-                      nombre:
-                        m.vendedor_name ||
-                        m.vendedor?.nombres ||
-                        m.user?.name ||
-                        `Vendedor ${m.user_id}`,
-                      email: m.vendedor?.email || m.user?.email || '',
-                      telefono: '',
-                      rol: 'Asesor Junior',
-                      ventasMes: 0,
-                      metaMes: Number(m.monthly_goal || 0),
-                      porcentajeMeta: 0,
-                      fechaIngreso: '',
-                      estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+          {canCreate && (
+            <Button
+              onClick={async () => {
+                try {
+                  // El líder se selecciona desde vendedores, pero necesitamos enviar como leader_user_id
+                  // Por ahora, enviar el ID del vendedor directamente (asumiendo que vendedor.id puede usarse)
+                  const payload = {
+                    name: nuevoEquipo.nombre,
+                    description: nuevoEquipo.descripcion,
+                    territory: nuevoEquipo.territorio,
+                    specialty: nuevoEquipo.especialidad,
+                    leader_user_id: selectedLeaderId ? Number(selectedLeaderId) : undefined,
+                    status: 'active',
+                  };
+                  await salesTeamsService.create(payload);
+                  const refreshed = await salesTeamsService.list({ per_page: 50 });
+                  const equiposApi: any[] = refreshed?.data || [];
+                  setEquipos(
+                    equiposApi.map((t: any) => ({
+                      id: String(t.id),
+                      nombre: t.name,
+                      descripcion: t.description || '',
+                      lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+                      liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                      miembros: (t.members || []).map((m: any) => ({
+                        id: String(m.user_id),
+                        nombre:
+                          m.vendedor_name ||
+                          m.vendedor?.nombres ||
+                          m.user?.name ||
+                          `Vendedor ${m.user_id}`,
+                        email: m.vendedor?.email || m.user?.email || '',
+                        telefono: '',
+                        rol: 'Asesor Junior',
+                        ventasMes: 0,
+                        metaMes: Number(m.monthly_goal || 0),
+                        porcentajeMeta: 0,
+                        fechaIngreso: '',
+                        estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                      })),
+                      metaEquipo: 0,
+                      ventasEquipo: 0,
+                      porcentajeEquipo: 0,
+                      territorio: t.territory || 'Nacional',
+                      especialidad: t.specialty || 'Comercial',
+                      fechaCreacion: (t.created_at || '').slice(0, 10),
+                      estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
                     })),
-                    metaEquipo: 0,
-                    ventasEquipo: 0,
-                    porcentajeEquipo: 0,
-                    territorio: t.territory || 'Nacional',
-                    especialidad: t.specialty || 'Comercial',
-                    fechaCreacion: (t.created_at || '').slice(0, 10),
-                    estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
-                  })),
-                );
-                setShowModalEquipo(false);
-                setSelectedLeaderId('');
-              } catch (_) {}
-            }}
-          >
-            Crear Equipo
-          </Button>
+                  );
+                  setShowModalEquipo(false);
+                  setSelectedLeaderId('');
+                } catch (_) {}
+              }}
+            >
+              Crear Equipo
+            </Button>
+          )}
           <Button color="gray" onClick={() => setShowModalEquipo(false)}>
             Cancelar
           </Button>
@@ -1478,63 +1506,65 @@ const EquiposVentas = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button
-            onClick={async () => {
-              try {
-                // El líder se selecciona desde vendedores
-                await salesTeamsService.update(Number(editarEquipo.id), {
-                  name: editarEquipo.nombre,
-                  description: editarEquipo.descripcion,
-                  territory: editarEquipo.territorio,
-                  specialty: editarEquipo.especialidad,
-                  leader_user_id: selectedEditLeaderId ? Number(selectedEditLeaderId) : undefined,
-                  status:
-                    editarEquipo.estado === 'Inactivo'
-                      ? 'inactive'
-                      : editarEquipo.estado === 'Reestructuración'
-                      ? 'restructuring'
-                      : 'active',
-                });
-                const refreshed = await salesTeamsService.list({ per_page: 50 });
-                const equiposApi: any[] = refreshed?.data || [];
-                setEquipos(
-                  equiposApi.map((t: any) => ({
-                    id: String(t.id),
-                    nombre: t.name,
-                    descripcion: t.description || '',
-                    lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
-                    liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
-                    miembros: (t.members || []).map((m: any) => ({
-                      id: String(m.user_id),
-                      nombre:
-                        m.vendedor_name ||
-                        m.vendedor?.nombres ||
-                        m.user?.name ||
-                        `Vendedor ${m.user_id}`,
-                      email: m.vendedor?.email || m.user?.email || '',
-                      telefono: '',
-                      rol: 'Asesor Junior',
-                      ventasMes: 0,
-                      metaMes: Number(m.monthly_goal || 0),
-                      porcentajeMeta: 0,
-                      fechaIngreso: '',
-                      estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+          {canEdit && (
+            <Button
+              onClick={async () => {
+                try {
+                  // El líder se selecciona desde vendedores
+                  await salesTeamsService.update(Number(editarEquipo.id), {
+                    name: editarEquipo.nombre,
+                    description: editarEquipo.descripcion,
+                    territory: editarEquipo.territorio,
+                    specialty: editarEquipo.especialidad,
+                    leader_user_id: selectedEditLeaderId ? Number(selectedEditLeaderId) : undefined,
+                    status:
+                      editarEquipo.estado === 'Inactivo'
+                        ? 'inactive'
+                        : editarEquipo.estado === 'Reestructuración'
+                        ? 'restructuring'
+                        : 'active',
+                  });
+                  const refreshed = await salesTeamsService.list({ per_page: 50 });
+                  const equiposApi: any[] = refreshed?.data || [];
+                  setEquipos(
+                    equiposApi.map((t: any) => ({
+                      id: String(t.id),
+                      nombre: t.name,
+                      descripcion: t.description || '',
+                      lider: t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+                      liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                      miembros: (t.members || []).map((m: any) => ({
+                        id: String(m.user_id),
+                        nombre:
+                          m.vendedor_name ||
+                          m.vendedor?.nombres ||
+                          m.user?.name ||
+                          `Vendedor ${m.user_id}`,
+                        email: m.vendedor?.email || m.user?.email || '',
+                        telefono: '',
+                        rol: 'Asesor Junior',
+                        ventasMes: 0,
+                        metaMes: Number(m.monthly_goal || 0),
+                        porcentajeMeta: 0,
+                        fechaIngreso: '',
+                        estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                      })),
+                      metaEquipo: 0,
+                      ventasEquipo: 0,
+                      porcentajeEquipo: 0,
+                      territorio: t.territory || 'Nacional',
+                      especialidad: t.specialty || 'Comercial',
+                      fechaCreacion: (t.created_at || '').slice(0, 10),
+                      estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
                     })),
-                    metaEquipo: 0,
-                    ventasEquipo: 0,
-                    porcentajeEquipo: 0,
-                    territorio: t.territory || 'Nacional',
-                    especialidad: t.specialty || 'Comercial',
-                    fechaCreacion: (t.created_at || '').slice(0, 10),
-                    estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
-                  })),
-                );
-                setShowModalEditar(false);
-              } catch (_) {}
-            }}
-          >
-            Guardar Cambios
-          </Button>
+                  );
+                  setShowModalEditar(false);
+                } catch (_) {}
+              }}
+            >
+              Guardar Cambios
+            </Button>
+          )}
           <Button color="gray" onClick={() => setShowModalEditar(false)}>
             Cancelar
           </Button>
@@ -1603,67 +1633,69 @@ const EquiposVentas = () => {
                 </div>
               </div>
               <div className="mt-2">
-                <Button
-                  disabled={!selectedUserId}
-                  onClick={async () => {
-                    try {
-                      const equipo = equipos.find((e) => e.id === equipoIdGestion);
-                      if (equipo?.miembros.some((m) => m.id === selectedUserId)) {
-                        alert('Este vendedor ya es miembro del equipo');
-                        return;
-                      }
-                      await salesTeamsService.addMember(Number(equipoIdGestion), {
-                        user_id: Number(selectedUserId),
-                        role: selectedRole,
-                        monthly_goal: parseFloat(monthlyGoal || '0'),
-                      });
-                      const refreshed = await salesTeamsService.list({ per_page: 50 });
-                      const equiposApi: any[] = refreshed?.data || [];
-                      setEquipos(
-                        equiposApi.map((t: any) => ({
-                          id: String(t.id),
-                          nombre: t.name,
-                          descripcion: t.description || '',
-                          lider:
-                            t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
-                          liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
-                          miembros: (t.members || []).map((m: any) => ({
-                            id: String(m.user_id),
-                            nombre:
-                              m.vendedor_name ||
-                              m.vendedor?.nombres ||
-                              m.user?.name ||
-                              `Vendedor ${m.user_id}`,
-                            email: m.vendedor?.email || m.user?.email || '',
-                            telefono: '',
-                            rol: m.role || 'Asesor Junior',
-                            ventasMes: 0,
-                            metaMes: Number(m.monthly_goal || 0),
-                            porcentajeMeta: 0,
-                            fechaIngreso: '',
-                            estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                {canEdit && (
+                  <Button
+                    disabled={!selectedUserId}
+                    onClick={async () => {
+                      try {
+                        const equipo = equipos.find((e) => e.id === equipoIdGestion);
+                        if (equipo?.miembros.some((m) => m.id === selectedUserId)) {
+                          alert('Este vendedor ya es miembro del equipo');
+                          return;
+                        }
+                        await salesTeamsService.addMember(Number(equipoIdGestion), {
+                          user_id: Number(selectedUserId),
+                          role: selectedRole,
+                          monthly_goal: parseFloat(monthlyGoal || '0'),
+                        });
+                        const refreshed = await salesTeamsService.list({ per_page: 50 });
+                        const equiposApi: any[] = refreshed?.data || [];
+                        setEquipos(
+                          equiposApi.map((t: any) => ({
+                            id: String(t.id),
+                            nombre: t.name,
+                            descripcion: t.description || '',
+                            lider:
+                              t.leader_name || t.leader?.name || t.leaderVendedor?.nombres || '-',
+                            liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
+                            miembros: (t.members || []).map((m: any) => ({
+                              id: String(m.user_id),
+                              nombre:
+                                m.vendedor_name ||
+                                m.vendedor?.nombres ||
+                                m.user?.name ||
+                                `Vendedor ${m.user_id}`,
+                              email: m.vendedor?.email || m.user?.email || '',
+                              telefono: '',
+                              rol: m.role || 'Asesor Junior',
+                              ventasMes: 0,
+                              metaMes: Number(m.monthly_goal || 0),
+                              porcentajeMeta: 0,
+                              fechaIngreso: '',
+                              estado: m.status === 'inactive' ? 'Inactivo' : 'Activo',
+                            })),
+                            metaEquipo: 0,
+                            ventasEquipo: 0,
+                            porcentajeEquipo: 0,
+                            territorio: t.territory || 'Nacional',
+                            especialidad: t.specialty || 'Comercial',
+                            fechaCreacion: (t.created_at || '').slice(0, 10),
+                            estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
                           })),
-                          metaEquipo: 0,
-                          ventasEquipo: 0,
-                          porcentajeEquipo: 0,
-                          territorio: t.territory || 'Nacional',
-                          especialidad: t.specialty || 'Comercial',
-                          fechaCreacion: (t.created_at || '').slice(0, 10),
-                          estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
-                        })),
-                      );
-                      setSelectedUserId('');
-                      setSelectedRole('Asesor Junior');
-                      setMonthlyGoal('');
-                    } catch (err: any) {
-                      if (err?.response?.data?.message) {
-                        alert(err.response.data.message);
+                        );
+                        setSelectedUserId('');
+                        setSelectedRole('Asesor Junior');
+                        setMonthlyGoal('');
+                      } catch (err: any) {
+                        if (err?.response?.data?.message) {
+                          alert(err.response.data.message);
+                        }
                       }
-                    }
-                  }}
-                >
-                  Agregar
-                </Button>
+                    }}
+                  >
+                    Agregar
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1684,62 +1716,67 @@ const EquiposVentas = () => {
                           <Table.Cell>{m.nombre}</Table.Cell>
                           <Table.Cell>{formatCurrency(m.metaMes || 0)}</Table.Cell>
                           <Table.Cell>
-                            <Button
-                              size="xs"
-                              color="light"
-                              onClick={async () => {
-                                if (!confirm('¿Quitar miembro del equipo?')) return;
-                                try {
-                                  await salesTeamsService.removeMember(
-                                    Number(equipoIdGestion),
-                                    Number(m.id),
-                                  );
-                                  const refreshed = await salesTeamsService.list({ per_page: 50 });
-                                  const equiposApi: any[] = refreshed?.data || [];
-                                  setEquipos(
-                                    equiposApi.map((t: any) => ({
-                                      id: String(t.id),
-                                      nombre: t.name,
-                                      descripcion: t.description || '',
-                                      lider:
-                                        t.leader_name ||
-                                        t.leader?.name ||
-                                        t.leaderVendedor?.nombres ||
-                                        '-',
-                                      liderUserId: t.leader_user_id || (t.leader?.id ?? undefined),
-                                      miembros: (t.members || []).map((x: any) => ({
-                                        id: String(x.user_id),
-                                        nombre:
-                                          x.vendedor_name ||
-                                          x.vendedor?.nombres ||
-                                          x.user?.name ||
-                                          `Vendedor ${x.user_id}`,
-                                        email: x.vendedor?.email || x.user?.email || '',
-                                        telefono: '',
-                                        rol: x.role || 'Asesor Junior',
-                                        ventasMes: 0,
-                                        metaMes: Number(x.monthly_goal || 0),
-                                        porcentajeMeta: 0,
-                                        fechaIngreso: '',
-                                        estado: x.status === 'inactive' ? 'Inactivo' : 'Activo',
+                            {canEdit && (
+                              <Button
+                                size="xs"
+                                color="light"
+                                onClick={async () => {
+                                  if (!confirm('¿Quitar miembro del equipo?')) return;
+                                  try {
+                                    await salesTeamsService.removeMember(
+                                      Number(equipoIdGestion),
+                                      Number(m.id),
+                                    );
+                                    const refreshed = await salesTeamsService.list({
+                                      per_page: 50,
+                                    });
+                                    const equiposApi: any[] = refreshed?.data || [];
+                                    setEquipos(
+                                      equiposApi.map((t: any) => ({
+                                        id: String(t.id),
+                                        nombre: t.name,
+                                        descripcion: t.description || '',
+                                        lider:
+                                          t.leader_name ||
+                                          t.leader?.name ||
+                                          t.leaderVendedor?.nombres ||
+                                          '-',
+                                        liderUserId:
+                                          t.leader_user_id || (t.leader?.id ?? undefined),
+                                        miembros: (t.members || []).map((x: any) => ({
+                                          id: String(x.user_id),
+                                          nombre:
+                                            x.vendedor_name ||
+                                            x.vendedor?.nombres ||
+                                            x.user?.name ||
+                                            `Vendedor ${x.user_id}`,
+                                          email: x.vendedor?.email || x.user?.email || '',
+                                          telefono: '',
+                                          rol: x.role || 'Asesor Junior',
+                                          ventasMes: 0,
+                                          metaMes: Number(x.monthly_goal || 0),
+                                          porcentajeMeta: 0,
+                                          fechaIngreso: '',
+                                          estado: x.status === 'inactive' ? 'Inactivo' : 'Activo',
+                                        })),
+                                        metaEquipo: 0,
+                                        ventasEquipo: 0,
+                                        porcentajeEquipo: 0,
+                                        territorio: t.territory || 'Nacional',
+                                        especialidad: t.specialty || 'Comercial',
+                                        fechaCreacion: (t.created_at || '').slice(0, 10),
+                                        estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
                                       })),
-                                      metaEquipo: 0,
-                                      ventasEquipo: 0,
-                                      porcentajeEquipo: 0,
-                                      territorio: t.territory || 'Nacional',
-                                      especialidad: t.specialty || 'Comercial',
-                                      fechaCreacion: (t.created_at || '').slice(0, 10),
-                                      estado: t.status === 'inactive' ? 'Inactivo' : 'Activo',
-                                    })),
-                                  );
-                                } catch (_) {}
-                              }}
-                            >
-                              <Icon
-                                icon="solar:trash-bin-minimalistic-bold-duotone"
-                                className="h-4 w-4"
-                              />
-                            </Button>
+                                    );
+                                  } catch (_) {}
+                                }}
+                              >
+                                <Icon
+                                  icon="solar:trash-bin-minimalistic-bold-duotone"
+                                  className="h-4 w-4"
+                                />
+                              </Button>
+                            )}
                           </Table.Cell>
                         </Table.Row>
                       ))}
@@ -1755,7 +1792,7 @@ const EquiposVentas = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-    </>
+    </PermissionGate>
   );
 };
 
