@@ -36,9 +36,9 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   // Marketing Digital
   '/apps/marketing/sms': 'sms_marketing',
   '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
-  '/apps/marketing/plantillas': 'plantillas_campana',
+  '/apps/marketing/plantillas': 'email_marketing',
   '/apps/marketing/mini-web': 'mini_web',
-  '/apps/saas/configuracion-masiva': 'configuracion_masiva',
+  '/apps/saas/configuracion-masiva': 'whatsapp_business',
 
   // Inteligencia Artificial
   '/apps/ia/asistente': 'asistentes_ia',
