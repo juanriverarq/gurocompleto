@@ -1,11 +1,33 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { Card, Select, Spinner, TextInput, Button, Table, Badge, Modal, Pagination } from 'flowbite-react';
+import {
+  Card,
+  Select,
+  Spinner,
+  TextInput,
+  Button,
+  Table,
+  Badge,
+  Modal,
+  Pagination,
+} from 'flowbite-react';
 import { polizaService, type Poliza } from 'src/services/polizaService';
-import { IconDotsVertical, IconEye, IconTrash, IconCloudUpload, IconRefresh, IconSearch, IconFilter } from '@tabler/icons-react';
+import {
+  IconDotsVertical,
+  IconEye,
+  IconTrash,
+  IconCloudUpload,
+  IconRefresh,
+  IconSearch,
+  IconFilter,
+} from '@tabler/icons-react';
 import { useDropzone } from 'react-dropzone';
-
+import PermissionGate from 'src/components/PermissionGate';
+import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 
 const DocumentosPoliza: React.FC = () => {
+  const { hasPermission } = useUnifiedAuth();
+  const canCreate = hasPermission('documentos_poliza', 'crear');
+  const canDelete = hasPermission('documentos_poliza', 'eliminar');
   const [polizas, setPolizas] = useState<Poliza[]>([]);
   const [loadingPolizas, setLoadingPolizas] = useState<boolean>(true);
   const [errorPolizas, setErrorPolizas] = useState<string | null>(null);
@@ -41,10 +63,12 @@ const DocumentosPoliza: React.FC = () => {
         setErrorPolizas(null);
         const res = await polizaService.getPolizas({ per_page: 200, page: 1 });
         if (!mounted) return;
-      const payload: any = res?.data;
-      const list: any[] = Array.isArray(payload)
-        ? payload
-        : (Array.isArray(payload?.data) ? payload.data : []);
+        const payload: any = res?.data;
+        const list: any[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
         if (res && Array.isArray(list)) {
           setPolizas(list as Poliza[]);
         } else {
@@ -57,7 +81,9 @@ const DocumentosPoliza: React.FC = () => {
         if (mounted) setLoadingPolizas(false);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const buildPolizaLabel = useCallback((p: Poliza): string => {
@@ -77,10 +103,10 @@ const DocumentosPoliza: React.FC = () => {
       if (res?.success && Array.isArray(res.data)) {
         const docsWithLabels = res.data.map((d: any) => {
           // Normalizar valores para evitar "null" y "[object Object]"
-          const policyNumber =
-            (d && (d.policy_number ?? d.numero_poliza)) || '-';
+          const policyNumber = (d && (d.policy_number ?? d.numero_poliza)) || '-';
 
-          let insuranceCompany: any = d?.insurance_company ?? d?.aseguradora ?? d?.aseguradora_nombre ?? '-';
+          let insuranceCompany: any =
+            d?.insurance_company ?? d?.aseguradora ?? d?.aseguradora_nombre ?? '-';
           if (typeof insuranceCompany !== 'string') {
             insuranceCompany =
               (insuranceCompany && (insuranceCompany.nombre || insuranceCompany.name)) || '-';
@@ -121,8 +147,17 @@ const DocumentosPoliza: React.FC = () => {
   }, [loadingPolizas, polizas, loadAllDocs]);
 
   const typesOptions = useMemo(() => {
-    const present = new Set<string>(docs.map((d) => (d.type || 'otro')));
-    const base = ['caratula', 'condiciones', 'recibo', 'soporte_pago', 'endoso', 'anexo', 'cotizacion', 'otro'];
+    const present = new Set<string>(docs.map((d) => d.type || 'otro'));
+    const base = [
+      'caratula',
+      'condiciones',
+      'recibo',
+      'soporte_pago',
+      'endoso',
+      'anexo',
+      'cotizacion',
+      'otro',
+    ];
     return [''].concat(Array.from(new Set([...base, ...Array.from(present)])));
   }, [docs]);
 
@@ -131,7 +166,14 @@ const DocumentosPoliza: React.FC = () => {
     let list = docs.filter((d) => {
       const okPoliza = !selectedPolizaId || String(d.__polizaId) === String(selectedPolizaId);
       const okType = !typeFilter || (d.type || 'otro') === typeFilter;
-      const okSearch = !s || (String(d.name || '').toLowerCase().includes(s) || String(d.contentType || '').toLowerCase().includes(s));
+      const okSearch =
+        !s ||
+        String(d.name || '')
+          .toLowerCase()
+          .includes(s) ||
+        String(d.contentType || '')
+          .toLowerCase()
+          .includes(s);
       return okPoliza && okType && okSearch;
     });
     return list;
@@ -159,17 +201,23 @@ const DocumentosPoliza: React.FC = () => {
     const units = ['B', 'KB', 'MB', 'GB'];
     let size = bytes;
     let idx = 0;
-    while (size >= 1024 && idx < units.length - 1) { size /= 1024; idx++; }
+    while (size >= 1024 && idx < units.length - 1) {
+      size /= 1024;
+      idx++;
+    }
     return `${size.toFixed(size < 10 && idx > 0 ? 1 : 0)} ${units[idx]}`;
   }, []);
 
   const onOpen = async (row: any) => {
     try {
       setOpeningKey(`${row.__polizaId}:${row.path}`);
-      const url = await polizaService.getSignedUrl(String(row.__polizaId), { path: row.path, name: row.name });
+      const url = await polizaService.getSignedUrl(String(row.__polizaId), {
+        path: row.path,
+        name: row.name,
+      });
       window.open(url, '_blank');
-    } catch {}
-    finally {
+    } catch {
+    } finally {
       setOpeningKey(null);
     }
   };
@@ -184,9 +232,9 @@ const DocumentosPoliza: React.FC = () => {
     setSelectedFiles(acceptedFiles);
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
-    onDrop, 
-    multiple: true, 
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    multiple: true,
     accept: {
       'application/pdf': ['.pdf'],
       'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
@@ -195,12 +243,20 @@ const DocumentosPoliza: React.FC = () => {
       'application/vnd.ms-excel': ['.xls'],
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'text/csv': ['.csv'],
-    }
+    },
   });
 
   return (
-    <>
-          <Card>
+    <PermissionGate
+      route="/apps/seguros/documentos-poliza"
+      action="ver"
+      fallback={
+        <div className="p-6">
+          <Badge color="warning">No tienes permisos para ver Documentos de Pólizas.</Badge>
+        </div>
+      }
+    >
+      <Card>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
             <h5 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -211,23 +267,24 @@ const DocumentosPoliza: React.FC = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              color="gray" 
-              size="sm" 
-              onClick={() => loadAllDocs()}
-              disabled={loadingDocs}
-            >
+            <Button color="gray" size="sm" onClick={() => loadAllDocs()} disabled={loadingDocs}>
               <IconRefresh className="w-4 h-4 mr-2" />
               Actualizar
             </Button>
-            <Button 
-              color="blue" 
-              size="sm" 
-              onClick={() => { setUploadPolizaId(selectedPolizaId || ''); setSelectedFiles([]); setShowUpload(true); }}
-            >
-              <IconCloudUpload className="w-4 h-4 mr-2" />
-              Subir archivos
-            </Button>
+            {canCreate && (
+              <Button
+                color="blue"
+                size="sm"
+                onClick={() => {
+                  setUploadPolizaId(selectedPolizaId || '');
+                  setSelectedFiles([]);
+                  setShowUpload(true);
+                }}
+              >
+                <IconCloudUpload className="w-4 h-4 mr-2" />
+                Subir archivos
+              </Button>
+            )}
           </div>
         </div>
 
@@ -237,13 +294,13 @@ const DocumentosPoliza: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Búsqueda
             </label>
-                  <TextInput
+            <TextInput
               placeholder="Buscar documentos..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               icon={IconSearch}
-                  />
-                </div>
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Póliza
@@ -253,30 +310,41 @@ const DocumentosPoliza: React.FC = () => {
                 <Spinner size="sm" />
                 <span className="ml-2 text-sm">Cargando...</span>
               </div>
-                  ) : (
-                    <Select value={selectedPolizaId} onChange={(e) => setSelectedPolizaId(e.target.value)}>
+            ) : (
+              <Select
+                value={selectedPolizaId}
+                onChange={(e) => setSelectedPolizaId(e.target.value)}
+              >
                 <option value="">Todas las pólizas</option>
                 {polizas.map((p) => (
-                  <option key={p.id} value={String(p.id)}>{buildPolizaLabel(p)}</option>
+                  <option key={p.id} value={String(p.id)}>
+                    {buildPolizaLabel(p)}
+                  </option>
                 ))}
-                    </Select>
-                  )}
-                </div>
+              </Select>
+            )}
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Tipo
             </label>
             <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
               {typesOptions.map((t, i) => (
-                <option key={i} value={t}>{t ? t.replace('_', ' ') : 'Todos los tipos'}</option>
+                <option key={i} value={t}>
+                  {t ? t.replace('_', ' ') : 'Todos los tipos'}
+                </option>
               ))}
             </Select>
           </div>
           <div className="flex items-end">
-            <Button 
-              color="gray" 
-              size="sm" 
-              onClick={() => { setSearch(''); setSelectedPolizaId(''); setTypeFilter(''); }}
+            <Button
+              color="gray"
+              size="sm"
+              onClick={() => {
+                setSearch('');
+                setSelectedPolizaId('');
+                setTypeFilter('');
+              }}
               className="w-full"
             >
               <IconFilter className="w-4 h-4 mr-2" />
@@ -297,32 +365,22 @@ const DocumentosPoliza: React.FC = () => {
               <div className="p-8 text-center text-gray-500">
                 <p className="text-lg mb-2">No hay documentos para mostrar</p>
                 <p className="text-sm">
-                  {search || typeFilter || selectedPolizaId 
-                    ? 'Intenta ajustar los filtros de búsqueda' 
+                  {search || typeFilter || selectedPolizaId
+                    ? 'Intenta ajustar los filtros de búsqueda'
                     : 'Comienza subiendo documentos usando el botón "Subir archivos"'}
                 </p>
               </div>
             ) : (
               <Table hoverable>
                 <Table.Head>
-                  <Table.HeadCell className="text-base font-semibold py-3">
-                    Póliza
-                  </Table.HeadCell>
+                  <Table.HeadCell className="text-base font-semibold py-3">Póliza</Table.HeadCell>
                   <Table.HeadCell className="text-base font-semibold py-3">
                     Documento
                   </Table.HeadCell>
-                  <Table.HeadCell className="text-base font-semibold py-3">
-                    Tipo
-                  </Table.HeadCell>
-                  <Table.HeadCell className="text-base font-semibold py-3">
-                    Tamaño
-                  </Table.HeadCell>
-                  <Table.HeadCell className="text-base font-semibold py-3">
-                    Fecha
-                  </Table.HeadCell>
-                  <Table.HeadCell className="text-base font-semibold py-3">
-                    Acciones
-                  </Table.HeadCell>
+                  <Table.HeadCell className="text-base font-semibold py-3">Tipo</Table.HeadCell>
+                  <Table.HeadCell className="text-base font-semibold py-3">Tamaño</Table.HeadCell>
+                  <Table.HeadCell className="text-base font-semibold py-3">Fecha</Table.HeadCell>
+                  <Table.HeadCell className="text-base font-semibold py-3">Acciones</Table.HeadCell>
                 </Table.Head>
                 <Table.Body>
                   {paginatedDocs.map((d, idx) => (
@@ -336,7 +394,9 @@ const DocumentosPoliza: React.FC = () => {
                         <div className="max-w-xs truncate" title={d.name}>
                           {d.name}
                         </div>
-                        <div className="text-xs text-gray-500">{d.contentType || 'Sin tipo MIME'}</div>
+                        <div className="text-xs text-gray-500">
+                          {d.contentType || 'Sin tipo MIME'}
+                        </div>
                       </Table.Cell>
                       <Table.Cell>
                         <Badge color="info" className="text-xs">
@@ -351,10 +411,10 @@ const DocumentosPoliza: React.FC = () => {
                       </Table.Cell>
                       <Table.Cell>
                         <div className="flex items-center gap-2">
-                          <Button 
-                            color="blue" 
-                            size="xs" 
-                            disabled={openingKey === `${d.__polizaId}:${d.path}`} 
+                          <Button
+                            color="blue"
+                            size="xs"
+                            disabled={openingKey === `${d.__polizaId}:${d.path}`}
                             onClick={() => onOpen(d)}
                           >
                             {openingKey === `${d.__polizaId}:${d.path}` ? (
@@ -363,13 +423,18 @@ const DocumentosPoliza: React.FC = () => {
                               <IconEye className="w-4 h-4" />
                             )}
                           </Button>
-                          <Button 
-                            color="red" 
-                            size="xs" 
-                            onClick={() => { setDocToDelete(d); setConfirmOpen(true); }}
-                          >
-                            <IconTrash className="w-4 h-4" />
-                          </Button>
+                          {canDelete && (
+                            <Button
+                              color="red"
+                              size="xs"
+                              onClick={() => {
+                                setDocToDelete(d);
+                                setConfirmOpen(true);
+                              }}
+                            >
+                              <IconTrash className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </Table.Cell>
                     </Table.Row>
@@ -387,11 +452,11 @@ const DocumentosPoliza: React.FC = () => {
             {(() => {
               const start = (currentPage - 1) * pageSize + 1;
               const end = Math.min(currentPage * pageSize, visibleDocs.length);
-              return `Mostrando ${visibleDocs.length === 0 ? 0 : start}-${end} de ${visibleDocs.length} documentos filtrados`;
+              return `Mostrando ${visibleDocs.length === 0 ? 0 : start}-${end} de ${
+                visibleDocs.length
+              } documentos filtrados`;
             })()}
-            <span className="ml-2 text-xs text-gray-500">
-              (Total cargados: {docs.length})
-            </span>
+            <span className="ml-2 text-xs text-gray-500">(Total cargados: {docs.length})</span>
           </div>
 
           {/* Selección de tamaño de página */}
@@ -425,24 +490,28 @@ const DocumentosPoliza: React.FC = () => {
       <Modal show={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <Modal.Header>Eliminar documento</Modal.Header>
         <Modal.Body>
-          <p>¿Estás seguro de eliminar <strong>"{docToDelete?.name}"</strong>?</p>
+          <p>
+            ¿Estás seguro de eliminar <strong>"{docToDelete?.name}"</strong>?
+          </p>
           <p className="text-sm text-gray-500 mt-2">Esta acción no se puede deshacer.</p>
         </Modal.Body>
         <Modal.Footer>
           <Button color="gray" onClick={() => setConfirmOpen(false)}>
             Cancelar
           </Button>
-          <Button 
-            color="red" 
-            onClick={async () => { 
-              if (!docToDelete) return; 
-              await onDelete(docToDelete); 
-              setConfirmOpen(false); 
-              setDocToDelete(null); 
-            }}
-          >
-            Eliminar
-          </Button>
+          {canDelete && (
+            <Button
+              color="red"
+              onClick={async () => {
+                if (!docToDelete) return;
+                await onDelete(docToDelete);
+                setConfirmOpen(false);
+                setDocToDelete(null);
+              }}
+            >
+              Eliminar
+            </Button>
+          )}
         </Modal.Footer>
       </Modal>
 
@@ -459,10 +528,12 @@ const DocumentosPoliza: React.FC = () => {
                 <Select value={uploadPolizaId} onChange={(e) => setUploadPolizaId(e.target.value)}>
                   <option value="">Seleccione una póliza...</option>
                   {polizas.map((p) => (
-                    <option key={p.id} value={String(p.id)}>{buildPolizaLabel(p)}</option>
+                    <option key={p.id} value={String(p.id)}>
+                      {buildPolizaLabel(p)}
+                    </option>
                   ))}
                 </Select>
-                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Tipo de documento
@@ -479,7 +550,7 @@ const DocumentosPoliza: React.FC = () => {
                 </Select>
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Seleccionar archivos
@@ -487,79 +558,90 @@ const DocumentosPoliza: React.FC = () => {
               <div
                 {...getRootProps()}
                 className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                  isDragActive 
-                    ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' 
+                  isDragActive
+                    ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 <input {...getInputProps()} />
                 <IconCloudUpload className="mx-auto mb-2 w-8 h-8 text-gray-400" />
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {isDragActive ? 'Suelta los archivos aquí' : 'Arrastra archivos o haz clic para seleccionar'}
+                  {isDragActive
+                    ? 'Suelta los archivos aquí'
+                    : 'Arrastra archivos o haz clic para seleccionar'}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">PDF, imágenes, Office, CSV • Máx 20MB</p>
               </div>
               {selectedFiles.length > 0 && (
                 <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <p className="text-sm font-medium mb-2">{selectedFiles.length} archivo(s) seleccionado(s):</p>
+                  <p className="text-sm font-medium mb-2">
+                    {selectedFiles.length} archivo(s) seleccionado(s):
+                  </p>
                   <div className="space-y-1 max-h-24 overflow-auto">
                     {selectedFiles.map((f, i) => (
                       <div key={i} className="flex justify-between text-xs">
-                        <span className="truncate max-w-[200px]" title={f.name}>{f.name}</span>
+                        <span className="truncate max-w-[200px]" title={f.name}>
+                          {f.name}
+                        </span>
                         <span className="text-gray-500">{formatSize(f.size)}</span>
                       </div>
                     ))}
                   </div>
-        </div>
-          )}
-        </div>
-      </div>
+                </div>
+              )}
+            </div>
+          </div>
         </Modal.Body>
         <Modal.Footer>
           <Button color="gray" onClick={() => setShowUpload(false)}>
             Cancelar
           </Button>
-          <Button
-            color="blue"
-            disabled={!uploadPolizaId || selectedFiles.length === 0 || uploading}
-            onClick={async () => {
-              try {
-                if (!uploadPolizaId || selectedFiles.length === 0) return;
-                setUploading(true);
-                setProgress({ percent: 0, text: 'Preparando subida...' });
-                await polizaService.subirDocumento(
-                  uploadPolizaId,
-                  selectedFiles,
-                  { type: docType },
-                  ({ percent, index, count, file }) => {
-                    const label = count && count > 1 ? `(${index}/${count})` : '';
-                    setProgress({ percent, text: `Subiendo ${file?.name || ''} ${label} - ${percent}%` });
-                  }
-                );
-                setSelectedFiles([]);
-                await loadAllDocs();
-              } finally {
-                setUploading(false);
-                setProgress(null);
-                setShowUpload(false);
-              }
-            }}
-          >
-            {uploading ? (
-              <div className="flex items-center">
-                <Spinner size="sm" className="mr-2" />
-                {progress ? progress.text : 'Subiendo...'}
-              </div>
-            ) : (
-              <>
-                <IconCloudUpload className="w-4 h-4 mr-2" />
-                Subir
-              </>
-            )}
-          </Button>
+          {canCreate && (
+            <Button
+              color="blue"
+              disabled={!uploadPolizaId || selectedFiles.length === 0 || uploading}
+              onClick={async () => {
+                try {
+                  if (!uploadPolizaId || selectedFiles.length === 0) return;
+                  setUploading(true);
+                  setProgress({ percent: 0, text: 'Preparando subida...' });
+                  await polizaService.subirDocumento(
+                    uploadPolizaId,
+                    selectedFiles,
+                    { type: docType },
+                    ({ percent, index, count, file }) => {
+                      const label = count && count > 1 ? `(${index}/${count})` : '';
+                      setProgress({
+                        percent,
+                        text: `Subiendo ${file?.name || ''} ${label} - ${percent}%`,
+                      });
+                    },
+                  );
+                  setSelectedFiles([]);
+                  await loadAllDocs();
+                } finally {
+                  setUploading(false);
+                  setProgress(null);
+                  setShowUpload(false);
+                }
+              }}
+            >
+              {uploading ? (
+                <div className="flex items-center">
+                  <Spinner size="sm" className="mr-2" />
+                  {progress ? progress.text : 'Subiendo...'}
+                </div>
+              ) : (
+                <>
+                  <IconCloudUpload className="w-4 h-4 mr-2" />
+                  Subir
+                </>
+              )}
+            </Button>
+          )}
         </Modal.Footer>
       </Modal>
-    </>
+    </PermissionGate>
   );
 };
 

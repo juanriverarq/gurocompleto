@@ -16,11 +16,7 @@ import {
 import { Icon } from '@iconify/react';
 import { useEmpleadosBroker, useRolesBroker } from 'src/hooks/useAdminCrudApi';
 import type { EmpleadoBroker as EmpleadoBrokerType, EmpleadoBrokerCreate } from 'src/types/admin';
-import {
-  usePagePermissions,
-  PermissionGate,
-  PermissionButton,
-} from 'src/components/PermissionGate';
+import { usePagePermissions, PermissionButton } from 'src/components/PermissionGate';
 import { useLocation } from 'react-router-dom';
 
 const tiposDocumento = [
@@ -49,7 +45,7 @@ const Usuarios = () => {
   const currentRoute = location.pathname;
 
   // Verificar permisos para esta página
-  const { canView, canCreate, canEdit, canDelete } = usePagePermissions(currentRoute);
+  const { canView, canCreate, canEdit } = usePagePermissions(currentRoute);
 
   const { empleados, loading, error, createEmpleado, updateEmpleado, deleteEmpleado } =
     useEmpleadosBroker();
@@ -672,10 +668,12 @@ const Usuarios = () => {
           </form>
         </Modal.Body>
         <Modal.Footer>
-          <Button type="submit" onClick={handleSubmit} disabled={loading}>
-            {loading ? <Spinner size="sm" className="mr-2" /> : null}
-            {isEditing ? 'Actualizar' : 'Crear'}
-          </Button>
+          {((isEditing && canEdit) || (!isEditing && canCreate)) && (
+            <Button type="submit" onClick={handleSubmit} disabled={loading}>
+              {loading ? <Spinner size="sm" className="mr-2" /> : null}
+              {isEditing ? 'Actualizar' : 'Crear'}
+            </Button>
+          )}
           <Button color="gray" onClick={() => setShowModal(false)}>
             Cancelar
           </Button>
