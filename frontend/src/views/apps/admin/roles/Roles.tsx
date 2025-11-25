@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Alert, Spinner, Table, Modal, TextInput, Label, Textarea, Select, ToggleSwitch, Badge } from 'flowbite-react';
+import {
+  Card,
+  Button,
+  Alert,
+  Spinner,
+  Table,
+  Modal,
+  TextInput,
+  Label,
+  Textarea,
+  Select,
+  ToggleSwitch,
+  Badge,
+} from 'flowbite-react';
 import { Checkbox } from 'src/components/shadcn-ui/Default-Ui/checkbox';
 import { useRolesBroker } from 'src/hooks/useAdminCrudApi';
 import type { RolBroker as RolBrokerType, RolBrokerCreate } from 'src/types/admin';
@@ -28,52 +41,232 @@ const nivelesAcceso = [
 // Estructura completa de módulos y permisos (fuente de verdad dinámica desde backend; fallback local)
 const defaultModulosDisponibles = {
   dashboard: { label: 'Dashboard', icon: 'solar:widget-2-bold-duotone', permisos: ['ver'] },
-  clientes: { label: 'Clientes', icon: 'solar:users-group-two-rounded-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'exportar', 'importar'] },
-  seguimiento_comercial: { label: 'Seguimiento Comercial', icon: 'solar:target-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  embudo_ventas: { label: 'Embudo de Conversión', icon: 'solar:chart-2-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  polizas: { label: 'Pólizas', icon: 'solar:shield-check-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'emitir', 'renovar', 'anular'] },
-  automoviles: { label: 'Automóviles', icon: 'solar:car-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  renovaciones: { label: 'Renovaciones', icon: 'solar:refresh-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'procesar'] },
-  siniestros: { label: 'Siniestros', icon: 'solar:danger-triangle-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'reportar', 'procesar', 'cerrar'] },
-  metas_objetivos: { label: 'Metas y Objetivos', icon: 'solar:target-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  equipos_ventas: { label: 'Equipos de Ventas', icon: 'solar:users-group-rounded-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar'] },
-  analisis_rendimiento: { label: 'Análisis de Rendimiento', icon: 'solar:graph-up-bold-duotone', permisos: ['ver', 'exportar'] },
-  whatsapp_business: { label: 'WhatsApp Business', icon: 'solar:chat-round-dots-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'enviar'] },
-  sms_marketing: { label: 'SMS Marketing', icon: 'solar:phone-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'enviar'] },
-  enlaces_cotizacion: { label: 'Enlaces de Cotización', icon: 'solar:link-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  plantillas_campana: { label: 'Plantillas de Campaña', icon: 'solar:document-text-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  mini_web: { label: 'Mini Web', icon: 'solar:globe-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'publicar'] },
-  configuracion_masiva: { label: 'Configuración Masiva', icon: 'solar:chat-round-dots-bold-duotone', permisos: ['ver', 'ejecutar'] },
-  asistentes_ia: { label: 'Asistentes IA', icon: 'solar:cpu-bolt-bold-duotone', permisos: ['ver', 'usar', 'configurar'] },
-  voice_ai: { label: 'Voice AI (ElevenLabs)', icon: 'solar:microphone-bold-duotone', permisos: ['ver', 'usar', 'configurar'] },
-  analytics_predictivo: { label: 'Analytics Predictivo', icon: 'solar:chart-square-bold-duotone', permisos: ['ver', 'usar', 'configurar'] },
-  comisiones: { label: 'Comisiones', icon: 'solar:dollar-minimalistic-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'calcular', 'pagar'] },
+  clientes: {
+    label: 'Clientes',
+    icon: 'solar:users-group-two-rounded-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'exportar', 'importar'],
+  },
+  seguimiento_comercial: {
+    label: 'Seguimiento Comercial',
+    icon: 'solar:target-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  embudo_ventas: {
+    label: 'Embudo de Conversión',
+    icon: 'solar:chart-2-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  polizas: {
+    label: 'Pólizas',
+    icon: 'solar:shield-check-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'emitir', 'renovar', 'anular'],
+  },
+  automoviles: {
+    label: 'Automóviles',
+    icon: 'solar:car-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  renovaciones: {
+    label: 'Renovaciones',
+    icon: 'solar:refresh-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'procesar'],
+  },
+  siniestros: {
+    label: 'Siniestros',
+    icon: 'solar:danger-triangle-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'reportar', 'procesar', 'cerrar'],
+  },
+  metas_objetivos: {
+    label: 'Metas y Objetivos',
+    icon: 'solar:target-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  equipos_ventas: {
+    label: 'Equipos de Ventas',
+    icon: 'solar:users-group-rounded-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar'],
+  },
+  analisis_rendimiento: {
+    label: 'Análisis de Rendimiento',
+    icon: 'solar:graph-up-bold-duotone',
+    permisos: ['ver', 'exportar'],
+  },
+  whatsapp_business: {
+    label: 'WhatsApp Business',
+    icon: 'solar:chat-round-dots-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'enviar'],
+  },
+  sms_marketing: {
+    label: 'SMS Marketing',
+    icon: 'solar:phone-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'enviar'],
+  },
+  enlaces_cotizacion: {
+    label: 'Enlaces de Cotización',
+    icon: 'solar:link-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  plantillas_campana: {
+    label: 'Plantillas de Campaña',
+    icon: 'solar:document-text-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  mini_web: {
+    label: 'Mini Web',
+    icon: 'solar:globe-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'publicar'],
+  },
+  configuracion_masiva: {
+    label: 'Configuración Masiva',
+    icon: 'solar:chat-round-dots-bold-duotone',
+    permisos: ['ver', 'ejecutar'],
+  },
+  asistentes_ia: {
+    label: 'Asistentes IA',
+    icon: 'solar:cpu-bolt-bold-duotone',
+    permisos: ['ver', 'usar', 'configurar'],
+  },
+  voice_ai: {
+    label: 'Voice AI (ElevenLabs)',
+    icon: 'solar:microphone-bold-duotone',
+    permisos: ['ver', 'usar', 'configurar'],
+  },
+  analytics_predictivo: {
+    label: 'Analytics Predictivo',
+    icon: 'solar:chart-square-bold-duotone',
+    permisos: ['ver', 'usar', 'configurar'],
+  },
+  comisiones: {
+    label: 'Comisiones',
+    icon: 'solar:dollar-minimalistic-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'calcular', 'pagar'],
+  },
   cartera: { label: 'Cartera', icon: 'solar:wallet-bold-duotone', permisos: ['ver', 'gestionar'] },
-  reportes_financieros: { label: 'Reportes Financieros', icon: 'solar:chart-square-bold-duotone', permisos: ['ver', 'generar', 'exportar'] },
-  contratos: { label: 'Contratos', icon: 'solar:document-medicine-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'firmar'] },
-  documentos_poliza: { label: 'Documentos de Póliza', icon: 'solar:folder-with-files-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'] },
-  documentos_siniestro: { label: 'Documentos de Siniestro', icon: 'solar:folder-with-files-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'] },
-  proteccion_datos: { label: 'Protección de Datos', icon: 'solar:shield-user-bold-duotone', permisos: ['ver', 'gestionar'] },
-  documentos_clientes: { label: 'Documentos', icon: 'solar:folder-with-files-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'] },
-  cumplimiento_legal: { label: 'Cumplimiento Legal', icon: 'solar:security-safe-bold-duotone', permisos: ['ver', 'gestionar'] },
-  integraciones_externas: { label: 'Integraciones Externas', icon: 'solar:programming-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'configurar'] },
-  sincronizacion: { label: 'Sincronización', icon: 'solar:refresh-bold-duotone', permisos: ['ver', 'ejecutar', 'configurar'] },
-  gestion_usuarios: { label: 'Gestión de Usuarios', icon: 'solar:users-group-rounded-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar_roles'] },
-  roles_permisos: { label: 'Roles y Permisos', icon: 'solar:shield-user-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar'] },
-  auditoria_accesos: { label: 'Auditoría de Accesos', icon: 'solar:eye-bold-duotone', permisos: ['ver', 'exportar'] },
-  informacion_agencia: { label: 'Información de Agencia', icon: 'solar:buildings-3-bold-duotone', permisos: ['ver', 'editar'] },
-  sedes: { label: 'Sedes', icon: 'solar:buildings-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  aseguradoras: { label: 'Aseguradoras', icon: 'solar:buildings-2-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  ramos: { label: 'Ramos', icon: 'solar:widget-3-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  vendedores: { label: 'Vendedores', icon: 'solar:user-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  coberturas: { label: 'Coberturas', icon: 'solar:shield-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  tipos_afiliacion: { label: 'Tipos de Afiliación', icon: 'solar:user-plus-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  estados_siniestros: { label: 'Estados de Siniestros', icon: 'solar:flag-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  motivos_estados_poliza: { label: 'Motivos Estados Póliza', icon: 'solar:question-circle-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  mensajeros: { label: 'Mensajeros', icon: 'solar:delivery-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] },
-  configuracion_sistema: { label: 'Configuración del Sistema', icon: 'solar:settings-bold-duotone', permisos: ['ver', 'editar'] },
-  monitoreo_logs: { label: 'Monitoreo y Logs', icon: 'solar:chart-square-bold-duotone', permisos: ['ver', 'exportar'] },
-  rrhh: { label: 'Recursos Humanos', icon: 'solar:users-group-two-rounded-bold-duotone', permisos: ['ver', 'crear', 'editar', 'eliminar'] }
+  reportes_financieros: {
+    label: 'Reportes Financieros',
+    icon: 'solar:chart-square-bold-duotone',
+    permisos: ['ver', 'generar', 'exportar'],
+  },
+  contratos: {
+    label: 'Contratos',
+    icon: 'solar:document-medicine-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'firmar'],
+  },
+  documentos_poliza: {
+    label: 'Documentos de Póliza',
+    icon: 'solar:folder-with-files-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'],
+  },
+  documentos_siniestro: {
+    label: 'Documentos de Siniestro',
+    icon: 'solar:folder-with-files-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'],
+  },
+  proteccion_datos: {
+    label: 'Protección de Datos',
+    icon: 'solar:shield-user-bold-duotone',
+    permisos: ['ver', 'gestionar'],
+  },
+  documentos_clientes: {
+    label: 'Documentos',
+    icon: 'solar:folder-with-files-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'],
+  },
+  cumplimiento_legal: {
+    label: 'Cumplimiento Legal',
+    icon: 'solar:security-safe-bold-duotone',
+    permisos: ['ver', 'gestionar'],
+  },
+  integraciones_externas: {
+    label: 'Integraciones Externas',
+    icon: 'solar:programming-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'configurar'],
+  },
+  sincronizacion: {
+    label: 'Sincronización',
+    icon: 'solar:refresh-bold-duotone',
+    permisos: ['ver', 'ejecutar', 'configurar'],
+  },
+  gestion_usuarios: {
+    label: 'Gestión de Usuarios',
+    icon: 'solar:users-group-rounded-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar_roles'],
+  },
+  roles_permisos: {
+    label: 'Roles y Permisos',
+    icon: 'solar:shield-user-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar'],
+  },
+  auditoria_accesos: {
+    label: 'Auditoría de Accesos',
+    icon: 'solar:eye-bold-duotone',
+    permisos: ['ver', 'exportar'],
+  },
+  informacion_agencia: {
+    label: 'Información de Agencia',
+    icon: 'solar:buildings-3-bold-duotone',
+    permisos: ['ver', 'editar'],
+  },
+  sedes: {
+    label: 'Sedes',
+    icon: 'solar:buildings-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  aseguradoras: {
+    label: 'Aseguradoras',
+    icon: 'solar:buildings-2-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  ramos: {
+    label: 'Ramos',
+    icon: 'solar:widget-3-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  vendedores: {
+    label: 'Vendedores',
+    icon: 'solar:user-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  coberturas: {
+    label: 'Coberturas',
+    icon: 'solar:shield-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  tipos_afiliacion: {
+    label: 'Tipos de Afiliación',
+    icon: 'solar:user-plus-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  estados_siniestros: {
+    label: 'Estados de Siniestros',
+    icon: 'solar:flag-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  motivos_estados_poliza: {
+    label: 'Motivos Estados Póliza',
+    icon: 'solar:question-circle-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  mensajeros: {
+    label: 'Mensajeros',
+    icon: 'solar:delivery-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  configuracion_sistema: {
+    label: 'Configuración del Sistema',
+    icon: 'solar:settings-bold-duotone',
+    permisos: ['ver', 'editar'],
+  },
+  monitoreo_logs: {
+    label: 'Monitoreo y Logs',
+    icon: 'solar:chart-square-bold-duotone',
+    permisos: ['ver', 'exportar'],
+  },
+  rrhh: {
+    label: 'Recursos Humanos',
+    icon: 'solar:users-group-two-rounded-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
 } as const;
 
 // Si backend expone permisosDisponibles, preferirlos
@@ -81,7 +274,9 @@ const defaultModulosDisponibles = {
 
 // Construcción dinámica de categorías a partir de módulos permitidos (whitelist del master)
 // Solo se muestran los módulos presentes en modulosDisponibles (backend o fallback local)
-const buildCategorias = (mods: Record<string, { label: string; icon?: string; permisos: string[] }>): Record<string, string[]> => {
+const buildCategorias = (
+  mods: Record<string, { label: string; icon?: string; permisos: string[] }>,
+): Record<string, string[]> => {
   const groups: [string, string[]][] = [
     // Dashboard
     ['Panel de Control', ['dashboard']],
@@ -90,25 +285,68 @@ const buildCategorias = (mods: Record<string, { label: string; icon?: string; pe
     ['Operaciones de Seguros', ['clientes', 'polizas', 'automoviles', 'siniestros']],
 
     // Gestión Comercial
-    ['Gestión Comercial', ['embudo_ventas', 'seguimiento_comercial', 'metas_objetivos', 'equipos_ventas', 'analisis_rendimiento']],
+    [
+      'Gestión Comercial',
+      [
+        'embudo_ventas',
+        'seguimiento_comercial',
+        'metas_objetivos',
+        'equipos_ventas',
+        'analisis_rendimiento',
+      ],
+    ],
 
     // Marketing Digital
-    ['Marketing Digital', ['whatsapp_business', 'email_marketing', 'sms_marketing', 'enlaces_cotizacion', 'mini_web']],
+    [
+      'Marketing Digital',
+      ['whatsapp_business', 'email_marketing', 'sms_marketing', 'enlaces_cotizacion', 'mini_web'],
+    ],
 
     // Inteligencia Artificial
     ['Inteligencia Artificial', ['asistentes_ia', 'voice_ai', 'analytics_predictivo']],
 
     // Gestión Financiera
-    ['Gestión Financiera', ['cartera', 'comisiones', 'liquidar_vendedores', 'reportes_financieros']],
+    [
+      'Gestión Financiera',
+      ['cartera', 'comisiones', 'liquidar_vendedores', 'reportes_financieros'],
+    ],
 
     // Gestión Documental
-    ['Gestión Documental', ['contratos', 'documentos_clientes', 'documentos_poliza', 'documentos_siniestro', 'cumplimiento_legal']],
+    [
+      'Gestión Documental',
+      [
+        'contratos',
+        'documentos_clientes',
+        'documentos_poliza',
+        'documentos_siniestro',
+        'cumplimiento_legal',
+      ],
+    ],
 
     // Integraciones
     ['Integraciones', ['integraciones_externas', 'sincronizacion']],
 
     // Administración
-    ['Administración', ['gestion_usuarios', 'roles_permisos', 'auditoria_accesos', 'informacion_agencia', 'sedes', 'aseguradoras', 'ramos', 'vendedores', 'coberturas', 'tipos_afiliacion', 'estados_siniestros', 'motivos_estados_poliza', 'mensajeros', 'configuracion_sistema', 'monitoreo_logs']],
+    [
+      'Administración',
+      [
+        'gestion_usuarios',
+        'roles_permisos',
+        'auditoria_accesos',
+        'informacion_agencia',
+        'sedes',
+        'aseguradoras',
+        'ramos',
+        'vendedores',
+        'coberturas',
+        'tipos_afiliacion',
+        'estados_siniestros',
+        'motivos_estados_poliza',
+        'mensajeros',
+        'configuracion_sistema',
+        'monitoreo_logs',
+      ],
+    ],
   ];
 
   const result: Record<string, string[]> = {};
@@ -187,10 +425,10 @@ const Roles: React.FC = () => {
   const location = useLocation();
   const currentRoute = location.pathname;
   const { user, empleado } = useUnifiedAuth();
-  
+
   // Verificar permisos para esta página
   const permissions = usePagePermissions(currentRoute);
-  
+
   const {
     roles,
     loading,
@@ -200,17 +438,17 @@ const Roles: React.FC = () => {
     deleteRol,
     refreshRoles,
     permisosDisponibles,
-    nivelesAcceso: nivelesFromApi
+    nivelesAcceso: nivelesFromApi,
   } = useRolesBroker();
   // Fuente de verdad de módulos: si backend trae permisosDisponibles, usarlo; si no, fallback local
   const modulosDisponibles: Record<string, { label: string; icon?: string; permisos: string[] }> =
-    (permisosDisponibles && Object.keys(permisosDisponibles).length > 0)
+    permisosDisponibles && Object.keys(permisosDisponibles).length > 0
       ? (permisosDisponibles as any)
       : (defaultModulosDisponibles as any);
 
   // Construir categorías dinámicamente en base a los módulos disponibles
   const categorias = React.useMemo(() => buildCategorias(modulosDisponibles), [modulosDisponibles]);
-  
+
   const [showModal, setShowModal] = useState(false);
   const [editingRol, setEditingRol] = useState<RolBrokerType | null>(null);
   const [formData, setFormData] = useState<RolBrokerCreate>({
@@ -220,10 +458,12 @@ const Roles: React.FC = () => {
     color: '#6B7280',
     activo: true,
     nivel_acceso: 1,
-    es_admin: false
+    es_admin: false,
   });
 
-  const [permisosSeleccionados, setPermisosSeleccionados] = useState<{[key: string]: string[]}>({});
+  const [permisosSeleccionados, setPermisosSeleccionados] = useState<{ [key: string]: string[] }>(
+    {},
+  );
   const [activeCategory, setActiveCategory] = useState<string>('Panel de Control');
 
   // Asegurar que la pestaña activa exista; si cambia el set de categorías, seleccionar la primera
@@ -246,7 +486,7 @@ const Roles: React.FC = () => {
       color: '#6B7280',
       activo: true,
       nivel_acceso: 1,
-      es_admin: false
+      es_admin: false,
     });
     setPermisosSeleccionados({});
     setEditingRol(null);
@@ -262,16 +502,17 @@ const Roles: React.FC = () => {
         color: rol.color,
         activo: rol.activo,
         nivel_acceso: rol.nivel_acceso,
-        es_admin: rol.es_admin
+        es_admin: rol.es_admin,
       });
-      
+
       // Parsear permisos existentes
-      const permisosActuales: {[key: string]: string[]} = {};
-      (rol.permisos || []).forEach(permiso => {
+      const permisosActuales: { [key: string]: string[] } = {};
+      (rol.permisos || []).forEach((permiso) => {
         if (permiso === '*') {
           // Si tiene todos los permisos
-          Object.keys(modulosDisponibles).forEach(modulo => {
-            permisosActuales[modulo] = modulosDisponibles[modulo as keyof typeof modulosDisponibles].permisos;
+          Object.keys(modulosDisponibles).forEach((modulo) => {
+            permisosActuales[modulo] =
+              modulosDisponibles[modulo as keyof typeof modulosDisponibles].permisos;
           });
         } else if (permiso.includes('.')) {
           const [modulo, accion] = permiso.split('.');
@@ -279,7 +520,8 @@ const Roles: React.FC = () => {
             permisosActuales[modulo] = [];
           }
           if (accion === '*') {
-            permisosActuales[modulo] = modulosDisponibles[modulo as keyof typeof modulosDisponibles]?.permisos || [];
+            permisosActuales[modulo] =
+              modulosDisponibles[modulo as keyof typeof modulosDisponibles]?.permisos || [];
           } else {
             permisosActuales[modulo].push(accion);
           }
@@ -298,7 +540,7 @@ const Roles: React.FC = () => {
   };
 
   const handlePermisoChange = (modulo: string, permiso: string, checked: boolean) => {
-    setPermisosSeleccionados(prev => {
+    setPermisosSeleccionados((prev) => {
       const newPermisos = { ...prev };
       if (!newPermisos[modulo]) {
         newPermisos[modulo] = [];
@@ -309,7 +551,7 @@ const Roles: React.FC = () => {
           newPermisos[modulo].push(permiso);
         }
       } else {
-        newPermisos[modulo] = newPermisos[modulo].filter(p => p !== permiso);
+        newPermisos[modulo] = newPermisos[modulo].filter((p) => p !== permiso);
         if (newPermisos[modulo].length === 0) {
           delete newPermisos[modulo];
         }
@@ -323,9 +565,9 @@ const Roles: React.FC = () => {
     const moduloInfo = modulosDisponibles[modulo as keyof typeof modulosDisponibles];
     if (!moduloInfo) return;
 
-    setPermisosSeleccionados(prev => {
+    setPermisosSeleccionados((prev) => {
       const newPermisos = { ...prev };
-      
+
       if (checked) {
         newPermisos[modulo] = [...moduloInfo.permisos];
       } else {
@@ -338,7 +580,7 @@ const Roles: React.FC = () => {
 
   const convertirPermisosAArray = (): string[] => {
     const permisosArray: string[] = [];
-    
+
     Object.entries(permisosSeleccionados).forEach(([modulo, permisos]) => {
       const moduloInfo = modulosDisponibles[modulo as keyof typeof modulosDisponibles];
       if (!moduloInfo) return;
@@ -348,7 +590,7 @@ const Roles: React.FC = () => {
         permisosArray.push(`${modulo}.*`);
       } else {
         // Agregar permisos específicos
-        permisos.forEach(permiso => {
+        permisos.forEach((permiso) => {
           permisosArray.push(`${modulo}.${permiso}`);
         });
       }
@@ -359,12 +601,12 @@ const Roles: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const permisosArray = convertirPermisosAArray();
       const rolData = {
         ...formData,
-        permisos: permisosArray
+        permisos: permisosArray,
       };
 
       if (editingRol) {
@@ -375,17 +617,26 @@ const Roles: React.FC = () => {
             const token = await user.getIdToken();
             const resp = await fetch('http://127.0.0.1:8001/api/empleado-auth/contexto', {
               headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
-              }
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+              },
             });
             if (resp.ok) {
               const ctx = await resp.json();
               if (ctx.success && ctx.data) {
-                const nuevo = { empleado: ctx.data.empleado, broker: ctx.data.broker, permisos: ctx.data.permisos };
+                const nuevo = {
+                  empleado: ctx.data.empleado,
+                  broker: ctx.data.broker,
+                  permisos: ctx.data.permisos,
+                };
                 localStorage.setItem('empleado_data', JSON.stringify(nuevo));
                 // Disparar evento storage para que el contexto se reactive
-                window.dispatchEvent(new StorageEvent('storage', { key: 'empleado_data', newValue: JSON.stringify(nuevo) }));
+                window.dispatchEvent(
+                  new StorageEvent('storage', {
+                    key: 'empleado_data',
+                    newValue: JSON.stringify(nuevo),
+                  }),
+                );
               }
             }
           } catch {}
@@ -393,18 +644,16 @@ const Roles: React.FC = () => {
       } else {
         await createRol(rolData);
       }
-      
+
       closeModal();
-    } catch (error) {
-    }
+    } catch (error) {}
   };
 
   const handleDelete = async (id: number) => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este rol?')) {
       try {
         await deleteRol(id);
-      } catch (error) {
-      }
+      } catch (error) {}
     }
   };
 
@@ -434,17 +683,11 @@ const Roles: React.FC = () => {
           </p>
         </div>
         <PermissionGate route={currentRoute} action="crear">
-          <Button onClick={() => openModal()}>
-            Crear Nuevo Rol
-          </Button>
+          <Button onClick={() => openModal()}>Crear Nuevo Rol</Button>
         </PermissionGate>
       </div>
 
-      {error && (
-        <Alert color="failure">
-          {error}
-        </Alert>
-      )}
+      {error && <Alert color="failure">{error}</Alert>}
 
       <Card>
         <div className="overflow-x-auto">
@@ -462,30 +705,36 @@ const Roles: React.FC = () => {
                 <Table.Row key={rol.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
                   <Table.Cell className="font-medium text-gray-900 dark:text-white">
                     <div className="flex items-center space-x-2">
-                      <div 
-                        className="w-3 h-3 rounded-full" 
+                      <div
+                        className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: rol.color }}
                       />
                       <span>{rol.nombre}</span>
                       {rol.es_admin && (
-                        <Badge color="info" size="sm">Admin</Badge>
+                        <Badge color="info" size="sm">
+                          Admin
+                        </Badge>
                       )}
                     </div>
                   </Table.Cell>
                   <Table.Cell>{rol.descripcion}</Table.Cell>
                   <Table.Cell>
-                    <Badge color={
-                      rol.nivel_acceso === 4 ? 'success' :
-                      rol.nivel_acceso === 3 ? 'warning' :
-                      rol.nivel_acceso === 2 ? 'info' : 'gray'
-                    }>
-                      {nivelesAcceso.find(n => n.value === rol.nivel_acceso)?.label}
+                    <Badge
+                      color={
+                        rol.nivel_acceso === 4
+                          ? 'success'
+                          : rol.nivel_acceso === 3
+                          ? 'warning'
+                          : rol.nivel_acceso === 2
+                          ? 'info'
+                          : 'gray'
+                      }
+                    >
+                      {nivelesAcceso.find((n) => n.value === rol.nivel_acceso)?.label}
                     </Badge>
                   </Table.Cell>
                   <Table.Cell>
-                    <Badge color="gray">
-                      {rol.empleados_count || 0} empleado(s)
-                    </Badge>
+                    <Badge color="gray">{rol.empleados_count || 0} empleado(s)</Badge>
                   </Table.Cell>
                   <Table.Cell>
                     <Badge color={rol.activo ? 'success' : 'failure'}>
@@ -495,20 +744,12 @@ const Roles: React.FC = () => {
                   <Table.Cell>
                     <div className="flex space-x-2">
                       <PermissionGate route={currentRoute} action="editar">
-                        <Button 
-                          size="sm" 
-                          color="gray"
-                          onClick={() => openModal(rol)}
-                        >
+                        <Button size="sm" color="gray" onClick={() => openModal(rol)}>
                           Editar
                         </Button>
                       </PermissionGate>
                       <PermissionGate route={currentRoute} action="eliminar">
-                        <Button 
-                          size="sm" 
-                          color="failure"
-                          onClick={() => handleDelete(rol.id)}
-                        >
+                        <Button size="sm" color="failure" onClick={() => handleDelete(rol.id)}>
                           Eliminar
                         </Button>
                       </PermissionGate>
@@ -523,9 +764,7 @@ const Roles: React.FC = () => {
 
       {/* Modal para crear/editar roles */}
       <Modal show={showModal} onClose={closeModal} size="7xl">
-        <Modal.Header>
-          {editingRol ? 'Editar Rol' : 'Crear Nuevo Rol'}
-        </Modal.Header>
+        <Modal.Header>{editingRol ? 'Editar Rol' : 'Crear Nuevo Rol'}</Modal.Header>
         <Modal.Body>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -538,13 +777,15 @@ const Roles: React.FC = () => {
                   required
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="nivel_acceso" value="Nivel de Acceso" />
                 <Select
                   id="nivel_acceso"
                   value={formData.nivel_acceso}
-                  onChange={(e) => setFormData({ ...formData, nivel_acceso: parseInt(e.target.value) })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, nivel_acceso: parseInt(e.target.value) })
+                  }
                 >
                   {nivelesAcceso.map((nivel) => (
                     <option key={nivel.value} value={nivel.value}>
@@ -623,7 +864,8 @@ const Roles: React.FC = () => {
                 {/* Módulos de la categoría activa */}
                 <div className="space-y-4">
                   {categorias[activeCategory as keyof typeof categorias]?.map((modulo) => {
-                    const moduloInfo = modulosDisponibles[modulo as keyof typeof modulosDisponibles];
+                    const moduloInfo =
+                      modulosDisponibles[modulo as keyof typeof modulosDisponibles];
                     if (!moduloInfo) return null;
 
                     const permisosModulo = permisosSeleccionados[modulo] || [];
@@ -636,23 +878,29 @@ const Roles: React.FC = () => {
                           <div className="flex items-center space-x-2">
                             <Checkbox
                               checked={todosMarcados}
-                              onCheckedChange={(checked) => handleModuloCompleteChange(modulo, !!checked)}
+                              onCheckedChange={(checked) =>
+                                handleModuloCompleteChange(modulo, !!checked)
+                              }
                             />
                             <span className="font-medium text-gray-900 dark:text-white">
                               {LABEL_OVERRIDES[modulo] ?? moduloInfo.label}
                             </span>
                           </div>
-                          <Badge color={todosMarcados ? 'success' : algunosMarcados ? 'warning' : 'gray'}>
+                          <Badge
+                            color={todosMarcados ? 'success' : algunosMarcados ? 'warning' : 'gray'}
+                          >
                             {permisosModulo.length}/{moduloInfo.permisos.length}
                           </Badge>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 ml-6">
                           {moduloInfo.permisos.map((permiso: string) => (
                             <div key={permiso} className="flex items-center space-x-2">
                               <Checkbox
                                 checked={permisosModulo.includes(permiso)}
-                                onCheckedChange={(checked) => handlePermisoChange(modulo, permiso, !!checked)}
+                                onCheckedChange={(checked) =>
+                                  handlePermisoChange(modulo, permiso, !!checked)
+                                }
                               />
                               <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">
                                 {permiso.replace('_', ' ')}
@@ -671,9 +919,15 @@ const Roles: React.FC = () => {
               <Button type="button" color="gray" onClick={closeModal}>
                 Cancelar
               </Button>
-              <Button type="submit">
-                {editingRol ? 'Actualizar' : 'Crear'} Rol
-              </Button>
+              {editingRol ? (
+                <PermissionGate route={currentRoute} action="editar">
+                  <Button type="submit">Actualizar Rol</Button>
+                </PermissionGate>
+              ) : (
+                <PermissionGate route={currentRoute} action="crear">
+                  <Button type="submit">Crear Rol</Button>
+                </PermissionGate>
+              )}
             </div>
           </form>
         </Modal.Body>
