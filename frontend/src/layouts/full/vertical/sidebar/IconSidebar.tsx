@@ -24,15 +24,16 @@ export const IconSidebar = () => {
       'embudo_ventas',
       'seguimiento_comercial',
     ],
-    4: ['cartera_clientes', 'comisiones', 'reportes_financieros'],
+    4: ['whatsapp_business', 'email_marketing'],
     5: [
       'leads',
-      'email_marketing',
-      'whatsapp_business',
       'sms_marketing',
       'enlaces_cotizacion',
       'plantillas_campana',
       'recordatorios_automaticos',
+      'cartera_clientes',
+      'comisiones',
+      'reportes_financieros',
     ],
     6: ['asistentes_ia', 'voice_ai', 'analytics_predictivo'],
     7: ['contratos', 'proteccion_datos', 'documentos_clientes', 'cumplimiento_legal'],
@@ -59,7 +60,13 @@ export const IconSidebar = () => {
   const visibleIcons = useMemo(() => {
     return Miniicons.filter((mi) => {
       const modules = iconAccessMap[mi.id] || [];
+
       if (modules.length === 0) return true;
+      console.log(
+        modules.some((m) => canAccessModule(m)),
+        'modules',
+        modules,
+      );
       return modules.some((m) => canAccessModule(m));
     });
   }, [canAccessModule]);
@@ -69,6 +76,8 @@ export const IconSidebar = () => {
     setSelectedIconId(id);
     setIsCollapse('full-sidebar');
   };
+
+  console.log(visibleIcons, 'visibleIcons');
 
   return (
     <>
