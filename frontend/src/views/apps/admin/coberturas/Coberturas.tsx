@@ -3,9 +3,11 @@ import { Card, Button, Alert, Spinner, Table, Modal, TextInput, Label } from 'fl
 import { Icon } from '@iconify/react';
 import { useCoberturas } from 'src/hooks/useAdminCrudApi';
 import type { Cobertura as CoberturaType, CoberturaCreate } from 'src/types/admin';
+import { PermissionGate } from 'src/components/PermissionGate';
 
 const Coberturas = () => {
-  const { coberturas, loading, error, createCobertura, updateCobertura, deleteCobertura } = useCoberturas();
+  const { coberturas, loading, error, createCobertura, updateCobertura, deleteCobertura } =
+    useCoberturas();
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CoberturaType | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -48,13 +50,20 @@ const Coberturas = () => {
     if (confirm('¿Estás seguro de que deseas eliminar esta cobertura?')) {
       try {
         await deleteCobertura(id);
-      } catch (error) {
-      }
+      } catch (error) {}
     }
   };
 
   return (
-    <>
+    <PermissionGate
+      route="/apps/admin/coberturas"
+      action="ver"
+      fallback={
+        <div className="flex justify-center items-center h-64">
+          <Alert color="warning">No tienes permisos para ver Coberturas.</Alert>
+        </div>
+      }
+    >
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <div>
@@ -65,10 +74,12 @@ const Coberturas = () => {
               Administra las coberturas disponibles para las pólizas.
             </p>
           </div>
-          <Button onClick={handleCreate} className="flex items-center">
-            <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
-            Nueva Cobertura
-          </Button>
+          <PermissionGate route="/apps/admin/coberturas" action="crear">
+            <Button onClick={handleCreate} className="flex items-center">
+              <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
+              Nueva Cobertura
+            </Button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -87,7 +98,10 @@ const Coberturas = () => {
       ) : coberturas.length === 0 ? (
         <Card>
           <div className="text-center py-12 px-6">
-            <Icon icon="solar:shield-plus-bold-duotone" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <Icon
+              icon="solar:shield-plus-bold-duotone"
+              className="w-16 h-16 text-gray-400 mx-auto mb-4"
+            />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               No hay coberturas definidas
             </h3>
@@ -95,10 +109,12 @@ const Coberturas = () => {
               Comienza creando coberturas para organizar las pólizas.
             </p>
             <div className="flex justify-center">
-              <Button onClick={handleCreate}>
-                <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
-                Crear Primera Cobertura
-              </Button>
+              <PermissionGate route="/apps/admin/coberturas" action="crear">
+                <Button onClick={handleCreate}>
+                  <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
+                  Crear Primera Cobertura
+                </Button>
+              </PermissionGate>
             </div>
           </div>
         </Card>
@@ -113,7 +129,10 @@ const Coberturas = () => {
               </Table.Head>
               <Table.Body className="divide-y">
                 {coberturas.map((item) => (
-                  <Table.Row key={item.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                  <Table.Row
+                    key={item.id}
+                    className="bg-white dark:border-gray-700 dark:bg-gray-800"
+                  >
                     <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       {item.nombre}
                     </Table.Cell>
@@ -122,20 +141,16 @@ const Coberturas = () => {
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          color="gray"
-                          onClick={() => handleEdit(item)}
-                        >
-                          <Icon icon="solar:pen-bold" className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          color="failure"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
-                        </Button>
+                        <PermissionGate route="/apps/admin/coberturas" action="editar">
+                          <Button size="sm" color="gray" onClick={() => handleEdit(item)}>
+                            <Icon icon="solar:pen-bold" className="w-4 h-4" />
+                          </Button>
+                        </PermissionGate>
+                        <PermissionGate route="/apps/admin/coberturas" action="eliminar">
+                          <Button size="sm" color="failure" onClick={() => handleDelete(item.id)}>
+                            <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+                          </Button>
+                        </PermissionGate>
                       </div>
                     </Table.Cell>
                   </Table.Row>
@@ -148,9 +163,7 @@ const Coberturas = () => {
 
       {/* Modal de formulario */}
       <Modal show={showModal} onClose={() => setShowModal(false)} size="md">
-        <Modal.Header>
-          {isEditing ? 'Editar Cobertura' : 'Crear Cobertura.'}
-        </Modal.Header>
+        <Modal.Header>{isEditing ? 'Editar Cobertura' : 'Crear Cobertura.'}</Modal.Header>
         <form onSubmit={handleSubmit}>
           <Modal.Body>
             <div className="space-y-4">
@@ -169,31 +182,41 @@ const Coberturas = () => {
           </Modal.Body>
           <Modal.Footer>
             <div className="flex gap-2 ml-auto">
-              <Button
-                color="gray"
-                onClick={() => setShowModal(false)}
-                disabled={isSubmitting}
-              >
+              <Button color="gray" onClick={() => setShowModal(false)} disabled={isSubmitting}>
                 Cancelar
               </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting || !formData.nombre.trim()}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Spinner size="sm" className="mr-2" />
-                    Guardando...
-                  </>
-                ) : (
-                  'Crear'
-                )}
-              </Button>
+              {isEditing ? (
+                <PermissionGate route="/apps/admin/coberturas" action="editar">
+                  <Button type="submit" disabled={isSubmitting || !formData.nombre.trim()}>
+                    {isSubmitting ? (
+                      <>
+                        <Spinner size="sm" className="mr-2" />
+                        Guardando...
+                      </>
+                    ) : (
+                      'Actualizar'
+                    )}
+                  </Button>
+                </PermissionGate>
+              ) : (
+                <PermissionGate route="/apps/admin/coberturas" action="crear">
+                  <Button type="submit" disabled={isSubmitting || !formData.nombre.trim()}>
+                    {isSubmitting ? (
+                      <>
+                        <Spinner size="sm" className="mr-2" />
+                        Guardando...
+                      </>
+                    ) : (
+                      'Crear'
+                    )}
+                  </Button>
+                </PermissionGate>
+              )}
             </div>
           </Modal.Footer>
         </form>
       </Modal>
-    </>
+    </PermissionGate>
   );
 };
 
