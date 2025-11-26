@@ -43,7 +43,6 @@ export const IconSidebar = () => {
       'roles_permisos',
       'auditoria_accesos',
       'informacion_agencia',
-      'sedes',
       'aseguradoras',
       'ramos',
       'vendedores',
@@ -55,6 +54,7 @@ export const IconSidebar = () => {
       'configuracion_sistema',
       'monitoreo_logs',
     ],
+    10: ['sedes'],
   };
 
   const visibleIcons = useMemo(() => {
