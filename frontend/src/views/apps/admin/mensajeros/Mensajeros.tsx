@@ -16,6 +16,7 @@ import {
 import { Icon } from '@iconify/react';
 import { useMensajeros } from 'src/hooks/useAdminCrudApi';
 import type { Mensajero as MensajeroType, MensajeroCreate } from 'src/types/admin';
+import { PermissionGate } from 'src/components/PermissionGate';
 
 const tiposVehiculo = [
   { value: 'moto', label: 'Motocicleta' },
@@ -180,7 +181,15 @@ const Mensajeros = () => {
   }
 
   return (
-    <>
+    <PermissionGate
+      route="/apps/admin/mensajeros"
+      action="ver"
+      fallback={
+        <div className="flex justify-center items-center h-64">
+          <Alert color="warning">No tienes permisos para ver Mensajeros.</Alert>
+        </div>
+      }
+    >
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <div>
@@ -189,10 +198,12 @@ const Mensajeros = () => {
               Administra los mensajeros para entrega de documentos.
             </p>
           </div>
-          <Button onClick={handleCreate} className="bg-primary hover:bg-primary/90">
-            <Icon icon="solar:add-circle-bold-duotone" className="mr-2" width={20} />
-            Nuevo Mensajero
-          </Button>
+          <PermissionGate route="/apps/admin/mensajeros" action="crear">
+            <Button onClick={handleCreate} className="bg-primary hover:bg-primary/90">
+              <Icon icon="solar:add-circle-bold-duotone" className="mr-2" width={20} />
+              Nuevo Mensajero
+            </Button>
+          </PermissionGate>
         </div>
 
         {error && (
@@ -245,22 +256,26 @@ const Mensajeros = () => {
                   </Table.Cell>
                   <Table.Cell>
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        color="gray"
-                        onClick={() => handleEdit(mensajero)}
-                        title="Editar"
-                      >
-                        <Icon icon="solar:pen-bold-duotone" width={16} />
-                      </Button>
-                      <Button
-                        size="sm"
-                        color="failure"
-                        onClick={() => handleDelete(mensajero)}
-                        title="Eliminar"
-                      >
-                        <Icon icon="solar:trash-bin-trash-bold-duotone" width={16} />
-                      </Button>
+                      <PermissionGate route="/apps/admin/mensajeros" action="editar">
+                        <Button
+                          size="sm"
+                          color="gray"
+                          onClick={() => handleEdit(mensajero)}
+                          title="Editar"
+                        >
+                          <Icon icon="solar:pen-bold-duotone" width={16} />
+                        </Button>
+                      </PermissionGate>
+                      <PermissionGate route="/apps/admin/mensajeros" action="eliminar">
+                        <Button
+                          size="sm"
+                          color="failure"
+                          onClick={() => handleDelete(mensajero)}
+                          title="Eliminar"
+                        >
+                          <Icon icon="solar:trash-bin-trash-bold-duotone" width={16} />
+                        </Button>
+                      </PermissionGate>
                     </div>
                   </Table.Cell>
                 </Table.Row>
@@ -456,16 +471,27 @@ const Mensajeros = () => {
           </form>
         </Modal.Body>
         <Modal.Footer>
-          <Button type="submit" onClick={handleSubmit} disabled={loading}>
-            {loading ? <Spinner size="sm" className="mr-2" /> : null}
-            {isEditing ? 'Actualizar' : 'Crear'}
-          </Button>
+          {isEditing ? (
+            <PermissionGate route="/apps/admin/mensajeros" action="editar">
+              <Button type="submit" onClick={handleSubmit} disabled={loading}>
+                {loading ? <Spinner size="sm" className="mr-2" /> : null}
+                Actualizar
+              </Button>
+            </PermissionGate>
+          ) : (
+            <PermissionGate route="/apps/admin/mensajeros" action="crear">
+              <Button type="submit" onClick={handleSubmit} disabled={loading}>
+                {loading ? <Spinner size="sm" className="mr-2" /> : null}
+                Crear
+              </Button>
+            </PermissionGate>
+          )}
           <Button color="gray" onClick={() => setShowModal(false)}>
             Cancelar
           </Button>
         </Modal.Footer>
       </Modal>
-    </>
+    </PermissionGate>
   );
 };
 
