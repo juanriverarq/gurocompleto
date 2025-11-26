@@ -45,13 +45,20 @@ export const IconSidebar = () => {
       'informacion_agencia',
       'aseguradoras',
 
-      'estados_siniestros',
-      'motivos_estados_poliza',
       'mensajeros',
       'configuracion_sistema',
       'monitoreo_logs',
     ],
-    10: ['sedes', 'aseguradoras', 'ramos', 'vendedores', 'coberturas', 'tipos_afiliacion'],
+    10: [
+      'sedes',
+      'aseguradoras',
+      'ramos',
+      'vendedores',
+      'coberturas',
+      'tipos_afiliacion',
+      'estados_siniestros',
+      'motivos_estados_poliza',
+    ],
   };
 
   const visibleIcons = useMemo(() => {

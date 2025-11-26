@@ -1,11 +1,32 @@
 import React, { useState } from 'react';
-import { Card, Button, Alert, Spinner, Table, Modal, TextInput, Label, Badge } from 'flowbite-react';
+import {
+  Card,
+  Button,
+  Alert,
+  Spinner,
+  Table,
+  Modal,
+  TextInput,
+  Label,
+  Badge,
+} from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { useEstadosSiniestros } from 'src/hooks/useAdminCrudApi';
-import type { EstadoSiniestro as EstadoSiniestroType, EstadoSiniestroCreate } from 'src/types/admin';
+import type {
+  EstadoSiniestro as EstadoSiniestroType,
+  EstadoSiniestroCreate,
+} from 'src/types/admin';
+import { PermissionGate } from 'src/components/PermissionGate';
 
 const EstadosSiniestros = () => {
-  const { estadosSiniestros, loading, error, createEstadoSiniestro, updateEstadoSiniestro, deleteEstadoSiniestro } = useEstadosSiniestros();
+  const {
+    estadosSiniestros,
+    loading,
+    error,
+    createEstadoSiniestro,
+    updateEstadoSiniestro,
+    deleteEstadoSiniestro,
+  } = useEstadosSiniestros();
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<EstadoSiniestroType | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -48,13 +69,20 @@ const EstadosSiniestros = () => {
     if (confirm('¿Estás seguro de que deseas eliminar este estado de siniestro?')) {
       try {
         await deleteEstadoSiniestro(id);
-      } catch (error) {
-      }
+      } catch (error) {}
     }
   };
 
   return (
-    <>
+    <PermissionGate
+      route="/apps/admin/estados-siniestros"
+      action="ver"
+      fallback={
+        <div className="flex justify-center items-center h-64">
+          <Alert color="warning">No tienes permisos para ver Estados de Siniestros.</Alert>
+        </div>
+      }
+    >
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <div>
@@ -65,10 +93,12 @@ const EstadosSiniestros = () => {
               Configura los estados disponibles para los siniestros.
             </p>
           </div>
-          <Button onClick={handleCreate} className="flex items-center">
-            <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-            Nuevo Estado
-          </Button>
+          <PermissionGate route="/apps/admin/estados-siniestros" action="crear">
+            <Button onClick={handleCreate} className="flex items-center">
+              <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
+              Nuevo Estado
+            </Button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -87,7 +117,10 @@ const EstadosSiniestros = () => {
       ) : estadosSiniestros.length === 0 ? (
         <Card>
           <div className="text-center py-12 px-6">
-            <Icon icon="solar:danger-triangle-bold-duotone" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <Icon
+              icon="solar:danger-triangle-bold-duotone"
+              className="w-16 h-16 text-gray-400 mx-auto mb-4"
+            />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               No hay estados de siniestros definidos
             </h3>
@@ -95,10 +128,12 @@ const EstadosSiniestros = () => {
               Comienza creando estados para organizar tus siniestros.
             </p>
             <div className="flex justify-center">
-              <Button onClick={handleCreate}>
-                <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                Crear Primer Estado
-              </Button>
+              <PermissionGate route="/apps/admin/estados-siniestros" action="crear">
+                <Button onClick={handleCreate}>
+                  <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
+                  Crear Primer Estado
+                </Button>
+              </PermissionGate>
             </div>
           </div>
         </Card>
@@ -114,21 +149,21 @@ const EstadosSiniestros = () => {
               </Table.Head>
               <Table.Body className="divide-y">
                 {estadosSiniestros.map((item) => (
-                  <Table.Row key={item.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
+                  <Table.Row
+                    key={item.id}
+                    className="bg-white dark:border-gray-700 dark:bg-gray-800"
+                  >
                     <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       <div className="flex items-center gap-2">
-                        <div 
-                          className="w-4 h-4 rounded-full border border-gray-200" 
+                        <div
+                          className="w-4 h-4 rounded-full border border-gray-200"
                           style={{ backgroundColor: item.color }}
                         ></div>
                         {item.nombre}
                       </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <Badge 
-                        color="indigo" 
-                        style={{ backgroundColor: item.color, color: '#fff' }}
-                      >
+                      <Badge color="indigo" style={{ backgroundColor: item.color, color: '#fff' }}>
                         {item.color}
                       </Badge>
                     </Table.Cell>
@@ -137,20 +172,16 @@ const EstadosSiniestros = () => {
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          color="gray"
-                          onClick={() => handleEdit(item)}
-                        >
-                          <Icon icon="solar:pen-bold" className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          color="failure"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
-                        </Button>
+                        <PermissionGate route="/apps/admin/estados-siniestros" action="editar">
+                          <Button size="sm" color="gray" onClick={() => handleEdit(item)}>
+                            <Icon icon="solar:pen-bold" className="w-4 h-4" />
+                          </Button>
+                        </PermissionGate>
+                        <PermissionGate route="/apps/admin/estados-siniestros" action="eliminar">
+                          <Button size="sm" color="failure" onClick={() => handleDelete(item.id)}>
+                            <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+                          </Button>
+                        </PermissionGate>
                       </div>
                     </Table.Cell>
                   </Table.Row>
@@ -203,32 +234,42 @@ const EstadosSiniestros = () => {
           </Modal.Body>
           <Modal.Footer>
             <div className="flex gap-2 ml-auto">
-              <Button
-                color="gray"
-                onClick={() => setShowModal(false)}
-                disabled={isSubmitting}
-              >
+              <Button color="gray" onClick={() => setShowModal(false)} disabled={isSubmitting}>
                 Cancelar
               </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting || !formData.nombre.trim()}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Spinner size="sm" className="mr-2" />
-                    Guardando...
-                  </>
-                ) : (
-                  'Crear'
-                )}
-              </Button>
+              {isEditing ? (
+                <PermissionGate route="/apps/admin/estados-siniestros" action="editar">
+                  <Button type="submit" disabled={isSubmitting || !formData.nombre.trim()}>
+                    {isSubmitting ? (
+                      <>
+                        <Spinner size="sm" className="mr-2" />
+                        Guardando...
+                      </>
+                    ) : (
+                      'Actualizar'
+                    )}
+                  </Button>
+                </PermissionGate>
+              ) : (
+                <PermissionGate route="/apps/admin/estados-siniestros" action="crear">
+                  <Button type="submit" disabled={isSubmitting || !formData.nombre.trim()}>
+                    {isSubmitting ? (
+                      <>
+                        <Spinner size="sm" className="mr-2" />
+                        Guardando...
+                      </>
+                    ) : (
+                      'Crear'
+                    )}
+                  </Button>
+                </PermissionGate>
+              )}
             </div>
           </Modal.Footer>
         </form>
       </Modal>
-    </>
+    </PermissionGate>
   );
 };
 
-export default EstadosSiniestros; 
+export default EstadosSiniestros;
