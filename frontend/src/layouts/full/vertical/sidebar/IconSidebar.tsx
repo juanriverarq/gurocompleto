@@ -45,7 +45,6 @@ export const IconSidebar = () => {
       'informacion_agencia',
       'aseguradoras',
 
-      'mensajeros',
       'configuracion_sistema',
       'monitoreo_logs',
     ],
@@ -58,6 +57,7 @@ export const IconSidebar = () => {
       'tipos_afiliacion',
       'estados_siniestros',
       'motivos_estados_poliza',
+      'mensajeros',
     ],
   };
 
