@@ -73,8 +73,13 @@ transition: color .15s ease-in-out, background-color .15s ease-in-out, border-co
 }
 
 [data-sidebar-type="mini-sidebar"] .page-wrapper {
-    margin-left: 80px;
+    margin-left: 0;
+}
 
+@media (min-width: 1280px) {
+    [data-sidebar-type="mini-sidebar"] .page-wrapper {
+        margin-left: 80px;
+    }
 }
 
 @media (min-width: 1199px) {

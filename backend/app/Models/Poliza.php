@@ -81,6 +81,10 @@ class Poliza extends Model
         'insured_document',
         'assigned_user_id',
         'seller_name',
+        'seller_id',
+        'seller_id_2',
+        'seller_name_2',
+        'external_link',
         'created_by',
         'notes',
         'custom_fields',
@@ -177,6 +181,22 @@ class Poliza extends Model
     }
 
     /**
+     * Relación con el vendedor principal
+     */
+    public function vendedor(): BelongsTo
+    {
+        return $this->belongsTo(Vendedor::class, 'seller_id');
+    }
+
+    /**
+     * Relación con el segundo vendedor (opcional)
+     */
+    public function vendedor2(): BelongsTo
+    {
+        return $this->belongsTo(Vendedor::class, 'seller_id_2');
+    }
+
+    /**
      * Relación con automóviles asociados por poliza_id
      */
     public function automoviles(): HasMany
@@ -198,6 +218,14 @@ class Poliza extends Model
     public function cobrosComision(): HasMany
     {
         return $this->hasMany(CobroComision::class, 'poliza_id');
+    }
+
+    /**
+     * Relación con detalles de liquidaciones de vendedores
+     */
+    public function liquidacionesDetalle(): HasMany
+    {
+        return $this->hasMany(LiquidacionVendedorDetalle::class, 'poliza_id');
     }
 
     /**

@@ -11,6 +11,7 @@ import DashboardConfigModal from '../../components/modals/DashboardConfigModal';
 import { useWelcomeModal } from '../../hooks/useWelcomeModal';
 import type { TutorialSection } from '../../components/modals/OnboardingTutorialModal';
 import OnboardingTutorialModal from '../../components/modals/OnboardingTutorialModal';
+import FirstTimeOnboardingModal from '../../components/modals/FirstTimeOnboardingModal';
 // import { getAuth } from 'firebase/auth';
 
 interface DashboardConfig {
@@ -26,9 +27,13 @@ const CombinedDashboard = () => {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [firstTimeOnboardingOpen, setFirstTimeOnboardingOpen] = useState(false);
   
   // Hook para la modal de bienvenida
-  const { showWelcomeModal, closeWelcomeModal, userName } = useWelcomeModal(true);
+  const { showWelcomeModal, closeWelcomeModal } = useWelcomeModal(true);
+  
+  // Verificar si es primera vez (onboarding no completado)
+  const isFirstTime = !localStorage.getItem('guro_onboarding_completed');
 
   // Config del tutorial (según indicaciones del usuario)
   const tutorialVideoId = 'abc123XYZ';
@@ -109,12 +114,18 @@ const CombinedDashboard = () => {
     } catch {}
   }, []);
 
-  // Si la lógica de bienvenida indica mostrar modal, abrimos el tutorial
+  // Si la lógica de bienvenida indica mostrar modal
+  // Si es primera vez, mostrar el onboarding completo (datos + tutoriales)
+  // Si no es primera vez, mostrar solo tutoriales
   useEffect(() => {
     if (showWelcomeModal) {
-      setTutorialOpen(true);
+      if (isFirstTime) {
+        setFirstTimeOnboardingOpen(true);
+      } else {
+        setTutorialOpen(true);
+      }
     }
-  }, [showWelcomeModal]);
+  }, [showWelcomeModal, isFirstTime]);
   
   const enabledDashboards = availableDashboards.filter(d => d.enabled);
 
@@ -252,9 +263,9 @@ const CombinedDashboard = () => {
         onSave={handleSaveDashboardConfig}
       />
 
-      {/* Tutorial Onboarding Modal (reemplaza a la WelcomeModal) */}
+      {/* Tutorial Onboarding Modal (para usuarios que ya completaron onboarding) */}
       <OnboardingTutorialModal
-        isOpen={tutorialOpen || showWelcomeModal}
+        isOpen={tutorialOpen && !isFirstTime}
         onClose={() => {
           setTutorialOpen(false);
           closeWelcomeModal();
@@ -263,6 +274,19 @@ const CombinedDashboard = () => {
         title="Tutorial: Guro"
         subtitle="Aprende a utilizar Guro en menos de 15 minutos"
         sections={tutorialSections}
+      />
+
+      {/* First Time Onboarding Modal (datos del broker + tutoriales) */}
+      <FirstTimeOnboardingModal
+        isOpen={firstTimeOnboardingOpen}
+        onClose={() => {
+          setFirstTimeOnboardingOpen(false);
+          closeWelcomeModal();
+        }}
+        onComplete={() => {
+          setFirstTimeOnboardingOpen(false);
+          closeWelcomeModal();
+        }}
       />
     </div>
   );

@@ -78,6 +78,7 @@
     "gray-matter": "^4.0.3",
     "i18next": "^23.5.1",
     "input-otp": "^1.4.2",
+    "jspdf": "^3.0.4",
     "lodash": "^4.17.21",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.474.0",
@@ -90,6 +91,7 @@
     "react": "^19.0.0",
     "react-apexcharts": "^1.4.1",
     "react-big-calendar": "1.11.3",
+    "react-confetti": "^6.4.0",
     "react-datepicker": "^7.5.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "^19.0.0",
@@ -124,6 +126,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tinymce": "^7.5.1",
     "vaul": "^1.1.2",
+    "xlsx": "^0.18.5",
     "yup": "^0.32.11",
     "zod": "^3.24.1"
   },

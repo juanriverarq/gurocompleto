@@ -61,12 +61,12 @@ const Header = () => {
               </Navbar.Link>
               <Button
                 as={Link}
-                to="/auth/auth1/register"
+                to="/comenzar"
                 color="primary"
                 size="sm"
                 className="px-4"
               >
-                Comenzar Gratis
+                Prueba 7 Días Gratis
               </Button>
             </div>
           </Navbar.Collapse>

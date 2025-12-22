@@ -23,13 +23,16 @@ class Vendedor extends Model
         'email',
         'cuenta_bancaria',
         'tipo_persona',
+        'tipo_retencion',
         'es_agencia',
         'porcentaje_comision',
         'calcular_comision_sobre',
         'porcentaje_retencion',
         'porcentaje_retencion_ica',
         'porcentaje_iva',
+        'porcentaje_retencion_iva',
         'comisiones_diferentes_por_ano',
+        'fecha_vinculacion',
         'broker_id',
     ];
 
@@ -40,12 +43,23 @@ class Vendedor extends Model
         'porcentaje_retencion' => 'decimal:2',
         'porcentaje_retencion_ica' => 'decimal:2',
         'porcentaje_iva' => 'decimal:2',
+        'porcentaje_retencion_iva' => 'decimal:2',
+        'fecha_vinculacion' => 'date',
     ];
 
     // Constantes para enums
     const TIPOS_PERSONA = [
         'natural' => 'Natural',
         'juridica' => 'Jurídica',
+    ];
+
+    // Tipos estandarizados de retención (opcionales)
+    // Claves internas => Etiquetas visibles
+    const TIPOS_RETENCION = [
+        'natural_ss' => 'Persona natural con seguridad social (sin retenciones)',
+        'natural_sin_ss_rf10' => 'Persona natural sin seguridad social (con retención en la fuente 10%)',
+        'juridica_simplificado' => 'Persona jurídica simplificado (IVA-RETEIVA)',
+        'juridica_no_simplificado_rf11' => 'Persona jurídica no simplificado (IVA-Retención en la fuente 11%)',
     ];
 
     const CALCULAR_COMISION_SOBRE = [
@@ -207,6 +221,14 @@ class Vendedor extends Model
     public function getPorcentajeIvaFormattedAttribute(): string
     {
         return number_format($this->porcentaje_iva, 2) . '%';
+    }
+
+    /**
+     * Obtener el porcentaje de retención IVA formateado
+     */
+    public function getPorcentajeRetencionIvaFormattedAttribute(): string
+    {
+        return number_format($this->porcentaje_retencion_iva, 2) . '%';
     }
 
     /**

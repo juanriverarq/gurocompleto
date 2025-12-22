@@ -73,6 +73,9 @@ interface UnifiedAuthContextType {
     permisos?: string[];
   }) => void;
 
+  // Update tenant data dynamically
+  updateTenant: (newTenantData: Partial<BrokerTenant>) => void;
+
   // Métodos SaaS
   createBroker: (brokerData: any) => Promise<{ success: boolean; message: string }>;
   checkSaasStatus: () => Promise<void>;
@@ -122,7 +125,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         const parsed = JSON.parse(saved);
         return parsed?.empleado || null;
       }
-    } catch {}
+    } catch { }
     return null;
   });
   const [empleadoToken, setEmpleadoToken] = useState<string | null>(() => {
@@ -142,7 +145,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         const parsed = JSON.parse(saved);
         return parsed?.broker || null;
       }
-    } catch {}
+    } catch { }
     return null;
   });
   const [usuarioSaas, setUsuarioSaas] = useState<UsuarioSaaS | null>(null);
@@ -153,7 +156,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         const parsed = JSON.parse(saved);
         return parsed?.permisos || null;
       }
-    } catch {}
+    } catch { }
     return null;
   });
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
@@ -243,7 +246,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
           setPermisos(nuevo.permisos as any);
         }
       }
-    } catch {}
+    } catch { }
   }, [isEmpleado, user]);
 
   // Auto-refresh: al recuperar foco de la ventana; quito intervalo para escala
@@ -321,7 +324,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
               setSaasError('Usuario necesita crear un broker');
             }
           }
-        } catch (error) {}
+        } catch (error) { }
       }
     };
 
@@ -329,6 +332,35 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
     const timeoutId = setTimeout(checkBrokerId, 1000);
     return () => clearTimeout(timeoutId);
   }, [user, isEmpleado, saasLoading]);
+
+  // Aplicar branding del tenant (definido antes de checkEmpleadoSession para poder usarlo)
+  const applyTenantBranding = (branding: any) => {
+    try {
+      // Soportar diferentes estructuras de branding
+      const primaryColor = branding?.primary_color || branding?.colores?.primario;
+      const secondaryColor = branding?.secondary_color || branding?.colores?.secundario;
+      const accentColor = branding?.accent_color || branding?.colores?.acento;
+      
+      if (primaryColor) {
+        // Aplicar con prioridad alta usando setProperty con priority
+        document.documentElement.style.setProperty('--color-primary', primaryColor, 'important');
+        document.documentElement.style.setProperty('--color-primary-emphasis', primaryColor, 'important');
+        // Calcular versión clara del color para lightprimary
+        document.documentElement.style.setProperty('--color-lightprimary', `${primaryColor}40`, 'important');
+        // También aplicar a variables de Tailwind/Flowbite si existen
+        document.documentElement.style.setProperty('--primary', primaryColor);
+        console.log('🎨 Color primario aplicado:', primaryColor);
+      }
+      if (secondaryColor) {
+        document.documentElement.style.setProperty('--color-secondary', secondaryColor, 'important');
+      }
+      if (accentColor) {
+        document.documentElement.style.setProperty('--color-accent', accentColor, 'important');
+      }
+    } catch (error) {
+      console.warn('Error aplicando branding:', error);
+    }
+  };
 
   // Verificar sesión de empleado guardada
   const checkEmpleadoSession = async () => {
@@ -346,7 +378,13 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
       if (savedData) {
         const parsed = JSON.parse(savedData);
         setEmpleado(parsed.empleado || null);
-        if (parsed.broker) setTenant(parsed.broker);
+        if (parsed.broker) {
+          setTenant(parsed.broker);
+          // Aplicar branding inmediatamente al restaurar
+          if (parsed.broker.branding) {
+            applyTenantBranding(parsed.broker.branding);
+          }
+        }
         if (parsed.permisos) setPermisos(parsed.permisos);
         if (savedToken) setEmpleadoToken(savedToken);
         setNeedsOnboarding(false);
@@ -354,6 +392,9 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         console.debug('[UnifiedAuthContext] checkEmpleadoSession() restored from localStorage', {
           empleadoId: parsed?.empleado?.id,
           hasBroker: !!parsed?.broker,
+          logo_url: parsed?.broker?.logo_url,
+          branding_logo: parsed?.broker?.branding?.logo,
+          primary_color: parsed?.broker?.branding?.primary_color,
           permisosCount: Array.isArray(parsed?.permisos) ? parsed.permisos.length : 0,
         });
 
@@ -408,8 +449,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
           '[UnifiedAuthContext] checkEmpleadoSession() legacy path: validating token without Firebase user',
         );
         const response = await fetch(
-          `${
-            import.meta.env.VITE_API_URL || 'http://localhost:8081/api'
+          `${import.meta.env.VITE_API_URL || 'http://localhost:8081/api'
           }/empleado-auth/validar-token`,
           {
             method: 'POST',
@@ -481,6 +521,61 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
       }, 0);
     } catch (e) {
       console.warn('[UnifiedAuthContext] setEmpleadoSession() error', e);
+    }
+  };
+
+  // Update tenant data dynamically and persist to localStorage if applicable
+  const updateTenant = (newTenantData: Partial<BrokerTenant>) => {
+    if (!tenant) return;
+
+    // Merge profundo para branding
+    const updatedBranding = newTenantData.branding 
+      ? { ...(tenant.branding || {}), ...newTenantData.branding }
+      : tenant.branding;
+
+    const updatedTenant = { 
+      ...tenant, 
+      ...newTenantData,
+      branding: updatedBranding 
+    };
+    
+    console.log('🔄 updateTenant:', { 
+      logo_url: updatedTenant.logo_url, 
+      branding_logo: updatedTenant.branding?.logo,
+      primary_color: updatedTenant.branding?.primary_color 
+    });
+    
+    setTenant(updatedTenant as BrokerTenant);
+
+    // Apply branding immediately
+    if (updatedTenant.branding) {
+      applyTenantBranding(updatedTenant.branding);
+    }
+
+    // Update localStorage - siempre intentar guardar
+    try {
+      const savedData = localStorage.getItem('empleado_data');
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        // Actualizar broker con merge profundo
+        parsed.broker = { 
+          ...(parsed.broker || {}), 
+          ...newTenantData,
+          branding: updatedBranding
+        };
+        localStorage.setItem('empleado_data', JSON.stringify(parsed));
+        console.log('✅ localStorage actualizado con nuevo tenant');
+      } else {
+        // Si no hay empleado_data, crear uno nuevo solo con broker
+        localStorage.setItem('empleado_data', JSON.stringify({ 
+          broker: updatedTenant,
+          empleado: null,
+          permisos: null
+        }));
+        console.log('✅ localStorage creado con nuevo tenant');
+      }
+    } catch (e) {
+      console.warn('[UnifiedAuthContext] updateTenant() error updating localStorage', e);
     }
   };
 
@@ -653,24 +748,6 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
     }
   };
 
-  // Aplicar branding del tenant
-  const applyTenantBranding = (branding: any) => {
-    try {
-      if (branding?.primary_color) {
-        document.documentElement.style.setProperty('--color-primary', branding.primary_color);
-        console.log('🎨 Color primario aplicado:', branding.primary_color);
-      }
-      if (branding?.secondary_color) {
-        document.documentElement.style.setProperty('--color-secondary', branding.secondary_color);
-      }
-      if (branding?.accent_color) {
-        document.documentElement.style.setProperty('--color-accent', branding.accent_color);
-      }
-    } catch (error) {
-      console.warn('Error aplicando branding:', error);
-    }
-  };
-
   // Aplicar branding al cargar el contexto (empleado o Firebase)
   useEffect(() => {
     if (tenant?.branding) {
@@ -731,9 +808,39 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         throw new Error(data.message || data.error || 'Error creando broker');
       }
     } catch (err: any) {
-      // Normalizar mensaje de error
-      const backendMessage = err?.response?.data?.message || err?.response?.data?.error;
-      const message = backendMessage || (err instanceof Error ? err.message : 'Error desconocido');
+      // Normalizar mensaje de error, incluyendo errores de validación
+      let message = 'Error desconocido';
+      
+      if (err?.response?.data?.errors) {
+        // Errores de validación Laravel - extraer mensajes
+        const errors = err.response.data.errors;
+        const errorMessages: string[] = [];
+        for (const field in errors) {
+          const fieldErrors = errors[field];
+          if (Array.isArray(fieldErrors)) {
+            fieldErrors.forEach((msg: string) => {
+              // Traducir mensajes comunes
+              if (msg.includes('has already been taken')) {
+                if (field === 'document_number') {
+                  errorMessages.push('El número de documento/NIT ya está registrado en el sistema');
+                } else {
+                  errorMessages.push(`El campo ${field} ya está en uso`);
+                }
+              } else {
+                errorMessages.push(msg);
+              }
+            });
+          }
+        }
+        message = errorMessages.length > 0 ? errorMessages.join('. ') : err?.response?.data?.message || 'Error de validación';
+      } else if (err?.response?.data?.message) {
+        message = err.response.data.message;
+      } else if (err?.response?.data?.error) {
+        message = err.response.data.error;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      
       console.error('[UnifiedAuthContext] createBroker() excepción:', err);
       return { success: false, message };
     }
@@ -861,7 +968,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
               'Content-Type': 'application/json',
             },
           });
-        } catch (error) {}
+        } catch (error) { }
         clearEmpleadoSession();
       }
 
@@ -878,7 +985,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
       setOnboardingStep(null);
       setTrialExpired(false);
       setTrialEndsAt(null);
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const value: UnifiedAuthContextType = {
@@ -921,6 +1028,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
     isEmailVerified,
     hasCompleteSaasAccess,
     saasChecked,
+    updateTenant,
   };
 
   return <UnifiedAuthContext.Provider value={value}>{children}</UnifiedAuthContext.Provider>;

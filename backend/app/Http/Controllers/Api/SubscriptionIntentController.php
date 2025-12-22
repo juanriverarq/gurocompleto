@@ -20,14 +20,29 @@ class SubscriptionIntentController extends Controller
                 return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
             }
 
-            $validator = Validator::make($request->all(), [
-                'users' => 'required|integer|min:1',
-                'period' => 'required|in:monthly,annual',
-                'storageGB' => 'nullable|integer|min:5',
-                'modules' => 'required|array',
-                'totals' => 'required|array',
-                'source' => 'nullable|string|max:64',
-            ]);
+            $source = $request->input('source', 'pricing_calculator');
+
+            // Validación diferente según el source
+            if ($source === 'onboarding_flow') {
+                // Flujo de onboarding simplificado
+                $validator = Validator::make($request->all(), [
+                    'modules' => 'required|array',
+                    'phone' => 'nullable|string|max:32',
+                    'employeeCount' => 'nullable|string|max:16',
+                    'businessType' => 'nullable|string|max:64',
+                    'source' => 'nullable|string|max:64',
+                ]);
+            } else {
+                // Flujo de pricing calculator
+                $validator = Validator::make($request->all(), [
+                    'users' => 'required|integer|min:1',
+                    'period' => 'required|in:monthly,annual',
+                    'storageGB' => 'nullable|integer|min:5',
+                    'modules' => 'required|array',
+                    'totals' => 'required|array',
+                    'source' => 'nullable|string|max:64',
+                ]);
+            }
 
             if ($validator->fails()) {
                 return response()->json([
@@ -37,16 +52,70 @@ class SubscriptionIntentController extends Controller
                 ], 422);
             }
 
-            $intent = SubscriptionIntent::create([
+            // Preparar datos para guardar
+            $intentData = [
                 'user_id' => $user->id,
-                'users_count' => (int) $request->input('users'),
-                'period' => $request->input('period'),
-                'storage_gb' => (int) ($request->input('storageGB') ?? 5),
                 'modules' => $request->input('modules', []),
-                'totals' => $request->input('totals', []),
                 'status' => 'pending',
-                'source' => $request->input('source', 'pricing_calculator'),
-            ]);
+                'source' => $source,
+            ];
+
+            if ($source === 'onboarding_flow') {
+                // Datos del flujo de onboarding
+                $intentData['users_count'] = 1; // Por defecto 1 usuario en trial
+                $intentData['period'] = 'monthly'; // Por defecto mensual
+                $intentData['storage_gb'] = 5; // Por defecto 5GB
+                $intentData['totals'] = [
+                    'phone' => $request->input('phone'),
+                    'employee_count' => $request->input('employeeCount'),
+                    'business_type' => $request->input('businessType'),
+                ];
+
+                // Actualizar teléfono del usuario si se proporcionó
+                if ($request->filled('phone')) {
+                    $user->update(['phone' => $request->input('phone')]);
+                }
+
+                // Actualizar broker si existe
+                if ($user->broker_id && $user->broker) {
+                    $broker = $user->broker;
+                    $updateData = [];
+                    
+                    if ($request->filled('phone')) {
+                        $updateData['phone'] = $request->input('phone');
+                    }
+                    if ($request->filled('employeeCount')) {
+                        // Mapear rango de empleados a max_users
+                        $employeeMap = [
+                            '1' => 1,
+                            '2-5' => 5,
+                            '6-10' => 10,
+                            '11-20' => 20,
+                            '21-50' => 50,
+                            '50+' => 100,
+                        ];
+                        $updateData['max_users'] = $employeeMap[$request->input('employeeCount')] ?? 5;
+                    }
+                    if ($request->filled('businessType')) {
+                        $updateData['industry'] = $request->input('businessType');
+                    }
+                    
+                    // Guardar módulos seleccionados como features del broker
+                    $updateData['features'] = $request->input('modules', []);
+                    
+                    if (!empty($updateData)) {
+                        $broker->update($updateData);
+                    }
+                }
+            } else {
+                // Datos del flujo de pricing calculator
+                $intentData['users_count'] = (int) $request->input('users');
+                $intentData['period'] = $request->input('period');
+                $intentData['storage_gb'] = (int) ($request->input('storageGB') ?? 5);
+                $intentData['totals'] = $request->input('totals', []);
+            }
+
+            $intent = SubscriptionIntent::create($intentData);
 
             try {
                 Mail::to($user->email)->send(new SubscriptionIntentCreated($intent));

@@ -45,8 +45,8 @@ const FrontHeader = () => {
               <Button as={Link} to="/auth/auth1/login" className="font-bold px-6 py-2" color={"light"}>
                 Iniciar Sesión
               </Button>
-              <Button as={Link} to="/auth/auth1/register" className="font-bold px-6 py-2" color={"primary"}>
-                Comenzar Gratis
+              <Button as={Link} to="/comenzar" className="font-bold px-6 py-2" color={"primary"}>
+                Prueba 7 Días Gratis
               </Button>
             </div>
           </div>

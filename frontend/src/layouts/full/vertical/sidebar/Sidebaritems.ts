@@ -170,7 +170,7 @@ const BaseMenuitems: MenuitemsType[] = [
   },
   {
     id: uniqueId(),
-    title: 'Liquidar Vendedores',
+    title: 'Liquidar Vendedor / Asesor',
     icon: 'solar:calculator-bold-duotone',
     href: '/apps/cartera/liquidar-vendedores',
   },
@@ -373,7 +373,7 @@ const BaseMenuitems: MenuitemsType[] = [
       },
       {
         id: uniqueId(),
-        title: 'Vendedores',
+        title: 'Vendedor / Asesor',
         href: '/apps/admin/vendedores',
       },
       {
@@ -422,12 +422,43 @@ const BaseMenuitems: MenuitemsType[] = [
   },
 ];
 
+// Función para aplicar terminología dinámica a los items del menú
+const applyTerminologia = (items: MenuitemsType[], terminologia: { vendedor: string; vendedorPlural: string }): MenuitemsType[] => {
+  return items.map(item => {
+    let newItem = { ...item };
+    
+    // Reemplazar títulos que contienen "Vendedor / Asesor" o "Vendedor"
+    if (newItem.title) {
+      if (newItem.title === "Vendedor / Asesor") {
+        newItem.title = terminologia.vendedorPlural;
+      } else if (newItem.title === "Liquidar Vendedor / Asesor") {
+        newItem.title = `Liquidar ${terminologia.vendedor}`;
+      }
+    }
+    
+    // Aplicar recursivamente a children
+    if (newItem.children) {
+      newItem.children = applyTerminologia(newItem.children, terminologia);
+    }
+    
+    return newItem;
+  });
+};
+
 // Función para obtener menú filtrado por permisos
 export const getFilteredMenuItems = (
   hasPermission: (module: string, action: string) => boolean,
   canAccessModule: (module: string) => boolean,
+  terminologia?: { vendedor: string; vendedorPlural: string }
 ): MenuitemsType[] => {
-  const filteredItems = filterMenuItemsByPermissions(BaseMenuitems, hasPermission, canAccessModule);
+  let items = [...BaseMenuitems];
+  
+  // Aplicar terminología si se proporciona
+  if (terminologia) {
+    items = applyTerminologia(items, terminologia);
+  }
+  
+  const filteredItems = filterMenuItemsByPermissions(items, hasPermission, canAccessModule);
   const cleanedItems = cleanOrphanedNavLabels(filteredItems);
   return cleanedItems;
 };

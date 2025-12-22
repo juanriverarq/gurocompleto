@@ -508,9 +508,20 @@ const DocumentosCliente: React.FC = () => {
                 </label>
                 <Select value={docType} onChange={(e) => setDocType(e.target.value)}>
                   <option value="documento_identidad">Documento de identidad</option>
+                  <option value="cedula">Cédula</option>
                   <option value="soporte_ingresos">Soporte de ingresos</option>
                   <option value="contrato">Contrato</option>
                   <option value="consentimiento">Consentimiento</option>
+                  <option value="sarlaft">SARLAFT</option>
+                  <option value="rut">RUT</option>
+                  <option value="camara_comercio">Cámara de Comercio</option>
+                  <option value="estados_financieros">Estados Financieros</option>
+                  <option value="matricula">Matrícula</option>
+                  <option value="factura">Factura</option>
+                  <option value="soat">SOAT</option>
+                  <option value="poliza">Póliza</option>
+                  <option value="carta_estadia">Carta de Estadía</option>
+                  <option value="carta_no_siniestro">Carta de No Siniestro</option>
                   <option value="otros">Otros</option>
                 </Select>
               </div>

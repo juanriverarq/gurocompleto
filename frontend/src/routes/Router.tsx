@@ -80,6 +80,10 @@ const PricingCalculatorPage = Loadable(lazy(() => import('../views/pages/Pricing
 // Checkout (Frontend)
 const Checkout = Loadable(lazy(() => import('../views/pages/frontend-pages/Checkout')));
 
+// Onboarding Flow (Nuevo flujo de compra simplificado)
+const SelectAppsFlow = Loadable(lazy(() => import('../views/pages/onboarding/SelectAppsFlow')));
+const SignupFlow = Loadable(lazy(() => import('../views/pages/onboarding/SignupFlow')));
+
 // Landing Page
 const LandingPages = Loadable(lazy(() => import('../views/pages/landingpages/LandingPages')));
 
@@ -174,6 +178,7 @@ const TipoAfiliacion = Loadable(
 const Mensajeros = Loadable(lazy(() => import('../views/apps/admin/mensajeros/Mensajeros')));
 const Coberturas = Loadable(lazy(() => import('../views/apps/admin/coberturas/Coberturas')));
 const ImportacionMasiva = Loadable(lazy(() => import('../views/apps/admin/ImportacionMasiva')));
+const ImportacionMultiple = Loadable(lazy(() => import('../views/apps/admin/ImportacionMultiple')));
 
 // Configuración del Sistema Apps
 const AuditoriaAccesos = Loadable(
@@ -196,6 +201,11 @@ const ReportesFinancieros = Loadable(
   lazy(() => import('../views/apps/cartera/ReportesFinancieros')),
 );
 const LiquidarVendedores = Loadable(lazy(() => import('../views/apps/cartera/LiquidarVendedores')));
+
+// Billing Apps
+const MisFacturas = Loadable(lazy(() => import('../views/apps/billing/MisFacturas')));
+const MiSuscripcion = Loadable(lazy(() => import('../views/apps/billing/MiSuscripcion')));
+const UpgradePlan = Loadable(lazy(() => import('../views/apps/billing/UpgradePlan')));
 
 // Gestión Comercial Apps
 const MetasObjetivos = Loadable(lazy(() => import('../views/apps/comercial/MetasObjetivos')));
@@ -327,12 +337,18 @@ const Router = [
       { path: '/apps/admin/2fa', element: <SeguridadDosFactores /> },
       { path: '/apps/admin/backup', element: <CopiasSeguridad /> },
       { path: '/apps/admin/importacion-masiva', element: <ImportacionMasiva /> },
+      { path: '/apps/admin/importacion-multiple', element: <ImportacionMultiple /> },
       // Comisiones y Cartera Routes
       { path: '/apps/comisiones/por-poliza', element: <ComisionesPorPoliza /> },
       { path: '/apps/comisiones/anticipos-ajustes', element: <AnticiposAjustes /> },
       { path: '/apps/cartera/clientes', element: <CarteraClientes /> },
       { path: '/apps/cartera/liquidar-vendedores', element: <LiquidarVendedores /> },
       { path: '/apps/cartera/reportes-financieros', element: <ReportesFinancieros /> },
+
+      // Billing Routes
+      { path: '/apps/billing/facturas', element: <MisFacturas /> },
+      { path: '/apps/billing/suscripcion', element: <MiSuscripcion /> },
+      { path: '/apps/billing/planes', element: <UpgradePlan /> },
 
       // Gestión Comercial Routes
       { path: '/apps/comercial/metas-objetivos', element: <MetasObjetivos /> },
@@ -401,6 +417,9 @@ const Router = [
         element: <FrontendLayout />,
         children: [{ path: '', element: <Checkout /> }],
       },
+      // Nuevo flujo de onboarding simplificado
+      { path: '/comenzar', element: <SelectAppsFlow /> },
+      { path: '/comenzar/registro', element: <SignupFlow /> },
       { path: '/web/:slug', element: <MiniWebPublic /> },
       { path: '/web/:slug/:tipo', element: <QuoteForm /> },
       { path: '/empleados', element: <Navigate to="/empleados/login" /> },

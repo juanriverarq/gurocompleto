@@ -12,6 +12,7 @@ import {
 } from 'src/components/shadcn-ui/Default-Ui/select';
 import { PolizaFilters } from 'src/services/polizaService';
 import saasApi from 'src/services/saasApi';
+import { useTerminologia } from 'src/context/TerminologiaContext';
 
 interface Props {
   isOpen: boolean;
@@ -31,23 +32,26 @@ const estadosPoliza = [
 
 const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFiltersChange }) => {
   const [localFilters, setLocalFilters] = useState<PolizaFilters>(filters);
+  const { terminologia } = useTerminologia();
 
   useEffect(() => {
     setLocalFilters(filters);
   }, [filters]);
 
-  // Catálogos: aseguradoras y ramos (dentro del componente para acceder a isOpen)
+  // Catálogos: aseguradoras, ramos y vendedores
   const [aseguradorasList, setAseguradorasList] = useState<Array<{ id: number | string; nombre: string }>>([]);
   const [ramosList, setRamosList] = useState<Array<{ id: number | string; nombre: string }>>([]);
+  const [vendedoresList, setVendedoresList] = useState<Array<{ id: number | string; nombre: string }>>([]);
   const [catsLoading, setCatsLoading] = useState(false);
 
   useEffect(() => {
     const loadCatalogs = async () => {
       try {
         setCatsLoading(true);
-        const [aRes, rRes] = await Promise.all([
+        const [aRes, rRes, vRes] = await Promise.all([
           saasApi.getAseguradoras().catch(() => ({ data: [] as any[] })),
           saasApi.getRamos().catch(() => ({ data: [] as any[] })),
+          saasApi.getVendedores().catch(() => ({ data: [] as any[] })),
         ]);
 
         const asegDataRaw = (aRes && (aRes as any).data)
@@ -55,6 +59,9 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
           : [];
         const ramosDataRaw = (rRes && (rRes as any).data)
           ? (Array.isArray((rRes as any).data) ? (rRes as any).data : (((rRes as any).data.data) || []))
+          : [];
+        const vendedoresDataRaw = (vRes && (vRes as any).data)
+          ? (Array.isArray((vRes as any).data) ? (vRes as any).data : (((vRes as any).data.data) || []))
           : [];
 
         const aseg = (asegDataRaw as any[]).map((x: any) => ({
@@ -67,8 +74,14 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
           nombre: x.nombre ?? x.name ?? x.display_name ?? x.Nombre ?? x.ramo ?? String(x),
         })).filter(x => x.id != null && x.nombre).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
+        const vendedores = (vendedoresDataRaw as any[]).map((x: any) => ({
+          id: x.id ?? x.vendedor_id ?? x.ID,
+          nombre: x.nombres ?? x.nombre ?? x.name ?? String(x),
+        })).filter(x => x.id != null && x.nombre).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
         setAseguradorasList(aseg);
         setRamosList(ramos);
+        setVendedoresList(vendedores);
       } finally {
         setCatsLoading(false);
       }
@@ -206,8 +219,19 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Vendedor</Label>
-              <Input placeholder="Nombre del vendedor" value={localFilters.vendedor || ''} onChange={(e) => set('vendedor', e.target.value)} />
+              <Label className="text-sm">{terminologia.vendedor}</Label>
+              <Select
+                value={localFilters.vendedor || 'all'}
+                onValueChange={(v) => set('vendedor', v === 'all' ? '' : v)}
+              >
+                <SelectTrigger className="w-full"><SelectValue placeholder={`Todos los ${terminologia.vendedorPlural.toLowerCase()}`} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {vendedoresList.map(v => (
+                    <SelectItem key={String(v.id)} value={v.nombre}>{v.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label className="text-sm">Sede</Label>

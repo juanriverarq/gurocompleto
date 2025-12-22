@@ -20,16 +20,16 @@ const PurchaseTemp = () => {
             </h3>
             <p className="text-lg text-white lg:px-64 leading-8">
               Únete a cientos de profesionales que ya están transformando sus negocios con Guro.
-              Comienza tu prueba gratuita de 14 días sin compromiso.
+              Comienza tu prueba gratuita de 7 días sin compromiso.
             </p>
             <div className="flex gap-4 mt-8">
               <Button 
                 color={"outlinewhite"} 
                 as={Link} 
-                to="/auth/auth1/register" 
+                to="/comenzar" 
                 className="px-6 py-3 sm:w-auto w-full font-semibold"
               >
-                Prueba Gratuita 14 Días
+                Probar 7 Días Gratis
               </Button>
               <Button 
                 color={"white"}

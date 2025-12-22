@@ -358,13 +358,16 @@ export interface Vendedor {
   email: string;
   cuenta_bancaria: string;
   tipo_persona: 'natural' | 'juridica';
+  tipo_retencion?: 'natural_ss' | 'natural_sin_ss_rf10' | 'juridica_simplificado' | 'juridica_no_simplificado_rf11';
   es_agencia: boolean;
   porcentaje_comision: number;
   calcular_comision_sobre: 'agencia' | 'prima_neta';
   porcentaje_retencion: number;
   porcentaje_retencion_ica: number;
   porcentaje_iva: number;
+  porcentaje_retencion_iva: number;
   comisiones_diferentes_por_ano: boolean;
+  fecha_vinculacion?: string;
   broker_id: string;
   created_at: string;
   updated_at: string;
@@ -379,13 +382,16 @@ export interface VendedorCreate {
   email: string;
   cuenta_bancaria: string;
   tipo_persona: 'natural' | 'juridica';
+  tipo_retencion?: 'natural_ss' | 'natural_sin_ss_rf10' | 'juridica_simplificado' | 'juridica_no_simplificado_rf11';
   es_agencia: boolean;
   porcentaje_comision: number;
   calcular_comision_sobre: 'agencia' | 'prima_neta';
   porcentaje_retencion: number;
   porcentaje_retencion_ica: number;
   porcentaje_iva: number;
+  porcentaje_retencion_iva: number;
   comisiones_diferentes_por_ano: boolean;
+  fecha_vinculacion?: string;
 }
 
 // Ramos

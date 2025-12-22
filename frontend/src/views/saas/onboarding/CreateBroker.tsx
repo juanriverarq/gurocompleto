@@ -25,12 +25,23 @@ interface BrokerFormData {
 }
 
 const CreateBroker: React.FC = () => {
+  // TODOS los hooks deben estar al inicio, antes de cualquier return condicional
   const navigate = useNavigate();
   const { createBroker, user, isAuthenticated, loading: authLoading } = useUnifiedAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [formData, setFormData] = useState<BrokerFormData>({
+    nombre: '',
+    documento: '',
+    razon_social: '',
+    nit: '',
+    telefono: '',
+    ciudad: '',
+    pais: 'Colombia',
+  });
+  const [error, setError] = useState('');
 
   // Redirigir si no está autenticado
   React.useEffect(() => {
@@ -59,17 +70,6 @@ const CreateBroker: React.FC = () => {
   if (!isAuthenticated) {
     return null;
   }
-  const [formData, setFormData] = useState<BrokerFormData>({
-    nombre: '',
-    documento: '',
-    razon_social: '',
-    nit: '',
-    telefono: '',
-    ciudad: '',
-    pais: 'Colombia',
-  });
-  
-  const [error, setError] = useState('');
   
   // Función para reproducir sonido de éxito
   const playSuccessSound = () => {
@@ -180,7 +180,7 @@ const CreateBroker: React.FC = () => {
         setIsCreating(false);
         
         // Si ya tiene un broker, redirigir al dashboard
-        if (result.message === 'Ya tienes un broker asociado') {
+        if (result.message?.includes('ya tiene') || result.message?.includes('Ya tienes')) {
           toast({
             title: "¡Ya tienes configuración!",
             description: "Ya tienes un broker configurado. Te llevaremos al dashboard.",
@@ -198,12 +198,43 @@ const CreateBroker: React.FC = () => {
           });
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       setIsCreating(false);
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      
+      // Extraer mensaje de error detallado del backend
+      let errorMessage = 'Error desconocido';
+      if (err?.response?.data?.errors) {
+        // Errores de validación Laravel
+        const errors = err.response.data.errors;
+        const errorMessages: string[] = [];
+        for (const field in errors) {
+          const fieldErrors = errors[field];
+          if (Array.isArray(fieldErrors)) {
+            fieldErrors.forEach((msg: string) => {
+              // Traducir mensajes comunes
+              if (msg.includes('has already been taken')) {
+                if (field === 'document_number') {
+                  errorMessages.push('El número de documento/NIT ya está registrado en el sistema');
+                } else {
+                  errorMessages.push(`El campo ${field} ya está en uso`);
+                }
+              } else {
+                errorMessages.push(msg);
+              }
+            });
+          }
+        }
+        errorMessage = errorMessages.join('. ');
+      } else if (err?.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
       toast({
         title: "Error",
-        description: err instanceof Error ? err.message : 'Error desconocido',
+        description: errorMessage,
         variant: "destructive"
       });
     }

@@ -14,7 +14,7 @@ import { auth } from '../config/firebase';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
 
 class SaasApiService {
-  private async getAuthHeaders(): Promise<HeadersInit> {
+  async getAuthHeaders(): Promise<HeadersInit> {
     let token: string | null = null;
 
     // 1) Firebase ID token (usuarios SaaS) - FORZAR REFRESH PARA EVITAR EXPIRACIÓN
@@ -22,7 +22,7 @@ class SaasApiService {
       if (auth.currentUser) {
         token = await auth.currentUser.getIdToken(true); // true = force refresh
       }
-    } catch {}
+    } catch { }
 
     // 2) Token de empleado (Laravel) emitido por EmpleadoAuthController
     if (!token) {
@@ -38,7 +38,10 @@ class SaasApiService {
     const devBypass = (import.meta as any).env?.VITE_DEV_AUTH_BYPASS === 'true';
     const devBrokerId = (import.meta as any).env?.VITE_DEV_BROKER_ID || '2';
 
-    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
 
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -51,6 +54,21 @@ class SaasApiService {
     return headers;
   }
 
+  // Obtener headers SOLO de autenticación (sin Content-Type, para usar con FormData)
+  async getAuthHeadersOnly(): Promise<Record<string, string>> {
+    const headers = await this.getAuthHeaders();
+    const result: Record<string, string> = {};
+
+    // Copiar solo Authorization y otros headers, pero NO Content-Type
+    Object.entries(headers).forEach(([key, value]) => {
+      if (key.toLowerCase() !== 'content-type' && typeof value === 'string') {
+        result[key] = value;
+      }
+    });
+
+    return result;
+  }
+
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     if (!response.ok) {
       let message = `Error HTTP: ${response.status}`;
@@ -58,7 +76,7 @@ class SaasApiService {
       try {
         errorData = await response.json();
         if (errorData?.message) message = errorData.message;
-      } catch {}
+      } catch { }
 
       if (response.status === 401 || response.status === 403) {
         // Token expirado o inválido. No forzar redirección aquí; dejar que la UI decida la ruta de login.
@@ -115,7 +133,7 @@ class SaasApiService {
           return { success: true, data: json };
         }
       }
-    } catch {}
+    } catch { }
     // Fallback temporal
     try {
       const res = await fetch(`${API_BASE_URL}/saas/clientes/all-temp`, { headers });
@@ -128,7 +146,7 @@ class SaasApiService {
           return { success: true, data: json };
         }
       }
-    } catch {}
+    } catch { }
     return { success: false, message: 'Endpoint all no disponible' };
   }
 
@@ -183,6 +201,15 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
+  async bulkDeleteAseguradoras(params: { delete_all?: boolean; ids?: string[] }): Promise<ApiResponse<{ deleted_count: number }>> {
+    const response = await fetch(`${API_BASE_URL}/saas/aseguradoras/bulk-delete`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
+    return this.handleResponse(response);
+  }
+
   async getRamos(): Promise<ApiResponse<PaginatedResponse<any>>> {
     const headers = await this.getAuthHeaders();
     // Intentar primero la ruta de catálogos
@@ -195,6 +222,15 @@ class SaasApiService {
     if (response.status === 404) {
       response = await fetch(`${API_BASE_URL}/saas/temp-catalogos/ramos`, { headers });
     }
+    return this.handleResponse(response);
+  }
+
+  async bulkDeleteRamos(params: { delete_all?: boolean; ids?: string[] }): Promise<ApiResponse<{ deleted_count: number }>> {
+    const response = await fetch(`${API_BASE_URL}/saas/ramos/bulk-delete`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
     return this.handleResponse(response);
   }
 
@@ -479,6 +515,16 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
+  async bulkDeleteClientes(params: { delete_all?: boolean; ids?: string[] }): Promise<ApiResponse<{ deleted_count: number }>> {
+    const response = await fetch(`${API_BASE_URL}/saas/clientes/bulk-delete`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
+
+    return this.handleResponse(response);
+  }
+
   async asignarCliente(clienteId: string, asesorId: string): Promise<ApiResponse<ClienteSaaS>> {
     const response = await fetch(`${API_BASE_URL}/saas/clientes/${clienteId}/asignar`, {
       method: 'POST',
@@ -537,7 +583,7 @@ class SaasApiService {
       try {
         const err = await response.json();
         if (err?.message) message = err.message;
-      } catch {}
+      } catch { }
       throw new Error(message);
     }
 
@@ -696,7 +742,7 @@ class SaasApiService {
   > {
     const params = new URLSearchParams();
     params.append('period', period);
-    
+
     if (startDate) {
       params.append('start_date', startDate);
     }

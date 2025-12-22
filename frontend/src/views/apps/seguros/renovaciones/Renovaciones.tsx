@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Badge, Spinner, Modal, Table, Button, Dropdown, TextInput, Label, Checkbox } from 'flowbite-react';
+import { Card, Badge, Spinner, Modal, Table, Button, Dropdown, TextInput, Label } from 'flowbite-react';
 import { IconDots } from '@tabler/icons-react';
 import { Icon } from '@iconify/react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useToast } from 'src/hooks/use-toast';
 import renovacionesService, { 
   RenovacionFilters, 
   Renovacion, 
-  RenovacionesResponse, 
-  RenovacionesStats 
 } from 'src/services/renovacionesService';
 import DetalleRenovacion from 'src/components/renovaciones/DetalleRenovacion';
 import { polizaService } from 'src/services/polizaService';
+import { useAseguradoras, useVendedores, useRamos } from 'src/hooks/useAdminCrudApi';
 
 const Renovaciones: React.FC = () => {
   const [renovaciones, setRenovaciones] = useState<Renovacion[]>([]);
@@ -26,21 +25,24 @@ const Renovaciones: React.FC = () => {
 
   // Estados para filtros y columnas
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
-  const [showColumnsModal, setShowColumnsModal] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState([
-    'numero_poliza', 'cliente', 'tipo_seguro', 'vencimiento', 'estado', 'prioridad'
-  ]);
 
   const { toast } = useToast();
-  const navigate = useNavigate();
+  useNavigate();
+  const { aseguradoras: aseguradorasList, loading: loadingAseguradoras } = useAseguradoras();
+  const { vendedores: vendedoresList, loading: loadingVendedores } = useVendedores();
+  const { ramos: ramosList, loading: loadingRamos } = useRamos();
 
   // Filtros - inicializar con el estado del tab "pendientes" por defecto
   const [filters, setFilters] = useState<RenovacionFilters>({
     search: '',
     estado: 'PENDIENTE,EN_PROCESO,CRITICO', // Tab pendientes por defecto
-    prioridad: '',
     agente: '',
+    aseguradora: '',
+    ramo: '',
+    placa: '',
     diasVencimiento: '',
+    fecha_inicio: '',
+    fecha_fin: '',
     per_page: 15,
     page: 1,
     sort_field: 'fechaVencimiento',
@@ -55,9 +57,6 @@ const Renovaciones: React.FC = () => {
     { value: 'empresarial', label: 'Empresarial', icon: 'solar:buildings-bold-duotone', color: 'purple' },
   ];
 
-  const aseguradoras = [
-    'Seguros Sura', 'Mapfre', 'Bolívar Seguros', 'La Previsora', 'AXA Colpatria'
-  ];
 
   const estadosRenovacion = [
     { value: 'PENDIENTE', label: 'Pendiente', color: 'warning' },
@@ -67,12 +66,6 @@ const Renovaciones: React.FC = () => {
     { value: 'VENCIDO', label: 'Vencido', color: 'gray' }
   ];
 
-  const prioridadRenovacion = [
-    { value: 'BAJA', label: 'Baja', color: 'gray' },
-    { value: 'MEDIA', label: 'Media', color: 'warning' },
-    { value: 'ALTA', label: 'Alta', color: 'info' },
-    { value: 'CRITICA', label: 'Crítica', color: 'failure' }
-  ];
 
   // Cargar renovaciones desde el backend (sin fallback a mock)
   const loadRenovaciones = async (currentFilters = filters) => {
@@ -386,25 +379,29 @@ const Renovaciones: React.FC = () => {
         : '';
       const fechaFinal = nuevaFechaV || fallbackNuevaFecha;
 
+      const nuevaAseguradora = (formData.get('nueva_aseguradora') as string || '').trim();
+
       const renovacionData = {
         nuevaFechaVencimiento: fechaFinal,
         nuevoValorPrima: nuevoValorPrima,
         observaciones: formData.get('observaciones_renovacion') as string,
         nuevoNumeroPoliza: nuevoNumero || undefined,
+        nuevaAseguradora: nuevaAseguradora || undefined,
       };
       const caratulaFile = formData.get('caratula') as File | null;
 
       await renovacionesService.procesarRenovacion(selectedRenovacion.id, renovacionData);
 
-      // Si se especificó nuevo número de póliza, actualizar la póliza
-      if (nuevoNumero && selectedRenovacion.poliza_id) {
+      // Si se especificó nuevo número de póliza o nueva aseguradora, actualizar la póliza
+      if ((nuevoNumero || nuevaAseguradora) && selectedRenovacion.poliza_id) {
         try {
-          await polizaService.updatePoliza(String(selectedRenovacion.poliza_id), {
-            numero_poliza: nuevoNumero,
-          } as any);
+          const updateData: any = {};
+          if (nuevoNumero) updateData.numero_poliza = nuevoNumero;
+          if (nuevaAseguradora) updateData.aseguradora_id = nuevaAseguradora;
+          await polizaService.updatePoliza(String(selectedRenovacion.poliza_id), updateData);
         } catch (err) {
           // Continuar aunque falle esta parte
-          console.warn('No se pudo actualizar número de póliza en renovación:', err);
+          console.warn('No se pudo actualizar datos de póliza en renovación:', err);
         }
       }
 
@@ -461,10 +458,6 @@ const Renovaciones: React.FC = () => {
     return estadoInfo?.color || 'gray';
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const prioridadInfo = prioridadRenovacion.find(p => p.value === prioridad);
-    return prioridadInfo?.color || 'gray';
-  };
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('es-CO', {
@@ -670,26 +663,106 @@ const Renovaciones: React.FC = () => {
 
               <Button
                 color="light"
-                onClick={() => setShowColumnsModal(true)}
-                className="h-10 w-10 p-0 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                title="Columnas"
-              >
-                <Icon icon="solar:settings-bold-duotone" className="w-4 h-4" />
-              </Button>
-
-              <Button
-                color="light"
                 onClick={handleExportRenovaciones}
-                className="h-10 px-4 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-[10px]"
-                title="Exportar"
+                className="h-10 px-3 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center gap-2"
+                title="Exportar a CSV"
               >
-                <Icon icon="solar:download-bold-duotone" className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Exportar</span>
+                <Icon icon="solar:export-bold-duotone" className="w-4 h-4" />
+                <span className="text-xs hidden sm:inline">Exportar</span>
               </Button>
               
               {/* Botón Nueva Póliza removido según solicitud del usuario */}
             </div>
           </div>
+
+          {/* Labels de filtros activos */}
+          {(filters.agente || filters.aseguradora || filters.ramo || filters.fecha_inicio || filters.fecha_fin || filters.diasVencimiento) && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {filters.agente && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full">
+                  Asesor: {filters.agente}
+                  <button
+                    onClick={() => handleFilterChange('agente', '')}
+                    className="ml-1 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full p-0.5"
+                  >
+                    <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )}
+              {filters.aseguradora && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full">
+                  Aseguradora: {filters.aseguradora}
+                  <button
+                    onClick={() => handleFilterChange('aseguradora', '')}
+                    className="ml-1 hover:bg-purple-200 dark:hover:bg-purple-800 rounded-full p-0.5"
+                  >
+                    <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )}
+              {filters.ramo && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-300 rounded-full">
+                  Ramo: {filters.ramo}
+                  <button
+                    onClick={() => handleFilterChange('ramo', '')}
+                    className="ml-1 hover:bg-cyan-200 dark:hover:bg-cyan-800 rounded-full p-0.5"
+                  >
+                    <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )}
+              {filters.fecha_inicio && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full">
+                  Desde: {filters.fecha_inicio}
+                  <button
+                    onClick={() => handleFilterChange('fecha_inicio', '')}
+                    className="ml-1 hover:bg-green-200 dark:hover:bg-green-800 rounded-full p-0.5"
+                  >
+                    <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )}
+              {filters.fecha_fin && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full">
+                  Hasta: {filters.fecha_fin}
+                  <button
+                    onClick={() => handleFilterChange('fecha_fin', '')}
+                    className="ml-1 hover:bg-orange-200 dark:hover:bg-orange-800 rounded-full p-0.5"
+                  >
+                    <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )}
+              {filters.diasVencimiento && filters.diasVencimiento !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full">
+                  Plazo: {filters.diasVencimiento === 'critico' ? '≤7 días' : filters.diasVencimiento === 'proximo' ? '≤30 días' : filters.diasVencimiento === 'proximo_2m' ? '≤60 días' : filters.diasVencimiento}
+                  <button
+                    onClick={() => handleFilterChange('diasVencimiento', '')}
+                    className="ml-1 hover:bg-red-200 dark:hover:bg-red-800 rounded-full p-0.5"
+                  >
+                    <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  setFilters(prev => ({
+                    ...prev,
+                    agente: '',
+                    aseguradora: '',
+                    ramo: '',
+                    fecha_inicio: '',
+                    fecha_fin: '',
+                    diasVencimiento: '',
+                    page: 1
+                  }));
+                }}
+                className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 underline"
+              >
+                Limpiar todos
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -722,7 +795,6 @@ const Renovaciones: React.FC = () => {
                   <Table.HeadCell className="text-sm font-semibold py-2">Ramo</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Vencimiento</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Estado</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Prioridad</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Prima</Table.HeadCell>
                   <Table.HeadCell className="text-sm font-semibold py-2">Acciones</Table.HeadCell>
                 </Table.Head>
@@ -761,14 +833,6 @@ const Renovaciones: React.FC = () => {
                           className="capitalize text-xs"
                         >
                           {estadosRenovacion.find(e => e.value === renovacion.estado)?.label || renovacion.estado}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        <Badge
-                          color={`light${getPrioridadBadge(renovacion.prioridad)}`}
-                          className="capitalize text-xs"
-                        >
-                          {prioridadRenovacion.find(p => p.value === renovacion.prioridad)?.label || renovacion.prioridad}
                         </Badge>
                       </Table.Cell>
                       <Table.Cell className="whitespace-nowrap">
@@ -875,21 +939,6 @@ const Renovaciones: React.FC = () => {
             </div>
             
             <div>
-              <Label htmlFor="prioridad" className="mb-2 block text-gray-900 dark:text-white">Prioridad</Label>
-              <select
-                id="prioridad"
-                value={filters.prioridad || ''}
-                onChange={(e) => handleFilterChange('prioridad', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
-              >
-                <option value="">Todas las prioridades</option>
-                {prioridadRenovacion.map((prioridad) => (
-                  <option key={prioridad.value} value={prioridad.value}>{prioridad.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
               <Label htmlFor="dias_vencimiento" className="mb-2 block text-gray-900 dark:text-white">Días de Vencimiento</Label>
               <select
                 id="dias_vencimiento"
@@ -900,7 +949,79 @@ const Renovaciones: React.FC = () => {
                 <option value="">Todos los plazos</option>
                 <option value="critico">Crítico (≤7 días)</option>
                 <option value="proximo">Próximo (≤30 días)</option>
+                <option value="proximo_2m">Próximos 2 meses (≤60 días)</option>
+                <option value="all">Sin ventana (todos)</option>
               </select>
+            </div>
+
+            <div>
+              <Label htmlFor="agente" className="mb-2 block text-gray-900 dark:text-white">Asesor</Label>
+              <select
+                id="agente"
+                value={filters.agente || ''}
+                onChange={(e) => handleFilterChange('agente', e.target.value)}
+                disabled={loadingVendedores}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
+              >
+                <option value="">Todos los asesores</option>
+                {(vendedoresList || []).map((v: any) => (
+                  <option key={v.id} value={v.nombres}>{v.nombres}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="aseguradora" className="mb-2 block text-gray-900 dark:text-white">Aseguradora</Label>
+              <select
+                id="aseguradora"
+                value={(filters as any).aseguradora || ''}
+                onChange={(e) => handleFilterChange('aseguradora' as any, e.target.value)}
+                disabled={loadingAseguradoras}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
+              >
+                <option value="">Todas</option>
+                {(aseguradorasList || []).map((a: any) => (
+                  <option key={a.id} value={a.nombre}>{a.nombre}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="ramo" className="mb-2 block text-gray-900 dark:text-white">Ramo</Label>
+              <select
+                id="ramo"
+                value={filters.ramo || ''}
+                onChange={(e) => handleFilterChange('ramo', e.target.value)}
+                disabled={loadingRamos}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
+              >
+                <option value="">Todos los ramos</option>
+                {(ramosList || []).map((r: any) => (
+                  <option key={r.id} value={r.nombre}>{r.nombre}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="fecha_inicio" className="mb-2 block text-gray-900 dark:text-white">Vencimiento desde</Label>
+              <TextInput
+                id="fecha_inicio"
+                type="date"
+                value={(filters as any).fecha_inicio || ''}
+                onChange={(e) => handleFilterChange('fecha_inicio' as any, e.target.value)}
+                className="h-10"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="fecha_fin" className="mb-2 block text-gray-900 dark:text-white">Vencimiento hasta</Label>
+              <TextInput
+                id="fecha_fin"
+                type="date"
+                value={(filters as any).fecha_fin || ''}
+                onChange={(e) => handleFilterChange('fecha_fin' as any, e.target.value)}
+                className="h-10"
+              />
             </div>
 
             <div>
@@ -926,9 +1047,13 @@ const Renovaciones: React.FC = () => {
               setFilters({
                 search: '',
                 estado: '',
-                prioridad: '',
                 agente: '',
+                aseguradora: '',
+                ramo: '',
+                placa: '',
                 diasVencimiento: '',
+                fecha_inicio: '',
+                fecha_fin: '',
                 per_page: 15,
                 page: 1,
                 sort_field: 'fechaVencimiento',
@@ -1064,20 +1189,38 @@ const Renovaciones: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div>
-                <Label htmlFor="nuevo_numero_poliza" className="mb-2 block text-gray-900 dark:text-white">
-                  Nuevo número de póliza (opcional)
-                  <span className="text-xs text-gray-500 ml-2">Formato: AAA-0000-0000</span>
-                </Label>
-                <TextInput
-                  type="text"
-                  id="nuevo_numero_poliza"
-                  name="nuevo_numero_poliza"
-                  placeholder="Ej: POL-2025-0001"
-                  className="bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
-                  pattern="^[A-Z]{3}-\d{4}-\d{4}$"
-                  title="Formato requerido: AAA-0000-0000"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="nuevo_numero_poliza" className="mb-2 block text-gray-900 dark:text-white">
+                    Nuevo número de póliza (opcional)
+                    <span className="text-xs text-gray-500 ml-2">Formato: AAA-0000-0000</span>
+                  </Label>
+                  <TextInput
+                    type="text"
+                    id="nuevo_numero_poliza"
+                    name="nuevo_numero_poliza"
+                    placeholder="Ej: POL-2025-0001"
+                    className="bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    pattern="^[A-Z]{3}-\d{4}-\d{4}$"
+                    title="Formato requerido: AAA-0000-0000"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nueva_aseguradora" className="mb-2 block text-gray-900 dark:text-white">
+                    Cambiar Aseguradora (opcional)
+                  </Label>
+                  <select
+                    id="nueva_aseguradora"
+                    name="nueva_aseguradora"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
+                    defaultValue=""
+                  >
+                    <option value="">Mantener aseguradora actual ({selectedRenovacion?.aseguradora})</option>
+                    {!loadingAseguradoras && aseguradorasList.map((aseg) => (
+                      <option key={aseg.id} value={aseg.id}>{aseg.nombre}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <Label htmlFor="nueva_fecha" className="mb-2 block text-gray-900 dark:text-white">

@@ -94,7 +94,7 @@ class CreateBrokerWithUser extends Command
                     'analytics',
                     'api_access'
                 ],
-                'trial_ends_at' => now()->addDays(14),
+                'trial_ends_at' => now()->addDays(7),
                 'subscription_ends_at' => now()->addYear(),
                 'owner_id' => $user->id,
             ]);

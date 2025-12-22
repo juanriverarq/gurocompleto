@@ -69,6 +69,21 @@ class EmpleadoAuthController extends Controller
             // Cargar relaciones necesarias
             $empleado->load(['rol', 'broker']);
 
+            // Preparar datos del broker con logo_url y branding completo
+            $broker = $empleado->broker;
+            $brokerData = $broker ? array_merge($broker->toArray(), [
+                'logo_url' => $broker->getLogoUrl(),
+                'favicon_url' => $broker->getFaviconUrl(),
+                'branding' => array_merge(
+                    is_array($broker->branding) ? $broker->branding : [],
+                    [
+                        'logo' => $broker->getLogoUrl(),
+                        'favicon' => $broker->getFaviconUrl(),
+                        'primary_color' => $broker->branding['primary_color'] ?? null,
+                    ]
+                ),
+            ]) : null;
+
             return response()->json([
                 'success' => true,
                 'message' => 'Login exitoso',
@@ -76,7 +91,7 @@ class EmpleadoAuthController extends Controller
                     'firebase_custom_token' => $firebaseCustomToken,
                     'user_type' => 'empleado',
                     'empleado' => $empleado,
-                    'broker' => $empleado->broker,
+                    'broker' => $brokerData,
                     'permisos' => $empleado->obtenerPermisos(),
                     'first_login' => $empleado->first_login,
                     'requiere_cambio_password' => $empleado->requiere_cambio_password,
@@ -392,12 +407,27 @@ class EmpleadoAuthController extends Controller
                 return response('', 304)->header('ETag', '"' . $version . '"');
             }
 
+            // Preparar datos del broker con logo_url y branding completo
+            $broker = $empleado->broker;
+            $brokerData = $broker ? array_merge($broker->toArray(), [
+                'logo_url' => $broker->getLogoUrl(),
+                'favicon_url' => $broker->getFaviconUrl(),
+                'branding' => array_merge(
+                    is_array($broker->branding) ? $broker->branding : [],
+                    [
+                        'logo' => $broker->getLogoUrl(),
+                        'favicon' => $broker->getFaviconUrl(),
+                        'primary_color' => $broker->branding['primary_color'] ?? null,
+                    ]
+                ),
+            ]) : null;
+
             return response()->json([
                 'success' => true,
                 'message' => 'Contexto de empleado',
                 'data' => [
                     'empleado' => $empleado,
-                    'broker' => $empleado->broker,
+                    'broker' => $brokerData,
                     'permisos' => $empleado->obtenerPermisos(),
                     'version' => $version,
                 ],

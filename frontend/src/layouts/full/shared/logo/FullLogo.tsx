@@ -1,33 +1,48 @@
-
-
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useUnifiedAuth } from "src/context/UnifiedAuthContext";
+import { saasApi } from "src/services/saasApi";
 import LogoDefault from "/src/assets/images/logos/Logo.svg";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
 
 const FullLogo = () => {
   const { tenant } = useUnifiedAuth();
-  
-  // Resolver URL del logo (acepta URL absoluta o ruta relativa de storage)
-  const rawLogo = (tenant as any)?.branding?.logo || (tenant as any)?.logo;
-  let logoUrl: string = LogoDefault as any;
-  if (typeof rawLogo === 'string' && rawLogo.length > 0) {
-    if (rawLogo.startsWith('http')) {
-      logoUrl = rawLogo;
-    } else {
-      const base = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8081/api';
-      const path = rawLogo.replace(/^\/+/, '');
-      logoUrl = `${base}/storage/${path}`;
-    }
-  }
-  
+  const [logoSrc, setLogoSrc] = useState<string>(LogoDefault);
+  const [hasFetched, setHasFetched] = useState(false);
+
+  // Siempre obtener el logo desde el backend (tabla brokers)
+  useEffect(() => {
+    if (!tenant?.id || hasFetched) return;
+
+    const fetchBrokerLogo = async () => {
+      try {
+        const headers = await saasApi.getAuthHeaders();
+        const response = await fetch(`${API_BASE_URL}/saas/informacion-agencia`, { headers });
+        const data = await response.json();
+        
+        if (data?.success && data?.data?.logo_url) {
+          setLogoSrc(data.data.logo_url);
+        }
+      } catch (error) {
+        console.warn('Error fetching broker logo:', error);
+      } finally {
+        setHasFetched(true);
+      }
+    };
+
+    fetchBrokerLogo();
+  }, [tenant?.id, hasFetched]);
+
   return (
     <Link to={"/"} className="flex items-center">
       <img
-        src={logoUrl}
+        key={logoSrc}
+        src={logoSrc}
         alt={(tenant as any)?.name || (tenant as any)?.nombre || "Guro Logo"}
         className="h-12 w-auto max-w-[180px] object-contain"
         onError={(e) => {
-          // Fallback al logo por defecto si falla la carga
+          console.warn('Error loading logo:', logoSrc);
           (e.target as HTMLImageElement).src = LogoDefault;
         }}
       />

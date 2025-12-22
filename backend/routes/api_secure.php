@@ -263,6 +263,18 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'throttle:api', 'clamp.
             Route::put('/{id}', [AutomovilesController::class, 'update']);
             Route::delete('/{id}', [AutomovilesController::class, 'destroy']);
         });
+
+        // Comisiones Manuales de Pólizas
+        Route::get('comisiones-manuales/constants', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'constants']);
+        Route::get('comisiones-manuales/pendientes', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'pendientesPorVendedor']);
+        Route::prefix('polizas/{polizaId}/comisiones-manuales')->group(function () {
+            Route::get('/', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'show'])->whereNumber('id');
+            Route::put('/{id}', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'update'])->whereNumber('id');
+            Route::delete('/{id}', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'destroy'])->whereNumber('id');
+            Route::post('/{id}/anular', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'anular'])->whereNumber('id');
+        });
         
         // Tareas comerciales
         Route::prefix('commercial-tasks')->group(function () {

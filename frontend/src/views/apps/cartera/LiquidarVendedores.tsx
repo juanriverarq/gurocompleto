@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Card,
   Button,
@@ -6,121 +6,100 @@ import {
   Badge,
   Table,
   Tabs,
-  Progress,
   Dropdown,
+  Modal,
+  Label,
+  Textarea,
+  TextInput,
+  Checkbox,
+  Select,
 } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { IconDots } from '@tabler/icons-react';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
-import { polizaService } from '../../../services/polizaService';
 import { useToast } from 'src/hooks/use-toast';
-
-interface ComisionVendedor {
-  id: string;
-  polizaId: string;
-  numeroPoliza: string;
-  cliente: string;
-  aseguradora: string;
-  ramo: string;
-  vendedor: string;
-  vendedorId: string;
-  primaNeta: number;
-  porcentajeComision: number;
-  comisionTotal: number;
-  comisionPagada: number;
-  comisionPendiente: number;
-  fechaPoliza: string;
-  fechaVencimiento: string;
-  estadoPago: 'Pagado' | 'Pendiente' | 'Parcial';
-  fechaPago?: string;
-}
-
-interface EstadisticasLiquidacion {
-  totalComisiones: number;
-  comisionesPagadas: number;
-  comisionesPendientes: number;
-  totalVendedores: number;
-  polizasConComision: number;
-  tasaPago: number;
-}
+import { useVendedores, useAseguradoras, useRamos } from 'src/hooks/useAdminCrudApi';
+import { useTerminologia } from 'src/context/TerminologiaContext';
+import liquidacionesVendedoresService, {
+  type ComisionDisponible,
+  type VistaPreviaLiquidacion,
+  type Liquidacion,
+  type PolizaComision,
+} from '../../../services/liquidacionesVendedoresService';
 
 const LiquidarVendedores = () => {
-  const [comisiones, setComisiones] = useState<ComisionVendedor[]>([]);
+  // Datos de comisiones disponibles desde el backend
+  const [comisionesDisponibles, setComisionesDisponibles] = useState<ComisionDisponible[]>([]);
   const [loading, setLoading] = useState(false);
-  const [estadisticas, setEstadisticas] = useState<EstadisticasLiquidacion | null>(null);
   const { toast } = useToast();
+  const { vendedores: vendedoresData } = useVendedores();
+  const { terminologia } = useTerminologia();
+  // TODO: Usar para filtros avanzados de aseguradoras y ramos
+  useAseguradoras();
+  useRamos();
 
   const [paginaActual, setPaginaActual] = useState(1);
   const [elementosPorPagina, setElementosPorPagina] = useState(25);
 
+  // Filtros avanzados
   const [filtros, setFiltros] = useState({
     busqueda: '',
-    vendedor: '',
-    estadoPago: '',
-    periodo: new Date().toISOString().slice(0, 7),
+    vendedor_id: '',
+    fecha_inicio: '',
+    fecha_fin: '',
+    aseguradoras: [] as string[],
+    ramos: [] as string[],
   });
 
-  const [tabActivo, setTabActivo] = useState<'porPagar' | 'pagados'>('porPagar');
+  // Mostrar/ocultar panel de filtros avanzados
+  const [mostrarFiltrosAvanzados, setMostrarFiltrosAvanzados] = useState(false);
 
-  const cargarComisiones = async () => {
+  const [tabActivo, setTabActivo] = useState<'porPagar' | 'pagadas' | 'porVendedor'>('porPagar');
+
+  // Estados para selección de pólizas
+  const [polizasSeleccionadas, setPolizasSeleccionadas] = useState<Set<number>>(new Set());
+
+  // Estados para modal de liquidación
+  const [showModalLiquidacion, setShowModalLiquidacion] = useState(false);
+  const [pasoModal, setPasoModal] = useState(1);
+  const [vendedorSeleccionado, setVendedorSeleccionado] = useState<ComisionDisponible | null>(null);
+  const [vistaPrevia, setVistaPrevia] = useState<VistaPreviaLiquidacion | null>(null);
+  const [loadingModal, setLoadingModal] = useState(false);
+  const [observaciones, setObservaciones] = useState('');
+  const [liquidacionCreada, setLiquidacionCreada] = useState<Liquidacion | null>(null);
+  
+  // Estados para selección y filtros dentro del modal
+  const [polizasModalSeleccionadas, setPolizasModalSeleccionadas] = useState<Set<number>>(new Set());
+  const [filtrosModal, setFiltrosModal] = useState({
+    fecha_inicio: '',
+    fecha_fin: '',
+    aseguradora: '',
+    ramo: '',
+    busqueda: '',
+  });
+  
+  // Estados para histórico de liquidaciones
+  const [liquidaciones, setLiquidaciones] = useState<Liquidacion[]>([]);
+  const [loadingLiquidaciones, setLoadingLiquidaciones] = useState(false);
+
+  // Cargar comisiones disponibles desde el backend (solo las que no han sido liquidadas)
+  const cargarComisionesDisponibles = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Usar el endpoint de cartera que incluye información real de pagos y comisiones
-      const response = await polizaService.getCarteraPolizas();
+      const response = await liquidacionesVendedoresService.getComisionesDisponibles({
+        vendedor_id: filtros.vendedor_id ? parseInt(filtros.vendedor_id) : undefined,
+        fecha_inicio: filtros.fecha_inicio || undefined,
+        fecha_fin: filtros.fecha_fin || undefined,
+        aseguradoras: filtros.aseguradoras.length > 0 ? filtros.aseguradoras : undefined,
+        ramos: filtros.ramos.length > 0 ? filtros.ramos : undefined,
+      });
 
-      if (!response.success || !response.data) {
-        setComisiones([]);
-        return;
+      if (response.success && response.data) {
+        setComisionesDisponibles(response.data);
+      } else {
+        setComisionesDisponibles([]);
       }
-
-      // Filtrar solo pólizas con vendedor asignado y que tengan comisiones
-      const comisionesVendedores: ComisionVendedor[] = response.data
-        .filter((poliza: any) => poliza.vendedor && poliza.vendedor !== 'Sin asignar')
-        .map((poliza: any) => {
-          const primaNeta = Number(poliza.prima_neta || 0);
-          const comisionTotal = Number(poliza.comision || 0);
-          
-          // Obtener información real de cobro de comisión
-          const cobroComision = poliza.cobro_comision || {};
-          const comisionCobrada = Number(cobroComision.cobrada || 0);
-          const comisionPendiente = Number(cobroComision.pendiente || 0);
-          
-          // Si no hay cobro registrado pero hay comisión, está pendiente
-          const pendiente = comisionPendiente > 0 ? comisionPendiente : (comisionCobrada === 0 && comisionTotal > 0 ? comisionTotal : 0);
-          
-          // Determinar estado de pago
-          let estadoPago: 'Pagado' | 'Pendiente' | 'Parcial' = 'Pendiente';
-          if (comisionCobrada >= comisionTotal && comisionTotal > 0) {
-            estadoPago = 'Pagado';
-          } else if (comisionCobrada > 0) {
-            estadoPago = 'Parcial';
-          }
-
-          return {
-            id: String(poliza.id),
-            polizaId: String(poliza.id),
-            numeroPoliza: poliza.numero_poliza || '',
-            cliente: poliza.cliente || 'Sin nombre',
-            aseguradora: poliza.aseguradora || '',
-            ramo: poliza.ramo || '',
-            vendedor: poliza.vendedor,
-            vendedorId: String(poliza.vendedor_id || poliza.vendedor),
-            primaNeta,
-            porcentajeComision: Number(poliza.porcentaje_comision || 15),
-            comisionTotal,
-            comisionPagada: comisionCobrada,
-            comisionPendiente: pendiente,
-            fechaPoliza: poliza.fecha_inicio || '',
-            fechaVencimiento: poliza.fecha_vencimiento || '',
-            estadoPago,
-            fechaPago: cobroComision.fecha,
-          };
-        });
-
-      setComisiones(comisionesVendedores);
-      calcularEstadisticas(comisionesVendedores);
-
     } catch (error: any) {
       console.error('Error cargando comisiones:', error);
       toast({
@@ -131,114 +110,79 @@ const LiquidarVendedores = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtros, toast]);
 
-  const calcularEstadisticas = (comisionesData: ComisionVendedor[]) => {
-    const totalComisiones = comisionesData.reduce((sum, c) => sum + c.comisionTotal, 0);
-    const comisionesPagadas = comisionesData.reduce((sum, c) => sum + c.comisionPagada, 0);
-    const comisionesPendientes = comisionesData.reduce((sum, c) => sum + c.comisionPendiente, 0);
-    const vendedoresUnicos = new Set(comisionesData.map(c => c.vendedorId)).size;
-    const tasaPago = totalComisiones > 0 ? (comisionesPagadas / totalComisiones) * 100 : 0;
+  useEffect(() => {
+    cargarComisionesDisponibles();
+  }, []);
 
-    setEstadisticas({
-      totalComisiones,
-      comisionesPagadas,
-      comisionesPendientes,
-      totalVendedores: vendedoresUnicos,
-      polizasConComision: comisionesData.length,
-      tasaPago,
+  // Aplicar filtros de búsqueda local
+  const comisionesFiltradas = useMemo(() => {
+    if (!filtros.busqueda) return comisionesDisponibles;
+    
+    const busqueda = filtros.busqueda.toLowerCase();
+    return comisionesDisponibles.filter(v => 
+      v.vendedor.toLowerCase().includes(busqueda) ||
+      v.polizas.some(p => 
+        p.numero_poliza.toLowerCase().includes(busqueda) ||
+        p.cliente.toLowerCase().includes(busqueda)
+      )
+    );
+  }, [comisionesDisponibles, filtros.busqueda]);
+
+  // Estadísticas calculadas
+  const estadisticasUI = useMemo(() => {
+    const totalPolizas = comisionesFiltradas.reduce((sum, v) => sum + v.total_polizas, 0);
+    const totalComisionBruta = comisionesFiltradas.reduce((sum, v) => sum + v.comision_bruta_total, 0);
+    const totalComisionNeta = comisionesFiltradas.reduce((sum, v) => sum + v.comision_neta_total, 0);
+
+    return {
+      totalComisiones: totalComisionBruta,
+      comisionesPendientes: totalComisionNeta,
+      totalVendedores: comisionesFiltradas.length,
+      polizasConComision: totalPolizas,
+    };
+  }, [comisionesFiltradas]);
+
+  // Todas las pólizas de todos los vendedores (para la vista por póliza)
+  const todasLasPolizas = useMemo(() => {
+    return comisionesFiltradas.flatMap(v => 
+      v.polizas.map(p => ({
+        ...p,
+        vendedor: v.vendedor,
+        vendedor_id: v.vendedor_id,
+      }))
+    );
+  }, [comisionesFiltradas]);
+
+  // Paginación de pólizas
+  const polizasPaginadas = useMemo(() => {
+    const inicio = (paginaActual - 1) * elementosPorPagina;
+    return todasLasPolizas.slice(inicio, inicio + elementosPorPagina);
+  }, [todasLasPolizas, paginaActual, elementosPorPagina]);
+
+  const totalPaginasPolizas = Math.ceil(todasLasPolizas.length / elementosPorPagina);
+
+  // Manejar selección de pólizas
+  const togglePolizaSeleccionada = (polizaId: number) => {
+    setPolizasSeleccionadas(prev => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(polizaId)) {
+        nuevo.delete(polizaId);
+      } else {
+        nuevo.add(polizaId);
+      }
+      return nuevo;
     });
   };
 
-  useEffect(() => {
-    cargarComisiones();
-  }, []);
-
-  const comisionesFiltradas = useMemo(() => {
-    let resultado = [...comisiones];
-
-    if (filtros.busqueda) {
-      const busqueda = filtros.busqueda.toLowerCase();
-      resultado = resultado.filter(c =>
-        c.numeroPoliza.toLowerCase().includes(busqueda) ||
-        c.cliente.toLowerCase().includes(busqueda) ||
-        c.vendedor.toLowerCase().includes(busqueda)
-      );
+  const seleccionarTodasPolizas = () => {
+    if (polizasSeleccionadas.size === todasLasPolizas.length) {
+      setPolizasSeleccionadas(new Set());
+    } else {
+      setPolizasSeleccionadas(new Set(todasLasPolizas.map(p => p.id)));
     }
-
-    if (filtros.vendedor) {
-      resultado = resultado.filter(c => c.vendedor === filtros.vendedor);
-    }
-
-    if (filtros.estadoPago) {
-      resultado = resultado.filter(c => c.estadoPago === filtros.estadoPago);
-    }
-
-    return resultado;
-  }, [comisiones, filtros]);
-
-  const comisionesPorPagar = useMemo(() => 
-    comisionesFiltradas.filter(c => c.estadoPago === 'Pendiente' || c.estadoPago === 'Parcial'),
-    [comisionesFiltradas]
-  );
-
-  const comisionesPagadas = useMemo(() => 
-    comisionesFiltradas.filter(c => c.estadoPago === 'Pagado'),
-    [comisionesFiltradas]
-  );
-
-  const comisionesPorPagarPaginadas = useMemo(() => {
-    const inicio = (paginaActual - 1) * elementosPorPagina;
-    return comisionesPorPagar.slice(inicio, inicio + elementosPorPagina);
-  }, [comisionesPorPagar, paginaActual, elementosPorPagina]);
-
-  const totalPaginasPorPagar = Math.ceil(comisionesPorPagar.length / elementosPorPagina);
-
-  const comisionesPagadasPaginadas = useMemo(() => {
-    const inicio = (paginaActual - 1) * elementosPorPagina;
-    return comisionesPagadas.slice(inicio, inicio + elementosPorPagina);
-  }, [comisionesPagadas, paginaActual, elementosPorPagina]);
-
-  const totalPaginasPagadas = Math.ceil(comisionesPagadas.length / elementosPorPagina);
-
-  const estadisticasUI = useMemo(() => {
-    const totalComisiones = comisionesFiltradas.reduce((sum, c) => sum + c.comisionTotal, 0);
-    const comisionesPagadasTotal = comisionesFiltradas.reduce((sum, c) => sum + c.comisionPagada, 0);
-    const comisionesPendientesTotal = comisionesFiltradas.reduce((sum, c) => sum + c.comisionPendiente, 0);
-    const vendedoresUnicos = new Set(comisionesFiltradas.map(c => c.vendedorId)).size;
-    const tasaPago = totalComisiones > 0 ? (comisionesPagadasTotal / totalComisiones) * 100 : 0;
-
-    return {
-      totalComisiones,
-      comisionesPagadas: comisionesPagadasTotal,
-      comisionesPendientes: comisionesPendientesTotal,
-      totalVendedores: vendedoresUnicos,
-      polizasConComision: comisionesFiltradas.length,
-      tasaPago,
-    } as EstadisticasLiquidacion;
-  }, [comisionesFiltradas]);
-
-  const comisionesPorVendedor = useMemo(() => {
-    const consolidado = comisionesFiltradas.reduce((acc, c) => {
-      if (!acc[c.vendedorId]) {
-        acc[c.vendedorId] = {
-          vendedor: c.vendedor,
-          vendedorId: c.vendedorId,
-          polizas: 0,
-          comisionTotal: 0,
-          comisionPagada: 0,
-          comisionPendiente: 0,
-        };
-      }
-      acc[c.vendedorId].polizas++;
-      acc[c.vendedorId].comisionTotal += c.comisionTotal;
-      acc[c.vendedorId].comisionPagada += c.comisionPagada;
-      acc[c.vendedorId].comisionPendiente += c.comisionPendiente;
-      return acc;
-    }, {} as Record<string, any>);
-
-    return Object.values(consolidado);
-  }, [comisionesFiltradas]);
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -258,29 +202,331 @@ const LiquidarVendedores = () => {
     }
   };
 
-  const getEstadoPagoColor = (estado: string) => {
-    switch (estado) {
-      case 'Pagado': return 'success';
-      case 'Pendiente': return 'warning';
-      case 'Parcial': return 'info';
-      default: return 'gray';
+  // ===== FUNCIONES PARA LIQUIDACIÓN =====
+  
+  const abrirModalLiquidacion = (vendedor: ComisionDisponible) => {
+    setVendedorSeleccionado(vendedor);
+    setShowModalLiquidacion(true);
+    setPasoModal(1);
+    setVistaPrevia(null);
+    setObservaciones('');
+    // Seleccionar todas las pólizas del vendedor por defecto
+    setPolizasModalSeleccionadas(new Set(vendedor.polizas.map(p => p.id)));
+    setFiltrosModal({ fecha_inicio: '', fecha_fin: '', aseguradora: '', ramo: '', busqueda: '' });
+  };
+
+  // Filtrar pólizas del vendedor seleccionado en el modal
+  const polizasModalFiltradas = useMemo(() => {
+    if (!vendedorSeleccionado) return [];
+    
+    return vendedorSeleccionado.polizas.filter(poliza => {
+      // Filtro por búsqueda
+      if (filtrosModal.busqueda) {
+        const busqueda = filtrosModal.busqueda.toLowerCase();
+        const coincide = 
+          poliza.numero_poliza.toLowerCase().includes(busqueda) ||
+          poliza.cliente.toLowerCase().includes(busqueda);
+        if (!coincide) return false;
+      }
+      
+      // Filtro por fecha inicio (usa fecha_cobro si existe, sino fecha_poliza)
+      const fechaPoliza = poliza.fecha_cobro || poliza.fecha_poliza;
+      if (filtrosModal.fecha_inicio && fechaPoliza) {
+        if (fechaPoliza < filtrosModal.fecha_inicio) return false;
+      }
+      
+      // Filtro por fecha fin
+      if (filtrosModal.fecha_fin && fechaPoliza) {
+        if (fechaPoliza > filtrosModal.fecha_fin) return false;
+      }
+      
+      // Filtro por aseguradora
+      if (filtrosModal.aseguradora && poliza.aseguradora !== filtrosModal.aseguradora) {
+        return false;
+      }
+      
+      // Filtro por ramo
+      if (filtrosModal.ramo && poliza.ramo !== filtrosModal.ramo) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [vendedorSeleccionado, filtrosModal]);
+
+  // Obtener aseguradoras y ramos únicos del vendedor
+  const aseguradorasUnicasModal = useMemo(() => {
+    if (!vendedorSeleccionado) return [];
+    return [...new Set(vendedorSeleccionado.polizas.map(p => p.aseguradora))].filter(Boolean);
+  }, [vendedorSeleccionado]);
+
+  const ramosUnicosModal = useMemo(() => {
+    if (!vendedorSeleccionado) return [];
+    return [...new Set(vendedorSeleccionado.polizas.map(p => p.ramo))].filter(Boolean);
+  }, [vendedorSeleccionado]);
+
+  // Toggle póliza en el modal
+  const togglePolizaModal = (polizaId: number) => {
+    setPolizasModalSeleccionadas(prev => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(polizaId)) {
+        nuevo.delete(polizaId);
+      } else {
+        nuevo.add(polizaId);
+      }
+      return nuevo;
+    });
+  };
+
+  // Seleccionar todas las pólizas filtradas del modal
+  const seleccionarTodasPolizasModal = () => {
+    const idsFiltradas = polizasModalFiltradas.map(p => p.id);
+    const todasSeleccionadas = idsFiltradas.every(id => polizasModalSeleccionadas.has(id));
+    
+    if (todasSeleccionadas) {
+      // Deseleccionar todas las filtradas
+      setPolizasModalSeleccionadas(prev => {
+        const nuevo = new Set(prev);
+        idsFiltradas.forEach(id => nuevo.delete(id));
+        return nuevo;
+      });
+    } else {
+      // Seleccionar todas las filtradas
+      setPolizasModalSeleccionadas(prev => {
+        const nuevo = new Set(prev);
+        idsFiltradas.forEach(id => nuevo.add(id));
+        return nuevo;
+      });
     }
   };
 
-  const getVendedoresUnicos = () => {
-    const vendedores = new Set(comisiones.map(c => c.vendedor).filter(Boolean));
-    return Array.from(vendedores).sort();
+  // Calcular totales de pólizas seleccionadas en el modal
+  const totalesModalSeleccionadas = useMemo(() => {
+    if (!vendedorSeleccionado) return null;
+    
+    const seleccionadas = vendedorSeleccionado.polizas.filter(p => polizasModalSeleccionadas.has(p.id));
+    
+    return {
+      cantidad: seleccionadas.length,
+      prima_total: seleccionadas.reduce((sum, p) => sum + p.prima_neta, 0),
+      comision_bruta: seleccionadas.reduce((sum, p) => sum + p.comision_bruta, 0),
+      retencion: seleccionadas.reduce((sum, p) => sum + p.retencion, 0),
+      retencion_ica: seleccionadas.reduce((sum, p) => sum + p.retencion_ica, 0),
+      iva: seleccionadas.reduce((sum, p) => sum + p.iva, 0),
+      reteiva: seleccionadas.reduce((sum, p) => sum + (p.reteiva || 0), 0),
+      comision_neta: seleccionadas.reduce((sum, p) => sum + p.comision_neta, 0),
+    };
+  }, [vendedorSeleccionado, polizasModalSeleccionadas]);
+
+  // Abrir modal para liquidar pólizas seleccionadas
+  const abrirModalLiquidacionSeleccionadas = () => {
+    if (polizasSeleccionadas.size === 0) {
+      toast({
+        title: 'Aviso',
+        description: 'Seleccione al menos una póliza para liquidar',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Agrupar pólizas seleccionadas por vendedor
+    const polizasSeleccionadasArray = todasLasPolizas.filter(p => polizasSeleccionadas.has(p.id));
+    const vendedoresUnicos = [...new Set(polizasSeleccionadasArray.map(p => p.vendedor_id))];
+    
+    if (vendedoresUnicos.length > 1) {
+      toast({
+        title: 'Aviso',
+        description: 'Las pólizas seleccionadas pertenecen a diferentes vendedores. Seleccione pólizas de un solo vendedor.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Encontrar el vendedor correspondiente
+    const vendedor = comisionesFiltradas.find(v => v.vendedor_id === vendedoresUnicos[0]);
+    if (vendedor) {
+      // Crear un vendedor con solo las pólizas seleccionadas
+      const vendedorConSeleccion: ComisionDisponible = {
+        ...vendedor,
+        polizas: vendedor.polizas.filter(p => polizasSeleccionadas.has(p.id)),
+        total_polizas: polizasSeleccionadasArray.length,
+        prima_total: polizasSeleccionadasArray.reduce((sum, p) => sum + p.prima_neta, 0),
+        comision_bruta_total: polizasSeleccionadasArray.reduce((sum, p) => sum + p.comision_bruta, 0),
+        comision_neta_total: polizasSeleccionadasArray.reduce((sum, p) => sum + p.comision_neta, 0),
+        retencion_total: polizasSeleccionadasArray.reduce((sum, p) => sum + p.retencion, 0),
+        retencion_ica_total: polizasSeleccionadasArray.reduce((sum, p) => sum + p.retencion_ica, 0),
+        iva_total: polizasSeleccionadasArray.reduce((sum, p) => sum + p.iva, 0),
+      };
+      abrirModalLiquidacion(vendedorConSeleccion);
+    }
   };
+
+  const cerrarModalLiquidacion = () => {
+    setShowModalLiquidacion(false);
+    setPasoModal(1);
+    setVendedorSeleccionado(null);
+    setVistaPrevia(null);
+    setObservaciones('');
+    setPolizasModalSeleccionadas(new Set());
+    setFiltrosModal({ fecha_inicio: '', fecha_fin: '', aseguradora: '', ramo: '', busqueda: '' });
+    setLiquidacionCreada(null);
+  };
+
+  // Función para descargar PDF
+  const descargarPDF = async (liquidacionId: number) => {
+    try {
+      setLoadingModal(true);
+      await liquidacionesVendedoresService.descargarPDF(liquidacionId);
+      toast({
+        title: 'Éxito',
+        description: 'PDF descargado correctamente',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Error al descargar PDF',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingModal(false);
+    }
+  };
+
+  const generarVistaPrevia = async () => {
+    if (!vendedorSeleccionado || !vendedorSeleccionado.vendedor_id) return;
+    
+    // Validar que haya pólizas seleccionadas
+    if (polizasModalSeleccionadas.size === 0) {
+      toast({
+        title: 'Aviso',
+        description: 'Seleccione al menos una póliza para liquidar',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    try {
+      setLoadingModal(true);
+      
+      // Usar solo las pólizas seleccionadas en el modal
+      const polizasIds = Array.from(polizasModalSeleccionadas);
+      const polizasSeleccionadasArr = vendedorSeleccionado.polizas.filter(p => polizasModalSeleccionadas.has(p.id));
+      const fechas = polizasSeleccionadasArr.map(p => p.fecha_poliza).filter(f => f);
+      const fechaInicio = fechas.length > 0 ? fechas.reduce((a, b) => a < b ? a : b) : new Date().toISOString().slice(0, 10);
+      const fechaFin = fechas.length > 0 ? fechas.reduce((a, b) => a > b ? a : b) : new Date().toISOString().slice(0, 10);
+      
+      const response = await liquidacionesVendedoresService.getVistaPrevia({
+        vendedor_id: vendedorSeleccionado.vendedor_id,
+        polizas_ids: polizasIds,
+        periodo_inicio: fechaInicio,
+        periodo_fin: fechaFin,
+        observaciones: observaciones,
+      });
+      
+      if (response.success && response.data) {
+        setVistaPrevia(response.data);
+        setPasoModal(2);
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'No se pudo generar la vista previa',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Error al generar vista previa',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingModal(false);
+    }
+  };
+
+  const confirmarLiquidacion = async () => {
+    if (!vistaPrevia || !vendedorSeleccionado) return;
+    
+    try {
+      setLoadingModal(true);
+      
+      // Usar las pólizas seleccionadas del modal
+      const polizasIds = Array.from(polizasModalSeleccionadas);
+      
+      const response = await liquidacionesVendedoresService.crear({
+        vendedor_id: vistaPrevia.vendedor.id,
+        polizas_ids: polizasIds,
+        periodo_inicio: vistaPrevia.periodo.inicio,
+        periodo_fin: vistaPrevia.periodo.fin,
+        observaciones: observaciones,
+      });
+      
+      if (response.success && response.data) {
+        toast({
+          title: 'Éxito',
+          description: `Liquidación ${response.data.codigo} creada exitosamente`,
+        });
+        setLiquidacionCreada(response.data);
+        setPasoModal(3); // Paso 3: Descarga de PDF
+        setPolizasSeleccionadas(new Set());
+        cargarComisionesDisponibles();
+        cargarLiquidaciones();
+      } else {
+        toast({
+          title: 'Error',
+          description: response.message || 'No se pudo crear la liquidación',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: 'Error al crear liquidación',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingModal(false);
+    }
+  };
+
+  const cargarLiquidaciones = useCallback(async () => {
+    try {
+      setLoadingLiquidaciones(true);
+      const response = await liquidacionesVendedoresService.listar();
+      console.log('Respuesta liquidaciones:', response);
+      
+      if (response.success && response.data) {
+        setLiquidaciones(response.data);
+      } else {
+        console.error('Error en respuesta:', response.message);
+      }
+    } catch (error) {
+      console.error('Error cargando liquidaciones:', error);
+    } finally {
+      setLoadingLiquidaciones(false);
+    }
+  }, []);
 
   useEffect(() => {
     setPaginaActual(1);
   }, [filtros, tabActivo]);
 
+  useEffect(() => {
+    if (tabActivo === 'pagadas') {
+      cargarLiquidaciones();
+    }
+  }, [tabActivo, cargarLiquidaciones]);
+
+  // Cargar liquidaciones al montar el componente
+  useEffect(() => {
+    cargarLiquidaciones();
+  }, [cargarLiquidaciones]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <Spinner size="xl" />
-        <span className="ml-3">Cargando liquidación de vendedores...</span>
+        <span className="ml-3">Cargando comisiones disponibles...</span>
       </div>
     );
   }
@@ -288,364 +534,277 @@ const LiquidarVendedores = () => {
   return (
     <div className="space-y-6">
       {/* Estadísticas */}
-      {estadisticas && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 gap-3 md:gap-4">
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Total Comisiones</p>
-                <p className="text-lg md:text-2xl font-bold text-blue-600">
-                  {formatCurrency(estadisticasUI.totalComisiones)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {estadisticasUI.polizasConComision} pólizas
-                </p>
-              </div>
-              <Icon icon="solar:calculator-bold-duotone" className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+        <Card className="p-3 md:p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs md:text-sm font-medium text-gray-600">Total Comisiones</p>
+              <p className="text-lg md:text-2xl font-bold text-blue-600">
+                {formatCurrency(estadisticasUI.totalComisiones)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {estadisticasUI.polizasConComision} pólizas
+              </p>
             </div>
-          </Card>
+            <Icon icon="solar:calculator-bold-duotone" className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
+          </div>
+        </Card>
 
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Por Pagar</p>
-                <p className="text-lg md:text-2xl font-bold text-orange-600">
-                  {formatCurrency(estadisticasUI.comisionesPendientes)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Pendiente de liquidar
-                </p>
-              </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 md:w-3 md:h-3 bg-orange-500 rounded-full"></div>
-              </div>
+        <Card className="p-3 md:p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs md:text-sm font-medium text-gray-600">Por Liquidar</p>
+              <p className="text-lg md:text-2xl font-bold text-orange-600">
+                {formatCurrency(estadisticasUI.comisionesPendientes)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Comisión neta
+              </p>
             </div>
-          </Card>
-
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Pagadas</p>
-                <p className="text-lg md:text-2xl font-bold text-green-600">
-                  {formatCurrency(estadisticasUI.comisionesPagadas)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Ya liquidadas
-                </p>
-              </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-green-100 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 md:w-3 md:h-3 bg-green-500 rounded-full"></div>
-              </div>
+            <div className="w-6 h-6 md:w-8 md:h-8 bg-orange-100 rounded-full flex items-center justify-center">
+              <div className="w-2 h-2 md:w-3 md:h-3 bg-orange-500 rounded-full"></div>
             </div>
-          </Card>
+          </div>
+        </Card>
 
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Vendedores</p>
-                <p className="text-lg md:text-2xl font-bold text-purple-600">
-                  {estadisticasUI.totalVendedores}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Tasa pago: {estadisticasUI.tasaPago.toFixed(1)}%
-                </p>
-              </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                <span className="text-purple-600 font-bold text-xs md:text-sm">👥</span>
-              </div>
+        <Card className="p-3 md:p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs md:text-sm font-medium text-gray-600">{terminologia.vendedorPlural}</p>
+              <p className="text-lg md:text-2xl font-bold text-purple-600">
+                {estadisticasUI.totalVendedores}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Con comisiones pendientes
+              </p>
             </div>
-          </Card>
-        </div>
-      )}
+            <div className="w-6 h-6 md:w-8 md:h-8 bg-purple-100 rounded-full flex items-center justify-center">
+              <span className="text-purple-600 font-bold text-xs md:text-sm">👥</span>
+            </div>
+          </div>
+        </Card>
 
-      {/* Header de Controles */}
-      <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex flex-col lg:flex-row gap-4">
+        <Card className="p-3 md:p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs md:text-sm font-medium text-gray-600">Seleccionadas</p>
+              <p className="text-lg md:text-2xl font-bold text-green-600">
+                {polizasSeleccionadas.size}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Pólizas para liquidar
+              </p>
+            </div>
+            <Icon icon="solar:check-circle-bold-duotone" className="w-6 h-6 md:w-8 md:h-8 text-green-500" />
+          </div>
+        </Card>
+      </div>
+
+      {/* Filtros Avanzados */}
+      <Card>
+        <div className="p-4">
+          <div className="flex flex-col lg:flex-row gap-4 items-end">
             <div className="flex-1">
               <div className="relative">
                 <Icon icon="solar:magnifer-bold-duotone" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
                   placeholder="Buscar por póliza, cliente o vendedor..."
-                  value={filtros.busqueda || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFiltros({ ...filtros, busqueda: e.target.value })}
-                  className="pl-10 h-10 text-sm rounded-[10px]"
+                  value={filtros.busqueda}
+                  onChange={(e) => setFiltros({ ...filtros, busqueda: e.target.value })}
+                  className="pl-10 h-10"
                 />
               </div>
             </div>
-            
-            <div className="flex gap-2">
-              <Button
-                color="light"
-                onClick={() => cargarComisiones()}
-                disabled={loading}
-                className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                title="Actualizar"
-              >
-                <Icon icon="solar:refresh-bold-duotone" className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-              
-              <Button
-                color="light"
-                className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                title="Exportar"
-              >
-                <Icon icon="solar:download-bold-duotone" className="w-4 h-4" />
-              </Button>
 
-              <Button
-                color="primary"
-                className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-              >
-                <Icon icon="solar:dollar-minimalistic-bold-duotone" className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Liquidar Seleccionadas</span>
-                <span className="sm:hidden">Liquidar</span>
-              </Button>
-            </div>
+            <Button
+              color="light"
+              onClick={() => setMostrarFiltrosAvanzados(!mostrarFiltrosAvanzados)}
+              className="h-10"
+            >
+              <Icon icon="solar:filter-bold-duotone" className="w-4 h-4 mr-2" />
+              Filtros
+            </Button>
+
+            <Button
+              color="light"
+              onClick={() => cargarComisionesDisponibles()}
+              disabled={loading}
+              className="h-10"
+            >
+              <Icon icon="solar:refresh-bold-duotone" className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+
+            <Button
+              color="primary"
+              onClick={abrirModalLiquidacionSeleccionadas}
+              disabled={polizasSeleccionadas.size === 0}
+              className="h-10 bg-blue-600 hover:bg-blue-700"
+            >
+              <Icon icon="solar:dollar-minimalistic-bold-duotone" className="w-4 h-4 mr-2" />
+              Liquidar Seleccionadas ({polizasSeleccionadas.size})
+            </Button>
           </div>
+
+          {/* Panel de filtros avanzados */}
+          {mostrarFiltrosAvanzados && (
+            <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <Label htmlFor="vendedor_id">Vendedor</Label>
+                <Select
+                  id="vendedor_id"
+                  value={filtros.vendedor_id}
+                  onChange={(e) => setFiltros({ ...filtros, vendedor_id: e.target.value })}
+                >
+                  <option value="">Todos los vendedores</option>
+                  {vendedoresData.map((v: any) => (
+                    <option key={v.id} value={v.id}>{v.nombres}</option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="fecha_inicio">Fecha Desde</Label>
+                <TextInput
+                  id="fecha_inicio"
+                  type="date"
+                  value={filtros.fecha_inicio}
+                  onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="fecha_fin">Fecha Hasta</Label>
+                <TextInput
+                  id="fecha_fin"
+                  type="date"
+                  value={filtros.fecha_fin}
+                  onChange={(e) => setFiltros({ ...filtros, fecha_fin: e.target.value })}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  color="primary"
+                  onClick={cargarComisionesDisponibles}
+                  className="w-full"
+                >
+                  Aplicar Filtros
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      </Card>
 
       {/* Tabs */}
       <Card>
         <Tabs>
-          <Tabs.Item 
+          <Tabs.Item
             active={tabActivo === 'porPagar'}
-            title={`Por Pagar (${comisionesPorPagar.length})`}
+            title={`Por Pagar (${todasLasPolizas.length})`}
             icon={() => <Icon icon="solar:wallet-money-bold-duotone" />}
             onClick={() => setTabActivo('porPagar')}
           >
             <div className="overflow-x-auto">
               <Table hoverable>
                 <Table.Head>
+                  <Table.HeadCell className="w-10">
+                    <Checkbox
+                      checked={polizasSeleccionadas.size === todasLasPolizas.length && todasLasPolizas.length > 0}
+                      onChange={seleccionarTodasPolizas}
+                    />
+                  </Table.HeadCell>
                   <Table.HeadCell>Póliza</Table.HeadCell>
                   <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell>Vendedor</Table.HeadCell>
+                  <Table.HeadCell>{terminologia.vendedor}</Table.HeadCell>
                   <Table.HeadCell>Aseguradora</Table.HeadCell>
+                  <Table.HeadCell>Ramo</Table.HeadCell>
                   <Table.HeadCell className="text-right">Prima</Table.HeadCell>
-                  <Table.HeadCell className="text-right">% Com.</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Comisión</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Pagado</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Pendiente</Table.HeadCell>
-                  <Table.HeadCell>Fecha Póliza</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Retención</Table.HeadCell>
+                  <Table.HeadCell className="text-right">ICA</Table.HeadCell>
+                  <Table.HeadCell className="text-right">IVA</Table.HeadCell>
+                  <Table.HeadCell className="text-right">ReteIVA</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Com. Neta</Table.HeadCell>
+                  <Table.HeadCell>Fecha Cobro</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
-                  {comisionesPorPagarPaginadas.map((comision) => (
-                    <Table.Row key={comision.id}>
-                      <Table.Cell className="font-medium">{comision.numeroPoliza}</Table.Cell>
-                      <Table.Cell>{comision.cliente}</Table.Cell>
+                  {polizasPaginadas.map((poliza) => (
+                    <Table.Row key={poliza.id} className={polizasSeleccionadas.has(poliza.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}>
                       <Table.Cell>
-                        <Badge color="info" size="sm">{comision.vendedor}</Badge>
+                        <Checkbox
+                          checked={polizasSeleccionadas.has(poliza.id)}
+                          onChange={() => togglePolizaSeleccionada(poliza.id)}
+                        />
                       </Table.Cell>
-                      <Table.Cell>{comision.aseguradora}</Table.Cell>
-                      <Table.Cell className="text-right">
-                        {formatCurrency(comision.primaNeta)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right">
-                        {comision.porcentajeComision}%
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
-                        {formatCurrency(comision.comisionTotal)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right text-green-600">
-                        {formatCurrency(comision.comisionPagada)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-orange-600">
-                        {formatCurrency(comision.comisionPendiente)}
-                      </Table.Cell>
-                      <Table.Cell>{formatDate(comision.fechaPoliza)}</Table.Cell>
+                      <Table.Cell className="font-medium">{poliza.numero_poliza}</Table.Cell>
+                      <Table.Cell>{poliza.cliente}</Table.Cell>
                       <Table.Cell>
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                              <Icon icon="solar:eye-bold-duotone" height={18} />
-                              <span>Ver Detalle</span>
-                            </Dropdown.Item>
-                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left text-blue-600">
-                              <Icon icon="solar:dollar-minimalistic-bold-duotone" height={18} />
-                              <span>Pagar Comisión</span>
-                            </Dropdown.Item>
-                          </Dropdown>
-                        </div>
+                        <Badge color="info" size="sm">{poliza.vendedor}</Badge>
                       </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table>
-
-              {comisionesPorPagar.length === 0 && (
-                <div className="text-center py-12">
-                  <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No hay comisiones pendientes de pagar</p>
-                </div>
-              )}
-            </div>
-
-            {/* Paginación */}
-            {totalPaginasPorPagar > 1 && (
-              <div className="flex items-center justify-between p-4 border-t">
-                <div className="text-sm text-gray-600">
-                  Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, comisionesPorPagar.length)} de {comisionesPorPagar.length}
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span>Por página:</span>
-                    <select
-                      className="border rounded-md px-2 py-1 text-sm dark:bg-darkgray"
-                      value={elementosPorPagina}
-                      onChange={(e) => {
-                        setElementosPorPagina(Number(e.target.value));
-                        setPaginaActual(1);
-                      }}
-                    >
-                      <option value={15}>15</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </div>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={paginaActual === 1}
-                    onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
-                    className="rounded-[10px]"
-                  >
-                    <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm text-gray-600">
-                    Página {paginaActual} de {totalPaginasPorPagar}
-                  </span>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={paginaActual === totalPaginasPorPagar}
-                    onClick={() => setPaginaActual(p => Math.min(totalPaginasPorPagar, p + 1))}
-                    className="rounded-[10px]"
-                  >
-                    <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </Tabs.Item>
-
-          <Tabs.Item 
-            title={`Pagadas (${comisionesPagadas.length})`}
-            icon={() => <Icon icon="solar:check-circle-bold-duotone" />}
-            onClick={() => setTabActivo('pagados')}
-          >
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Póliza</Table.HeadCell>
-                  <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell>Vendedor</Table.HeadCell>
-                  <Table.HeadCell>Aseguradora</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Prima</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Comisión</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Pagado</Table.HeadCell>
-                  <Table.HeadCell>Fecha Pago</Table.HeadCell>
-                  <Table.HeadCell>Fecha Póliza</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
-                  {comisionesPagadasPaginadas.map((comision) => (
-                    <Table.Row key={comision.id}>
-                      <Table.Cell className="font-medium">{comision.numeroPoliza}</Table.Cell>
-                      <Table.Cell>{comision.cliente}</Table.Cell>
-                      <Table.Cell>
-                        <Badge color="success" size="sm">{comision.vendedor}</Badge>
-                      </Table.Cell>
-                      <Table.Cell>{comision.aseguradora}</Table.Cell>
-                      <Table.Cell className="text-right">
-                        {formatCurrency(comision.primaNeta)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
-                        {formatCurrency(comision.comisionTotal)}
-                      </Table.Cell>
+                      <Table.Cell>{poliza.aseguradora}</Table.Cell>
+                      <Table.Cell>{poliza.ramo}</Table.Cell>
+                      <Table.Cell className="text-right">{formatCurrency(poliza.prima_neta)}</Table.Cell>
+                      <Table.Cell className="text-right">{formatCurrency(poliza.comision_bruta)}</Table.Cell>
+                      <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.retencion)}</Table.Cell>
+                      <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.retencion_ica)}</Table.Cell>
+                      <Table.Cell className="text-right text-blue-500">{formatCurrency(poliza.iva)}</Table.Cell>
+                      <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.reteiva || 0)}</Table.Cell>
                       <Table.Cell className="text-right font-semibold text-green-600">
-                        {formatCurrency(comision.comisionPagada)}
+                        {formatCurrency(poliza.comision_neta)}
                       </Table.Cell>
                       <Table.Cell>
-                        <Badge color="success" size="sm">
-                          {formatDate(comision.fechaPago || '')}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>{formatDate(comision.fechaPoliza)}</Table.Cell>
-                      <Table.Cell>
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                              <Icon icon="solar:eye-bold-duotone" height={18} />
-                              <span>Ver Detalle</span>
-                            </Dropdown.Item>
-                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                              <Icon icon="solar:document-text-bold-duotone" height={18} />
-                              <span>Ver Comprobante</span>
-                            </Dropdown.Item>
-                          </Dropdown>
-                        </div>
+                        <span className="text-green-600">{formatDate(poliza.fecha_cobro || poliza.fecha_poliza)}</span>
                       </Table.Cell>
                     </Table.Row>
                   ))}
                 </Table.Body>
               </Table>
 
-              {comisionesPagadas.length === 0 && (
+              {todasLasPolizas.length === 0 && (
                 <div className="text-center py-12">
                   <Icon icon="solar:wallet-money-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No hay comisiones pagadas aún</p>
+                  <p className="text-gray-500">No hay comisiones disponibles para liquidar</p>
+                  <p className="text-sm text-gray-400 mt-2">
+                    Las comisiones aparecen aquí cuando la aseguradora ya pagó al broker y la póliza tiene vendedor asignado
+                  </p>
                 </div>
               )}
             </div>
 
             {/* Paginación */}
-            {totalPaginasPagadas > 1 && (
+            {totalPaginasPolizas > 1 && (
               <div className="flex items-center justify-between p-4 border-t">
                 <div className="text-sm text-gray-600">
-                  Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, comisionesPagadas.length)} de {comisionesPagadas.length}
+                  Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, todasLasPolizas.length)} de {todasLasPolizas.length}
                 </div>
                 <div className="flex items-center gap-3">
+                  <select
+                    className="border rounded-md px-2 py-1 text-sm dark:bg-darkgray"
+                    value={elementosPorPagina}
+                    onChange={(e) => {
+                      setElementosPorPagina(Number(e.target.value));
+                      setPaginaActual(1);
+                    }}
+                  >
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
                   <Button
                     size="sm"
                     color="gray"
                     disabled={paginaActual === 1}
                     onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
-                    className="rounded-[10px]"
                   >
                     <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
                   </Button>
                   <span className="text-sm text-gray-600">
-                    Página {paginaActual} de {totalPaginasPagadas}
+                    Página {paginaActual} de {totalPaginasPolizas}
                   </span>
                   <Button
                     size="sm"
                     color="gray"
-                    disabled={paginaActual === totalPaginasPagadas}
-                    onClick={() => setPaginaActual(p => Math.min(totalPaginasPagadas, p + 1))}
-                    className="rounded-[10px]"
+                    disabled={paginaActual === totalPaginasPolizas}
+                    onClick={() => setPaginaActual(p => Math.min(totalPaginasPolizas, p + 1))}
                   >
                     <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
                   </Button>
@@ -655,80 +814,555 @@ const LiquidarVendedores = () => {
           </Tabs.Item>
 
           <Tabs.Item
-            title={`Por Vendedor (${comisionesPorVendedor.length})`}
+            active={tabActivo === 'porVendedor'}
+            title={`Por ${terminologia.vendedor} (${comisionesFiltradas.length})`}
             icon={() => <Icon icon="solar:user-bold-duotone" />}
+            onClick={() => setTabActivo('porVendedor')}
           >
             <div className="overflow-x-auto">
               <Table hoverable>
                 <Table.Head>
-                  <Table.HeadCell>Vendedor</Table.HeadCell>
+                  <Table.HeadCell>{terminologia.vendedor}</Table.HeadCell>
                   <Table.HeadCell className="text-center">Pólizas</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Comisión Total</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Pagado</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Pendiente</Table.HeadCell>
-                  <Table.HeadCell className="text-center">% Pagado</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Prima Total</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Retención</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Ret. ICA</Table.HeadCell>
+                  <Table.HeadCell className="text-right">IVA</Table.HeadCell>
+                  <Table.HeadCell className="text-right">ReteIVA</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Com. Neta</Table.HeadCell>
                   <Table.HeadCell>Acciones</Table.HeadCell>
                 </Table.Head>
                 <Table.Body className="divide-y">
-                  {comisionesPorVendedor.map((vendedor: any) => (
-                    <Table.Row key={vendedor.vendedorId}>
-                      <Table.Cell className="font-medium">{vendedor.vendedor}</Table.Cell>
-                      <Table.Cell className="text-center font-semibold text-blue-600">
-                        {vendedor.polizas}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
-                        {formatCurrency(vendedor.comisionTotal)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right text-green-600">
-                        {formatCurrency(vendedor.comisionPagada)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-orange-600">
-                        {formatCurrency(vendedor.comisionPendiente)}
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <Progress 
-                            progress={vendedor.comisionTotal > 0 ? (vendedor.comisionPagada / vendedor.comisionTotal) * 100 : 0}
-                            size="sm"
-                            color="green"
-                          />
-                          <span className="text-xs text-gray-500">
-                            {vendedor.comisionTotal > 0 ? ((vendedor.comisionPagada / vendedor.comisionTotal) * 100).toFixed(1) : 0}%
-                          </span>
+                  {comisionesFiltradas.map((vendedor) => (
+                    <Table.Row key={vendedor.vendedor_id}>
+                      <Table.Cell className="font-medium">
+                        <div>
+                          <span>{vendedor.vendedor}</span>
+                          <div className="text-xs text-gray-500">
+                            Ret: {vendedor.porcentajes?.retencion || 0}% | ICA: {vendedor.porcentajes?.retencion_ica || 0}% | IVA: {vendedor.porcentajes?.iva || 0}% | ReteIVA: {vendedor.porcentajes?.reteiva || 0}%
+                          </div>
                         </div>
+                      </Table.Cell>
+                      <Table.Cell className="text-center font-semibold text-blue-600">
+                        {vendedor.total_polizas}
+                      </Table.Cell>
+                      <Table.Cell className="text-right">{formatCurrency(vendedor.prima_total)}</Table.Cell>
+                      <Table.Cell className="text-right font-semibold">
+                        {formatCurrency(vendedor.comision_bruta_total)}
+                      </Table.Cell>
+                      <Table.Cell className="text-right text-red-600">
+                        {formatCurrency(vendedor.retencion_total)}
+                      </Table.Cell>
+                      <Table.Cell className="text-right text-red-600">
+                        {formatCurrency(vendedor.retencion_ica_total)}
+                      </Table.Cell>
+                      <Table.Cell className="text-right text-blue-600">
+                        {formatCurrency(vendedor.iva_total)}
+                      </Table.Cell>
+                      <Table.Cell className="text-right text-red-600">
+                        {formatCurrency(vendedor.reteiva_total || 0)}
+                      </Table.Cell>
+                      <Table.Cell className="text-right font-bold text-green-600">
+                        {formatCurrency(vendedor.comision_neta_total)}
                       </Table.Cell>
                       <Table.Cell>
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                              <Icon icon="solar:eye-bold-duotone" height={18} />
-                              <span>Ver Detalle</span>
-                            </Dropdown.Item>
-                            <Dropdown.Item className="flex gap-3 w-full justify-start text-left text-blue-600">
-                              <Icon icon="solar:dollar-minimalistic-bold-duotone" height={18} />
-                              <span>Liquidar Vendedor</span>
-                            </Dropdown.Item>
-                          </Dropdown>
-                        </div>
+                        <Button
+                          size="sm"
+                          color="primary"
+                          onClick={() => abrirModalLiquidacion(vendedor)}
+                        >
+                          <Icon icon="solar:dollar-minimalistic-bold-duotone" className="w-4 h-4 mr-1" />
+                          Liquidar
+                        </Button>
                       </Table.Cell>
                     </Table.Row>
                   ))}
                 </Table.Body>
               </Table>
+
+              {comisionesFiltradas.length === 0 && (
+                <div className="text-center py-12">
+                  <Icon icon="solar:user-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No hay vendedores con comisiones pendientes</p>
+                </div>
+              )}
             </div>
+          </Tabs.Item>
+
+          <Tabs.Item
+            active={tabActivo === 'pagadas'}
+            title="Pagadas"
+            icon={() => <Icon icon="solar:history-bold-duotone" />}
+            onClick={() => setTabActivo('pagadas')}
+          >
+            {loadingLiquidaciones ? (
+              <div className="flex justify-center py-12">
+                <Spinner size="lg" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table hoverable>
+                  <Table.Head>
+                    <Table.HeadCell>Código</Table.HeadCell>
+                    <Table.HeadCell>{terminologia.vendedor}</Table.HeadCell>
+                    <Table.HeadCell>Período</Table.HeadCell>
+                    <Table.HeadCell className="text-right">Pólizas</Table.HeadCell>
+                    <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
+                    <Table.HeadCell className="text-right">Retención</Table.HeadCell>
+                    <Table.HeadCell className="text-right">ICA</Table.HeadCell>
+                    <Table.HeadCell className="text-right">IVA</Table.HeadCell>
+                    <Table.HeadCell className="text-right">ReteIVA</Table.HeadCell>
+                    <Table.HeadCell className="text-right">Com. Neta</Table.HeadCell>
+                    <Table.HeadCell>Estado</Table.HeadCell>
+                    <Table.HeadCell>Fecha</Table.HeadCell>
+                    <Table.HeadCell>Acciones</Table.HeadCell>
+                  </Table.Head>
+                  <Table.Body className="divide-y">
+                    {liquidaciones.map((liquidacion) => (
+                      <Table.Row key={liquidacion.id}>
+                        <Table.Cell className="font-medium">{liquidacion.codigo}</Table.Cell>
+                        <Table.Cell>{liquidacion.vendedor?.nombres || 'N/A'}</Table.Cell>
+                        <Table.Cell>
+                          {formatDate(liquidacion.periodo_inicio)} - {formatDate(liquidacion.periodo_fin)}
+                        </Table.Cell>
+                        <Table.Cell className="text-right">{liquidacion.cantidad_polizas}</Table.Cell>
+                        <Table.Cell className="text-right">{formatCurrency(liquidacion.monto_bruto_total)}</Table.Cell>
+                        <Table.Cell className="text-right text-red-500">{formatCurrency(liquidacion.monto_retencion_total)}</Table.Cell>
+                        <Table.Cell className="text-right text-red-500">{formatCurrency(liquidacion.monto_retencion_ica_total)}</Table.Cell>
+                        <Table.Cell className="text-right text-blue-500">{formatCurrency(liquidacion.monto_iva_total)}</Table.Cell>
+                        <Table.Cell className="text-right text-red-500">{formatCurrency(liquidacion.monto_reteiva_total || 0)}</Table.Cell>
+                        <Table.Cell className="text-right font-semibold text-green-600">
+                          {formatCurrency(liquidacion.monto_neto_total)}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Badge 
+                            color={
+                              liquidacion.estado === 'pagada' ? 'success' :
+                              liquidacion.estado === 'aprobada' ? 'info' :
+                              liquidacion.estado === 'revertida' ? 'failure' :
+                              'warning'
+                            }
+                            size="sm"
+                          >
+                            {liquidacion.estado.toUpperCase()}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell>{formatDate(liquidacion.fecha_generacion)}</Table.Cell>
+                        <Table.Cell>
+                          <Button 
+                            size="xs" 
+                            color="primary" 
+                            title="Descargar PDF"
+                            onClick={() => descargarPDF(liquidacion.id)}
+                          >
+                            <Icon icon="solar:download-bold" className="w-4 h-4" />
+                          </Button>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table>
+
+                {liquidaciones.length === 0 && (
+                  <div className="text-center py-12">
+                    <Icon icon="solar:folder-open-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No hay liquidaciones generadas aún</p>
+                  </div>
+                )}
+              </div>
+            )}
           </Tabs.Item>
         </Tabs>
       </Card>
+
+      {/* Modal de Liquidación */}
+      <Modal show={showModalLiquidacion} onClose={cerrarModalLiquidacion} size="6xl">
+        <Modal.Header>
+          {pasoModal === 1 && `Liquidar Comisiones - ${vendedorSeleccionado?.vendedor || ''}`}
+          {pasoModal === 2 && 'Vista Previa de Liquidación'}
+          {pasoModal === 3 && '✅ Liquidación Creada Exitosamente'}
+        </Modal.Header>
+        <Modal.Body className="max-h-[70vh] overflow-y-auto">
+          {pasoModal === 1 && vendedorSeleccionado && (
+            <div className="space-y-4">
+              {/* Resumen del vendedor y totales seleccionados */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-semibold text-lg">{vendedorSeleccionado.vendedor}</h3>
+                    <p className="text-sm text-gray-600">
+                      Ret: {vendedorSeleccionado.porcentajes?.retencion || 0}% | 
+                      ICA: {vendedorSeleccionado.porcentajes?.retencion_ica || 0}% | 
+                      IVA: {vendedorSeleccionado.porcentajes?.iva || 0}% | 
+                      ReteIVA: {vendedorSeleccionado.porcentajes?.reteiva || 0}%
+                    </p>
+                  </div>
+                  {totalesModalSeleccionadas && (
+                    <div className="text-right">
+                      <Badge color="info" size="lg">
+                        {totalesModalSeleccionadas.cantidad} pólizas seleccionadas
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+                
+                {totalesModalSeleccionadas && (
+                  <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                      <span className="text-gray-500 block">Com. Bruta</span>
+                      <span className="font-bold">{formatCurrency(totalesModalSeleccionadas.comision_bruta)}</span>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                      <span className="text-gray-500 block">Retenciones</span>
+                      <span className="font-bold text-red-600">
+                        -{formatCurrency(totalesModalSeleccionadas.retencion + totalesModalSeleccionadas.retencion_ica + totalesModalSeleccionadas.reteiva)}
+                      </span>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                      <span className="text-gray-500 block">IVA</span>
+                      <span className="font-bold text-blue-600">+{formatCurrency(totalesModalSeleccionadas.iva)}</span>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded">
+                      <span className="text-gray-500 block">Com. Neta</span>
+                      <span className="font-bold text-green-600">{formatCurrency(totalesModalSeleccionadas.comision_neta)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Filtros */}
+              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <Icon icon="solar:filter-bold-duotone" className="w-5 h-5" />
+                    Filtrar Pólizas
+                  </h4>
+                  <Button size="xs" color="gray" onClick={() => setFiltrosModal({ fecha_inicio: '', fecha_fin: '', aseguradora: '', ramo: '', busqueda: '' })}>
+                    Limpiar Filtros
+                  </Button>
+                </div>
+                <div className="grid grid-cols-5 gap-3">
+                  <div>
+                    <Label className="text-xs">Buscar</Label>
+                    <TextInput
+                      sizing="sm"
+                      placeholder="Póliza o cliente..."
+                      value={filtrosModal.busqueda}
+                      onChange={(e) => setFiltrosModal(prev => ({ ...prev, busqueda: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Fecha Cobro Desde</Label>
+                    <TextInput
+                      sizing="sm"
+                      type="date"
+                      value={filtrosModal.fecha_inicio}
+                      onChange={(e) => setFiltrosModal(prev => ({ ...prev, fecha_inicio: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Fecha Cobro Hasta</Label>
+                    <TextInput
+                      sizing="sm"
+                      type="date"
+                      value={filtrosModal.fecha_fin}
+                      onChange={(e) => setFiltrosModal(prev => ({ ...prev, fecha_fin: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Aseguradora</Label>
+                    <Select
+                      sizing="sm"
+                      value={filtrosModal.aseguradora}
+                      onChange={(e) => setFiltrosModal(prev => ({ ...prev, aseguradora: e.target.value }))}
+                    >
+                      <option value="">Todas</option>
+                      {aseguradorasUnicasModal.map(aseg => (
+                        <option key={aseg} value={aseg}>{aseg}</option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Ramo</Label>
+                    <Select
+                      sizing="sm"
+                      value={filtrosModal.ramo}
+                      onChange={(e) => setFiltrosModal(prev => ({ ...prev, ramo: e.target.value }))}
+                    >
+                      <option value="">Todos</option>
+                      {ramosUnicosModal.map(ramo => (
+                        <option key={ramo} value={ramo}>{ramo}</option>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabla de pólizas */}
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 flex justify-between items-center">
+                  <span className="text-sm font-medium">
+                    Mostrando {polizasModalFiltradas.length} de {vendedorSeleccionado.polizas.length} pólizas
+                  </span>
+                  <div className="flex gap-2">
+                    <Button size="xs" color="gray" onClick={seleccionarTodasPolizasModal}>
+                      {polizasModalFiltradas.every(p => polizasModalSeleccionadas.has(p.id)) ? 'Deseleccionar Todas' : 'Seleccionar Todas'}
+                    </Button>
+                  </div>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  <Table hoverable>
+                    <Table.Head>
+                      <Table.HeadCell className="w-10">
+                        <Checkbox
+                          checked={polizasModalFiltradas.length > 0 && polizasModalFiltradas.every(p => polizasModalSeleccionadas.has(p.id))}
+                          onChange={seleccionarTodasPolizasModal}
+                        />
+                      </Table.HeadCell>
+                      <Table.HeadCell>Póliza</Table.HeadCell>
+                      <Table.HeadCell>Cliente</Table.HeadCell>
+                      <Table.HeadCell>Aseguradora</Table.HeadCell>
+                      <Table.HeadCell>Ramo</Table.HeadCell>
+                      <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
+                      <Table.HeadCell className="text-right">Retención</Table.HeadCell>
+                      <Table.HeadCell className="text-right">ICA</Table.HeadCell>
+                      <Table.HeadCell className="text-right">IVA</Table.HeadCell>
+                      <Table.HeadCell className="text-right">ReteIVA</Table.HeadCell>
+                      <Table.HeadCell className="text-right">Com. Neta</Table.HeadCell>
+                      <Table.HeadCell>Fecha</Table.HeadCell>
+                    </Table.Head>
+                    <Table.Body className="divide-y">
+                      {polizasModalFiltradas.map((poliza) => (
+                        <Table.Row 
+                          key={poliza.id} 
+                          className={`cursor-pointer ${polizasModalSeleccionadas.has(poliza.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                          onClick={() => togglePolizaModal(poliza.id)}
+                        >
+                          <Table.Cell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={polizasModalSeleccionadas.has(poliza.id)}
+                              onChange={() => togglePolizaModal(poliza.id)}
+                            />
+                          </Table.Cell>
+                          <Table.Cell className="font-medium">{poliza.numero_poliza}</Table.Cell>
+                          <Table.Cell>{poliza.cliente}</Table.Cell>
+                          <Table.Cell>{poliza.aseguradora}</Table.Cell>
+                          <Table.Cell>{poliza.ramo}</Table.Cell>
+                          <Table.Cell className="text-right">{formatCurrency(poliza.comision_bruta)}</Table.Cell>
+                          <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.retencion)}</Table.Cell>
+                          <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.retencion_ica)}</Table.Cell>
+                          <Table.Cell className="text-right text-blue-500">{formatCurrency(poliza.iva)}</Table.Cell>
+                          <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.reteiva || 0)}</Table.Cell>
+                          <Table.Cell className="text-right font-semibold text-green-600">{formatCurrency(poliza.comision_neta)}</Table.Cell>
+                          <Table.Cell>{formatDate(poliza.fecha_cobro || poliza.fecha_poliza)}</Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Observaciones */}
+              <div>
+                <Label htmlFor="observaciones">Observaciones (opcional)</Label>
+                <Textarea
+                  id="observaciones"
+                  value={observaciones}
+                  onChange={(e) => setObservaciones(e.target.value)}
+                  placeholder="Ingrese observaciones sobre esta liquidación..."
+                  rows={2}
+                />
+              </div>
+
+              {polizasModalSeleccionadas.size === 0 && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded text-sm text-yellow-700">
+                  <Icon icon="solar:danger-triangle-bold" className="inline w-5 h-5 mr-2" />
+                  Seleccione al menos una póliza para continuar con la liquidación.
+                </div>
+              )}
+            </div>
+          )}
+
+          {pasoModal === 2 && vistaPrevia && (
+            <div className="space-y-4">
+              <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                <h3 className="font-semibold text-lg mb-2">Resumen de Liquidación</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Vendedor:</span>
+                    <span className="font-semibold ml-2">{vistaPrevia.vendedor.nombres}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Documento:</span>
+                    <span className="font-semibold ml-2">{vistaPrevia.vendedor.numero_documento}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Período:</span>
+                    <span className="font-semibold ml-2">{formatDate(vistaPrevia.periodo.inicio)} - {formatDate(vistaPrevia.periodo.fin)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Pólizas:</span>
+                    <span className="font-semibold ml-2">{vistaPrevia.cantidad_polizas}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-4 space-y-2">
+                <h4 className="font-semibold mb-3">Detalle Financiero</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Prima Total:</span>
+                    <span className="font-semibold">{formatCurrency(vistaPrevia.totales.prima_total)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Comisión Bruta:</span>
+                    <span className="font-semibold">{formatCurrency(vistaPrevia.totales.comision_bruta_total)}</span>
+                  </div>
+                  <div className="flex justify-between text-red-600">
+                    <span>(-) Retención:</span>
+                    <span>{formatCurrency(vistaPrevia.totales.retencion_total)}</span>
+                  </div>
+                  <div className="flex justify-between text-red-600">
+                    <span>(-) Retención ICA:</span>
+                    <span>{formatCurrency(vistaPrevia.totales.retencion_ica_total)}</span>
+                  </div>
+                  <div className="flex justify-between text-green-600">
+                    <span>(+) IVA:</span>
+                    <span>{formatCurrency(vistaPrevia.totales.iva_total)}</span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between text-lg font-bold text-green-600">
+                    <span>Comisión Neta a Pagar:</span>
+                    <span>{formatCurrency(vistaPrevia.totales.comision_neta_total)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Paso 3: Liquidación creada - Descarga de PDF */}
+          {pasoModal === 3 && liquidacionCreada && (
+            <div className="space-y-6">
+              <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-lg text-center">
+                <Icon icon="solar:check-circle-bold" className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-green-700 mb-2">Liquidación Generada Exitosamente</h3>
+                <p className="text-gray-600">Código: <span className="font-bold">{liquidacionCreada.codigo}</span></p>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                <h4 className="font-semibold mb-3">Resumen de la Liquidación</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">{terminologia.vendedor}:</span>
+                    <span className="font-semibold ml-2">{liquidacionCreada.vendedor?.nombres}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Período:</span>
+                    <span className="font-semibold ml-2">
+                      {formatDate(liquidacionCreada.periodo_inicio)} - {formatDate(liquidacionCreada.periodo_fin)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Cantidad de Pólizas:</span>
+                    <span className="font-semibold ml-2">{liquidacionCreada.cantidad_polizas}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Estado:</span>
+                    <Badge color="warning" size="sm" className="ml-2">
+                      {liquidacionCreada.estado.toUpperCase()}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="border-t mt-4 pt-4 grid grid-cols-3 gap-4 text-sm">
+                  <div className="text-center">
+                    <span className="text-gray-500 block">Comisión Bruta</span>
+                    <span className="font-bold text-lg">{formatCurrency(liquidacionCreada.monto_bruto_total)}</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-gray-500 block">Retenciones</span>
+                    <span className="font-bold text-lg text-red-600">
+                      -{formatCurrency(liquidacionCreada.monto_retencion_total + liquidacionCreada.monto_retencion_ica_total)}
+                    </span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-gray-500 block">Comisión Neta</span>
+                    <span className="font-bold text-xl text-green-600">{formatCurrency(liquidacionCreada.monto_neto_total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-center gap-4">
+                <Button 
+                  size="lg" 
+                  color="primary" 
+                  onClick={() => descargarPDF(liquidacionCreada.id)}
+                  disabled={loadingModal}
+                >
+                  {loadingModal ? (
+                    <>
+                      <Spinner size="sm" className="mr-2" />
+                      Generando PDF...
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon="solar:download-bold" className="w-5 h-5 mr-2" />
+                      Descargar PDF
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <div className="flex gap-2 w-full justify-end">
+            <Button color="gray" onClick={cerrarModalLiquidacion} disabled={loadingModal}>
+              Cancelar
+            </Button>
+            {pasoModal === 1 && (
+              <Button 
+                onClick={generarVistaPrevia} 
+                disabled={loadingModal || polizasModalSeleccionadas.size === 0}
+                color="primary"
+              >
+                {loadingModal ? (
+                  <>
+                    <Spinner size="sm" className="mr-2" />
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:eye-bold" className="w-4 h-4 mr-2" />
+                    Ver Vista Previa ({polizasModalSeleccionadas.size} pólizas)
+                  </>
+                )}
+              </Button>
+            )}
+            {pasoModal === 2 && (
+              <Button onClick={confirmarLiquidacion} disabled={loadingModal} color="success">
+                {loadingModal ? (
+                  <>
+                    <Spinner size="sm" className="mr-2" />
+                    Creando...
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:check-circle-bold" className="w-4 h-4 mr-2" />
+                    Confirmar y Generar
+                  </>
+                )}
+              </Button>
+            )}
+            {pasoModal === 3 && (
+              <Button color="success" onClick={cerrarModalLiquidacion}>
+                <Icon icon="solar:check-circle-bold" className="w-4 h-4 mr-2" />
+                Cerrar
+              </Button>
+            )}
+          </div>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

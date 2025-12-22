@@ -55,6 +55,17 @@ export interface DashboardData {
   ventas: {
     del_mes: number;
   };
+  recaudos?: {
+    primas_cobradas: number;
+    primas_cobradas_formato: string;
+    primas_pendientes: number;
+    primas_pendientes_formato: string;
+    comisiones_cobradas: number;
+    comisiones_cobradas_formato: string;
+    comisiones_pendientes: number;
+    comisiones_pendientes_formato: string;
+    polizas_recaudadas: number;
+  };
   timestamp: string;
 }
 

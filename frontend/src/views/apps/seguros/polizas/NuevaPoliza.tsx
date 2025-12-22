@@ -25,6 +25,7 @@ import { useToast } from 'src/hooks/use-toast';
 import usePolizaValidation, { type PolizaFormData } from 'src/hooks/usePolizaValidation';
 import saasApi from 'src/services/saasApi';
 import { useAseguradoras, useRamos, useSedes, useVendedores } from 'src/hooks/useAdminCrudApi';
+import { useTerminologia } from 'src/context/TerminologiaContext';
 
 // Usar el tipo del hook de validación
 type FormData = PolizaFormData;
@@ -465,6 +466,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     beneficiarioEnRemision: false,
     beneficiarioOnerosoNombre: '',
     beneficiarioOnerosoDocumento: '',
+    // Enlace externo
+    enlaceExterno: '',
     // Pago
     banco: '',
     cuotas: '',
@@ -484,6 +487,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   const [ramos, setRamos] = useState<{ id: string; nombre: string }[]>([]);
   const [vendedores, setVendedores] = useState<{ id: string; nombre: string }[]>([]);
   const [selectedVendedorId, setSelectedVendedorId] = useState<string>('');
+  const [selectedVendedorId2, setSelectedVendedorId2] = useState<string>('');
   const [clientQuery, setClientQuery] = useState('');
   const [clientResults, setClientResults] = useState<any[]>([]);
   const [clientLoading, setClientLoading] = useState(false);
@@ -495,6 +499,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
 
   // Hooks adelantados para validación y notificaciones (requeridos por el autocompletado de placas)
   const { toast } = useToast();
+  const { terminologia } = useTerminologia();
   const {
     errors,
     setErrors,
@@ -829,6 +834,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         beneficiarioEnRemision: !!polizaToEdit.beneficiario_en_remision,
         beneficiarioOnerosoNombre: polizaToEdit.beneficiario_oneroso_nombre || '',
         beneficiarioOnerosoDocumento: polizaToEdit.beneficiario_oneroso_documento || '',
+        enlaceExterno: polizaToEdit.enlace_externo || '',
         banco: (polizaToEdit as any).bank_name || '',
         cuotas: ((polizaToEdit as any).installments_count || '').toString(),
         numeroTarjeta: (polizaToEdit as any).card_last4 || '',
@@ -856,21 +862,36 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
       });
       // Asegurar que se quite el error de cliente requerido
       clearError('cliente_id');
-      // Preseleccionar vendedor si coincide por nombre
-      if (polizaToEdit.vendedor) {
+      // Preseleccionar vendedor si coincide por nombre o id
+      if (polizaToEdit.vendedor_id) {
+        setSelectedVendedorId(String(polizaToEdit.vendedor_id));
+      } else if (polizaToEdit.vendedor) {
         const vend = vendedores.find(v => v.nombre === polizaToEdit.vendedor);
         if (vend) setSelectedVendedorId(vend.id);
+      }
+      // Preseleccionar vendedor 2 si existe
+      if (polizaToEdit.vendedor_id_2) {
+        setSelectedVendedorId2(String(polizaToEdit.vendedor_id_2));
       }
     }
   }, [isEditMode, polizaToEdit]);
 
   // Si la lista de vendedores llega después, intentar alinear selección en modo edición
   useEffect(() => {
-    if (isEditMode && polizaToEdit && polizaToEdit.vendedor && !selectedVendedorId && vendedores.length > 0) {
-      const vend = vendedores.find(v => v.nombre === polizaToEdit.vendedor);
-      if (vend) setSelectedVendedorId(vend.id);
+    if (isEditMode && polizaToEdit && vendedores.length > 0) {
+      // Vendedor principal
+      if (polizaToEdit.vendedor_id && !selectedVendedorId) {
+        setSelectedVendedorId(String(polizaToEdit.vendedor_id));
+      } else if (polizaToEdit.vendedor && !selectedVendedorId) {
+        const vend = vendedores.find(v => v.nombre === polizaToEdit.vendedor);
+        if (vend) setSelectedVendedorId(vend.id);
+      }
+      // Vendedor 2
+      if (polizaToEdit.vendedor_id_2 && !selectedVendedorId2) {
+        setSelectedVendedorId2(String(polizaToEdit.vendedor_id_2));
+      }
     }
-  }, [isEditMode, polizaToEdit, vendedores, selectedVendedorId]);
+  }, [isEditMode, polizaToEdit, vendedores, selectedVendedorId, selectedVendedorId2]);
 
   // Cálculos automáticos
   useEffect(() => {
@@ -1257,6 +1278,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           
           // Información administrativa
           vendedor_id: selectedVendedorId ? parseInt(selectedVendedorId) : undefined,
+          vendedor_id_2: selectedVendedorId2 ? parseInt(selectedVendedorId2) : undefined,
+          enlace_externo: formData.enlaceExterno || undefined,
           observaciones: formData.observaciones || undefined,
           observaciones_internas: formData.observacionesInternas || undefined,
           fecha_expedicion: formData.fechaExpedicion,
@@ -1310,6 +1333,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           const payload = {
             ...polizaData,
             vendedor_id: selectedVendedorId ? parseInt(selectedVendedorId) : undefined,
+            vendedor_id_2: selectedVendedorId2 ? parseInt(selectedVendedorId2) : undefined,
             vendedor: selectedVendedorId ? (vendedores.find(v => v.id === selectedVendedorId)?.nombre || undefined) : undefined,
             // Enviar cliente_id si hay selección
             cliente_id: selectedClient?.id
@@ -1329,6 +1353,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           const payload = {
             ...polizaData,
             vendedor_id: selectedVendedorId ? parseInt(selectedVendedorId) : undefined,
+            vendedor_id_2: selectedVendedorId2 ? parseInt(selectedVendedorId2) : undefined,
             vendedor: selectedVendedorId ? (vendedores.find(v => v.id === selectedVendedorId)?.nombre || undefined) : undefined,
             cliente_id: selectedClient?.id
               ? (typeof selectedClient.id === 'string' ? parseInt(selectedClient.id as any, 10) : (selectedClient.id as any))
@@ -1720,10 +1745,10 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         {/** Paso 2: Cliente */}
         {currentStep === 1 && (
           <TitleCard title="Cliente" className="overflow-visible">
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="space-y-4 overflow-visible">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-visible">
             {/* Combobox de clientes */}
-            <div className="relative lg:col-span-2 z-[100]">
+            <div className="relative lg:col-span-2" style={{ zIndex: 1000 }}>
               <Label className="text-sm font-medium text-gray-900 dark:text-white mb-1 block">Buscar y seleccionar cliente <span className="text-red-500">*</span></Label>
               <div className="flex gap-2">
                 <Input
@@ -1752,7 +1777,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                 <p className="text-xs text-red-500 mt-1">{errors['cliente_id'] as any}</p>
               )}
               {(!selectedClient && (clientQuery.length >= 2 || clientLoading)) && (
-                <div className="absolute z-[9999] mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-64 overflow-auto">
+                <div className="absolute left-0 right-0 z-[99999] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-2xl max-h-64 overflow-auto" style={{ position: 'absolute', zIndex: 99999 }}>
                   {clientLoading ? (
                     <div className="p-3 text-sm text-gray-500">Buscando clientes...</div>
                   ) : clientResults.length === 0 ? (
@@ -1792,14 +1817,23 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
             </div>
 
             {/* Asignación vendedor/sede */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <FormField
                 id="vendedor_id"
                 name="vendedor_id"
-                label="Asesor/Vendedor"
+                label={terminologia.vendedor}
                 type="select"
                 value={selectedVendedorId}
                 onChange={(e) => setSelectedVendedorId((e.target as HTMLSelectElement).value)}
+                options={[{ value: '', label: 'Sin asignar' }, ...vendedores.map((v) => ({ value: v.id, label: v.nombre }))]}
+              />
+              <FormField
+                id="vendedor_id_2"
+                name="vendedor_id_2"
+                label={`${terminologia.vendedor} 2 (Opcional)`}
+                type="select"
+                value={selectedVendedorId2}
+                onChange={(e) => setSelectedVendedorId2((e.target as HTMLSelectElement).value)}
                 options={[{ value: '', label: 'Sin asignar' }, ...vendedores.map((v) => ({ value: v.id, label: v.nombre }))]}
               />
               <FormField
@@ -1810,6 +1844,18 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                 onChange={handleInputChange}
                 type="select"
                 options={[{ value: '', label: 'Seleccionar sede' }, ...sedes.map((s) => ({ value: s.nombre, label: s.nombre }))]}
+              />
+            </div>
+
+            {/* Enlace externo */}
+            <div className="grid grid-cols-1 gap-4">
+              <FormField
+                id="enlaceExterno"
+                name="enlaceExterno"
+                label="Enlace Externo (Opcional)"
+                value={formData.enlaceExterno || ''}
+                onChange={handleInputChange}
+                placeholder="https://ejemplo.com/poliza"
               />
             </div>
 

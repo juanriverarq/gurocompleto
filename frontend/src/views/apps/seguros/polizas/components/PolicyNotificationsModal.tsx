@@ -17,6 +17,7 @@ import policyNotificationService, {
   WhatsAppStatus
 } from 'src/services/policyNotificationService';
 import { useToast } from 'src/hooks/use-toast';
+import { useTerminologia } from 'src/context/TerminologiaContext';
 import api from 'src/config/api';
 import saasApi from 'src/services/saasApi';
 import whatsappInstanceService from 'src/services/whatsappInstanceService';
@@ -28,6 +29,7 @@ interface Props {
 
 const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { toast } = useToast();
+  const { terminologia } = useTerminologia();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<PolicyNotificationConfig | null>(null);
@@ -1033,8 +1035,8 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
-                    <p className="font-medium text-sm">Usuario asignado</p>
-                    <p className="text-xs text-gray-500">Notificar también al asesor asignado</p>
+                    <p className="font-medium text-sm">{terminologia.vendedor} asignado</p>
+                    <p className="text-xs text-gray-500">Notificar también al {terminologia.vendedor.toLowerCase()} asignado</p>
                   </div>
                   <Switch
                     checked={config.send_to_assigned_user}

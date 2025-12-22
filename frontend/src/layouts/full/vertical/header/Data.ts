@@ -348,12 +348,12 @@ const profileDD: ProfileType[] = [
   },
   {
     title: "Mis Facturas",
-    url: "/apps/invoice",
+    url: "/apps/billing/facturas",
     icon: "solar:bill-list-bold-duotone",
   },
   {
     title: "Suscripción",
-    url: "/theme-pages/pricing",
+    url: "/apps/billing/suscripcion",
     icon: "solar:crown-bold-duotone",
   },
   {

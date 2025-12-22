@@ -62,6 +62,12 @@ class InformacionAgenciaController extends Controller
             'settings' => 'nullable|array',
         ]);
 
+        // Mezclar settings existentes con los nuevos (para no perder configuraciones)
+        if (isset($validated['settings'])) {
+            $existingSettings = is_array($broker->settings) ? $broker->settings : [];
+            $validated['settings'] = array_merge($existingSettings, $validated['settings']);
+        }
+        
         $broker->fill($validated);
         $broker->save();
 
@@ -77,13 +83,23 @@ class InformacionAgenciaController extends Controller
         $broker = $this->currentBroker($request);
 
         $request->validate([
-            'logo' => 'nullable|image|max:5120',
-            'favicon' => 'nullable|image|max:1024',
+            'logo' => 'nullable|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
+            'favicon' => 'nullable|mimes:jpeg,png,jpg,gif,svg,webp|max:1024',
             'primary_color' => 'nullable|string|max:7',
+            'secondary_color' => 'nullable|string|max:7',
+            'accent_color' => 'nullable|string|max:7',
+            'reset_logo' => 'nullable|string',
         ]);
 
+        // Manejar reset de logo (eliminar logo actual)
+        if ($request->input('reset_logo') === 'true') {
+            if ($broker->logo && Storage::disk('public')->exists($broker->logo)) {
+                Storage::disk('public')->delete($broker->logo);
+            }
+            $broker->logo = null;
+        }
         // Manejar subida de logo
-        if ($request->hasFile('logo')) {
+        elseif ($request->hasFile('logo')) {
             // Eliminar logo anterior si existe
             if ($broker->logo && Storage::disk('public')->exists($broker->logo)) {
                 Storage::disk('public')->delete($broker->logo);
@@ -101,10 +117,26 @@ class InformacionAgenciaController extends Controller
             $broker->favicon = $path;
         }
 
-        // Manejar color primario
+        // Manejar colores (primary, secondary, accent)
+        $branding = $broker->branding ?? [];
+        $colorsUpdated = false;
+        
         if ($request->has('primary_color')) {
-            $branding = $broker->branding ?? [];
             $branding['primary_color'] = $request->input('primary_color');
+            $colorsUpdated = true;
+        }
+        
+        if ($request->has('secondary_color')) {
+            $branding['secondary_color'] = $request->input('secondary_color');
+            $colorsUpdated = true;
+        }
+        
+        if ($request->has('accent_color')) {
+            $branding['accent_color'] = $request->input('accent_color');
+            $colorsUpdated = true;
+        }
+        
+        if ($colorsUpdated) {
             $broker->branding = $branding;
         }
 
@@ -112,11 +144,17 @@ class InformacionAgenciaController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Branding actualizado',
+            'message' => 'Branding actualizado correctamente',
             'data' => [
                 'logo_url' => $broker->getLogoUrl(),
                 'favicon_url' => $broker->getFaviconUrl(),
-                'primary_color' => $broker->branding['primary_color'] ?? null,
+                'branding' => [
+                    'primary_color' => $broker->branding['primary_color'] ?? null,
+                    'secondary_color' => $broker->branding['secondary_color'] ?? null,
+                    'accent_color' => $broker->branding['accent_color'] ?? null,
+                    'logo' => $broker->getLogoUrl(),
+                    'favicon' => $broker->getFaviconUrl(),
+                ],
             ],
         ]);
     }
