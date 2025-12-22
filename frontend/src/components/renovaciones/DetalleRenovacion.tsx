@@ -105,12 +105,6 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
     { value: 'VENCIDO', label: 'Vencido', color: 'gray' }
   ];
 
-  const prioridadRenovacion = [
-    { value: 'BAJA', label: 'Baja', color: 'gray' },
-    { value: 'MEDIA', label: 'Media', color: 'warning' },
-    { value: 'ALTA', label: 'Alta', color: 'info' },
-    { value: 'CRITICA', label: 'Crítica', color: 'failure' }
-  ];
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('es-CO', {
@@ -161,10 +155,6 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
     return estadoInfo?.color || 'gray';
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const prioridadInfo = prioridadRenovacion.find(p => p.value === prioridad);
-    return prioridadInfo?.color || 'gray';
-  };
 
   if (!renovacion) return null;
 
@@ -205,12 +195,6 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
                 className="capitalize"
               >
                 {estadosRenovacion.find(e => e.value === renovacion.estado)?.label || renovacion.estado}
-              </Badge>
-              <Badge
-                color={`light${getPrioridadBadge(renovacion.prioridad)}`}
-                className="capitalize"
-              >
-                {prioridadRenovacion.find(p => p.value === renovacion.prioridad)?.label || renovacion.prioridad}
               </Badge>
               <button
                 onClick={onClose}
@@ -418,27 +402,6 @@ const DetalleRenovacion: React.FC<DetalleRenovacionProps> = ({
 
                 {/* Sidebar de Acciones */}
                 <div className="space-y-4">
-                  <Card>
-                    <div className="text-center space-y-4">
-                      <div className="flex items-center justify-center w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-900/20 rounded-full">
-                        <Badge
-                          color={`light${getPrioridadBadge(renovacion.prioridad)}`}
-                          className="capitalize text-lg px-3 py-1"
-                        >
-                          {prioridadRenovacion.find(p => p.value === renovacion.prioridad)?.label}
-                        </Badge>
-                      </div>
-                      <div>
-                        <h5 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          Prioridad {prioridadRenovacion.find(p => p.value === renovacion.prioridad)?.label}
-                        </h5>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Basada en días de vencimiento y valor de prima
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-
                   <Card>
                     <h5 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                       Acciones Rápidas

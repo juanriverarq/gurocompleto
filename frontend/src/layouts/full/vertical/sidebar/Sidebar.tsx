@@ -10,16 +10,18 @@ import { useLocation } from 'react-router';
 import FullLogo from '../../shared/logo/FullLogo';
 import React from 'react';
 import { useUnifiedAuth } from '../../../../context/UnifiedAuthContext';
+import { useTerminologia } from '../../../../context/TerminologiaContext';
 
 const SidebarLayout = () => {
   const { selectedIconId, setSelectedIconId } = useContext(CustomizerContext) || {};
   const { hasPermission, canAccessModule } = useUnifiedAuth();
+  const { terminologia } = useTerminologia();
 
   const location = useLocation();
   const pathname = location.pathname;
 
   // Obtener elementos del menú filtrados por permisos (visibilidad exige permiso "ver")
-  const filteredMenuitems = getFilteredMenuItems(hasPermission, canAccessModule);
+const filteredMenuitems = getFilteredMenuItems(hasPermission, canAccessModule, terminologia);
 
   function findActiveUrl(narray: any, targetUrl: any) {
     for (const item of narray) {

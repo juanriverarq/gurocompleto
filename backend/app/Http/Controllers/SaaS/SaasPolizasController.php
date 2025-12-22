@@ -334,20 +334,13 @@ class SaasPolizasController extends Controller
             }
 
             if ($request->has('vendedor') && !empty($request->vendedor)) {
-                $query->whereHas('assignedUser', function($q) use ($request) {
-                    $q->where('name', 'like', "%{$request->vendedor}%");
-                });
-            }
-
-            // Filtro por sede (custom_fields->sede). Fallback a LIKE si no es JSON.
-            if ($request->has('sede') && !empty($request->sede)) {
-                $sede = $request->sede;
-                $query->where(function($q) use ($sede) {
-                    $q->where('custom_fields->sede', $sede)
-                      ->orWhere(function($q2) use ($sede) {
-                          $q2->whereNotNull('custom_fields')
-                             ->where('custom_fields', 'like', '%"sede"%')
-                             ->where('custom_fields', 'like', '%' . $sede . '%');
+                $vendedor = $request->vendedor;
+                $query->where(function($q) use ($vendedor) {
+                    // Buscar en seller_name (campo directo)
+                    $q->where('seller_name', 'like', "%{$vendedor}%")
+                      // O buscar en assignedUser.name (relación)
+                      ->orWhereHas('assignedUser', function($qu) use ($vendedor) {
+                          $qu->where('name', 'like', "%{$vendedor}%");
                       });
                 });
             }
@@ -505,20 +498,13 @@ class SaasPolizasController extends Controller
             }
 
             if ($request->has('vendedor') && !empty($request->vendedor)) {
-                $query->whereHas('assignedUser', function($q) use ($request) {
-                    $q->where('name', 'like', "%{$request->vendedor}%");
-                });
-            }
-
-            // Filtro por sede (custom_fields->sede). Fallback a LIKE si no es JSON.
-            if ($request->has('sede') && !empty($request->sede)) {
-                $sede = $request->sede;
-                $query->where(function($q) use ($sede) {
-                    $q->where('custom_fields->sede', $sede)
-                      ->orWhere(function($q2) use ($sede) {
-                          $q2->whereNotNull('custom_fields')
-                             ->where('custom_fields', 'like', '%"sede"%')
-                             ->where('custom_fields', 'like', '%' . $sede . '%');
+                $vendedor = $request->vendedor;
+                $query->where(function($q) use ($vendedor) {
+                    // Buscar en seller_name (campo directo)
+                    $q->where('seller_name', 'like', "%{$vendedor}%")
+                      // O buscar en assignedUser.name (relación)
+                      ->orWhereHas('assignedUser', function($qu) use ($vendedor) {
+                          $qu->where('name', 'like', "%{$vendedor}%");
                       });
                 });
             }
@@ -657,229 +643,317 @@ class SaasPolizasController extends Controller
         try {
             // Obtener broker_id dinámicamente
             $brokerId = $this->getBrokerId($request);
+            
+            // Obtener nombre del broker para usarlo como fallback cuando no hay vendedor asignado
+            $brokerName = 'Broker';
+            $broker = \App\Models\Broker::find($brokerId);
+            if ($broker) {
+                $brokerName = $broker->company_name ?: ($broker->contact_name ?: 'Broker');
+            }
 
-            // OPTIMIZACIÓN: Query específica para cartera - solo pólizas activas con datos necesarios
-            $query = Poliza::where('broker_id', $brokerId)
+            // 1. CALCULAR ESTADÍSTICAS GLOBALES (TOTALES REALES)
+            // Se calculan sobre todas las pólizas activas del broker, sin filtros de búsqueda ni paginación
+            // Calcular siempre para mantener los KPIs visibles en todas las páginas
+            
+            // Definiciones SQL para cálculos (alineados con la query principal)
+            $totalPolizaExpr = 'COALESCE(polizas.total_amount, (polizas.premium_amount + COALESCE(polizas.vat_amount, 0)))';
+            $recaudadoOficinaExpr = "COALESCE((SELECT SUM(monto_pagado) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = 'oficina'), 0)";
+            $pendienteOficinaExpr = "GREATEST(0, {$totalPolizaExpr} - {$recaudadoOficinaExpr})";
+            $comisionExpr = "COALESCE(polizas.commission_amount, (polizas.premium_amount * COALESCE(polizas.commission_percentage, 15) / 100))";
+
+            // Usamos DB::table para máxima eficiencia en agregación
+            $statsRaw = DB::table('polizas')
+                ->where('broker_id', $brokerId)
                 ->where('status', 'active')
-                ->with([
-                    'client:id,first_name,last_name,email,phone,mobile_phone',
-                    'aseguradora:id,nombre',
-                    'ramo:id,nombre'
-                ]);
+                ->whereNull('deleted_at')
+                ->selectRaw("
+                    COUNT(*) as total_polizas,
+                    SUM({$totalPolizaExpr}) as total_cartera,
+                    SUM({$comisionExpr}) as total_comisiones,
+                    SUM({$pendienteOficinaExpr}) as por_cobrar_total,
+                    SUM({$recaudadoOficinaExpr}) as recaudado_total
+                ")
+                ->first();
 
-            // Solo cargar relaciones de pagos si las tablas existen
-            if (\Schema::hasTable('pagos_polizas')) {
-                $query->with(['pagos' => function($q) {
-                    $q->select([
-                        'id', 'poliza_id', 'monto_total', 'monto_pagado', 'monto_pendiente',
-                        'tipo_recaudo', 'estado', 'fecha_pago'
-                    ])->orderBy('fecha_pago', 'desc');
-                }]);
-            }
+            $estadisticas = [
+                'totalPolizas' => (int) ($statsRaw->total_polizas ?? 0),
+                'polizasActivas' => (int) ($statsRaw->total_polizas ?? 0),
+                'primaTotal' => (float) ($statsRaw->total_cartera ?? 0),
+                'comisionesTotal' => (float) ($statsRaw->total_comisiones ?? 0),
+                'recaudadoTotal' => (float) ($statsRaw->recaudado_total ?? 0),
+                'porCobrarTotal' => (float) ($statsRaw->por_cobrar_total ?? 0),
+                'tasaRecaudo' => ($statsRaw->total_cartera ?? 0) > 0 ? ((($statsRaw->recaudado_total ?? 0) / $statsRaw->total_cartera) * 100) : 0,
+                'porCobrarVencido' => 0,
+                'polizasVencidas' => 0,
+                'polizasPorVencer' => 0
+            ];
 
-            if (\Schema::hasTable('cobros_comisiones')) {
-                $query->with(['cobrosComision' => function($q) {
-                    $q->select([
-                        'id', 'poliza_id', 'monto_comision', 'monto_cobrado', 'monto_pendiente',
-                        'estado', 'fecha_cobro'
-                    ])->orderBy('fecha_cobro', 'desc');
-                }]);
-            }
+            // Calcular contadores para cada tab (siempre, para mostrar en títulos)
+            $pagadoAseguradoraExpr = "COALESCE((SELECT SUM(monto_pagado) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = 'aseguradora' AND estado = 'pagado'), 0)";
+            $pendienteAseguradoraExpr = "COALESCE((SELECT SUM(monto_pendiente) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = 'aseguradora' AND estado IN ('pendiente', 'parcial')), 0)";
+            $tienePagosAseguradoraExpr = "(SELECT COUNT(*) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = 'aseguradora')";
+            $pendienteAseguradoraRealExpr = "(CASE WHEN {$tienePagosAseguradoraExpr} > 0 THEN {$pendienteAseguradoraExpr} ELSE polizas.premium_amount END)";
 
-            $query->select([
-                'id',
-                'policy_number',
-                'client_id',
-                'insurance_company',
-                'aseguradora_id',
-                'type',
-                'ramo_id',
-                'premium_amount',
-                'commission_amount',
-                'commission_percentage',
-                'vat_percentage',
-                'vat_amount',
-                'total_amount',
-                'start_date',
-                'end_date',
-                'status',
-                'payment_method',
-                'payment_status',
-                'created_at'
-            ]);
+            $tabCounters = DB::table('polizas')
+                ->where('broker_id', $brokerId)
+                ->where('status', 'active')
+                ->whereNull('deleted_at')
+                ->selectRaw("
+                    SUM(CASE WHEN ({$totalPolizaExpr} - {$recaudadoOficinaExpr}) > 1 THEN 1 ELSE 0 END) as count_por_cobrar,
+                    SUM(CASE WHEN ({$totalPolizaExpr} - {$recaudadoOficinaExpr}) <= 1 AND {$recaudadoOficinaExpr} > 0 AND {$pendienteAseguradoraRealExpr} > 0 THEN 1 ELSE 0 END) as count_por_pagar,
+                    SUM(CASE WHEN {$recaudadoOficinaExpr} > 0 AND {$pagadoAseguradoraExpr} > 0 THEN 1 ELSE 0 END) as count_recaudos_completados
+                ")
+                ->first();
 
-            // Aplicar filtros adicionales si se especifican
-            if ($request->has('search') && !empty($request->search)) {
-                $search = $request->search;
-                $query->where(function($q) use ($search) {
-                    $q->where('policy_number', 'like', "%{$search}%")
-                      ->orWhere('client_name', 'like', "%{$search}%")
-                      ->orWhere('client_document', 'like', "%{$search}%")
-                      ->orWhere('insurance_company', 'like', "%{$search}%");
-                });
-            }
+            // Contar clientes únicos para el tab general
+            $clientesCount = DB::table('polizas')
+                ->where('broker_id', $brokerId)
+                ->where('status', 'active')
+                ->whereNull('deleted_at')
+                ->distinct('client_id')
+                ->count('client_id');
 
-            if ($request->has('aseguradora') && !empty($request->aseguradora)) {
-                $query->where('insurance_company', $request->aseguradora);
-            }
+            $contadoresTabs = [
+                'general' => (int) $clientesCount,
+                'porCobrar' => (int) ($tabCounters->count_por_cobrar ?? 0),
+                'porPagar' => (int) ($tabCounters->count_por_pagar ?? 0),
+                'recaudosCompletados' => (int) ($tabCounters->count_recaudos_completados ?? 0),
+            ];
 
-            if ($request->has('estado_pago') && !empty($request->estado_pago)) {
-                // Filtrar por estado de pago basado en pagos reales
-                $estadoPago = $request->estado_pago;
-                $query->whereHas('pagos', function($q) use ($estadoPago) {
-                    if ($estadoPago === 'Al día') {
-                        $q->where('tipo_recaudo', 'oficina')
-                          ->where('estado', 'pagado')
-                          ->havingRaw('SUM(monto_pagado) >= polizas.total_amount');
-                    } elseif ($estadoPago === 'Pendiente') {
-                        $q->where('tipo_recaudo', 'oficina')
-                          ->whereIn('estado', ['pendiente', 'parcial'])
-                          ->havingRaw('SUM(monto_pagado) = 0');
-                    } elseif ($estadoPago === 'Parcial') {
-                        $q->where('tipo_recaudo', 'oficina')
-                          ->where('estado', 'parcial')
-                          ->havingRaw('SUM(monto_pagado) > 0 AND SUM(monto_pagado) < polizas.total_amount');
-                    } elseif ($estadoPago === 'Vencido') {
-                        $q->where('tipo_recaudo', 'oficina')
-                          ->where('estado', 'vencido');
-                    }
-                });
-            }
+            // 2. CONSTRUIR QUERY PRINCIPAL CON PAGINACIÓN
+            $query = DB::table('polizas')
+                ->leftJoin('clientes', 'polizas.client_id', '=', 'clientes.id')
+                ->leftJoin('aseguradoras', 'polizas.aseguradora_id', '=', 'aseguradoras.id')
+                ->leftJoin('ramos', 'polizas.ramo_id', '=', 'ramos.id')
+                ->leftJoin('users', 'polizas.assigned_user_id', '=', 'users.id')
+                ->where('polizas.broker_id', $brokerId)
+                ->where('polizas.status', 'active')
+                ->whereNull('polizas.deleted_at')
+                ->selectRaw('
+                    polizas.id,
+                    polizas.policy_number,
+                    polizas.client_id,
+                    polizas.insurance_company,
+                    polizas.aseguradora_id,
+                    polizas.type,
+                    polizas.ramo_id,
+                    polizas.premium_amount,
+                    polizas.commission_amount,
+                    polizas.commission_percentage,
+                    polizas.vat_percentage,
+                    polizas.vat_amount,
+                    polizas.total_amount,
+                    polizas.start_date,
+                    polizas.end_date,
+                    polizas.status,
+                    polizas.payment_status,
+                    polizas.created_at,
+                    polizas.assigned_user_id,
+                    polizas.seller_name,
+                    CONCAT(clientes.first_name, " ", clientes.last_name) as cliente_nombre,
+                    clientes.document_number as cliente_documento,
+                    aseguradoras.nombre as aseguradora_nombre,
+                    ramos.nombre as ramo_nombre,
+                    users.name as vendedor_nombre,
+                    -- Cálculos de pagos
+                    COALESCE((SELECT SUM(monto_pagado) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = "oficina"), 0) as recaudado_oficina,
+                    COALESCE((SELECT SUM(monto_pagado) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = "aseguradora" AND estado = "pagado"), 0) as pagado_aseguradora,
+                    COALESCE((SELECT SUM(monto_pendiente) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = "aseguradora" AND estado IN ("pendiente", "parcial")), 0) as pendiente_aseguradora_reg,
+                    (SELECT COUNT(*) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = "oficina") as tiene_pagos_oficina,
+                    (SELECT COUNT(*) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = "aseguradora") as tiene_pagos_aseguradora,
+                    COALESCE((SELECT SUM(monto_cobrado) FROM cobros_comisiones WHERE cobros_comisiones.poliza_id = polizas.id AND estado = "cobrado"), 0) as comision_cobrada,
+                    COALESCE((SELECT SUM(monto_pendiente) FROM cobros_comisiones WHERE cobros_comisiones.poliza_id = polizas.id AND estado IN ("pendiente", "parcial")), 0) as comision_pendiente_reg,
+                    (SELECT COUNT(*) FROM cobros_comisiones WHERE cobros_comisiones.poliza_id = polizas.id) as tiene_cobros_comision
+                ');
 
-            // Aplicar ordenamiento por fecha de vencimiento por defecto
-            $query->orderBy('end_date', 'asc');
+        // Aplicar filtros adicionales si se especifican
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('polizas.policy_number', 'like', "%{$search}%")
+                  ->orWhereRaw('CONCAT(clientes.first_name, " ", clientes.last_name) LIKE ?', ["%{$search}%"])
+                  ->orWhere('clientes.document_number', 'like', "%{$search}%")
+                  ->orWhere('polizas.insurance_company', 'like', "%{$search}%");
+            });
+        }
 
-            // OPTIMIZACIÓN: Sin paginación para cartera completa (considerar implementar paginación si hay muchas pólizas)
-            $polizas = $query->get();
+        if ($request->has('aseguradora') && !empty($request->aseguradora)) {
+            $query->where('polizas.insurance_company', $request->aseguradora);
+        }
 
-            // Transformar datos optimizados para cartera
-            $carteraData = $polizas->map(function ($poliza) {
-                $endDate = Carbon::parse($poliza->end_date);
-                $diasVencimiento = (int) round(Carbon::now()->diffInDays($endDate, false));
-
-                $totalPoliza = (float) ($poliza->total_amount ?? ($poliza->premium_amount + ($poliza->vat_amount ?? ($poliza->premium_amount * ($poliza->vat_percentage ?? 19) / 100))));
-
-                // Calcular información de pagos reales desde las relaciones
-                $pagosOficina = $poliza->relationLoaded('pagos') ? $poliza->pagos->where('tipo_recaudo', 'oficina') : collect([]);
-                $pagosAseguradora = $poliza->relationLoaded('pagos') ? $poliza->pagos->where('tipo_recaudo', 'aseguradora') : collect([]);
-                $cobrosComision = $poliza->relationLoaded('cobrosComision') ? $poliza->cobrosComision : collect([]);
-
-                // Recaudo oficina (pagos del cliente a la agencia)
-                $recaudadoOficina = (float) $pagosOficina->where('estado', 'pagado')->sum('monto_pagado');
-                $pendienteOficinaRegistrado = (float) $pagosOficina->whereIn('estado', ['pendiente', 'parcial'])->sum('monto_pendiente');
-                
-                // Si no hay pagos registrados, el total de la póliza está pendiente
-                $pendienteOficina = $pagosOficina->count() > 0
-                    ? $pendienteOficinaRegistrado
-                    : $totalPoliza;
-
-                // Recaudo aseguradora (pagos de agencia a aseguradora)
-                $pagadoAseguradora = (float) $pagosAseguradora->where('estado', 'pagado')->sum('monto_pagado');
-                $pendienteAseguradoraRegistrado = (float) $pagosAseguradora->whereIn('estado', ['pendiente', 'parcial'])->sum('monto_pendiente');
-                
-                // Si no hay pagos a aseguradora registrados, la prima neta está pendiente
-                $primaNeta = (float) $poliza->premium_amount;
-                $pendienteAseguradora = $pagosAseguradora->count() > 0
-                    ? $pendienteAseguradoraRegistrado
-                    : $primaNeta;
-
-                // Cobros de comisión (lo que la agencia cobra a la aseguradora)
-                $comisionTotal = (float) ($poliza->commission_amount ?? ($poliza->premium_amount * ($poliza->commission_percentage ?? 15) / 100));
-                $comisionCobrada = (float) $cobrosComision->where('estado', 'cobrado')->sum('monto_cobrado');
-                $comisionPendienteRegistrada = (float) $cobrosComision->whereIn('estado', ['pendiente', 'parcial'])->sum('monto_pendiente');
-                
-                // Si no hay cobros registrados, toda la comisión está pendiente
-                $comisionPendiente = $cobrosComision->count() > 0
-                    ? $comisionPendienteRegistrada
-                    : $comisionTotal;
-
-                // Determinar estado de pago general basado en pagos reales
-                $totalRecaudado = $recaudadoOficina;
-                $totalPendiente = $totalPoliza - $totalRecaudado;
-                $estadoPago = $this->determinarEstadoPago($totalRecaudado, $totalPoliza);
-
-                // Calcular días de mora si hay pagos pendientes
-                $diasMora = 0;
-                if ($totalPendiente > 0 && $pagosOficina->where('estado', 'vencido')->count() > 0) {
-                    $ultimoPagoVencido = $pagosOficina->where('estado', 'vencido')->sortByDesc('fecha_pago')->first();
-                    if ($ultimoPagoVencido) {
-                        $diasMora = Carbon::now()->diffInDays(Carbon::parse($ultimoPagoVencido->fecha_pago), false);
-                    }
+        if ($request->has('estado_pago') && !empty($request->estado_pago)) {
+            // Filtrar por estado de pago basado en pagos reales
+            $estadoPago = $request->estado_pago;
+            $query->whereHas('pagos', function($q) use ($estadoPago) {
+                if ($estadoPago === 'Al día') {
+                    $q->where('tipo_recaudo', 'oficina')
+                      ->where('estado', 'pagado')
+                      ->havingRaw('SUM(monto_pagado) >= polizas.total_amount');
+                } elseif ($estadoPago === 'Pendiente') {
+                    $q->where('tipo_recaudo', 'oficina')
+                      ->whereIn('estado', ['pendiente', 'parcial'])
+                      ->havingRaw('SUM(monto_pagado) = 0');
+                } elseif ($estadoPago === 'Parcial') {
+                    $q->where('tipo_recaudo', 'oficina')
+                      ->where('estado', 'parcial')
+                      ->havingRaw('SUM(monto_pagado) > 0 AND SUM(monto_pagado) < polizas.total_amount');
+                } elseif ($estadoPago === 'Vencido') {
+                    $q->where('tipo_recaudo', 'oficina')
+                      ->where('estado', 'vencido');
                 }
+            });
+        }
 
-                // Obtener fechas e IDs de los pagos
-                $pagoOficinaObj = $pagosOficina->where('estado', 'pagado')->sortByDesc('fecha_pago')->first();
-                $pagoAseguradoraObj = $pagosAseguradora->sortByDesc('fecha_pago')->first();
-                $cobroComisionObj = $cobrosComision->where('estado', 'cobrado')->sortByDesc('fecha_cobro')->first();
-                
-                $fechaRecaudoOficina = $pagoOficinaObj?->fecha_pago;
-                $fechaPagoAseguradora = $pagoAseguradoraObj?->fecha_pago;
-                $fechaCobroComision = $cobroComisionObj?->fecha_cobro;
+        // Filtrar por vendedor
+        if ($request->has('vendedor') && !empty($request->vendedor)) {
+            $vendedor = $request->vendedor;
+            $query->where(function($q) use ($vendedor) {
+                $q->where('polizas.assigned_user_id', $vendedor)
+                  ->orWhere('polizas.seller_name', 'like', "%{$vendedor}%");
+            });
+        }
 
-                return [
-                    'id' => $poliza->id,
-                    'numero_poliza' => $poliza->policy_number,
-                    'cliente' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'Sin nombre',
-                    'cliente_id' => $poliza->client_id,
-                    'documento' => $poliza->client?->document_number ?? '',
-                    'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company,
-                    'ramo' => $poliza->ramo?->nombre ?? $poliza->type,
-                    'estado' => 'ACTIVA',
-                    'fecha_inicio' => $poliza->start_date?->format('Y-m-d'),
-                    'fecha_vencimiento' => $poliza->end_date?->format('Y-m-d'),
-                    'dias_vencimiento' => (int) $diasVencimiento,
-                    'prima_neta' => (float) $poliza->premium_amount,
-                    'iva' => (float) ($poliza->vat_amount ?? ($poliza->premium_amount * ($poliza->vat_percentage ?? 19) / 100)),
-                    'total' => $totalPoliza,
-                    'comision' => (float) ($poliza->commission_amount ?? ($poliza->premium_amount * ($poliza->commission_percentage ?? 15) / 100)),
-                    'forma_pago' => $poliza->payment_method ?? 'Contado',
-                    'estado_pago' => $estadoPago,
+        // Filtrar por vendedor_id específico
+        if ($request->has('vendedor_id') && !empty($request->vendedor_id)) {
+            $query->where('polizas.assigned_user_id', $request->vendedor_id);
+        }
 
-                    // Información detallada de cobros con fechas e IDs
+        // Filtro por tab/vista (aplicar ANTES de paginar)
+        if ($request->filled('tab')) {
+            $tab = trim((string) $request->tab);
+
+            // Subconsultas SQL para usar en WHERE (necesarias para que paginate() cuente bien los registros)
+            // No podemos usar alias del SELECT en el WHERE, debemos repetir la subconsulta
+            $recaudadoOficinaSql = "COALESCE((SELECT SUM(monto_pagado) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = 'oficina'), 0)";
+            $pagadoAseguradoraSql = "COALESCE((SELECT SUM(monto_pagado) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = 'aseguradora' AND estado = 'pagado'), 0)";
+            $pendienteAseguradoraRegSql = "COALESCE((SELECT SUM(monto_pendiente) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = 'aseguradora' AND estado IN ('pendiente', 'parcial')), 0)";
+            $tienePagosAseguradoraSql = "(SELECT COUNT(*) FROM pagos_polizas WHERE pagos_polizas.poliza_id = polizas.id AND tipo_recaudo = 'aseguradora')";
+            $totalPolizaSql = "COALESCE(polizas.total_amount, (polizas.premium_amount + COALESCE(polizas.vat_amount, 0)))";
+            
+            // Pendiente real aseguradora (si no hay pagos registrados, es la prima total)
+            $pendienteAseguradoraRealSql = "(CASE WHEN {$tienePagosAseguradoraSql} > 0 THEN {$pendienteAseguradoraRegSql} ELSE polizas.premium_amount END)";
+
+            switch ($tab) {
+                case 'porCobrar':
+                    // Pendiente por oficina > 0 (con tolerancia de 1 peso por decimales)
+                    // Lógica: Total - Recaudado > 1
+                    $query->whereRaw("({$totalPolizaSql} - {$recaudadoOficinaSql}) > 1"); 
+                    break;
+
+                case 'porPagar':
+                    // Oficina pagada (pendiente <= 1) Y recaudado algo Y aseguradora pendiente
+                    $query->whereRaw("({$totalPolizaSql} - {$recaudadoOficinaSql}) <= 1")
+                          ->whereRaw("{$recaudadoOficinaSql} > 0")
+                          ->whereRaw("{$pendienteAseguradoraRealSql} > 0");
+                    break;
+
+                case 'recaudosCompletados':
+                    // Recaudado por oficina y pagado a aseguradora
+                    $query->whereRaw("{$recaudadoOficinaSql} > 0")
+                          ->whereRaw("{$pagadoAseguradoraSql} > 0");
+                    break;
+            }
+        }
+
+        // Aplicar ordenamiento por fecha de vencimiento por defecto
+        $query->orderBy('polizas.end_date', 'asc');
+
+        // Paginación del servidor - páginas pequeñas para carga rápida
+        $perPage = $request->input('per_page', 25);
+        $page = $request->input('page', 1);
+        
+        // Limitar máximo de registros por página
+        $perPage = min($perPage, 100);
+        
+        $polizasPaginated = $query->paginate($perPage, ['*'], 'page', $page);
+        $polizas = $polizasPaginated->getCollection();
+
+        // Transformar datos optimizados para cartera - USANDO CAMPOS PRECALCULADOS EN SQL
+        $carteraData = $polizas->map(function ($poliza) use ($brokerName) {
+            $endDate = Carbon::parse($poliza->end_date);
+            $diasVencimiento = (int) round(Carbon::now()->diffInDays($endDate, false));
+
+            $totalPoliza = (float) ($poliza->total_amount ?? ($poliza->premium_amount + ($poliza->vat_amount ?? ($poliza->premium_amount * ($poliza->vat_percentage ?? 19) / 100))));
+            $primaNeta = (float) $poliza->premium_amount;
+
+            // USAR VALORES PRECALCULADOS EN SQL (mucho más rápido)
+            $recaudadoOficina = (float) ($poliza->recaudado_oficina ?? 0);
+            $pendienteOficina = $poliza->tiene_pagos_oficina > 0
+                ? max(0, $totalPoliza - $recaudadoOficina)
+                : $totalPoliza;
+
+            $pagadoAseguradora = (float) ($poliza->pagado_aseguradora ?? 0);
+            $pendienteAseguradora = $poliza->tiene_pagos_aseguradora > 0
+                ? (float) ($poliza->pendiente_aseguradora_reg ?? 0)
+                : $primaNeta;
+
+            $comisionTotal = (float) ($poliza->commission_amount ?? ($poliza->premium_amount * ($poliza->commission_percentage ?? 15) / 100));
+            $comisionCobrada = (float) ($poliza->comision_cobrada ?? 0);
+            $comisionPendiente = $poliza->tiene_cobros_comision > 0
+                ? (float) ($poliza->comision_pendiente_reg ?? 0)
+                : $comisionTotal;
+
+            // Determinar estado de pago
+            $estadoPago = $this->determinarEstadoPago($recaudadoOficina, $totalPoliza);
+
+            return [
+                'id' => $poliza->id,
+                'numero_poliza' => $poliza->policy_number,
+                'cliente' => $poliza->cliente_nombre ?: 'Sin nombre',
+                'cliente_id' => $poliza->client_id,
+                'documento' => $poliza->cliente_documento ?? '',
+                'aseguradora' => $poliza->aseguradora_nombre ?? $poliza->insurance_company,
+                'ramo' => $poliza->ramo_nombre ?? $poliza->type,
+                'estado' => 'ACTIVA',
+                'fecha_inicio' => $poliza->start_date,
+                'fecha_vencimiento' => $poliza->end_date,
+                'dias_vencimiento' => (int) $diasVencimiento,
+                'prima_neta' => $primaNeta,
+                'iva' => (float) ($poliza->vat_amount ?? ($poliza->premium_amount * ($poliza->vat_percentage ?? 19) / 100)),
+                'total' => $totalPoliza,
+                'comision' => $comisionTotal,
+                'forma_pago' => 'Contado',
+                'estado_pago' => $estadoPago,
+                'vendedor' => $poliza->vendedor_nombre ?: ($poliza->seller_name ?: $brokerName),
+                'vendedor_id' => $poliza->assigned_user_id,
+
+                // Información detallada de cobros (valores precalculados en SQL)
                     'recaudo_oficina' => [
                         'recaudado' => $recaudadoOficina,
                         'pendiente' => $pendienteOficina,
-                        'total' => $recaudadoOficina + $pendienteOficina,
-                        'fecha' => $fechaRecaudoOficina ? $fechaRecaudoOficina->format('Y-m-d') : null,
-                        'pago_id' => $pagoOficinaObj?->id,
+                        'total' => $totalPoliza,
                     ],
                     'recaudo_aseguradora' => [
                         'pagado' => $pagadoAseguradora,
                         'pendiente' => $pendienteAseguradora,
-                        'total' => $pagadoAseguradora + $pendienteAseguradora,
-                        'fecha' => $fechaPagoAseguradora ? $fechaPagoAseguradora->format('Y-m-d') : null,
-                        'pago_id' => $pagoAseguradoraObj?->id,
+                        'total' => $primaNeta,
                     ],
                     'cobro_comision' => [
                         'cobrada' => $comisionCobrada,
                         'pendiente' => $comisionPendiente,
-                        'total' => $comisionCobrada + $comisionPendiente,
-                        'fecha' => $fechaCobroComision ? $fechaCobroComision->format('Y-m-d') : null,
-                        'cobro_id' => $cobroComisionObj?->id,
-                    ],
-
-                    // Campos legacy para compatibilidad
-                    'valorRecaudado' => $totalRecaudado,
-                    'valorPendienteCliente' => $totalPendiente,
-                    'valorPagadoAseguradora' => $pagadoAseguradora,
-                    'valorPendienteAseguradora' => $pendienteAseguradora,
-                    'comisionReal' => (float) ($poliza->commission_amount ?? ($poliza->premium_amount * ($poliza->commission_percentage ?? 15) / 100)),
-                    'comisionPendiente' => $comisionPendiente,
-                    'comisionCobrada' => $comisionCobrada,
-                    'diasMora' => $diasMora,
+                        'total' => $comisionTotal,
+                    ]
                 ];
             });
 
             return response()->json([
                 'success' => true,
-                'message' => 'Datos de cartera obtenidos exitosamente',
-                'data' => $carteraData
+                'message' => 'Cartera obtenida exitosamente',
+                'data' => $carteraData,
+                'pagination' => [
+                    'current_page' => $polizasPaginated->currentPage(),
+                    'last_page' => $polizasPaginated->lastPage(),
+                    'per_page' => $polizasPaginated->perPage(),
+                    'total' => $polizasPaginated->total(),
+                ],
+                'estadisticas' => $estadisticas, // Incluir estadísticas globales
+                'contadoresTabs' => $contadoresTabs // Contadores para títulos de tabs
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al obtener datos de cartera: ' . $e->getMessage(),
+                'message' => 'Error al obtener la cartera: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -1101,10 +1175,14 @@ class SaasPolizasController extends Controller
             'insured_name' => ($poliza->insured_name ?? ($poliza->custom_fields['insured_name'] ?? null)),
             'insured_document' => ($poliza->insured_document ?? ($poliza->custom_fields['insured_document'] ?? null)),
             
-            // Información administrativa
+            // Información administrativa - Vendedores
             'vendedor' => ($poliza->seller_name
                 ?: ($poliza->assignedUser?->name ?? 'Sin asignar')
             ),
+            'vendedor_id' => $poliza->seller_id,
+            'vendedor_id_2' => $poliza->seller_id_2,
+            'vendedor_2' => $poliza->seller_name_2,
+            'enlace_externo' => $poliza->external_link,
             'observaciones' => $poliza->notes,
             'observaciones_internas' => $poliza->status_notes,
             'fecha_expedicion' => $poliza->issue_date?->format('Y-m-d'),
@@ -1165,7 +1243,7 @@ class SaasPolizasController extends Controller
             
             // Construir la query base con aislamiento multi-tenant
             $query = Poliza::where('broker_id', $brokerId)
-                ->with(['client', 'assignedUser', 'createdBy']);
+                ->with(['client', 'assignedUser', 'createdBy', 'ramo', 'automoviles']);
 
             // Normalización de filtros de cliente
             if ($request->has('cliente_id') && !$request->has('client_id')) {
@@ -1206,11 +1284,19 @@ class SaasPolizasController extends Controller
             // Aplicar filtros adicionales
             if ($request->has('search') && !empty($request->search)) {
                 $search = $request->search;
-                $query->where(function($q) use ($search) {
+                $searchUpper = strtoupper($search);
+                $query->where(function($q) use ($search, $searchUpper) {
                     $q->where('policy_number', 'like', "%{$search}%")
                       ->orWhere('client_name', 'like', "%{$search}%")
                       ->orWhere('client_document', 'like', "%{$search}%")
-                      ->orWhere('insurance_company', 'like', "%{$search}%");
+                      ->orWhere('insurance_company', 'like', "%{$search}%")
+                      // Buscar placa en automóviles vinculados
+                      ->orWhereHas('automoviles', function($qa) use ($searchUpper) {
+                          $qa->where('placa', 'like', "%{$searchUpper}%");
+                      })
+                      // Buscar placa en campos de texto (notes, description)
+                      ->orWhere('notes', 'like', "%{$searchUpper}%")
+                      ->orWhere('description', 'like', "%{$searchUpper}%");
                 });
             }
 
@@ -1219,8 +1305,37 @@ class SaasPolizasController extends Controller
             }
 
             if ($request->has('agente') && !empty($request->agente)) {
-                $query->whereHas('assignedUser', function($q) use ($request) {
-                    $q->where('name', 'like', "%{$request->agente}%");
+                $agente = $request->agente;
+                $query->where(function($q) use ($agente) {
+                    // Buscar en seller_name (campo directo)
+                    $q->where('seller_name', 'like', "%{$agente}%")
+                      // O buscar en vendedor.nombres (relación con tabla vendedores)
+                      ->orWhereHas('vendedor', function($qv) use ($agente) {
+                          $qv->where('nombres', 'like', "%{$agente}%");
+                      })
+                      // O buscar en assignedUser.name (usuario asignado)
+                      ->orWhereHas('assignedUser', function($qu) use ($agente) {
+                          $qu->where('name', 'like', "%{$agente}%");
+                      });
+                });
+            }
+
+            // Rango de fechas (vencimiento) - permite filtrar solo enero, etc.
+            if ($request->has('fecha_inicio') && !empty($request->fecha_inicio)) {
+                $query->whereDate('end_date', '>=', $request->fecha_inicio);
+            }
+            if ($request->has('fecha_fin') && !empty($request->fecha_fin)) {
+                $query->whereDate('end_date', '<=', $request->fecha_fin);
+            }
+
+            // Filtro por ramo
+            if ($request->has('ramo') && !empty($request->ramo)) {
+                $ramo = $request->ramo;
+                $query->where(function($q) use ($ramo) {
+                    $q->whereHas('ramo', function($qr) use ($ramo) {
+                        $qr->where('nombre', 'like', "%{$ramo}%");
+                    })
+                    ->orWhere('type', 'like', "%{$ramo}%");
                 });
             }
 
@@ -1433,8 +1548,14 @@ class SaasPolizasController extends Controller
             $prioridad = 'MEDIA';
         }
 
-        // Obtener el ramo correcto: usar ramo.nombre si existe, sino mapear el type
-        $ramoNombre = $poliza->ramo?->nombre ?? $this->mapTypeToFrontend($poliza->type);
+        // Obtener el ramo correcto: usar ramo.nombre si existe, sino usar type directamente (sin mapeo a vida)
+        $ramoNombre = $poliza->ramo?->nombre ?? ($poliza->type ?: 'Sin ramo');
+
+        // Obtener placa del primer automóvil vinculado (si existe)
+        $placa = null;
+        if ($poliza->automoviles && $poliza->automoviles->count() > 0) {
+            $placa = $poliza->automoviles->first()->placa;
+        }
 
         return [
             'id' => (string)$poliza->id,
@@ -1443,6 +1564,8 @@ class SaasPolizasController extends Controller
             'dni_cliente' => $poliza->client_document,
             'aseguradora' => $poliza->insurance_company,
             'tipoSeguro' => $ramoNombre, // Usar el nombre del ramo correcto
+            'ramo' => $ramoNombre,
+            'placa' => $placa,
             'fechaVencimiento' => $endDate->format('Y-m-d'),
             'diasVencimiento' => (int)$diasVencimiento,
             'valorPrima' => (float)$poliza->premium_amount,
@@ -1621,7 +1744,9 @@ class SaasPolizasController extends Controller
                 // Nuevos campos para edición coherentes con store
                 'vendedor_user_id' => 'nullable|integer|exists:users,id',
                 'vendedor_id' => 'nullable|integer|exists:vendedores,id',
+                'vendedor_id_2' => 'nullable|integer|exists:vendedores,id',
                 'fecha_recepcion' => 'nullable|date',
+                'enlace_externo' => 'nullable|string|max:500',
 
                 // Beneficiarios
                 'beneficiario_en_remision' => 'nullable|boolean',
@@ -1636,10 +1761,23 @@ class SaasPolizasController extends Controller
             ]);
 
             // Si viene vendedor_id (catálogo de vendedores), mapear su nombre para seller_name
+            $sellerId = null;
             if (isset($validated['vendedor_id'])) {
                 $vend = Vendedor::forBroker($brokerId)->find((int)$validated['vendedor_id']);
                 if ($vend) {
+                    $sellerId = $vend->id;
                     $validated['vendedor'] = $validated['vendedor'] ?? $vend->nombres;
+                }
+            }
+            
+            // Si viene vendedor_id_2 (segundo vendedor opcional)
+            $sellerId2 = null;
+            $sellerName2 = null;
+            if (isset($validated['vendedor_id_2']) && !empty($validated['vendedor_id_2'])) {
+                $vend2 = Vendedor::forBroker($brokerId)->find((int)$validated['vendedor_id_2']);
+                if ($vend2) {
+                    $sellerId2 = $vend2->id;
+                    $sellerName2 = $vend2->nombres;
                 }
             }
 
@@ -1782,6 +1920,10 @@ class SaasPolizasController extends Controller
                 'assigned_user_id' => !empty($validated['vendedor_user_id']) ? (int)$validated['vendedor_user_id'] : ($user ? $user->id : null),
                 // Guardar nombre del vendedor si fue enviado (o si se resolvió por vendedor_id)
                 'seller_name' => $validated['vendedor'] ?? ($user ? ($user->name ?? null) : null),
+                'seller_id' => $sellerId,
+                // Segundo vendedor (opcional)
+                'seller_id_2' => $sellerId2,
+                'seller_name_2' => $sellerName2,
                 // Nuevas columnas
                 'reception_date' => $validated['fecha_recepcion'] ?? null,
                 // Persistir sede en custom_fields (sin migraciones)
@@ -1805,6 +1947,8 @@ class SaasPolizasController extends Controller
                 'insured_document' => $validated['insured_document'] ?? null,
                 
                 'beneficiary_in_remittance' => $validated['beneficiario_en_remision'] ?? false,
+                // Enlace externo
+                'external_link' => $validated['enlace_externo'] ?? null,
                 // Custom fields: sede y metadata de cliente
                 'custom_fields' => $customFields,
                 
@@ -1923,7 +2067,9 @@ class SaasPolizasController extends Controller
                 // Nuevos campos para edición coherentes con store
                 'vendedor_user_id' => 'nullable|integer|exists:users,id',
                 'vendedor_id' => 'nullable|integer|exists:vendedores,id',
+                'vendedor_id_2' => 'nullable|integer|exists:vendedores,id',
                 'fecha_recepcion' => 'nullable|date',
+                'enlace_externo' => 'nullable|string|max:500',
 
                 // Beneficiarios
                 'beneficiario_en_remision' => 'nullable|boolean',
@@ -2069,11 +2215,26 @@ class SaasPolizasController extends Controller
             if (isset($validated['vendedor'])) {
                 $updateData['seller_name'] = $validated['vendedor'];
             }
-            // Si viene vendedor_id del catálogo, mapear a seller_name
+            // Si viene vendedor_id del catálogo, mapear a seller_name y seller_id
             if (isset($validated['vendedor_id'])) {
                 $vend = Vendedor::forBroker($brokerId)->find((int)$validated['vendedor_id']);
                 if ($vend) {
+                    $updateData['seller_id'] = $vend->id;
                     $updateData['seller_name'] = $vend->nombres;
+                }
+            }
+            // Si viene vendedor_id_2 (segundo vendedor opcional)
+            if (array_key_exists('vendedor_id_2', $validated)) {
+                if (!empty($validated['vendedor_id_2'])) {
+                    $vend2 = Vendedor::forBroker($brokerId)->find((int)$validated['vendedor_id_2']);
+                    if ($vend2) {
+                        $updateData['seller_id_2'] = $vend2->id;
+                        $updateData['seller_name_2'] = $vend2->nombres;
+                    }
+                } else {
+                    // Si se envía vacío, limpiar el segundo vendedor
+                    $updateData['seller_id_2'] = null;
+                    $updateData['seller_name_2'] = null;
                 }
             }
             // Asignación de asesor (vendedor_user_id) si viene en edición
@@ -2094,6 +2255,10 @@ class SaasPolizasController extends Controller
                 $updateData['insured_document'] = $validated['insured_document'];
             }
 
+            // Enlace externo
+            if (array_key_exists('enlace_externo', $validated)) {
+                $updateData['external_link'] = $validated['enlace_externo'];
+            }
             // Beneficiarios
             if (array_key_exists('beneficiario_en_remision', $validated)) {
                 $updateData['beneficiary_in_remittance'] = (bool)$validated['beneficiario_en_remision'];
@@ -2795,10 +2960,9 @@ class SaasPolizasController extends Controller
     public function registrarContactoRenovacion(Request $request, $id)
     {
         try {
-            // Obtener broker_id dinámicamente
             $brokerId = $this->getBrokerId($request);
-            
-            // Verificar que la póliza existe y pertenece al broker
+
+            // Buscar la póliza
             $poliza = Poliza::where('broker_id', $brokerId)
                 ->where('id', $id)
                 ->first();
@@ -3181,12 +3345,27 @@ class SaasPolizasController extends Controller
                 $query->where('insurance_company', $request->aseguradora);
             }
 
+            if ($request->filled('aseguradora_id')) {
+                $query->where('aseguradora_id', $request->aseguradora_id);
+            }
+
             if ($request->has('ramo') && !empty($request->ramo)) {
-                $query->where('type', $request->ramo);
+                $query->where('type', $this->mapTypeFromFrontend($request->ramo));
+            }
+
+            if ($request->filled('ramo_id')) {
+                $query->where('ramo_id', $request->ramo_id);
             }
 
             if ($request->has('estado') && !empty($request->estado)) {
-                $query->where('status', $request->estado);
+                $estadoFilter = strtoupper(trim((string)$request->estado));
+                if ($estadoFilter === 'POR_VENCER') {
+                    $today = Carbon::now()->toDateString();
+                    $query->where('status', 'active')
+                          ->whereRaw('DATEDIFF(end_date, ?) >= 0 AND DATEDIFF(end_date, ?) <= 30', [$today, $today]);
+                } else {
+                    $query->where('status', $this->mapStatusFromFrontend($request->estado));
+                }
             }
 
             if ($request->has('client_id') && !empty($request->client_id)) {
@@ -3194,8 +3373,14 @@ class SaasPolizasController extends Controller
             }
 
             if ($request->has('vendedor') && !empty($request->vendedor)) {
-                $query->whereHas('assignedUser', function($q) use ($request) {
-                    $q->where('name', 'like', "%{$request->vendedor}%");
+                $vendedor = $request->vendedor;
+                $query->where(function($q) use ($vendedor) {
+                    // Buscar en seller_name (campo directo)
+                    $q->where('seller_name', 'like', "%{$vendedor}%")
+                      // O buscar en assignedUser.name (relación)
+                      ->orWhereHas('assignedUser', function($qu) use ($vendedor) {
+                          $qu->where('name', 'like', "%{$vendedor}%");
+                      });
                 });
             }
 
@@ -3222,17 +3407,21 @@ class SaasPolizasController extends Controller
                 $query->where('end_date', '<=', $request->fecha_fin);
             }
 
+            // Obtener columnas a exportar (si no se especifica, exportar todas)
+            $columnasParam = $request->get('columnas', '');
+            $columnas = !empty($columnasParam) ? explode(',', $columnasParam) : [];
+
             // Obtener todas las pólizas sin paginación
-            \Log::info('EXPORTAR: Ejecutando query', ['broker_id' => $brokerId]);
+            \Log::info('EXPORTAR: Ejecutando query', ['broker_id' => $brokerId, 'columnas' => $columnas]);
             $polizas = $query->get();
             \Log::info('EXPORTAR: Query ejecutada', ['count' => $polizas->count()]);
 
             if ($formato === 'csv') {
                 \Log::info('EXPORTAR: Exportando CSV');
-                return $this->exportarCSV($polizas);
+                return $this->exportarCSV($polizas, $columnas);
             } else {
                 \Log::info('EXPORTAR: Exportando Excel');
-                return $this->exportarExcel($polizas);
+                return $this->exportarExcel($polizas, $columnas);
             }
 
         } catch (\Exception $e) {
@@ -3244,48 +3433,73 @@ class SaasPolizasController extends Controller
     }
 
     /**
+     * Definición de todas las columnas disponibles para exportar
+     */
+    private function getExportColumns()
+    {
+        return [
+            'numero_poliza' => ['header' => 'Número Póliza', 'getter' => fn($p) => $p->policy_number],
+            'cliente' => ['header' => 'Cliente', 'getter' => fn($p) => $p->client_name],
+            'documento_cliente' => ['header' => 'Documento Cliente', 'getter' => fn($p) => $p->client_document],
+            'aseguradora' => ['header' => 'Aseguradora', 'getter' => fn($p) => $p->insurance_company],
+            'ramo' => ['header' => 'Ramo', 'getter' => fn($p) => $this->mapTypeToFrontend($p->type)],
+            'estado' => ['header' => 'Estado', 'getter' => fn($p) => $this->mapStatusToFrontend($p->status)],
+            'prima_neta' => ['header' => 'Prima Neta', 'getter' => fn($p) => $p->premium_amount, 'format' => 'number'],
+            'iva' => ['header' => 'IVA', 'getter' => fn($p) => $p->vat_amount ?? 0, 'format' => 'number'],
+            'total' => ['header' => 'Total', 'getter' => fn($p) => $p->total_amount ?? 0, 'format' => 'number'],
+            'fecha_inicio' => ['header' => 'Fecha Inicio', 'getter' => fn($p) => $p->start_date ? $p->start_date->format('Y-m-d') : ''],
+            'fecha_fin' => ['header' => 'Fecha Fin', 'getter' => fn($p) => $p->end_date ? $p->end_date->format('Y-m-d') : ''],
+            'fecha_expedicion' => ['header' => 'Fecha Expedición', 'getter' => fn($p) => $p->issue_date ? $p->issue_date->format('Y-m-d') : ''],
+            'fecha_recepcion' => ['header' => 'Fecha Recepción', 'getter' => fn($p) => $p->reception_date ? $p->reception_date->format('Y-m-d') : ''],
+            'comision' => ['header' => 'Comisión', 'getter' => fn($p) => $p->commission_amount ?? 0, 'format' => 'number'],
+            'porcentaje_comision' => ['header' => '% Comisión', 'getter' => fn($p) => $p->commission_percentage ?? 0],
+            'estado_pago' => ['header' => 'Estado Pago', 'getter' => fn($p) => $this->mapStatusToFrontend($p->payment_status ?? 'pending')],
+            'vendedor' => ['header' => 'Vendedor', 'getter' => fn($p) => $p->seller_name ?: ($p->assignedUser ? $p->assignedUser->name : 'Sin asignar')],
+            'forma_pago' => ['header' => 'Forma de Pago', 'getter' => fn($p) => $p->payment_method ?? ''],
+            'periodicidad' => ['header' => 'Periodicidad', 'getter' => fn($p) => $p->payment_frequency ?? ''],
+            'valor_asegurado' => ['header' => 'Valor Asegurado', 'getter' => fn($p) => $p->insured_amount ?? 0, 'format' => 'number'],
+            'observaciones' => ['header' => 'Observaciones', 'getter' => fn($p) => $p->notes ? strip_tags($p->notes) : ''],
+            'telefono_cliente' => ['header' => 'Teléfono Cliente', 'getter' => fn($p) => $p->client?->phone ?? $p->client?->mobile_phone ?? ''],
+            'email_cliente' => ['header' => 'Email Cliente', 'getter' => fn($p) => $p->client?->email ?? ''],
+        ];
+    }
+
+    /**
      * Exportar pólizas a formato CSV
      */
-    private function exportarCSV($polizas)
+    private function exportarCSV($polizas, $columnasSeleccionadas = [])
     {
+        $allColumns = $this->getExportColumns();
+        
+        // Si no se especifican columnas, usar las predeterminadas
+        $defaultColumns = ['numero_poliza', 'cliente', 'documento_cliente', 'aseguradora', 'ramo', 'estado', 'prima_neta', 'fecha_inicio', 'fecha_fin', 'fecha_expedicion', 'fecha_recepcion', 'comision', 'estado_pago', 'vendedor', 'observaciones'];
+        $columnas = !empty($columnasSeleccionadas) ? $columnasSeleccionadas : $defaultColumns;
+        
+        // Filtrar solo columnas válidas
+        $columnas = array_filter($columnas, fn($c) => isset($allColumns[$c]));
+        
         // Generar CSV
         $csvData = [];
-        $csvData[] = [
-            'Número Póliza',
-            'Cliente',
-            'Documento Cliente',
-            'Aseguradora',
-            'Ramo',
-            'Estado',
-            'Prima Neta',
-            'Fecha Inicio',
-            'Fecha Fin',
-            'Fecha Expedición',
-            'Fecha Recepción',
-            'Comisión',
-            'Estado Pago',
-            'Vendedor',
-            'Observaciones'
-        ];
+        
+        // Headers
+        $headers = [];
+        foreach ($columnas as $col) {
+            $headers[] = $allColumns[$col]['header'];
+        }
+        $csvData[] = $headers;
 
+        // Datos
         foreach ($polizas as $poliza) {
-            $csvData[] = [
-                $poliza->policy_number,
-                $poliza->client_name,
-                $poliza->client_document,
-                $poliza->insurance_company,
-                $this->mapTypeToFrontend($poliza->type),
-                $this->mapStatusToFrontend($poliza->status),
-                number_format($poliza->premium_amount, 2, ',', ''),
-                $poliza->start_date ? $poliza->start_date->format('Y-m-d') : '',
-                $poliza->end_date ? $poliza->end_date->format('Y-m-d') : '',
-                $poliza->issue_date ? $poliza->issue_date->format('Y-m-d') : '',
-                $poliza->reception_date ? $poliza->reception_date->format('Y-m-d') : '',
-                number_format($poliza->commission_amount ?? 0, 2, ',', ''),
-                $this->mapStatusToFrontend($poliza->payment_status ?? 'pending'),
-                $poliza->assignedUser ? $poliza->assignedUser->name : 'Sin asignar',
-                $poliza->notes ? strip_tags($poliza->notes) : ''
-            ];
+            $row = [];
+            foreach ($columnas as $col) {
+                $value = $allColumns[$col]['getter']($poliza);
+                if (isset($allColumns[$col]['format']) && $allColumns[$col]['format'] === 'number') {
+                    $row[] = number_format((float)$value, 2, ',', '');
+                } else {
+                    $row[] = $value;
+                }
+            }
+            $csvData[] = $row;
         }
 
         // Convertir a CSV
@@ -3312,69 +3526,61 @@ class SaasPolizasController extends Controller
     /**
      * Exportar pólizas a formato Excel
      */
-    private function exportarExcel($polizas)
+    private function exportarExcel($polizas, $columnasSeleccionadas = [])
     {
         // Verificar si tenemos la librería PHPExcel/PhpSpreadsheet
         if (!class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
             // Fallback a CSV si no hay Excel
-            return $this->exportarCSV($polizas);
+            return $this->exportarCSV($polizas, $columnasSeleccionadas);
         }
+
+        $allColumns = $this->getExportColumns();
+        
+        // Si no se especifican columnas, usar las predeterminadas
+        $defaultColumns = ['numero_poliza', 'cliente', 'documento_cliente', 'aseguradora', 'ramo', 'estado', 'prima_neta', 'fecha_inicio', 'fecha_fin', 'fecha_expedicion', 'fecha_recepcion', 'comision', 'estado_pago', 'vendedor', 'observaciones'];
+        $columnas = !empty($columnasSeleccionadas) ? $columnasSeleccionadas : $defaultColumns;
+        
+        // Filtrar solo columnas válidas
+        $columnas = array_values(array_filter($columnas, fn($c) => isset($allColumns[$c])));
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Headers
-        $headers = [
-            'A1' => 'Número Póliza',
-            'B1' => 'Cliente',
-            'C1' => 'Documento Cliente',
-            'D1' => 'Aseguradora',
-            'E1' => 'Ramo',
-            'F1' => 'Estado',
-            'G1' => 'Prima Neta',
-            'H1' => 'Fecha Inicio',
-            'I1' => 'Fecha Fin',
-            'J1' => 'Fecha Expedición',
-            'K1' => 'Fecha Recepción',
-            'L1' => 'Comisión',
-            'M1' => 'Estado Pago',
-            'N1' => 'Vendedor',
-            'O1' => 'Observaciones'
-        ];
-
-        foreach ($headers as $cell => $header) {
-            $sheet->setCellValue($cell, $header);
-            $sheet->getStyle($cell)->getFont()->setBold(true);
+        // Headers dinámicos
+        $colIndex = 1;
+        $numberColumns = []; // Para guardar qué columnas son numéricas
+        foreach ($columnas as $col) {
+            $cellRef = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex) . '1';
+            $sheet->setCellValue($cellRef, $allColumns[$col]['header']);
+            $sheet->getStyle($cellRef)->getFont()->setBold(true);
+            
+            if (isset($allColumns[$col]['format']) && $allColumns[$col]['format'] === 'number') {
+                $numberColumns[$colIndex] = true;
+            }
+            $colIndex++;
         }
 
         // Datos
         $row = 2;
         foreach ($polizas as $poliza) {
-            $sheet->setCellValue('A' . $row, $poliza->policy_number);
-            $sheet->setCellValue('B' . $row, $poliza->client_name);
-            $sheet->setCellValue('C' . $row, $poliza->client_document);
-            $sheet->setCellValue('D' . $row, $poliza->insurance_company);
-            $sheet->setCellValue('E' . $row, $this->mapTypeToFrontend($poliza->type));
-            $sheet->setCellValue('F' . $row, $this->mapStatusToFrontend($poliza->status));
-            $sheet->setCellValue('G' . $row, $poliza->premium_amount);
-            $sheet->setCellValue('H' . $row, $poliza->start_date ? $poliza->start_date->format('Y-m-d') : '');
-            $sheet->setCellValue('I' . $row, $poliza->end_date ? $poliza->end_date->format('Y-m-d') : '');
-            $sheet->setCellValue('J' . $row, $poliza->issue_date ? $poliza->issue_date->format('Y-m-d') : '');
-            $sheet->setCellValue('K' . $row, $poliza->reception_date ? $poliza->reception_date->format('Y-m-d') : '');
-            $sheet->setCellValue('L' . $row, $poliza->commission_amount ?? 0);
-            $sheet->setCellValue('M' . $row, $this->mapStatusToFrontend($poliza->payment_status ?? 'pending'));
-            $sheet->setCellValue('N' . $row, $poliza->assignedUser ? $poliza->assignedUser->name : 'Sin asignar');
-            $sheet->setCellValue('O' . $row, $poliza->notes ? strip_tags($poliza->notes) : '');
-
-            // Formato de números
-            $sheet->getStyle('G' . $row)->getNumberFormat()->setFormatCode('#,##0');
-            $sheet->getStyle('L' . $row)->getNumberFormat()->setFormatCode('#,##0');
-
+            $colIndex = 1;
+            foreach ($columnas as $col) {
+                $cellRef = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex) . $row;
+                $value = $allColumns[$col]['getter']($poliza);
+                $sheet->setCellValue($cellRef, $value);
+                
+                // Formato de números
+                if (isset($numberColumns[$colIndex])) {
+                    $sheet->getStyle($cellRef)->getNumberFormat()->setFormatCode('#,##0');
+                }
+                $colIndex++;
+            }
             $row++;
         }
 
         // Auto-size columns
-        foreach (range('A', 'O') as $col) {
+        $lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($columnas));
+        foreach (range('A', $lastCol) as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -3403,6 +3609,11 @@ class SaasPolizasController extends Controller
         try {
             // Obtener broker_id dinámicamente
             $brokerId = $this->getBrokerId($request);
+
+            // Normalizar parámetros desde frontend (camelCase → snake_case)
+            if ($request->has('diasVencimiento') && !$request->has('dias_vencimiento')) {
+                $request->merge(['dias_vencimiento' => $request->get('diasVencimiento')]);
+            }
             
             // Aplicar mismos filtros que en renovacionesDev
             $diasCritico = 7;
@@ -3410,8 +3621,7 @@ class SaasPolizasController extends Controller
             $diasAdelantado = 60;
             
             $query = Poliza::where('broker_id', $brokerId)
-                ->where('status', 'active')
-                ->with(['client', 'assignedUser']);
+                ->with(['client', 'assignedUser', 'ramo', 'automoviles', 'vendedor']);
             
             // Filtros por días de vencimiento
             if ($request->has('dias_vencimiento') && !empty($request->dias_vencimiento)) {
@@ -3422,26 +3632,110 @@ class SaasPolizasController extends Controller
                     $query->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasCritico]);
                 } elseif ($filtro === 'proximo') {
                     $query->whereRaw('DATEDIFF(end_date, ?) <= ?', [$today->toDateString(), $diasProximo]);
-                } elseif ($filtro === 'all') {
-                    // No aplicar ventana de días
-                } else {
-                    $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?', 
-                        [Carbon::now()->toDateString(), $diasAdelantado, Carbon::now()->toDateString(), -30]);
+                } elseif ($filtro === 'proximo_2m') {
+                    // Próximos 2 meses: vencen en 60 días o menos
+                    $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?',
+                        [$today->toDateString(), $diasAdelantado, $today->toDateString(), -30]);
                 }
-            } else {
-                $query->whereRaw('DATEDIFF(end_date, ?) <= ? AND DATEDIFF(end_date, ?) >= ?', 
-                    [Carbon::now()->toDateString(), $diasAdelantado, Carbon::now()->toDateString(), -30]);
+                // Si es 'all' o cualquier otro valor, no aplicar filtro de días
             }
+            // Sin filtro de días por defecto - exportar según el resto de filtros
             
             // Otros filtros
             if ($request->has('search') && !empty($request->search)) {
                 $search = $request->search;
-                $query->where(function($q) use ($search) {
+                $searchUpper = strtoupper($search);
+                $query->where(function($q) use ($search, $searchUpper) {
                     $q->where('policy_number', 'like', "%{$search}%")
                       ->orWhere('client_name', 'like', "%{$search}%")
                       ->orWhere('client_document', 'like', "%{$search}%")
-                      ->orWhere('insurance_company', 'like', "%{$search}%");
+                      ->orWhere('insurance_company', 'like', "%{$search}%")
+                      // Buscar placa en automóviles vinculados
+                      ->orWhereHas('automoviles', function($qa) use ($searchUpper) {
+                          $qa->where('placa', 'like', "%{$searchUpper}%");
+                      })
+                      // Buscar placa en campos de texto (notes, description)
+                      ->orWhere('notes', 'like', "%{$searchUpper}%")
+                      ->orWhere('description', 'like', "%{$searchUpper}%");
                 });
+            }
+
+            if ($request->has('aseguradora') && !empty($request->aseguradora)) {
+                $query->where('insurance_company', $request->aseguradora);
+            }
+
+            if ($request->has('agente') && !empty($request->agente)) {
+                $agente = $request->agente;
+                $query->where(function($q) use ($agente) {
+                    // Buscar en seller_name (campo directo)
+                    $q->where('seller_name', 'like', "%{$agente}%")
+                      // O buscar en vendedor.nombres (relación con tabla vendedores)
+                      ->orWhereHas('vendedor', function($qv) use ($agente) {
+                          $qv->where('nombres', 'like', "%{$agente}%");
+                      })
+                      // O buscar en assignedUser.name (usuario asignado)
+                      ->orWhereHas('assignedUser', function($qu) use ($agente) {
+                          $qu->where('name', 'like', "%{$agente}%");
+                      });
+                });
+            }
+
+            // Rango de fechas (vencimiento) - permite exportar solo enero, etc.
+            if ($request->has('fecha_inicio') && !empty($request->fecha_inicio)) {
+                $query->whereDate('end_date', '>=', $request->fecha_inicio);
+            }
+            if ($request->has('fecha_fin') && !empty($request->fecha_fin)) {
+                $query->whereDate('end_date', '<=', $request->fecha_fin);
+            }
+
+            // Filtro por ramo
+            if ($request->has('ramo') && !empty($request->ramo)) {
+                $ramo = $request->ramo;
+                $query->where(function($q) use ($ramo) {
+                    $q->whereHas('ramo', function($qr) use ($ramo) {
+                        $qr->where('nombre', 'like', "%{$ramo}%");
+                    })
+                    ->orWhere('type', 'like', "%{$ramo}%");
+                });
+            }
+
+            // Filtro por estado de renovación (acepta múltiples separados por coma)
+            if ($request->filled('estado')) {
+                $today = Carbon::now();
+                $estados = array_filter(array_map('trim', explode(',', strtoupper((string) $request->estado))));
+                if (!empty($estados)) {
+                    $query->where(function ($q) use ($estados, $today) {
+                        foreach ($estados as $estado) {
+                            switch ($estado) {
+                                case 'VENCIDO':
+                                    $q->orWhere(function($subQ) use ($today) {
+                                        $subQ->whereRaw('DATEDIFF(end_date, ?) < 0', [$today->toDateString()])
+                                             ->where('status', '!=', 'renewed');
+                                    });
+                                    break;
+                                case 'CRITICO':
+                                    $q->orWhere(function($subQ) use ($today) {
+                                        $subQ->whereRaw('DATEDIFF(end_date, ?) >= 0 AND DATEDIFF(end_date, ?) <= 7', [$today->toDateString(), $today->toDateString()])
+                                             ->where('status', '!=', 'renewed');
+                                    });
+                                    break;
+                                case 'PENDIENTE':
+                                case 'EN_PROCESO':
+                                    $q->orWhere(function($subQ) use ($today) {
+                                        $subQ->whereRaw('DATEDIFF(end_date, ?) > 7 AND DATEDIFF(end_date, ?) <= 30', [$today->toDateString(), $today->toDateString()])
+                                             ->where('status', '!=', 'renewed');
+                                    });
+                                    break;
+                                case 'RENOVADO':
+                                    $q->orWhere('status', 'renewed');
+                                    break;
+                                default:
+                                    // ignorar
+                                    break;
+                            }
+                        }
+                    });
+                }
             }
             
             $renovaciones = $query->get();
@@ -3453,13 +3747,15 @@ class SaasPolizasController extends Controller
                 'Cliente',
                 'Documento',
                 'Aseguradora',
-                'Tipo de Seguro',
+                'Ramo',
+                'Placa',
+                'Póliza de riesgo',
                 'Fecha Vencimiento',
                 'Días para Vencimiento',
                 'Valor Prima',
                 'Estado',
                 'Prioridad',
-                'Agente',
+                'Vendedor',
                 'Observaciones'
             ];
             
@@ -3510,18 +3806,29 @@ class SaasPolizasController extends Controller
                     $prioridad = 'MEDIA';
                 }
                 
+                // Obtener ramo correcto
+                $ramoNombre = $poliza->ramo?->nombre ?? ($poliza->type ?: 'Sin ramo');
+                
+                // Obtener placa del primer automóvil vinculado
+                $placa = '';
+                if ($poliza->automoviles && $poliza->automoviles->count() > 0) {
+                    $placa = $poliza->automoviles->first()->placa ?? '';
+                }
+                
                 $csvData[] = [
                     $poliza->policy_number,
                     $poliza->client_name,
                     $poliza->client_document,
                     $poliza->insurance_company,
-                    $this->mapTypeToFrontend($poliza->type),
+                    $ramoNombre,
+                    $placa,
+                    $poliza->description ?? '',
                     $poliza->end_date->format('Y-m-d'),
                     $diasVencimiento,
                     number_format($poliza->premium_amount, 2),
                     $estado,
                     $prioridad,
-                    $poliza->assignedUser ? $poliza->assignedUser->name : 'Sin asignar',
+                    ($poliza->vendedor?->nombres ?? ($poliza->seller_name ?? ($poliza->assignedUser?->name ?? 'Sin asignar'))),
                     $poliza->notes ? strip_tags($poliza->notes) : 'Sin observaciones'
                 ];
             }

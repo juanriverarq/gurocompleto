@@ -65,6 +65,8 @@ export interface PolizaFormData {
   beneficiarioOneroso?: boolean;
   beneficiarioOnerosoNombre?: string;
   beneficiarioOnerosoDocumento?: string;
+  // Enlace externo
+  enlaceExterno?: string;
   // Pago
   banco?: string;
   cuotas?: string;

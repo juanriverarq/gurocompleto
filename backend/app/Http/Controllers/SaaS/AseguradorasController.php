@@ -161,8 +161,18 @@ class AseguradorasController extends Controller
                 $query->orderBy($sortField, $sortDirection);
             }
 
+            // Si se pide como catálogo (all=true o per_page=all), devolver todos sin paginar
             $perPage = $request->get('per_page', 15);
-            $aseguradoras = $query->paginate($perPage);
+            if ($perPage === 'all' || $request->get('all') === 'true' || $request->get('all') === '1') {
+                $aseguradoras = $query->get();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Aseguradoras obtenidas exitosamente',
+                    'data' => $aseguradoras,
+                ]);
+            }
+            
+            $aseguradoras = $query->paginate((int) $perPage);
 
             return response()->json([
                 'success' => true,
@@ -480,6 +490,65 @@ class AseguradorasController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al eliminar la aseguradora: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Borrado masivo de aseguradoras
+     */
+    public function bulkDelete(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $deleteAll = $request->input('delete_all', false);
+            $ids = $request->input('ids', []);
+            
+            \Log::info('🗑️ [BULK DELETE] Aseguradoras - Iniciando', [
+                'broker_id' => $brokerId,
+                'delete_all' => $deleteAll,
+                'ids_count' => count($ids),
+            ]);
+            
+            $deletedCount = 0;
+            
+            if ($deleteAll) {
+                $deletedCount = Aseguradora::forBroker($brokerId)->count();
+                Aseguradora::forBroker($brokerId)->delete();
+            } elseif (!empty($ids)) {
+                $deletedCount = Aseguradora::forBroker($brokerId)
+                    ->whereIn('id', $ids)
+                    ->count();
+                Aseguradora::forBroker($brokerId)
+                    ->whereIn('id', $ids)
+                    ->delete();
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Debe especificar los IDs a eliminar o activar delete_all',
+                ], 400);
+            }
+            
+            \Log::info('✅ [BULK DELETE] Aseguradoras eliminadas', [
+                'broker_id' => $brokerId,
+                'deleted_count' => $deletedCount,
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => "Se eliminaron {$deletedCount} aseguradoras exitosamente",
+                'deleted_count' => $deletedCount,
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('🚨 [BULK DELETE ERROR] Aseguradoras', [
+                'error' => $e->getMessage(),
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar aseguradoras: ' . $e->getMessage(),
             ], 500);
         }
     }

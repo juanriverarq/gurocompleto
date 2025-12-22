@@ -51,12 +51,12 @@ const banner = () => {
               >
                 <Button
                   as={Link}
-                  to="/auth/auth1/login"
+                  to="/comenzar"
                   size={"lg"}
                   color={"primary"}
                   className="w-full sm:w-auto"
                 >
-                  Iniciar Sesión
+                  Prueba 7 Días Gratis
                 </Button>
                 <button onClick={() => setOpenDemo(true)} type="button" className="w-full sm:w-auto group relative flex items-stretch justify-center p-0.5 text-center font-medium border border-primary bg-transparent text-primary hover:bg-primary dark:hover:bg-primary hover:text-white rounded-md" data-discover="true"><span className="flex items-center gap-2 transition-all duration-150 justify-center rounded-md px-9 py-2.5 text-sm">Ver Demo</span></button>
               </div>

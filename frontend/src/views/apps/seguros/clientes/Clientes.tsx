@@ -316,6 +316,8 @@ const Clientes: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkStateModal, setShowBulkStateModal] = useState(false);
   const [bulkClientTargetState, setBulkClientTargetState] = useState<string>('activo');
+  const [showBulkDeleteAllModal, setShowBulkDeleteAllModal] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
 
   // Usuarios (Agentes) dinámicos
   const [usuarios, setUsuarios] = useState<any[]>([]);
@@ -1250,6 +1252,39 @@ const Clientes: React.FC = () => {
     }
   };
 
+  // Borrado masivo de TODOS los clientes
+  const handleBulkDeleteAll = async () => {
+    if (bulkDeleteConfirmText !== 'ELIMINAR TODOS') return;
+    
+    try {
+      setLoading(true);
+      const response = await saasApi.bulkDeleteClientes({ delete_all: true });
+      
+      if (response.success) {
+        const data = response.data as any;
+        toast({
+          title: 'Borrado masivo completado',
+          description: response.message || `Se eliminaron ${data?.deleted_count || 0} clientes.`,
+        });
+        setShowBulkDeleteAllModal(false);
+        setBulkDeleteConfirmText('');
+        clearSelection();
+        await cargarClientes();
+        await loadEstadisticas();
+      } else {
+        throw new Error(response.message || 'Error al eliminar clientes');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Error al eliminar clientes',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {error && (
@@ -1387,6 +1422,17 @@ const Clientes: React.FC = () => {
               >
                 <Icon icon="solar:download-bold-duotone" className="w-4 h-4" />
               </Button>
+
+              {canDeleteClient && estadisticasTotales && estadisticasTotales.total > 0 && (
+                <Button
+                  color="failure"
+                  onClick={() => setShowBulkDeleteAllModal(true)}
+                  className="h-10 w-10 p-0 rounded-[10px] flex items-center justify-center"
+                  title="Eliminar todos los clientes"
+                >
+                  <Icon icon="solar:trash-bin-trash-bold-duotone" className="w-4 h-4" />
+                </Button>
+              )}
 
               <Button
                 color="light"
@@ -2398,6 +2444,76 @@ const Clientes: React.FC = () => {
             Aplicar
           </Button>
           <Button color="gray" onClick={() => setShowBulkStateModal(false)}>
+            Cancelar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal de borrado masivo total */}
+      <Modal 
+        show={showBulkDeleteAllModal} 
+        onClose={() => {
+          setShowBulkDeleteAllModal(false);
+          setBulkDeleteConfirmText('');
+        }} 
+        size="md"
+      >
+        <Modal.Header>
+          <div className="flex items-center gap-2 text-red-600">
+            <Icon icon="solar:danger-triangle-bold" className="w-6 h-6" />
+            Eliminar TODOS los clientes
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <p className="text-red-700 dark:text-red-400 font-medium">
+                ⚠️ Esta acción eliminará permanentemente TODOS los {estadisticasTotales?.total || 0} clientes de tu cuenta.
+              </p>
+              <p className="text-red-600 dark:text-red-500 text-sm mt-2">
+                Esta acción NO se puede deshacer.
+              </p>
+            </div>
+            
+            <div>
+              <Label className="text-gray-700 dark:text-gray-300">
+                Para confirmar, escribe <strong>ELIMINAR TODOS</strong> en el campo:
+              </Label>
+              <Input
+                type="text"
+                value={bulkDeleteConfirmText}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBulkDeleteConfirmText(e.target.value)}
+                placeholder="ELIMINAR TODOS"
+                className="mt-2"
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button 
+            color="failure" 
+            onClick={handleBulkDeleteAll}
+            disabled={bulkDeleteConfirmText !== 'ELIMINAR TODOS' || loading}
+          >
+            {loading ? (
+              <>
+                <Spinner size="sm" className="mr-2" />
+                Eliminando...
+              </>
+            ) : (
+              <>
+                <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" />
+                Eliminar todos los clientes
+              </>
+            )}
+          </Button>
+          <Button 
+            color="gray" 
+            onClick={() => {
+              setShowBulkDeleteAllModal(false);
+              setBulkDeleteConfirmText('');
+            }}
+          >
             Cancelar
           </Button>
         </Modal.Footer>

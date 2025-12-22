@@ -251,9 +251,19 @@ const ArchivosPoliza: React.FC<Props> = ({ polizaId }) => {
                 <option value="endoso">Endoso</option>
                 <option value="anexo">Anexo</option>
                 <option value="cotizacion">Cotización</option>
-                <option value="matricula">Matrícula</option>
+                <option value="poliza">Póliza</option>
                 <option value="sarlaft">SARLAFT</option>
+                <option value="cedula">Cédula</option>
+                <option value="matricula">Matrícula</option>
+                <option value="factura">Factura</option>
+                <option value="rut">RUT</option>
+                <option value="camara_comercio">Cámara de Comercio</option>
+                <option value="estados_financieros">Estados Financieros</option>
+                <option value="soat">SOAT</option>
+                <option value="carta_estadia">Carta de Estadía</option>
+                <option value="carta_no_siniestro">Carta de No Siniestro</option>
                 <option value="tratamiento_datos">Tratamiento de Datos</option>
+                <option value="cancelacion">Cancelación</option>
                 <option value="otro">Otro</option>
               </Select>
             </div>

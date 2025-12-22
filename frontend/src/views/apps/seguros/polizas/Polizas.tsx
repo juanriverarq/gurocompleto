@@ -78,15 +78,28 @@ const Polizas: React.FC = () => {
     }
   }, [saasLoading, user, navigate]);
 
-  // Columnas visibles (máximo 6)
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'numero_poliza',
-    'cliente',
-    'aseguradora',
-    'ramo',
-    'estado',
-    'prima_neta',
-  ]);
+  // Columnas visibles (máximo 6) - Cargar desde localStorage si existe
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    const saved = localStorage.getItem('polizas_visible_columns');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed.length <= 6) {
+          return parsed;
+        }
+      } catch (e) {
+        // Si hay error de parsing, usar valores por defecto
+      }
+    }
+    return [
+      'numero_poliza',
+      'cliente',
+      'aseguradora',
+      'ramo',
+      'estado',
+      'prima_neta',
+    ];
+  });
 
   // Filtros
   const [filters, setFilters] = useState<PolizaFilters>({
@@ -343,6 +356,8 @@ const Polizas: React.FC = () => {
 
   const handleVisibleColumnsChange = (columns: string[]) => {
     setVisibleColumns(columns);
+    // Guardar en localStorage para persistencia
+    localStorage.setItem('polizas_visible_columns', JSON.stringify(columns));
   };
 
   const handleViewPoliza = (poliza: Poliza) => {
@@ -978,6 +993,15 @@ const Polizas: React.FC = () => {
                                   <Icon icon="solar:eye-bold-duotone" height={18} />
                                   <span>Ver Detalles</span>
                                 </Dropdown.Item>
+                                {poliza.enlace_externo && (
+                                  <Dropdown.Item
+                                    className="flex gap-3 text-blue-600"
+                                    onClick={() => window.open(poliza.enlace_externo, '_blank')}
+                                  >
+                                    <Icon icon="solar:link-round-bold-duotone" height={18} />
+                                    <span>Enlace Externo</span>
+                                  </Dropdown.Item>
+                                )}
                                 {canEditPolicy && (
                                   <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
                                     <Dropdown.Item className="flex gap-3">
@@ -1095,6 +1119,15 @@ const Polizas: React.FC = () => {
                               <Icon icon="solar:eye-bold" height={16} />
                               <span>Ver Detalles</span>
                             </Dropdown.Item>
+                            {poliza.enlace_externo && (
+                              <Dropdown.Item
+                                className="flex gap-3 text-blue-600"
+                                onClick={() => window.open(poliza.enlace_externo, '_blank')}
+                              >
+                                <Icon icon="solar:link-round-bold-duotone" height={16} />
+                                <span>Enlace Externo</span>
+                              </Dropdown.Item>
+                            )}
                             {canEditPolicy && (
                               <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
                                 <Dropdown.Item className="flex gap-3">

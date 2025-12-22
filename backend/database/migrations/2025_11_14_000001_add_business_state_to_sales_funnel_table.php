@@ -12,13 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('sales_funnel', function (Blueprint $table) {
-            $table->enum('business_state', [
-                'nuevo',
-                'contactado',
-                'interesado',
-                'negociando',
-                'cerrado'
-            ])->default('nuevo')->after('stage');
+            if (!Schema::hasColumn('sales_funnel', 'business_state')) {
+                $table->enum('business_state', [
+                    'nuevo',
+                    'contactado',
+                    'interesado',
+                    'negociando',
+                    'cerrado'
+                ])->default('nuevo')->after('stage');
+            }
         });
     }
 

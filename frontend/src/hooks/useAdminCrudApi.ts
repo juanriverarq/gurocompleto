@@ -554,8 +554,8 @@ export const useAseguradoras = () => {
       setLoading(true);
       setError(null);
       // Traer todo para evitar duplicados no detectados en la UI (paginación)
-      const adminEndpoint = '/saas/aseguradoras?per_page=999999';
-      const catalogEndpoint = '/saas/catalogos/aseguradoras?per_page=999999';
+      const adminEndpoint = '/saas/aseguradoras?all=true';
+      const catalogEndpoint = '/saas/catalogos/aseguradoras?all=true';
       try {
         const response = await makeRequest(isEmpleado ? catalogEndpoint : adminEndpoint);
         setAseguradoras(response.data || []);
@@ -641,8 +641,9 @@ export const useVendedores = () => {
     try {
       setLoading(true);
       setError(null);
-      const adminEndpoint = '/saas/vendedores';
-      const catalogEndpoint = '/saas/catalogos/vendedores';
+      // Pedir todos los vendedores sin paginación para selectores
+      const adminEndpoint = '/saas/vendedores?all=true';
+      const catalogEndpoint = '/saas/catalogos/vendedores?all=true';
       try {
         const response = await makeRequest(isEmpleado ? catalogEndpoint : adminEndpoint);
         setVendedores(response.data || []);
@@ -728,8 +729,8 @@ export const useRamos = () => {
     try {
       setLoading(true);
       setError(null);
-      const adminEndpoint = '/saas/ramos?per_page=999999';
-      const catalogEndpoint = '/saas/catalogos/ramos?per_page=999999';
+      const adminEndpoint = '/saas/ramos?all=true';
+      const catalogEndpoint = '/saas/catalogos/ramos?all=true';
       try {
         const response = await makeRequest(isEmpleado ? catalogEndpoint : adminEndpoint);
         setRamos(response.data || []);

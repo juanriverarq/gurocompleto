@@ -174,8 +174,18 @@ class VendedoresController extends Controller
                 $query->orderBy($sortField, $sortDirection);
             }
 
+            // Si se pide como catálogo (all=true o per_page=all), devolver todos sin paginar
             $perPage = $request->get('per_page', 15);
-            $vendedores = $query->paginate($perPage);
+            if ($perPage === 'all' || $request->get('all') === 'true' || $request->get('all') === '1') {
+                $vendedores = $query->get();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Vendedores obtenidos exitosamente',
+                    'data' => $vendedores,
+                ]);
+            }
+            
+            $vendedores = $query->paginate((int) $perPage);
 
             return response()->json([
                 'success' => true,
@@ -237,6 +247,11 @@ class VendedoresController extends Controller
                     'required',
                     Rule::in(['natural', 'juridica']),
                 ],
+                'tipo_retencion' => [
+                    'nullable',
+                    'string',
+                    Rule::in(array_keys(\App\Models\Vendedor::TIPOS_RETENCION)),
+                ],
                 'es_agencia' => 'required|boolean',
                 'porcentaje_comision' => 'required|numeric|min:0|max:100',
                 'calcular_comision_sobre' => [
@@ -246,7 +261,9 @@ class VendedoresController extends Controller
                 'porcentaje_retencion' => 'nullable|numeric|min:0|max:100',
                 'porcentaje_retencion_ica' => 'nullable|numeric|min:0|max:100',
                 'porcentaje_iva' => 'nullable|numeric|min:0|max:100',
+                'porcentaje_retencion_iva' => 'nullable|numeric|min:0|max:100',
                 'comisiones_diferentes_por_ano' => 'required|boolean',
+                'fecha_vinculacion' => 'nullable|date',
             ], [
                 'nombres.required' => 'Los nombres son obligatorios',
                 'nombres.string' => 'Los nombres deben ser texto',
@@ -264,6 +281,7 @@ class VendedoresController extends Controller
                 'cuenta_bancaria.max' => 'La cuenta bancaria no puede exceder 100 caracteres',
                 'tipo_persona.required' => 'El tipo de persona es obligatorio',
                 'tipo_persona.in' => 'El tipo de persona debe ser natural o jurídica',
+                'tipo_retencion.in' => 'El tipo de retención no es válido',
                 'es_agencia.required' => 'Debe especificar si es agencia',
                 'es_agencia.boolean' => 'El campo es agencia debe ser verdadero o falso',
                 'porcentaje_comision.required' => 'El porcentaje de comisión es obligatorio',
@@ -281,6 +299,9 @@ class VendedoresController extends Controller
                 'porcentaje_iva.numeric' => 'El porcentaje de IVA debe ser un número',
                 'porcentaje_iva.min' => 'El porcentaje de IVA debe ser mayor o igual a 0',
                 'porcentaje_iva.max' => 'El porcentaje de IVA no puede ser mayor a 100',
+                'porcentaje_retencion_iva.numeric' => 'El porcentaje de retención IVA debe ser un número',
+                'porcentaje_retencion_iva.min' => 'El porcentaje de retención IVA debe ser mayor o igual a 0',
+                'porcentaje_retencion_iva.max' => 'El porcentaje de retención IVA no puede ser mayor a 100',
                 'comisiones_diferentes_por_ano.required' => 'Debe especificar si las comisiones son diferentes por año',
                 'comisiones_diferentes_por_ano.boolean' => 'El campo comisiones diferentes por año debe ser verdadero o falso',
             ]);
@@ -302,13 +323,16 @@ class VendedoresController extends Controller
                 'email' => $request->email,
                 'cuenta_bancaria' => $request->cuenta_bancaria,
                 'tipo_persona' => $request->tipo_persona,
+                'tipo_retencion' => $request->tipo_retencion,
                 'es_agencia' => $request->es_agencia,
                 'porcentaje_comision' => $request->porcentaje_comision,
                 'calcular_comision_sobre' => $request->calcular_comision_sobre,
                 'porcentaje_retencion' => $request->porcentaje_retencion ?? 0,
                 'porcentaje_retencion_ica' => $request->porcentaje_retencion_ica ?? 0,
                 'porcentaje_iva' => $request->porcentaje_iva ?? 0,
+                'porcentaje_retencion_iva' => $request->porcentaje_retencion_iva ?? 0,
                 'comisiones_diferentes_por_ano' => $request->comisiones_diferentes_por_ano,
+                'fecha_vinculacion' => $request->fecha_vinculacion,
                 'broker_id' => $brokerId,
             ]);
 
@@ -395,6 +419,11 @@ class VendedoresController extends Controller
                     'required',
                     Rule::in(['natural', 'juridica']),
                 ],
+                'tipo_retencion' => [
+                    'nullable',
+                    'string',
+                    Rule::in(array_keys(\App\Models\Vendedor::TIPOS_RETENCION)),
+                ],
                 'es_agencia' => 'required|boolean',
                 'porcentaje_comision' => 'required|numeric|min:0|max:100',
                 'calcular_comision_sobre' => [
@@ -404,7 +433,9 @@ class VendedoresController extends Controller
                 'porcentaje_retencion' => 'nullable|numeric|min:0|max:100',
                 'porcentaje_retencion_ica' => 'nullable|numeric|min:0|max:100',
                 'porcentaje_iva' => 'nullable|numeric|min:0|max:100',
+                'porcentaje_retencion_iva' => 'nullable|numeric|min:0|max:100',
                 'comisiones_diferentes_por_ano' => 'required|boolean',
+                'fecha_vinculacion' => 'nullable|date',
             ], [
                 'nombres.required' => 'Los nombres son obligatorios',
                 'nombres.string' => 'Los nombres deben ser texto',
@@ -439,6 +470,9 @@ class VendedoresController extends Controller
                 'porcentaje_iva.numeric' => 'El porcentaje de IVA debe ser un número',
                 'porcentaje_iva.min' => 'El porcentaje de IVA debe ser mayor o igual a 0',
                 'porcentaje_iva.max' => 'El porcentaje de IVA no puede ser mayor a 100',
+                'porcentaje_retencion_iva.numeric' => 'El porcentaje de retención IVA debe ser un número',
+                'porcentaje_retencion_iva.min' => 'El porcentaje de retención IVA debe ser mayor o igual a 0',
+                'porcentaje_retencion_iva.max' => 'El porcentaje de retención IVA no puede ser mayor a 100',
                 'comisiones_diferentes_por_ano.required' => 'Debe especificar si las comisiones son diferentes por año',
                 'comisiones_diferentes_por_ano.boolean' => 'El campo comisiones diferentes por año debe ser verdadero o falso',
             ]);
@@ -460,13 +494,16 @@ class VendedoresController extends Controller
                 'email' => $request->email,
                 'cuenta_bancaria' => $request->cuenta_bancaria,
                 'tipo_persona' => $request->tipo_persona,
+                'tipo_retencion' => $request->tipo_retencion,
                 'es_agencia' => $request->es_agencia,
                 'porcentaje_comision' => $request->porcentaje_comision,
                 'calcular_comision_sobre' => $request->calcular_comision_sobre,
                 'porcentaje_retencion' => $request->porcentaje_retencion ?? 0,
                 'porcentaje_retencion_ica' => $request->porcentaje_retencion_ica ?? 0,
                 'porcentaje_iva' => $request->porcentaje_iva ?? 0,
+                'porcentaje_retencion_iva' => $request->porcentaje_retencion_iva ?? 0,
                 'comisiones_diferentes_por_ano' => $request->comisiones_diferentes_por_ano,
+                'fecha_vinculacion' => $request->fecha_vinculacion,
             ]);
 
             return response()->json([

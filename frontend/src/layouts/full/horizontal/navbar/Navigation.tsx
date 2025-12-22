@@ -1,16 +1,24 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Navbar } from 'flowbite-react';
 import { IconChevronDown } from '@tabler/icons-react';
 import ChildComponent from './ChildComponent';
 import { Icon } from "@iconify/react";
-import Menuitems from '../MenuData';
+import Menuitems, { applyTerminologiaToMenu } from '../MenuData';
 import { Link, useLocation } from "react-router";
+import { useTerminologia } from "../../../../context/TerminologiaContext";
 
 
 
 const Navigation = () => {
   const [activeDropdown, setActiveDropdown] = useState(null);
-  const [active, setActive] = useState(Menuitems[0].id);
+  const { terminologia } = useTerminologia();
+  
+  // Aplicar terminología al menú
+  const menuItems = useMemo(() => {
+    return applyTerminologiaToMenu(Menuitems, terminologia);
+  }, [terminologia]);
+  
+  const [active, setActive] = useState(menuItems[0]?.id);
 
   const location = useLocation();
 const pathname = location.pathname;
@@ -31,7 +39,7 @@ const pathname = location.pathname;
     <Navbar fluid={true} rounded={true} className="horizontal-nav bg-transparent dark:bg-transparent sm:px-0 xl:py-4 py-0">
       <Navbar.Collapse className="xl:block">
         <ul className="flex items-center space-x-3">
-          {Menuitems.map((item) => {
+          {menuItems.map((item) => {
             let isActive = false;
              item.children.find((item:any) => {
               if(item?.children){

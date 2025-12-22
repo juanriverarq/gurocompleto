@@ -498,11 +498,10 @@ class SaasClientesController extends Controller
                     throw new \Exception('Nombre y apellidos son obligatorios para cliente persona');
                 }
             } else {
+                // Para empresas, solo razón social y NIT son obligatorios
+                // Los datos del representante legal son opcionales
                 if (empty($validatedData['company']) || empty($validatedData['document_number'])) {
                     throw new \Exception('Razón social y NIT son obligatorios para cliente empresa');
-                }
-                if (empty($validatedData['legal_representative_name']) || empty($validatedData['legal_representative_document_number'])) {
-                    throw new \Exception('Datos del representante legal son obligatorios para cliente empresa');
                 }
             }
 
@@ -815,6 +814,87 @@ class SaasClientesController extends Controller
     }
 
     /**
+     * Borrado masivo de clientes
+     * Puede eliminar todos los clientes del broker o solo los seleccionados
+     */
+    public function bulkDelete(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            // Verificar si se quieren eliminar todos o solo algunos
+            $deleteAll = $request->input('delete_all', false);
+            $clienteIds = $request->input('ids', []);
+            
+            \Log::info('🗑️ [BULK DELETE] Iniciando borrado masivo', [
+                'broker_id' => $brokerId,
+                'delete_all' => $deleteAll,
+                'ids_count' => count($clienteIds),
+            ]);
+            
+            $deletedCount = 0;
+            
+            DB::beginTransaction();
+            
+            try {
+                if ($deleteAll) {
+                    // Eliminar TODOS los clientes del broker
+                    $deletedCount = Cliente::where('broker_id', $brokerId)->count();
+                    Cliente::where('broker_id', $brokerId)->delete();
+                    
+                    \Log::info('✅ [BULK DELETE] Todos los clientes eliminados', [
+                        'broker_id' => $brokerId,
+                        'deleted_count' => $deletedCount,
+                    ]);
+                } elseif (!empty($clienteIds)) {
+                    // Eliminar solo los clientes seleccionados
+                    $deletedCount = Cliente::where('broker_id', $brokerId)
+                        ->whereIn('id', $clienteIds)
+                        ->count();
+                    
+                    Cliente::where('broker_id', $brokerId)
+                        ->whereIn('id', $clienteIds)
+                        ->delete();
+                    
+                    \Log::info('✅ [BULK DELETE] Clientes seleccionados eliminados', [
+                        'broker_id' => $brokerId,
+                        'requested_ids' => count($clienteIds),
+                        'deleted_count' => $deletedCount,
+                    ]);
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Debe especificar los IDs de clientes a eliminar o activar delete_all',
+                    ], 400);
+                }
+                
+                DB::commit();
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => "Se eliminaron {$deletedCount} clientes exitosamente",
+                    'deleted_count' => $deletedCount,
+                ]);
+                
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+            
+        } catch (\Exception $e) {
+            \Log::error('🚨 [BULK DELETE ERROR]', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar clientes: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Normalizar valores de estado
      */
     private function normalizeStatus($status) {
@@ -955,7 +1035,7 @@ class SaasClientesController extends Controller
             // OPTIMIZACIÓN: Estadísticas de pólizas activas (valor cartera y total pólizas)
             $polizasStats = DB::table('polizas')
                 ->where('broker_id', $brokerId)
-                ->where('status', 'ACTIVA')
+                ->where('status', 'active')
                 ->whereNull('deleted_at')
                 ->selectRaw('
                     COUNT(*) as total_polizas_activas,

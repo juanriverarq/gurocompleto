@@ -166,7 +166,18 @@ class RamosController extends Controller
                 $query->orderByName('asc');
             }
 
-            $perPage = (int) $request->get('per_page', 15);
+            // Si se pide como catálogo (all=true o per_page=all), devolver todos sin paginar
+            $perPage = $request->get('per_page', 15);
+            if ($perPage === 'all' || $request->get('all') === 'true' || $request->get('all') === '1') {
+                $ramos = $query->get();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Ramos obtenidos exitosamente',
+                    'data' => $ramos,
+                ]);
+            }
+            
+            $perPage = (int) $perPage;
             $perPage = $perPage > 0 ? $perPage : 15;
             $ramos = $query->paginate($perPage);
 
@@ -492,5 +503,80 @@ class RamosController extends Controller
         }
     }
 
-    // Eliminado método categorias ya que el modelo actual no maneja categorías
+    /**
+     * Borrado masivo de ramos
+     */
+    public function bulkDelete(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $deleteAll = $request->input('delete_all', false);
+            $ids = $request->input('ids', []);
+            
+            \Log::info('🗑️ [BULK DELETE] Ramos - Iniciando', [
+                'broker_id' => $brokerId,
+                'delete_all' => $deleteAll,
+                'ids_count' => count($ids),
+            ]);
+            
+            $deletedCount = 0;
+            
+            DB::beginTransaction();
+            
+            try {
+                if ($deleteAll) {
+                    $ramos = Ramo::forBroker($brokerId)->get();
+                    $deletedCount = $ramos->count();
+                    
+                    foreach ($ramos as $ramo) {
+                        ComisionAseguradora::where('ramo_id', $ramo->id)->delete();
+                    }
+                    
+                    Ramo::forBroker($brokerId)->delete();
+                } elseif (!empty($ids)) {
+                    $ramos = Ramo::forBroker($brokerId)->whereIn('id', $ids)->get();
+                    $deletedCount = $ramos->count();
+                    
+                    foreach ($ramos as $ramo) {
+                        ComisionAseguradora::where('ramo_id', $ramo->id)->delete();
+                    }
+                    
+                    Ramo::forBroker($brokerId)->whereIn('id', $ids)->delete();
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Debe especificar los IDs a eliminar o activar delete_all',
+                    ], 400);
+                }
+                
+                DB::commit();
+                
+                \Log::info('✅ [BULK DELETE] Ramos eliminados', [
+                    'broker_id' => $brokerId,
+                    'deleted_count' => $deletedCount,
+                ]);
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => "Se eliminaron {$deletedCount} ramos exitosamente",
+                    'deleted_count' => $deletedCount,
+                ]);
+                
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+            
+        } catch (\Exception $e) {
+            \Log::error('🚨 [BULK DELETE ERROR] Ramos', [
+                'error' => $e->getMessage(),
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar ramos: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

@@ -408,8 +408,8 @@ class AuthController extends Controller
                 'status' => 'trial',
                 'plan' => 'basic',
                 'country' => $request->country ?? 'Colombia',
-                // Cambiado a 14 días de prueba
-                'trial_ends_at' => now()->addDays(14),
+                // Cambiado a 7 días de prueba
+                'trial_ends_at' => now()->addDays(7),
             ]));
 
             // Actualizar el usuario como MASTER y asociarlo al broker

@@ -427,7 +427,6 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                             onChange={handleInputChange}
                             error={(errors as any).representante_legal}
                             placeholder="Nombre del representante legal"
-                            required
                           />
                           <FormField
                             id="representante_legal_tipo_documento"
@@ -436,7 +435,6 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                             value={formData.representante_legal_tipo_documento || ''}
                             onChange={handleInputChange}
                             error={(errors as any).representante_legal_tipo_documento}
-                            required
                             type="select"
                             options={[
                               { value: '', label: 'Seleccionar tipo' },
@@ -453,7 +451,6 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                             onChange={handleInputChange}
                             error={(errors as any).representante_legal_documento}
                             placeholder="Número de documento del representante"
-                            required
                           />
                         </>
                       )}

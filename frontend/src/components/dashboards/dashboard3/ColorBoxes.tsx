@@ -58,6 +58,20 @@ const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
       ];
     }
 
+    // Formatear valores de recaudos
+    const primasCobradas = data.recaudos?.primas_cobradas || 0;
+    const comisionesCobradas = data.recaudos?.comisiones_cobradas || 0;
+    const comisionesPendientes = data.recaudos?.comisiones_pendientes || 0;
+
+    const formatMoney = (value: number) => {
+      if (value >= 1000000) {
+        return `$${(value / 1000000).toFixed(1)}M`;
+      } else if (value >= 1000) {
+        return `$${(value / 1000).toFixed(0)}K`;
+      }
+      return `$${value.toLocaleString()}`;
+    };
+
     return [
       {
         bg: "primary-gradient",
@@ -96,8 +110,18 @@ const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
         icon: "solar:dollar-minimalistic-linear",
         color: "bg-success",
         title: "Primas Cobradas",
-        price: `$${(parseFloat(data.finanzas.valor_primas_numero) / 1000000).toFixed(1)}M`,
-        link: "/apps/comisiones",
+        price: formatMoney(primasCobradas),
+        subtitle: `${data.recaudos?.polizas_recaudadas || 0} pólizas`,
+        link: "/apps/cartera/clientes",
+      },
+      {
+        bg: "indigo-gradient",
+        icon: "solar:wallet-money-linear",
+        color: "bg-indigo-500",
+        title: "Comisiones Cobradas",
+        price: formatMoney(comisionesCobradas),
+        subtitle: `Pendiente: ${formatMoney(comisionesPendientes)}`,
+        link: "/apps/cartera/clientes",
       },
     ];
   };
@@ -121,9 +145,9 @@ const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
         <div className="overflow-x-auto">
           <div className="flex gap-30 min-w-max">
             {colorboxData.map((item, index) => (
-              <div className="lg:basis-1/5 md:basis-1/4 basis-full lg:shrink shrink-0" key={index}>
+              <div className="lg:basis-1/6 md:basis-1/4 basis-full lg:shrink shrink-0" key={index}>
                 <div
-                  className={`text-center px-5 py-30 rounded-tw ${item.bg}`}
+                  className={`text-center px-5 py-30 rounded-tw ${item.bg} h-full flex flex-col`}
                 >
                   <span
                     className={`h-12 w-12 mx-auto flex items-center justify-center rounded-tw ${item.color}`}
@@ -144,14 +168,17 @@ const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
                       item.price
                     )}
                   </h4>
-                  <Button
-                    as={Link}
-                    to={item.link}
-                    className="w-fit mx-auto mt-5 bg-white hover:bg-dark text-ld font-semibold hover:text-white shadow-sm py-1 px-1 dark:bg-darkgray dark:hover:bg-dark"
-                    size="xs"
-                  >
-                    Ver Detalles
-                  </Button>
+                  <p className="text-xs text-gray-600 mt-1 h-4">{item.subtitle || ''}</p>
+                  <div className="mt-auto pt-3">
+                    <Button
+                      as={Link}
+                      to={item.link}
+                      className="w-fit mx-auto bg-white hover:bg-dark text-ld font-semibold hover:text-white shadow-sm py-1 px-1 dark:bg-darkgray dark:hover:bg-dark"
+                      size="xs"
+                    >
+                      Ver Detalles
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

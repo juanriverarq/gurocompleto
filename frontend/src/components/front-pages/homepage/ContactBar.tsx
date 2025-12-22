@@ -24,10 +24,10 @@ const ContactBar = () => {
             </div>
           </div>
           <p className="text-base text-white sm:text-left text-center md:py-0 py-2">
-            ¿Listo para transformar tu negocio de seguros con IA? Comienza tu prueba gratuita.
+            ¿Listo para transformar tu negocio de seguros con IA? Prueba 7 días gratis.
           </p>
           <Link
-            to={"/auth/auth1/register"}
+            to={"/comenzar"}
             className="text-base font-semibold text-white underline sm:text-left text-center block hover:text-sky-100 transition-colors"
           >
             Comenzar Ahora

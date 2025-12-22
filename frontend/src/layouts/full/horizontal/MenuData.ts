@@ -1182,4 +1182,22 @@ const Menuitems = [
     ],
   },
 ];
+
+// Función para aplicar terminología dinámica
+export const applyTerminologiaToMenu = (items: any[], terminologia: { vendedor: string; vendedorPlural: string }): any[] => {
+  return items.map(item => {
+    let newItem = { ...item };
+    
+    if (newItem.title === "Vendedores") {
+      newItem.title = terminologia.vendedorPlural;
+    }
+    
+    if (newItem.children) {
+      newItem.children = applyTerminologiaToMenu(newItem.children, terminologia);
+    }
+    
+    return newItem;
+  });
+};
+
 export default Menuitems;

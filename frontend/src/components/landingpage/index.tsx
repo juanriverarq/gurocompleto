@@ -13,6 +13,7 @@ import LpHeader from "./header/Header"
 import LpBanners from "./banner/banner"
 import InsuranceBenefits from "./insurance-benefits/InsuranceBenefits";
 import { FAQ } from "../front-pages/homepage/FAQ";
+import AnnouncementBar from "../front-pages/layout/AnnouncementBar";
 
 const Landingpage = () => {
   useEffect(() => {
@@ -22,6 +23,7 @@ const Landingpage = () => {
     <>
       <Flowbite theme={{ theme: customTheme }}>
         <div className="landingpage">
+          <AnnouncementBar />
           <LpHeader />
           <LpBanners />
           <InsuranceBenefits />

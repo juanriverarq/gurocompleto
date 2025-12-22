@@ -17,6 +17,8 @@ import { useAseguradoras } from 'src/hooks/useAdminCrudApi';
 import type { Aseguradora as AseguradoraType, AseguradoraCreate } from 'src/types/admin';
 import { COLOMBIA_INSURERS } from 'src/data/colombia_insurers';
 import { PermissionGate } from 'src/components/PermissionGate';
+import { saasApi } from 'src/services/saasApi';
+import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 
 const Aseguradoras = () => {
   const { aseguradoras, loading, error, createAseguradora, updateAseguradora, deleteAseguradora } =
@@ -51,6 +53,12 @@ const Aseguradoras = () => {
     failed: number;
     messages: string[];
   } | null>(null);
+
+  // Estado para selección masiva de eliminación
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const normalize = (s: string) =>
     (s || '')
@@ -163,17 +171,17 @@ const Aseguradoras = () => {
     setIsEditing(true);
     setCreationMode('blank');
     setFormData({
-      nombre: item.nombre,
-      cuit: item.cuit,
-      email: item.email,
-      direccion: item.direccion,
-      telefono: item.telefono,
-      cuenta_bancaria: item.cuenta_bancaria,
-      link_pago: item.link_pago,
-      codigo_intermediario: item.codigo_intermediario,
-      retencion: item.retencion,
-      iva: item.iva,
-      retencion_iva: item.retencion_iva,
+      nombre: item.nombre || '',
+      cuit: item.cuit || '',
+      email: item.email || '',
+      direccion: item.direccion || '',
+      telefono: item.telefono || '',
+      cuenta_bancaria: item.cuenta_bancaria || '',
+      link_pago: item.link_pago || '',
+      codigo_intermediario: item.codigo_intermediario || '',
+      retencion: item.retencion || 0,
+      iva: item.iva || 0,
+      retencion_iva: item.retencion_iva || 0,
     });
     setShowModal(true);
   };
@@ -217,6 +225,68 @@ const Aseguradoras = () => {
     }
   };
 
+  // Funciones para selección masiva
+  const toggleSelectForDelete = (id: string) => {
+    setSelectedForDelete((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllForDelete = () => {
+    if (selectedForDelete.size === aseguradoras.length) {
+      setSelectedForDelete(new Set());
+    } else {
+      setSelectedForDelete(new Set(aseguradoras.map((a) => a.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (bulkDeleteConfirmText !== 'ELIMINAR') return;
+    
+    try {
+      setIsBulkDeleting(true);
+      const ids = Array.from(selectedForDelete);
+      const response = await saasApi.bulkDeleteAseguradoras({ ids });
+      
+      if (response.success) {
+        alert(`Se eliminaron ${(response.data as any)?.deleted_count || ids.length} aseguradoras`);
+        setShowBulkDeleteModal(false);
+        setBulkDeleteConfirmText('');
+        setSelectedForDelete(new Set());
+        // Recargar la lista (el hook debería actualizarse automáticamente)
+        window.location.reload();
+      }
+    } catch (error: any) {
+      alert(error.message || 'Error al eliminar');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkDeleteAll = async () => {
+    if (bulkDeleteConfirmText !== 'ELIMINAR TODAS') return;
+    
+    try {
+      setIsBulkDeleting(true);
+      const response = await saasApi.bulkDeleteAseguradoras({ delete_all: true });
+      
+      if (response.success) {
+        alert(`Se eliminaron ${(response.data as any)?.deleted_count || 0} aseguradoras`);
+        setShowBulkDeleteModal(false);
+        setBulkDeleteConfirmText('');
+        setSelectedForDelete(new Set());
+        window.location.reload();
+      }
+    } catch (error: any) {
+      alert(error.message || 'Error al eliminar');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
   return (
     <PermissionGate
       route="/apps/admin/aseguradoras"
@@ -237,12 +307,30 @@ const Aseguradoras = () => {
               Administra las aseguradoras con las que trabajas.
             </p>
           </div>
-          <PermissionGate route="/apps/admin/aseguradoras" action="crear">
-            <Button onClick={handleCreate} className="flex items-center">
-              <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
-              Nueva Aseguradora
-            </Button>
-          </PermissionGate>
+          <div className="flex gap-2">
+            {selectedForDelete.size > 0 && (
+              <PermissionGate route="/apps/admin/aseguradoras" action="eliminar">
+                <Button color="failure" onClick={() => setShowBulkDeleteModal(true)} className="flex items-center">
+                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" />
+                  Eliminar ({selectedForDelete.size})
+                </Button>
+              </PermissionGate>
+            )}
+            {aseguradoras.length > 0 && selectedForDelete.size === 0 && (
+              <PermissionGate route="/apps/admin/aseguradoras" action="eliminar">
+                <Button color="light" onClick={() => setShowBulkDeleteModal(true)} className="flex items-center">
+                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" />
+                  Eliminar Todas
+                </Button>
+              </PermissionGate>
+            )}
+            <PermissionGate route="/apps/admin/aseguradoras" action="crear">
+              <Button onClick={handleCreate} className="flex items-center">
+                <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
+                Nueva Aseguradora
+              </Button>
+            </PermissionGate>
+          </div>
         </div>
       </div>
 
@@ -286,6 +374,12 @@ const Aseguradoras = () => {
           <div className="overflow-x-auto">
             <Table striped>
               <Table.Head>
+                <Table.HeadCell className="w-10">
+                  <Checkbox
+                    checked={selectedForDelete.size === aseguradoras.length && aseguradoras.length > 0}
+                    onChange={selectAllForDelete}
+                  />
+                </Table.HeadCell>
                 <Table.HeadCell>Aseguradora</Table.HeadCell>
                 <Table.HeadCell>NIT</Table.HeadCell>
                 <Table.HeadCell>Email</Table.HeadCell>
@@ -298,8 +392,14 @@ const Aseguradoras = () => {
                 {aseguradoras.map((item) => (
                   <Table.Row
                     key={item.id}
-                    className="bg-white dark:border-gray-700 dark:bg-gray-800"
+                    className={`bg-white dark:border-gray-700 dark:bg-gray-800 ${selectedForDelete.has(item.id) ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
                   >
+                    <Table.Cell>
+                      <Checkbox
+                        checked={selectedForDelete.has(item.id)}
+                        onChange={() => toggleSelectForDelete(item.id)}
+                      />
+                    </Table.Cell>
                     <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       <div className="flex items-center gap-2">
                         <Icon icon="solar:shield-check-bold" className="w-5 h-5 text-blue-600" />
@@ -801,6 +901,84 @@ const Aseguradoras = () => {
             </div>
           </Modal.Footer>
         </form>
+      </Modal>
+
+      {/* Modal de confirmación de borrado masivo */}
+      <Modal 
+        show={showBulkDeleteModal} 
+        onClose={() => {
+          setShowBulkDeleteModal(false);
+          setBulkDeleteConfirmText('');
+        }} 
+        size="md"
+      >
+        <Modal.Header>
+          <div className="flex items-center gap-2 text-red-600">
+            <Icon icon="solar:danger-triangle-bold" className="w-6 h-6" />
+            {selectedForDelete.size > 0 
+              ? `Eliminar ${selectedForDelete.size} aseguradora(s)` 
+              : 'Eliminar TODAS las aseguradoras'}
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <p className="text-red-700 dark:text-red-400 font-medium">
+                ⚠️ {selectedForDelete.size > 0 
+                  ? `Se eliminarán ${selectedForDelete.size} aseguradora(s) seleccionada(s).`
+                  : `Se eliminarán TODAS las ${aseguradoras.length} aseguradoras.`}
+              </p>
+              <p className="text-red-600 dark:text-red-500 text-sm mt-2">
+                Esta acción NO se puede deshacer.
+              </p>
+            </div>
+            
+            <div>
+              <Label className="text-gray-700 dark:text-gray-300">
+                Para confirmar, escribe <strong>{selectedForDelete.size > 0 ? 'ELIMINAR' : 'ELIMINAR TODAS'}</strong>:
+              </Label>
+              <Input
+                type="text"
+                value={bulkDeleteConfirmText}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBulkDeleteConfirmText(e.target.value)}
+                placeholder={selectedForDelete.size > 0 ? 'ELIMINAR' : 'ELIMINAR TODAS'}
+                className="mt-2"
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button 
+            color="failure" 
+            onClick={selectedForDelete.size > 0 ? handleBulkDelete : handleBulkDeleteAll}
+            disabled={
+              (selectedForDelete.size > 0 && bulkDeleteConfirmText !== 'ELIMINAR') ||
+              (selectedForDelete.size === 0 && bulkDeleteConfirmText !== 'ELIMINAR TODAS') ||
+              isBulkDeleting
+            }
+          >
+            {isBulkDeleting ? (
+              <>
+                <Spinner size="sm" className="mr-2" />
+                Eliminando...
+              </>
+            ) : (
+              <>
+                <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" />
+                Confirmar eliminación
+              </>
+            )}
+          </Button>
+          <Button 
+            color="gray" 
+            onClick={() => {
+              setShowBulkDeleteModal(false);
+              setBulkDeleteConfirmText('');
+            }}
+          >
+            Cancelar
+          </Button>
+        </Modal.Footer>
       </Modal>
     </PermissionGate>
   );

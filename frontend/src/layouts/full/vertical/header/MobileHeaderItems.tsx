@@ -8,7 +8,6 @@ import CreateButton from "./CreateButton";
 
 import { useContext } from "react";
 import { CustomizerContext } from "../../../../context/CustomizerContext";
-import { Language } from "./Language";
 
 const MobileHeaderItems = () => {
   const { activeMode, setActiveMode } = useContext(CustomizerContext);
@@ -55,8 +54,6 @@ const MobileHeaderItems = () => {
           {/* Create Button */}
           <CreateButton />
 
-          {/* Language Dropdown*/}
-          <Language />
           {/* Profile Dropdown */}
           <Profile />
         </div>

@@ -15,17 +15,17 @@ const LoginReg = () => {
               <p className="text-white/90 sm:text-lg text-base mb-6 leading-relaxed">
                 Únete a más de 150 agencias de seguros que ya transformaron su negocio con Guro, 
                 el software de seguros con inteligencia artificial más completo del mercado. 
-                Comienza tu prueba gratuita hoy mismo.
+                Comienza tu prueba de 7 días gratis hoy mismo.
               </p>
               <div className="flex flex-col sm:flex-row lg:justify-start justify-center gap-3">
                 <Button
                   as={Link}
-                  to="/auth/auth1/register"
+                  to="/comenzar"
                   color={"white"}
                   className="w-full sm:w-auto px-0"
                   size={"lg"}
                 >
-                  🚀 Comenzar Prueba Gratuita
+                  Probar 7 Días Gratis
                 </Button>
                 <Button
                   as={Link}
@@ -38,7 +38,7 @@ const LoginReg = () => {
                 </Button>
               </div>
               <p className="text-white/70 text-sm mt-4">
-                ✓ 14 días gratis • ✓ Sin tarjeta de crédito • ✓ Configuración en 24h
+                ✓ 7 días gratis • ✓ Sin tarjeta de crédito • ✓ Configuración en 24h
               </p>
             </div>
             <div className="lg:w-[30%]">

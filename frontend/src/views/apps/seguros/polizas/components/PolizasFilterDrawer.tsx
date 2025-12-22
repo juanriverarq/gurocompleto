@@ -54,7 +54,6 @@ const PolizasFilterDrawer: React.FC<PolizasFilterDrawerProps> = ({
       ramo: '',
       estado: '',
       vendedor: '',
-      sede: '',
       fecha_inicio: '',
       fecha_fin: '',
       per_page: 15,
@@ -74,7 +73,6 @@ const PolizasFilterDrawer: React.FC<PolizasFilterDrawerProps> = ({
     if (localFilters.ramo) count++;
     if (localFilters.estado) count++;
     if (localFilters.vendedor) count++;
-    if (localFilters.sede) count++;
     if (localFilters.fecha_inicio) count++;
     if (localFilters.fecha_fin) count++;
     if (localFilters.renovable !== undefined && localFilters.renovable !== '') count++;
@@ -264,20 +262,6 @@ const PolizasFilterDrawer: React.FC<PolizasFilterDrawerProps> = ({
                   placeholder="Nombre del vendedor"
                   value={localFilters.vendedor || ''}
                   onChange={(e) => handleFilterChange('vendedor', e.target.value)}
-                  className="w-full"
-                />
-              </div>
-
-              {/* Sede */}
-              <div className="space-y-2">
-                <Label htmlFor="sede" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Sede de Origen
-                </Label>
-                <Input
-                  id="sede"
-                  placeholder="Sede donde se creó la póliza"
-                  value={localFilters.sede || ''}
-                  onChange={(e) => handleFilterChange('sede', e.target.value)}
                   className="w-full"
                 />
               </div>

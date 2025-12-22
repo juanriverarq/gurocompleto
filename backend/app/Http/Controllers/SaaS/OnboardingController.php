@@ -127,8 +127,8 @@ class OnboardingController extends Controller
                     'max_policies' => $planFeatures['max_policies'],
                     'features' => $planFeatures['features'],
                     'status' => 'trial',
-                    // Cambiado a 14 días de prueba
-                    'trial_ends_at' => Carbon::now()->addDays(14),
+                    // Cambiado a 7 días de prueba
+                    'trial_ends_at' => Carbon::now()->addDays(7),
                     'owner_id' => $user->id,
                     'settings' => [
                         'timezone' => 'America/Bogota',
@@ -209,6 +209,289 @@ class OnboardingController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error interno del servidor: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Crear broker simplificado desde el flujo de onboarding rápido
+     * Solo requiere: nombre, teléfono, tipo de negocio, empleados y módulos
+     */
+    public function createBrokerSimplified(Request $request)
+    {
+        Log::info('🚀 [ONBOARDING-SIMPLE] Iniciando createBrokerSimplified', [
+            'data' => $request->all()
+        ]);
+
+        try {
+            $user = UnifiedAuthMiddleware::getAuthenticatedUser($request);
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Verificar si el usuario ya tiene un broker
+            $existingBroker = $user->getPrimaryBroker();
+            if ($existingBroker) {
+                // Ya tiene broker, actualizar con los nuevos datos
+                $updateData = [];
+                
+                if ($request->filled('phone')) {
+                    $updateData['phone'] = $request->input('phone');
+                }
+                if ($request->filled('businessType')) {
+                    $updateData['industry'] = $request->input('businessType');
+                }
+                if ($request->filled('employeeCount')) {
+                    $employeeMap = [
+                        '1' => 1, '2-5' => 5, '6-10' => 10,
+                        '11-20' => 20, '21-50' => 50, '50+' => 100,
+                    ];
+                    $updateData['max_users'] = $employeeMap[$request->input('employeeCount')] ?? 5;
+                }
+                if ($request->filled('modules')) {
+                    $updateData['features'] = $request->input('modules');
+                }
+                
+                if (!empty($updateData)) {
+                    $existingBroker->update($updateData);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Broker actualizado',
+                    'data' => [
+                        'broker' => [
+                            'id' => $existingBroker->id,
+                            'name' => $existingBroker->name,
+                        ]
+                    ]
+                ]);
+            }
+
+            // Validar datos mínimos
+            $validator = Validator::make($request->all(), [
+                'phone' => 'required|string|max:32',
+                'businessType' => 'required|string|max:64',
+                'employeeCount' => 'required|string|max:16',
+                'modules' => 'required|array|min:1',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos incompletos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Mapear empleados a max_users
+            $employeeMap = [
+                '1' => 1, '2-5' => 5, '6-10' => 10,
+                '11-20' => 20, '21-50' => 50, '50+' => 100,
+            ];
+            $maxUsers = $employeeMap[$request->input('employeeCount')] ?? 5;
+
+            // Generar nombre del broker basado en el nombre del usuario
+            $brokerName = $user->name ? $user->name . ' - Agencia' : 'Mi Agencia';
+            
+            // Generar subdominio único
+            $baseSubdomain = Str::slug($brokerName);
+            $subdomain = $baseSubdomain;
+            $counter = 1;
+            
+            while (Broker::where('subdomain', $subdomain)->exists()) {
+                $subdomain = $baseSubdomain . '-' . $counter;
+                $counter++;
+            }
+
+            DB::beginTransaction();
+
+            try {
+                $broker = Broker::create([
+                    'name' => $brokerName,
+                    'legal_name' => $brokerName,
+                    'document_type' => 'NIT',
+                    'document_number' => 'PENDIENTE-' . time(),
+                    'email' => $user->email,
+                    'phone' => $request->input('phone'),
+                    'address' => 'Por definir',
+                    'city' => 'Por definir',
+                    'country' => 'Colombia',
+                    'industry' => $request->input('businessType'),
+                    'subdomain' => $subdomain,
+                    'plan' => 'basic',
+                    'max_users' => $maxUsers,
+                    'max_clients' => 100,
+                    'max_policies' => 500,
+                    'features' => $request->input('modules', []),
+                    'status' => 'trial',
+                    'trial_ends_at' => Carbon::now()->addDays(7),
+                    'owner_id' => $user->id,
+                    'settings' => [
+                        'timezone' => 'America/Bogota',
+                        'currency' => 'COP',
+                        'language' => 'es',
+                        'onboarding_completed' => false,
+                    ],
+                    'brand_colors' => [
+                        'primary' => '#3b82f6',
+                        'secondary' => '#64748b',
+                        'accent' => '#10b981'
+                    ]
+                ]);
+
+                // Actualizar usuario
+                $user->update([
+                    'broker_id' => $broker->id,
+                    'user_type' => 'MASTER',
+                    'phone' => $request->input('phone'),
+                ]);
+
+                DB::commit();
+
+                Log::info('🚀 [ONBOARDING-SIMPLE] Broker creado exitosamente', [
+                    'broker_id' => $broker->id,
+                    'user_id' => $user->id,
+                ]);
+
+                // Sembrar catálogos base
+                try {
+                    $this->seedCatalogsForBroker($broker);
+                } catch (\Throwable $se) {
+                    Log::warning('🚀 [ONBOARDING-SIMPLE] Seed de catálogos falló', [
+                        'error' => $se->getMessage(),
+                    ]);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Broker creado exitosamente',
+                    'data' => [
+                        'broker' => [
+                            'id' => $broker->id,
+                            'name' => $broker->name,
+                            'subdomain' => $broker->subdomain,
+                            'status' => $broker->status,
+                            'trial_ends_at' => $broker->trial_ends_at->toISOString(),
+                        ]
+                    ]
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            Log::error('🚀 [ONBOARDING-SIMPLE] Error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear el broker: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualizar perfil del broker (para completar datos después del registro)
+     */
+    public function updateBrokerProfile(Request $request)
+    {
+        try {
+            $user = UnifiedAuthMiddleware::getAuthenticatedUser($request);
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $broker = $user->getPrimaryBroker();
+            if (!$broker) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes un broker asociado'
+                ], 404);
+            }
+
+            // Validar datos
+            $validator = Validator::make($request->all(), [
+                'name' => 'nullable|string|max:255',
+                'legal_name' => 'nullable|string|max:255',
+                'document_type' => 'nullable|string|in:NIT,CC,CE',
+                'document_number' => 'nullable|string|max:50',
+                'phone' => 'nullable|string|max:32',
+                'address' => 'nullable|string|max:500',
+                'city' => 'nullable|string|max:100',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Datos inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Actualizar solo los campos proporcionados
+            $updateData = [];
+            $fields = ['name', 'legal_name', 'document_type', 'document_number', 'phone', 'address', 'city'];
+            
+            foreach ($fields as $field) {
+                if ($request->filled($field)) {
+                    $updateData[$field] = $request->input($field);
+                }
+            }
+
+            // Si se actualiza el document_number, verificar que no sea el placeholder
+            if (isset($updateData['document_number']) && 
+                strpos($broker->document_number, 'PENDIENTE-') === 0) {
+                // Es el placeholder, permitir actualización
+            }
+
+            if (!empty($updateData)) {
+                $broker->update($updateData);
+                
+                // Marcar onboarding como completado en settings
+                $settings = $broker->settings ?? [];
+                $settings['onboarding_completed'] = true;
+                $broker->update(['settings' => $settings]);
+            }
+
+            Log::info('🚀 [BROKER-PROFILE] Perfil actualizado', [
+                'broker_id' => $broker->id,
+                'updated_fields' => array_keys($updateData),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Perfil actualizado correctamente',
+                'data' => [
+                    'broker' => [
+                        'id' => $broker->id,
+                        'name' => $broker->name,
+                        'legal_name' => $broker->legal_name,
+                        'document_number' => $broker->document_number,
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('🚀 [BROKER-PROFILE] Error', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el perfil'
             ], 500);
         }
     }

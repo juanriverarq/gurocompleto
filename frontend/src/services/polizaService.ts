@@ -72,6 +72,10 @@ export interface Poliza {
   
   // Información administrativa
   vendedor?: string;
+  vendedor_id?: number;
+  vendedor_id_2?: number;
+  vendedor_2?: string;
+  enlace_externo?: string;
   observaciones?: string;
   observaciones_internas?: string;
   fecha_expedicion: string;
@@ -307,17 +311,51 @@ export const polizaService = {
   },
 
   /**
-   * Obtener pólizas de cartera (optimizado para vista de cartera)
+   * Obtener pólizas de cartera (optimizado para vista de cartera con paginación del servidor)
    */
-  async getCarteraPolizas(): Promise<ApiResponse<Poliza[]>> {
+  async getCarteraPolizas(
+    page: number = 1,
+    perPage: number = 25,
+    search: string = '',
+    tab?: 'general' | 'porCobrar' | 'porPagar' | 'recaudosCompletados',
+  ): Promise<{ 
+    success: boolean; 
+    data: Poliza[]; 
+    message?: string; 
+    pagination?: { current_page: number; last_page: number; per_page: number; total: number };
+    estadisticas?: {
+      totalPolizas: number;
+      polizasActivas: number;
+      primaTotal: number;
+      comisionesTotal: number;
+      recaudadoTotal: number;
+      porCobrarTotal: number;
+      tasaRecaudo: number;
+    };
+    contadoresTabs?: {
+      general: number;
+      porCobrar: number;
+      porPagar: number;
+      recaudosCompletados: number;
+    };
+  }> {
     try {
-      const endpoint = `${API_PREFIX}/cartera`;
-      const response = await makeRequest<any>(endpoint);
+      let endpoint = `${API_PREFIX}/cartera?page=${page}&per_page=${perPage}`;
+      if (search) {
+        endpoint += `&search=${encodeURIComponent(search)}`;
+      }
+      if (tab && tab !== 'general') {
+        endpoint += `&tab=${encodeURIComponent(tab)}`;
+      }
+      const response = await makeRequest<any>(endpoint) as any;
 
       return {
         success: (response && typeof response === 'object' && 'success' in response) ? !!response.success : true,
         data: response.data || response,
         message: (response && typeof response === 'object' && 'message' in response) ? response.message : undefined,
+        pagination: response.pagination,
+        estadisticas: response.estadisticas,
+        contadoresTabs: response.contadoresTabs,
       };
     } catch (error) {
       toast({
@@ -330,9 +368,33 @@ export const polizaService = {
   },
 
   /**
+   * Registrar recaudo por número de póliza (para importación masiva)
+   */
+  async registrarRecaudoPorNumeroPoliza(params: {
+    numero_poliza: string;
+    tipo_recaudo: 'oficina' | 'aseguradora_directo';
+    monto_pagado?: number;
+    fecha_pago?: string;
+    metodo_pago?: string;
+    referencia_pago?: string;
+  }): Promise<ApiResponse<any>> {
+    try {
+      const endpoint = `${API_PREFIX}/recaudo-por-numero`;
+      const response = await makeRequest<any>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+      return response;
+    } catch (error) {
+      // No mostrar toast aquí para no saturar en importación masiva
+      throw error;
+    }
+  },
+
+  /**
    * Registrar recaudo de póliza
    */
-  async registrarPagoPoliza(polizaId: string, tipoRecaudo: 'oficina' | 'aseguradora', monto: number, metodoPago?: string, referenciaPago?: string, observaciones?: string, fechaPago?: string): Promise<ApiResponse<any>> {
+  async registrarPagoPoliza(polizaId: string, tipoRecaudo: 'oficina' | 'aseguradora' | 'aseguradora_directo', monto: number, metodoPago?: string, referenciaPago?: string, observaciones?: string, fechaPago?: string): Promise<ApiResponse<any>> {
     try {
       const endpoint = `${API_PREFIX}/${polizaId}/pagos`;
       const response = await makeRequest<any>(endpoint, {
@@ -406,6 +468,101 @@ export const polizaService = {
       toast({
         variant: "destructive",
         title: "Error al revertir pago",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Revertir todos los recaudos de oficina de una póliza
+   */
+  async revertirRecaudosOficina(polizaId: string): Promise<ApiResponse<void>> {
+    try {
+      const response = await makeRequest<void>(`${API_PREFIX}/${polizaId}/pagos/revertir-oficina`, {
+        method: 'DELETE',
+      });
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al revertir recaudos",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Revertir recaudo completo (oficina + aseguradora)
+   */
+  async revertirRecaudoCompleto(polizaId: string): Promise<ApiResponse<void>> {
+    try {
+      const response = await makeRequest<void>(`${API_PREFIX}/${polizaId}/pagos/revertir-completo`, {
+        method: 'DELETE',
+      });
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al revertir recaudo",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Recaudo masivo de pólizas
+   */
+  async recaudoMasivo(params: {
+    poliza_ids?: string[];
+    fecha_inicio?: string;
+    fecha_fin?: string;
+    tipo_recaudo: 'oficina' | 'aseguradora_directo';
+    metodo_pago?: string;
+    referencia_pago?: string;
+    observaciones?: string;
+  }): Promise<ApiResponse<{ procesadas: number; total: number; errores: string[] }>> {
+    try {
+      const response = await makeRequest<{ procesadas: number; total: number; errores: string[] }>(`${API_PREFIX}/recaudo-masivo`, {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error en recaudo masivo",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Recaudo masivo desde archivo CSV
+   */
+  async recaudoMasivoCsv(archivo: File, tipoRecaudo: 'oficina' | 'aseguradora_directo'): Promise<ApiResponse<{ procesadas: number; total_lineas: number; errores: string[] }>> {
+    try {
+      const formData = new FormData();
+      formData.append('archivo', archivo);
+      formData.append('tipo_recaudo', tipoRecaudo);
+
+      const response = await makeRequest<{ procesadas: number; total_lineas: number; errores: string[] }>(`${API_PREFIX}/recaudo-masivo-csv`, {
+        method: 'POST',
+        body: formData,
+        headers: {}, // No Content-Type header para FormData
+      });
+
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error procesando CSV",
         description: error instanceof Error ? error.message : "Error desconocido",
       });
       throw error;
@@ -1070,27 +1227,44 @@ export const polizaService = {
       // Agregar formato
       queryParams.append('formato', formato);
 
-      // Agregar filtros
+      // Agregar filtros - solo los que tienen valor
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, value.toString());
+          queryParams.append(key, String(value));
         }
       });
+
+      console.log('Exportar URL:', `${API_BASE_URL}${API_PREFIX}/exportar?${queryParams.toString()}`);
 
       const response = await fetch(`${API_BASE_URL}${API_PREFIX}/exportar?${queryParams.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/csv, application/json',
         },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error desconocido' }));
+      // Si la respuesta es JSON, probablemente es un error
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const errorData = await response.json();
         throw new Error(errorData.message || 'Error al exportar datos');
       }
 
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: No se pudo exportar los datos`);
+      }
+
       const blob = await response.blob();
+      
+      // Verificar que el blob no esté vacío
+      if (blob.size < 100) {
+        // Un archivo Excel/CSV válido debería tener al menos los headers
+        console.warn('Blob muy pequeño:', blob.size, 'bytes');
+      }
+      
       return blob;
     } catch (error) {
+      console.error('Error en exportarPolizas:', error);
       toast({
         variant: "destructive",
         title: "Error al exportar pólizas",

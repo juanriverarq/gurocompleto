@@ -91,25 +91,20 @@ const useClienteValidation = () => {
             isValid = false;
           }
         } else {
+          // Para empresas, solo razón social es obligatoria
           if (!formData.razon_social || !formData.razon_social.trim()) {
             stepErrors.razon_social = 'La razón social es obligatoria';
             isValid = false;
           }
-          if (!formData.representante_legal || !formData.representante_legal.trim()) {
-            stepErrors.representante_legal = 'El nombre del representante es obligatorio';
-            isValid = false;
-          }
-          if (!formData.representante_legal_tipo_documento) {
-            stepErrors.representante_legal_tipo_documento =
-              'El tipo de documento del representante es obligatorio';
-            isValid = false;
-          }
+          // Representante legal y sus datos son opcionales
+          // Solo validar formato si se ingresa documento del representante
           if (
-            !formData.representante_legal_documento ||
+            formData.representante_legal_documento &&
+            formData.representante_legal_documento.trim() &&
             !validateDocNumber(formData.representante_legal_documento)
           ) {
             stepErrors.representante_legal_documento =
-              'El documento del representante es obligatorio (6-15 dígitos)';
+              'El documento del representante debe tener entre 6-15 dígitos';
             isValid = false;
           }
         }

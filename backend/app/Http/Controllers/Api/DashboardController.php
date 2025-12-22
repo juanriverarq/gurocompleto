@@ -8,6 +8,8 @@ use App\Models\Cliente;
 use App\Models\Poliza;
 use App\Models\Siniestro;
 use App\Models\CommercialTask;
+use App\Models\PagoPoliza;
+use App\Models\CobroComision;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -204,6 +206,54 @@ class DashboardController extends Controller
             $crecimientoVentas = $ventasMesAnterior > 0 
                 ? round((($ventasDelMes - $ventasMesAnterior) / $ventasMesAnterior) * 100, 1)
                 : ($ventasDelMes > 0 ? 100 : 0);
+
+            // RECAUDOS Y COMISIONES - Datos de cartera
+            $recaudosStats = [
+                'primas_cobradas' => 0,
+                'primas_pendientes' => 0,
+                'comisiones_cobradas' => 0,
+                'comisiones_pendientes' => 0,
+                'polizas_recaudadas' => 0,
+            ];
+
+            try {
+                // Primas cobradas (pólizas con pago aseguradora completado)
+                $primasCobradas = PagoPoliza::where('broker_id', $broker->id)
+                    ->where('tipo_recaudo', 'aseguradora')
+                    ->where('estado', 'pagado')
+                    ->sum('monto_pagado');
+                
+                // Contar pólizas con recaudo completado
+                $polizasRecaudadas = PagoPoliza::where('broker_id', $broker->id)
+                    ->where('tipo_recaudo', 'aseguradora')
+                    ->where('estado', 'pagado')
+                    ->distinct('poliza_id')
+                    ->count('poliza_id');
+
+                // Primas pendientes (total de pólizas activas - primas cobradas)
+                $primasPendientes = max(0, $valorTotalPrimas - $primasCobradas);
+
+                // Comisiones cobradas
+                $comisionesCobradas = 0;
+                if (Schema::hasTable('cobros_comision')) {
+                    $comisionesCobradas = CobroComision::where('broker_id', $broker->id)
+                        ->where('estado', 'cobrado')
+                        ->sum('monto_cobrado');
+                }
+
+                // Comisiones pendientes (total comisiones - cobradas)
+                $comisionesPendientes = max(0, $comisionTotal - $comisionesCobradas);
+
+                $recaudosStats = [
+                    'primas_cobradas' => $primasCobradas,
+                    'primas_pendientes' => $primasPendientes,
+                    'comisiones_cobradas' => $comisionesCobradas,
+                    'comisiones_pendientes' => $comisionesPendientes,
+                    'polizas_recaudadas' => $polizasRecaudadas,
+                ];
+            } catch (\Exception $e) {
+                Log::warning('Error calculando recaudos para dashboard', ['error' => $e->getMessage()]);
+            }
             
             return response()->json([
                 'success' => true,
@@ -250,6 +300,17 @@ class DashboardController extends Controller
                         'del_mes' => $ventasDelMes,
                         'mes_anterior' => $ventasMesAnterior,
                         'crecimiento_porcentaje' => $crecimientoVentas
+                    ],
+                    'recaudos' => [
+                        'primas_cobradas' => $recaudosStats['primas_cobradas'],
+                        'primas_cobradas_formato' => number_format($recaudosStats['primas_cobradas'], 2),
+                        'primas_pendientes' => $recaudosStats['primas_pendientes'],
+                        'primas_pendientes_formato' => number_format($recaudosStats['primas_pendientes'], 2),
+                        'comisiones_cobradas' => $recaudosStats['comisiones_cobradas'],
+                        'comisiones_cobradas_formato' => number_format($recaudosStats['comisiones_cobradas'], 2),
+                        'comisiones_pendientes' => $recaudosStats['comisiones_pendientes'],
+                        'comisiones_pendientes_formato' => number_format($recaudosStats['comisiones_pendientes'], 2),
+                        'polizas_recaudadas' => $recaudosStats['polizas_recaudadas'],
                     ],
                     'timestamp' => now()->toISOString()
                 ]

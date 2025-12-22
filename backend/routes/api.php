@@ -922,6 +922,10 @@ Route::prefix('master/auth')->group(function () {
 // Rutas SaaS - ONBOARDING (solo autenticación unificada, sin broker requerido)
 Route::middleware(['unified.auth', 'security.auth'])->prefix('saas')->group(function () {
     Route::post('onboarding/create-broker', [OnboardingController::class, 'createBrokerWithFirebase']);
+    // Nuevo endpoint simplificado para el flujo de registro rápido
+    Route::post('onboarding/create-broker-simple', [OnboardingController::class, 'createBrokerSimplified']);
+    // Actualizar perfil del broker (para completar datos después del registro)
+    Route::put('broker/profile', [OnboardingController::class, 'updateBrokerProfile']);
 });
 
 // Rutas SaaS con Autenticación Unificada (Firebase + Empleados)
@@ -940,6 +944,14 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
     });
     // Verificar estado del usuario SaaS
     // Route::get('me', [SaasAuthController::class, 'firebaseMe']); // Comentado temporalmente
+    
+    // Billing - Suscripción y Facturas
+    Route::prefix('billing')->group(function () {
+        Route::get('/subscription', [\App\Http\Controllers\Api\SubscriptionController::class, 'current']);
+        Route::get('/invoices', [\App\Http\Controllers\Api\SubscriptionController::class, 'invoices']);
+        Route::get('/invoices/{invoiceId}/download', [\App\Http\Controllers\Api\SubscriptionController::class, 'downloadInvoice']);
+        Route::get('/usage', [\App\Http\Controllers\Api\SubscriptionController::class, 'usage']);
+    });
     
     // Rutas protegidas SaaS con Autenticación Unificada + verificación de permisos
     Route::middleware(['saas.auth'])->group(function () {
@@ -976,6 +988,29 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
 
             // Endpoint de debug
             Route::get('/debug/broker', [SaasPolizasController::class, 'debugBroker']);
+        });
+
+        // Automóviles (SaaS protegido)
+        // Ruta explícita para catálogos (evitar colisión con /{id})
+        Route::get('automoviles/catalogos', [AutomovilesController::class, 'catalogos']);
+        Route::prefix('automoviles')->group(function () {
+            Route::get('/', [AutomovilesController::class, 'index']);
+            Route::post('/', [AutomovilesController::class, 'store']);
+            Route::get('/{id}', [AutomovilesController::class, 'show'])->whereNumber('id');
+            Route::put('/{id}', [AutomovilesController::class, 'update'])->whereNumber('id');
+            Route::delete('/{id}', [AutomovilesController::class, 'destroy'])->whereNumber('id');
+        });
+
+        // Comisiones Manuales de Pólizas
+        Route::get('comisiones-manuales/constants', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'constants']);
+        Route::get('comisiones-manuales/pendientes', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'pendientesPorVendedor']);
+        Route::prefix('polizas/{polizaId}/comisiones-manuales')->group(function () {
+            Route::get('/', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'show'])->whereNumber('id');
+            Route::put('/{id}', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'update'])->whereNumber('id');
+            Route::delete('/{id}', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'destroy'])->whereNumber('id');
+            Route::post('/{id}/anular', [\App\Http\Controllers\SaaS\ComisionesManualesController::class, 'anular'])->whereNumber('id');
         });
         
         // Rutas para reportes
@@ -1106,6 +1141,7 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
         Route::prefix('aseguradoras')->group(function () {
             Route::get('/', [App\Http\Controllers\SaaS\AseguradorasController::class, 'index']);
             Route::post('/', [App\Http\Controllers\SaaS\AseguradorasController::class, 'store']);
+            Route::post('/bulk-delete', [App\Http\Controllers\SaaS\AseguradorasController::class, 'bulkDelete']);
             Route::get('/{id}', [App\Http\Controllers\SaaS\AseguradorasController::class, 'show'])->whereNumber('id');
             Route::put('/{id}', [App\Http\Controllers\SaaS\AseguradorasController::class, 'update'])->whereNumber('id');
             Route::delete('/{id}', [App\Http\Controllers\SaaS\AseguradorasController::class, 'destroy'])->whereNumber('id');
@@ -1120,11 +1156,34 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::delete('/{id}', [App\Http\Controllers\SaaS\VendedoresController::class, 'destroy'])->whereNumber('id');
         });
         
+        // Liquidaciones de Vendedores
+        Route::prefix('liquidaciones-vendedores')->group(function () {
+            Route::get('/comisiones-disponibles', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'comisionesDisponibles']);
+            Route::get('/reporte', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'reporteLiquidaciones']);
+            Route::get('/reporte-vendedor', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'reporteVendedor']);
+            Route::post('/vista-previa', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'vistaPrevia']);
+            Route::get('/', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'index']);
+            Route::post('/', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'store']);
+            Route::get('/{id}', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'show'])->whereNumber('id');
+            Route::post('/{id}/aprobar', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'aprobar'])->whereNumber('id');
+            Route::post('/{id}/registrar-pago', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'registrarPago'])->whereNumber('id');
+            Route::post('/{id}/revertir', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'revertir'])->whereNumber('id');
+            Route::get('/{id}/pdf', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'generarPDF'])->whereNumber('id');
+            Route::delete('/{id}', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'destroy'])->whereNumber('id');
+        });
+
+        // Liquidaciones Manuales (desde comisiones manuales de pólizas)
+        Route::post('liquidaciones-manuales', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'crearDesdeComisionesManuales']);
+        Route::post('liquidaciones-manuales-poliza', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'crearDesdePoliza']);
+        Route::get('polizas/{polizaId}/comisiones-manuales/liquidaciones', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'liquidacionesPorPoliza']);
+        Route::get('polizas/{polizaId}/datos-liquidacion', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'datosLiquidacionPoliza']);
+        
         // Ramos
 Route::prefix('ramos')->group(function () {
 Route::get('/categorias', [App\Http\Controllers\SaaS\RamosController::class, 'categorias']);
 Route::get('/', [App\Http\Controllers\SaaS\RamosController::class, 'index']);
 Route::post('/', [App\Http\Controllers\SaaS\RamosController::class, 'store']);
+Route::post('/bulk-delete', [App\Http\Controllers\SaaS\RamosController::class, 'bulkDelete']);
 Route::get('/{id}', [App\Http\Controllers\SaaS\RamosController::class, 'show'])->whereNumber('id');
 Route::put('/{id}', [App\Http\Controllers\SaaS\RamosController::class, 'update'])->whereNumber('id');
 Route::delete('/{id}', [App\Http\Controllers\SaaS\RamosController::class, 'destroy'])->whereNumber('id');
@@ -1736,7 +1795,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
         Route::post('/clientes', [SaasClientesController::class, 'store']);
         Route::get('/clientes/{id}', [SaasClientesController::class, 'show'])->whereNumber('id');
         Route::put('/clientes/{id}', [SaasClientesController::class, 'update'])->whereNumber('id');
-        Route::delete('/clientes/{id}', [SaasClientesController::class, 'destroy'])->middleware('saas.auth:clientes.eliminar')->whereNumber('id');
+        Route::delete('/clientes/{id}', [SaasClientesController::class, 'destroy'])->whereNumber('id');
         
         // =============================
         // RUTAS DE CAMPAÑAS (CON FIREBASE AUTH IGUAL QUE CLIENTES)
@@ -2422,6 +2481,9 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::get('/{id}', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'show'])->whereNumber('id');
         Route::put('/{id}', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'update'])->whereNumber('id');
         Route::delete('/{id}', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'destroy'])->whereNumber('id');
+        
+        // Borrado masivo de clientes
+        Route::post('/bulk-delete', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'bulkDelete']);
 
         // Alias esperado por el frontend: /{id}/asignar
         Route::post('/{id}/asignar', [\App\Http\Controllers\SaaS\SaasClientesController::class, 'asignarAsesor'])->whereNumber('id');
@@ -2458,6 +2520,11 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::get('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'index'])->whereNumber('id');
         Route::post('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'store'])->whereNumber('id');
         Route::delete('/{id}/pagos/{pagoId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPago'])->whereNumber('id')->whereNumber('pagoId');
+        Route::delete('/{id}/pagos/revertir-oficina', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirRecaudosOficina'])->whereNumber('id');
+        Route::delete('/{id}/pagos/revertir-completo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirRecaudoCompleto'])->whereNumber('id');
+        Route::post('/recaudo-masivo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoMasivo']);
+        Route::post('/recaudo-masivo-csv', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoMasivoCsv']);
+        Route::post('/recaudo-por-numero', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoPorNumeroPoliza']);
         Route::post('/{id}/cobrar-comision', [\App\Http\Controllers\Api\PagoPolizaController::class, 'registrarCobroComision'])->whereNumber('id');
         Route::delete('/{id}/cobrar-comision/{cobroId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirCobroComision'])->whereNumber('id')->whereNumber('cobroId');
 

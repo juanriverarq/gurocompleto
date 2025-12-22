@@ -17,19 +17,19 @@ const AnnouncementBar = () => {
         <div className="bg-sky py-2 overflow-hidden relative  before:absolute before:left-0 before:lg:inline-block before:lg:none before:hidden before:content-[''] before:bg-[url('/src/assets/images/front-pages/background/left-shape.png')] before:bg-no-repeat before:bg-contain before:top-0  before:w-[325px] before:h-[50px]   after:absolute after:end-1/4 after:lg:inline-block after:lg:none after:hidden after:content-[''] after:bg-[url('/src/assets/images/front-pages/background/right-shape.png')] after:bg-no-repeat after:bg-contain after:top-0  after:w-[325px] after:h-[50px]">
           <div className="flex justify-center gap-4 items-center ">
             <Link
-              to="/auth/auth1/register"
+              to="/comenzar"
               className="py-1 px-2 rounded-[8px] bg-lightbtn text-xs font-bold text-white hover:bg-primary transition-colors"
             >
-              🎉 GRATIS
+              7 DÍAS GRATIS
             </Link>
             <p className="text-13 font-medium text-white opacity-90">
-              ¡Prueba Guro 14 días gratis! Revoluciona tu negocio de seguros con IA
+              ¡Prueba Guro gratis! Revoluciona tu negocio de seguros con IA
             </p>
             <Link 
-              to="/auth/auth1/register" 
+              to="/comenzar" 
               className="text-xs font-bold text-white underline hover:text-secondary transition-colors"
             >
-              Comenzar →
+              Comenzar ahora →
             </Link>
             <Link to={"#"} onClick={toggleVisibility} className="absolute end-4">
               <Icon

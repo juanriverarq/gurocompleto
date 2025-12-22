@@ -71,10 +71,10 @@ const MobileDrawer = () => {
               color={"primary"}
               className="w-full"
               as={Link}
-              to="/auth/auth1/register"
+              to="/comenzar"
               onClick={handleClose}
             >
-              Comenzar Gratis
+              Prueba 7 Días Gratis
             </Button>
           </div>
 

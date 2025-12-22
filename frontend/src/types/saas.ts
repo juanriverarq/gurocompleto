@@ -13,15 +13,22 @@ export interface BrokerTenant {
   estado?: 'ACTIVO' | 'SUSPENDIDO' | 'INACTIVO';
   status?: 'active' | 'trial' | 'suspended' | 'inactive';
   trial_ends_at?: string; // ISO string date
+  logo?: string;
+  logo_url?: string;
   branding: {
     logo?: string;
     favicon?: string;
-    colores: {
+    // Soportar ambas estructuras de colores (backend puede devolver cualquiera)
+    colores?: {
       primario: string;
       secundario: string;
       acento: string;
     };
-    nombre_comercial: string;
+    // Estructura alternativa del backend
+    primary_color?: string;
+    secondary_color?: string;
+    accent_color?: string;
+    nombre_comercial?: string;
     slogan?: string;
   };
   plan: 'basic' | 'professional' | 'enterprise';
@@ -59,7 +66,7 @@ export interface UsuarioSaaS {
   avatar?: string;
   rol: string; // 'super_admin' | 'admin' | 'supervisor' | 'asesor' | 'vendedor' | custom
   estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
-  
+
   // Permisos granulares
   permisos: {
     dashboard: {
@@ -118,7 +125,7 @@ export interface UsuarioSaaS {
       facturacion: boolean;
     };
   };
-  
+
   // Asignaciones y territorios
   asignaciones?: {
     clientes_asignados: string[];
@@ -126,7 +133,7 @@ export interface UsuarioSaaS {
     supervisor_id?: string;
     equipo_ids: string[];
   };
-  
+
   // Configuraciones personales
   configuraciones: {
     notificaciones: {
@@ -137,7 +144,7 @@ export interface UsuarioSaaS {
     dashboard_layout: any;
     tema: 'light' | 'dark' | 'auto';
   };
-  
+
   ultimo_acceso?: string;
   created_at: string;
   updated_at: string;
@@ -149,7 +156,7 @@ export interface ClienteSaaS {
   codigo_cliente: string; // Generado automáticamente
   tipo: 'PERSONA' | 'EMPRESA' | 'CONSORCIO';
   estado: 'ACTIVO' | 'INACTIVO' | 'PROSPECTO';
-  
+
   // Datos comunes
   email: string;
   telefono: string;
@@ -159,13 +166,13 @@ export interface ClienteSaaS {
   departamento: string;
   pais: string;
   codigo_postal?: string;
-  
+
   // Asignación y gestión
   asesor_asignado_id?: string;
   supervisor_id?: string;
   fecha_asignacion?: string;
   origen: 'REFERIDO' | 'WEB' | 'TELEFONO' | 'PRESENCIAL' | 'REDES_SOCIALES' | 'OTRO';
-  
+
   // Datos específicos por tipo
   persona?: {
     nombres: string;
@@ -179,7 +186,7 @@ export interface ClienteSaaS {
     profesion?: string;
     ingresos_mensuales?: number;
   };
-  
+
   empresa?: {
     razon_social: string;
     nombre_comercial?: string;
@@ -193,7 +200,7 @@ export interface ClienteSaaS {
     ingresos_anuales?: number;
     fecha_constitucion: string;
   };
-  
+
   consorcio?: {
     nombre_consorcio: string;
     objeto_consorcio: string;
@@ -207,7 +214,7 @@ export interface ClienteSaaS {
     documento_representante: string;
     duracion_consorcio: string;
   };
-  
+
   // Información adicional
   observaciones?: string;
   tags: string[];
@@ -217,13 +224,13 @@ export interface ClienteSaaS {
     url: string;
     fecha_subida: string;
   }[];
-  
+
   // Métricas
   total_polizas: number;
   prima_total_anual: number;
   ultima_poliza?: string;
   fecha_ultima_actividad: string;
-  
+
   created_at: string;
   updated_at: string;
 }

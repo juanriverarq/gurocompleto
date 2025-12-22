@@ -40,12 +40,12 @@ const MobileMenu = () => {
             </Button>
             <Button
               as={Link}
-              to="/auth/auth1/register"
+              to="/comenzar"
               className="font-bold w-full py-3"
               color={"primary"}
               onClick={handleClose}
             >
-              Comenzar Gratis
+              Prueba 7 Días Gratis
             </Button>
           </div>
         </Drawer.Items>

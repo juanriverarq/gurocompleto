@@ -8,7 +8,12 @@ export interface RenovacionFilters {
   estado?: string;
   prioridad?: string;
   agente?: string;
+  aseguradora?: string;
+  ramo?: string;
+  placa?: string;
   diasVencimiento?: string;
+  fecha_inicio?: string;
+  fecha_fin?: string;
   per_page?: number;
   page?: number;
   sort_field?: string;
@@ -22,6 +27,8 @@ export interface Renovacion {
   dni_cliente?: string;
   aseguradora: string;
   tipoSeguro: string;
+  ramo?: string;
+  placa?: string;
   fechaVencimiento: string;
   diasVencimiento: number;
   valorPrima: number;
@@ -274,37 +281,32 @@ class RenovacionesService {
       });
 
       const response = await fetch(
-        `${API_BASE_URL}/saas/renovaciones/export${
+        `${API_BASE_URL}/saas/polizas/renovaciones/exportar${
           queryParams.toString() ? `?${queryParams.toString()}` : ''
         }`,
         {
           method: 'GET',
-          headers: await this.getAuthHeaders(),
+          headers: {
+            ...(await this.getAuthHeaders()),
+            Accept: 'text/csv, application/json',
+          } as any,
         },
       );
 
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const errorData = await response.json().catch(() => ({} as any));
+        throw new Error(errorData.message || 'Error al exportar renovaciones');
+      }
+
       if (!response.ok) {
-        throw new Error('Error al exportar renovaciones');
+        throw new Error(`Error ${response.status}: No se pudo exportar renovaciones`);
       }
 
       return await response.blob();
     } catch (error) {
-      // Fallback simulado para desarrollo
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          const csvContent =
-            `Número Póliza,Cliente,Aseguradora,Tipo,Vencimiento,Estado,Prioridad,Prima
-` +
-            `POL-2024-001,Juan Carlos Pérez,Seguros Bolívar,Automóvil,2024-08-15,PENDIENTE,ALTA,1250000
-` +
-            `POL-2024-002,Empresa Logística ABC,Mapfre,Empresarial,2024-07-30,CRITICO,CRITICA,3500000
-` +
-            `POL-2024-003,Ana María Torres,Sura,Hogar,2024-09-10,EN_PROCESO,MEDIA,850000
-`;
-          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-          resolve(blob);
-        }, 1000);
-      });
+      console.error('Error exportando renovaciones:', error);
+      throw error;
     }
   }
 }

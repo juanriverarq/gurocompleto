@@ -253,7 +253,19 @@ class Broker extends Model
      */
     public function getLogoUrl(): ?string
     {
-        return $this->logo ? asset('storage/' . $this->logo) : null;
+        if (!$this->logo) {
+            return null;
+        }
+        
+        // Si ya es URL absoluta, devolverla tal cual
+        if (filter_var($this->logo, FILTER_VALIDATE_URL)) {
+            return $this->logo;
+        }
+        
+        // Construir URL absoluta con APP_URL
+        $appUrl = rtrim(config('app.url', 'http://localhost'), '/');
+        $path = ltrim($this->logo, '/');
+        return "{$appUrl}/storage/{$path}";
     }
 
     /**
@@ -261,7 +273,19 @@ class Broker extends Model
      */
     public function getFaviconUrl(): ?string
     {
-        return $this->favicon ? asset('storage/' . $this->favicon) : null;
+        if (!$this->favicon) {
+            return null;
+        }
+        
+        // Si ya es URL absoluta, devolverla tal cual
+        if (filter_var($this->favicon, FILTER_VALIDATE_URL)) {
+            return $this->favicon;
+        }
+        
+        // Construir URL absoluta con APP_URL
+        $appUrl = rtrim(config('app.url', 'http://localhost'), '/');
+        $path = ltrim($this->favicon, '/');
+        return "{$appUrl}/storage/{$path}";
     }
 
     /**

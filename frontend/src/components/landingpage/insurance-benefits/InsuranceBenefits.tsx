@@ -191,12 +191,12 @@ const InsuranceBenefits = () => {
             >
               <Button
                 as={Link}
-                to="/auth/auth1/register"
+                to="/comenzar"
                 size={"lg"}
                 color={"primary"}
                 className="w-full sm:w-auto"
               >
-                🚀 Comenzar Prueba Gratuita
+                Probar 7 Días Gratis
               </Button>
               <a 
                 href="#demos" 

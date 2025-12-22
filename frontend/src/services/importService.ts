@@ -40,6 +40,7 @@ export async function dryRunImport(params: {
   file: File;
   mapping: Record<string, string>;
   upsert_key?: string;
+  limit?: number;
 }) {
   const form = new FormData();
   form.append('entity', params.entity);
@@ -48,6 +49,7 @@ export async function dryRunImport(params: {
   // Enviar mapping como campo de texto JSON para que Laravel lo lea con input('mapping')
   form.append('mapping', JSON.stringify(params.mapping));
   if (params.upsert_key) form.append('upsert_key', params.upsert_key);
+  if (params.limit) form.append('limit', params.limit.toString());
   return request('/process', { method: 'POST', body: form });
 }
 
@@ -56,6 +58,17 @@ export async function executeImport(params: {
   file: File;
   mapping: Record<string, string>;
   upsert_key?: string;
+  auto_create?: boolean;
+  limit?: number;
+  // Mapeo de relaciones: indica qué columna del CSV de esta entidad se relaciona con qué columna del CSV de otra entidad
+  relation_mappings?: Record<string, {
+    targetEntityKey: string;
+    columnInThisFile: string;
+    columnInTargetFile: string;
+  }>;
+  // Índice de entidades importadas previamente para relacionar por columnas que no están en BD
+  // Formato: { "clientes": { "valor_identificador": id_en_bd, ... }, ... }
+  imported_index?: Record<string, Record<string, number>>;
 }) {
   const form = new FormData();
   form.append('entity', params.entity);
@@ -64,6 +77,17 @@ export async function executeImport(params: {
   // Enviar mapping como texto JSON (no Blob) para compatibilidad con PHP
   form.append('mapping', JSON.stringify(params.mapping));
   if (params.upsert_key) form.append('upsert_key', params.upsert_key);
+  // Enviar auto_create para crear automáticamente entidades relacionadas
+  form.append('auto_create', params.auto_create ? '1' : '0');
+  if (params.limit) form.append('limit', params.limit.toString());
+  // Enviar relation_mappings para que el backend sepa cómo buscar entidades relacionadas
+  if (params.relation_mappings) {
+    form.append('relation_mappings', JSON.stringify(params.relation_mappings));
+  }
+  // Enviar índice de entidades importadas para relacionar por columnas temporales
+  if (params.imported_index) {
+    form.append('imported_index', JSON.stringify(params.imported_index));
+  }
   return request('/process', { method: 'POST', body: form });
 }
 
@@ -79,6 +103,7 @@ export type ImportMetaResponse = {
       number_fields?: string[];
       boolean_fields?: string[];
       fields: string[];
+      auto_create_relations?: Record<string, { display_name: string; lookup_field: string }>;
     }
   >;
 };

@@ -12,6 +12,7 @@ import {
   Select,
   ToggleSwitch,
   Badge,
+  Checkbox as FlowbiteCheckbox,
 } from 'flowbite-react';
 import { Checkbox } from 'src/components/shadcn-ui/Default-Ui/checkbox';
 import { Icon } from '@iconify/react';
@@ -24,6 +25,8 @@ import type {
 } from 'src/types/admin';
 import { COLOMBIA_RAMOS } from 'src/data/colombia_ramos';
 import { PermissionGate } from 'src/components/PermissionGate';
+import { saasApi } from 'src/services/saasApi';
+import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 
 const Ramos = () => {
   const { ramos, loading, error, createRamo, updateRamo, deleteRamo } = useRamos();
@@ -50,6 +53,12 @@ const Ramos = () => {
     failed: number;
     messages: string[];
   } | null>(null);
+
+  // Estado para selección masiva de eliminación
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const normalize = (s: string) =>
     (s || '')
@@ -177,11 +186,11 @@ const Ramos = () => {
     setIsEditing(true);
     setCreationMode('blank');
     setFormData({
-      nombre: item.nombre,
-      subramo: item.subramo,
-      calcular_iva_pri_a_pre: item.calcular_iva_pri_a_pre,
-      vista_mapa_oportunidad: item.vista_mapa_oportunidad,
-      comisiones_aseguradoras: item.comisiones_aseguradoras.map((comision) => ({
+      nombre: item.nombre || '',
+      subramo: item.subramo || '',
+      calcular_iva_pri_a_pre: item.calcular_iva_pri_a_pre ?? false,
+      vista_mapa_oportunidad: item.vista_mapa_oportunidad ?? false,
+      comisiones_aseguradoras: (item.comisiones_aseguradoras || []).map((comision) => ({
         aseguradora_id: comision.aseguradora_id,
         porcentaje_iva: comision.porcentaje_iva,
         porcentaje_comision: comision.porcentaje_comision,
@@ -193,7 +202,7 @@ const Ramos = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nombre.trim()) return;
+    if (!(formData.nombre || '').trim()) return;
 
     try {
       setIsSubmitting(true);
@@ -214,6 +223,67 @@ const Ramos = () => {
       try {
         await deleteRamo(id);
       } catch (error) {}
+    }
+  };
+
+  // Funciones para selección masiva
+  const toggleSelectForDelete = (id: string) => {
+    setSelectedForDelete((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllForDelete = () => {
+    if (selectedForDelete.size === ramos.length) {
+      setSelectedForDelete(new Set());
+    } else {
+      setSelectedForDelete(new Set(ramos.map((r) => r.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (bulkDeleteConfirmText !== 'ELIMINAR') return;
+    
+    try {
+      setIsBulkDeleting(true);
+      const ids = Array.from(selectedForDelete);
+      const response = await saasApi.bulkDeleteRamos({ ids });
+      
+      if (response.success) {
+        alert(`Se eliminaron ${(response.data as any)?.deleted_count || ids.length} ramos`);
+        setShowBulkDeleteModal(false);
+        setBulkDeleteConfirmText('');
+        setSelectedForDelete(new Set());
+        window.location.reload();
+      }
+    } catch (error: any) {
+      alert(error.message || 'Error al eliminar');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkDeleteAll = async () => {
+    if (bulkDeleteConfirmText !== 'ELIMINAR TODOS') return;
+    
+    try {
+      setIsBulkDeleting(true);
+      const response = await saasApi.bulkDeleteRamos({ delete_all: true });
+      
+      if (response.success) {
+        alert(`Se eliminaron ${(response.data as any)?.deleted_count || 0} ramos`);
+        setShowBulkDeleteModal(false);
+        setBulkDeleteConfirmText('');
+        setSelectedForDelete(new Set());
+        window.location.reload();
+      }
+    } catch (error: any) {
+      alert(error.message || 'Error al eliminar');
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -279,12 +349,30 @@ const Ramos = () => {
               Administra los ramos de seguros disponibles.
             </p>
           </div>
-          <PermissionGate route="/apps/admin/ramos" action="crear">
-            <Button onClick={handleCreate} className="flex items-center">
-              <Icon icon="solar:document-add-bold" className="w-4 h-4 mr-2" />
-              Nuevo Ramo
-            </Button>
-          </PermissionGate>
+          <div className="flex gap-2">
+            {selectedForDelete.size > 0 && (
+              <PermissionGate route="/apps/admin/ramos" action="eliminar">
+                <Button color="failure" onClick={() => setShowBulkDeleteModal(true)} className="flex items-center">
+                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" />
+                  Eliminar ({selectedForDelete.size})
+                </Button>
+              </PermissionGate>
+            )}
+            {ramos.length > 0 && selectedForDelete.size === 0 && (
+              <PermissionGate route="/apps/admin/ramos" action="eliminar">
+                <Button color="light" onClick={() => setShowBulkDeleteModal(true)} className="flex items-center">
+                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" />
+                  Eliminar Todos
+                </Button>
+              </PermissionGate>
+            )}
+            <PermissionGate route="/apps/admin/ramos" action="crear">
+              <Button onClick={handleCreate} className="flex items-center">
+                <Icon icon="solar:document-add-bold" className="w-4 h-4 mr-2" />
+                Nuevo Ramo
+              </Button>
+            </PermissionGate>
+          </div>
         </div>
       </div>
 
@@ -328,6 +416,12 @@ const Ramos = () => {
           <div className="overflow-x-auto">
             <Table striped>
               <Table.Head>
+                <Table.HeadCell className="w-10">
+                  <FlowbiteCheckbox
+                    checked={selectedForDelete.size === ramos.length && ramos.length > 0}
+                    onChange={selectAllForDelete}
+                  />
+                </Table.HeadCell>
                 <Table.HeadCell>Ramo</Table.HeadCell>
                 <Table.HeadCell>Características</Table.HeadCell>
                 <Table.HeadCell>Aseguradoras</Table.HeadCell>
@@ -338,8 +432,14 @@ const Ramos = () => {
                 {ramos.map((item) => (
                   <Table.Row
                     key={item.id}
-                    className="bg-white dark:border-gray-700 dark:bg-gray-800"
+                    className={`bg-white dark:border-gray-700 dark:bg-gray-800 ${selectedForDelete.has(item.id) ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
                   >
+                    <Table.Cell>
+                      <FlowbiteCheckbox
+                        checked={selectedForDelete.has(item.id)}
+                        onChange={() => toggleSelectForDelete(item.id)}
+                      />
+                    </Table.Cell>
                     <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       <div className="flex items-center gap-2">
                         <Icon icon="solar:document-bold" className="w-5 h-5 text-blue-600" />
@@ -545,14 +645,13 @@ const Ramos = () => {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="subramo" value="Subramo *" />
+                        <Label htmlFor="subramo" value="Subramo (opcional)" />
                         <TextInput
                           id="subramo"
                           type="text"
                           placeholder="Subramo"
                           value={formData.subramo}
                           onChange={(e) => setFormData({ ...formData, subramo: e.target.value })}
-                          required
                         />
                       </div>
                     </div>
@@ -756,7 +855,7 @@ const Ramos = () => {
                   <PermissionGate route="/apps/admin/ramos" action="editar">
                     <Button
                       type="submit"
-                      disabled={isSubmitting || !formData.nombre.trim() || !formData.subramo.trim()}
+                      disabled={isSubmitting || !(formData.nombre || '').trim() || !(formData.subramo || '').trim()}
                     >
                       {isSubmitting ? (
                         <>
@@ -772,7 +871,7 @@ const Ramos = () => {
                   <PermissionGate route="/apps/admin/ramos" action="crear">
                     <Button
                       type="submit"
-                      disabled={isSubmitting || !formData.nombre.trim() || !formData.subramo.trim()}
+                      disabled={isSubmitting || !(formData.nombre || '').trim() || !(formData.subramo || '').trim()}
                     >
                       {isSubmitting ? (
                         <>
@@ -810,6 +909,84 @@ const Ramos = () => {
             </div>
           </Modal.Footer>
         </form>
+      </Modal>
+
+      {/* Modal de confirmación de borrado masivo */}
+      <Modal 
+        show={showBulkDeleteModal} 
+        onClose={() => {
+          setShowBulkDeleteModal(false);
+          setBulkDeleteConfirmText('');
+        }} 
+        size="md"
+      >
+        <Modal.Header>
+          <div className="flex items-center gap-2 text-red-600">
+            <Icon icon="solar:danger-triangle-bold" className="w-6 h-6" />
+            {selectedForDelete.size > 0 
+              ? `Eliminar ${selectedForDelete.size} ramo(s)` 
+              : 'Eliminar TODOS los ramos'}
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <p className="text-red-700 dark:text-red-400 font-medium">
+                ⚠️ {selectedForDelete.size > 0 
+                  ? `Se eliminarán ${selectedForDelete.size} ramo(s) seleccionado(s).`
+                  : `Se eliminarán TODOS los ${ramos.length} ramos.`}
+              </p>
+              <p className="text-red-600 dark:text-red-500 text-sm mt-2">
+                Esta acción NO se puede deshacer.
+              </p>
+            </div>
+            
+            <div>
+              <Label className="text-gray-700 dark:text-gray-300">
+                Para confirmar, escribe <strong>{selectedForDelete.size > 0 ? 'ELIMINAR' : 'ELIMINAR TODOS'}</strong>:
+              </Label>
+              <Input
+                type="text"
+                value={bulkDeleteConfirmText}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBulkDeleteConfirmText(e.target.value)}
+                placeholder={selectedForDelete.size > 0 ? 'ELIMINAR' : 'ELIMINAR TODOS'}
+                className="mt-2"
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button 
+            color="failure" 
+            onClick={selectedForDelete.size > 0 ? handleBulkDelete : handleBulkDeleteAll}
+            disabled={
+              (selectedForDelete.size > 0 && bulkDeleteConfirmText !== 'ELIMINAR') ||
+              (selectedForDelete.size === 0 && bulkDeleteConfirmText !== 'ELIMINAR TODOS') ||
+              isBulkDeleting
+            }
+          >
+            {isBulkDeleting ? (
+              <>
+                <Spinner size="sm" className="mr-2" />
+                Eliminando...
+              </>
+            ) : (
+              <>
+                <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" />
+                Confirmar eliminación
+              </>
+            )}
+          </Button>
+          <Button 
+            color="gray" 
+            onClick={() => {
+              setShowBulkDeleteModal(false);
+              setBulkDeleteConfirmText('');
+            }}
+          >
+            Cancelar
+          </Button>
+        </Modal.Footer>
       </Modal>
     </PermissionGate>
   );

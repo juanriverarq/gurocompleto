@@ -95,7 +95,7 @@ const ArchivosCliente: React.FC<Props> = ({ clienteId }) => {
   }, [items, search, typeFilter, sortBy, sortDir]);
 
   const typesOptions = useMemo(() => {
-    const base = ['documento_identidad', 'soporte_ingresos', 'contrato', 'consentimiento', 'otros'];
+    const base = ['documento_identidad', 'soporte_ingresos', 'contrato', 'consentimiento', 'cancelacion', 'otros'];
     const present = new Set<string>(items.map((d) => (d.type || 'otro')));
     return [''].concat(Array.from(new Set([...base, ...present])));
   }, [items]);
@@ -228,9 +228,21 @@ const ArchivosCliente: React.FC<Props> = ({ clienteId }) => {
               <label className="block text-sm font-medium mb-2">Tipo de documento</label>
               <Select value={docType} onChange={(e) => setDocType(e.target.value)}>
                 <option value="documento_identidad">Documento de identidad</option>
+                <option value="cedula">Cédula</option>
+                <option value="rut">RUT</option>
+                <option value="camara_comercio">Cámara de Comercio</option>
+                <option value="estados_financieros">Estados Financieros</option>
+                <option value="sarlaft">SARLAFT</option>
+                <option value="matricula">Matrícula</option>
+                <option value="factura">Factura</option>
+                <option value="soat">SOAT</option>
+                <option value="poliza">Póliza</option>
+                <option value="carta_estadia">Carta de Estadía</option>
+                <option value="carta_no_siniestro">Carta de No Siniestro</option>
                 <option value="soporte_ingresos">Soporte de ingresos</option>
                 <option value="contrato">Contrato</option>
                 <option value="consentimiento">Consentimiento</option>
+                <option value="cancelacion">Cancelación</option>
                 <option value="otros">Otros</option>
               </Select>
             </div>

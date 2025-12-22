@@ -7,6 +7,7 @@ import { useToast } from 'src/hooks/use-toast';
 import NuevaPoliza from './NuevaPoliza';
 import ArchivosPoliza from './components/ArchivosPoliza';
 import AnexosPoliza from './components/AnexosPoliza';
+import ComisionesPoliza from './components/ComisionesPoliza';
 
 const EditarPoliza: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -115,6 +116,19 @@ const EditarPoliza: React.FC = () => {
         </Tabs.Item>
         <Tabs.Item title="Archivos">
           <ArchivosPoliza polizaId={poliza.id!} />
+        </Tabs.Item>
+        <Tabs.Item title="Liquidación de Comisiones">
+          <ComisionesPoliza 
+            polizaId={poliza.id!} 
+            numeroPoliza={poliza.numero_poliza}
+            vendedorId={poliza.vendedor_id}
+            vendedorId2={poliza.vendedor_id_2}
+            vendedorNombre={poliza.vendedor}
+            vendedor2Nombre={poliza.vendedor_2}
+            aseguradoraNombre={poliza.aseguradora_nombre || poliza.aseguradora}
+            ramoNombre={poliza.ramo_nombre || poliza.ramo_principal}
+            clienteNombre={poliza.nombre_completo_cliente || poliza.nombres_cliente}
+          />
         </Tabs.Item>
       </Tabs>
     </div>
