@@ -2525,6 +2525,13 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/recaudo-masivo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoMasivo']);
         Route::post('/recaudo-masivo-csv', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoMasivoCsv']);
         Route::post('/recaudo-por-numero', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoPorNumeroPoliza']);
+        
+        // Importación masiva de recaudos con registro y reversión
+        Route::post('/importar-recaudos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'importarRecaudosMasivo']);
+        Route::get('/importaciones', [\App\Http\Controllers\Api\PagoPolizaController::class, 'listarImportaciones']);
+        Route::get('/importaciones/{importId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'detalleImportacion'])->whereNumber('importId');
+        Route::delete('/importaciones/{importId}/revertir', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirImportacion'])->whereNumber('importId');
+        
         Route::post('/{id}/cobrar-comision', [\App\Http\Controllers\Api\PagoPolizaController::class, 'registrarCobroComision'])->whereNumber('id');
         Route::delete('/{id}/cobrar-comision/{cobroId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirCobroComision'])->whereNumber('id')->whereNumber('cobroId');
 
@@ -2546,8 +2553,16 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
 
     // Estadísticas de pagos
     Route::get('/pagos/estadisticas', [\App\Http\Controllers\Api\PagoPolizaController::class, 'estadisticas']);
+});
 
-    // Siniestros - Documentos (alineado con siniestroDocumentsService)
+// Pagos de aseguradora individuales (para tab Recaudos Completados)
+Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->group(function () {
+    Route::get('/pagos/aseguradora', [\App\Http\Controllers\Api\PagoPolizaController::class, 'listarPagosAseguradora']);
+    Route::delete('/pagos/aseguradora/{pagoId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPagoAseguradora'])->whereNumber('pagoId');
+});
+
+// Siniestros - Documentos (alineado con siniestroDocumentsService)
+Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->group(function () {
     Route::prefix('siniestros')->group(function () {
         // Lista global de documentos de todos los siniestros del broker
         Route::get('/documents', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'indexAll']);

@@ -369,6 +369,7 @@ export const polizaService = {
 
   /**
    * Registrar recaudo por número de póliza (para importación masiva)
+   * Soporta búsqueda por últimos 5 dígitos y pagos parciales/negativos
    */
   async registrarRecaudoPorNumeroPoliza(params: {
     numero_poliza: string;
@@ -377,6 +378,7 @@ export const polizaService = {
     fecha_pago?: string;
     metodo_pago?: string;
     referencia_pago?: string;
+    recaudo_import_id?: number;
   }): Promise<ApiResponse<any>> {
     try {
       const endpoint = `${API_PREFIX}/recaudo-por-numero`;
@@ -387,6 +389,83 @@ export const polizaService = {
       return response;
     } catch (error) {
       // No mostrar toast aquí para no saturar en importación masiva
+      throw error;
+    }
+  },
+
+  /**
+   * Importar recaudos masivamente con registro para reversión
+   */
+  async importarRecaudosMasivo(params: {
+    tipo_recaudo: 'oficina' | 'aseguradora_directo';
+    recaudos: Array<{
+      numero_poliza: string;
+      monto_pagado?: number;
+      fecha_pago?: string;
+      metodo_pago?: string;
+      referencia_pago?: string;
+    }>;
+    filename?: string;
+    mapping?: Record<string, string>;
+  }): Promise<ApiResponse<any>> {
+    try {
+      const endpoint = `${API_PREFIX}/importar-recaudos`;
+      const response = await makeRequest<any>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Listar importaciones de recaudos
+   */
+  async listarImportaciones(limit: number = 20): Promise<ApiResponse<any>> {
+    try {
+      const endpoint = `${API_PREFIX}/importaciones?limit=${limit}`;
+      const response = await makeRequest<any>(endpoint, {
+        method: 'GET',
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Obtener detalle de una importación
+   */
+  async detalleImportacion(importId: number): Promise<ApiResponse<any>> {
+    try {
+      const endpoint = `${API_PREFIX}/importaciones/${importId}`;
+      const response = await makeRequest<any>(endpoint, {
+        method: 'GET',
+      });
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Revertir una importación masiva
+   */
+  async revertirImportacion(importId: number): Promise<ApiResponse<any>> {
+    try {
+      const endpoint = `${API_PREFIX}/importaciones/${importId}/revertir`;
+      const response = await makeRequest<any>(endpoint, {
+        method: 'DELETE',
+      });
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al revertir importación",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
       throw error;
     }
   },

@@ -146,7 +146,13 @@ class VendedoresController extends Controller
         try {
             $brokerId = $this->getBrokerId($request);
             
-            $query = Vendedor::forBroker($brokerId);
+            $query = Vendedor::forBroker($brokerId)
+                ->withCount(['polizas' => function ($q) {
+                    $q->whereNull('deleted_at');
+                }])
+                ->withSum(['polizas' => function ($q) {
+                    $q->whereNull('deleted_at');
+                }], 'premium_amount');
 
             if ($request->has('search') && !empty($request->search)) {
                 $query->search($request->search);
@@ -247,11 +253,7 @@ class VendedoresController extends Controller
                     'required',
                     Rule::in(['natural', 'juridica']),
                 ],
-                'tipo_retencion' => [
-                    'nullable',
-                    'string',
-                    Rule::in(array_keys(\App\Models\Vendedor::TIPOS_RETENCION)),
-                ],
+                'tipo_retencion' => 'nullable|string',
                 'es_agencia' => 'required|boolean',
                 'porcentaje_comision' => 'required|numeric|min:0|max:100',
                 'calcular_comision_sobre' => [
@@ -391,11 +393,7 @@ class VendedoresController extends Controller
             
             $validator = Validator::make($request->all(), [
                 'nombres' => 'required|string|max:255',
-                'tipo_documento' => [
-                    'required',
-                    'string',
-                    Rule::in(array_keys(Vendedor::TIPOS_DOCUMENTO)),
-                ],
+                'tipo_documento' => 'nullable|string',
                 'numero_documento' => [
                     'required',
                     'string',
@@ -419,11 +417,7 @@ class VendedoresController extends Controller
                     'required',
                     Rule::in(['natural', 'juridica']),
                 ],
-                'tipo_retencion' => [
-                    'nullable',
-                    'string',
-                    Rule::in(array_keys(\App\Models\Vendedor::TIPOS_RETENCION)),
-                ],
+                'tipo_retencion' => 'nullable|string',
                 'es_agencia' => 'required|boolean',
                 'porcentaje_comision' => 'required|numeric|min:0|max:100',
                 'calcular_comision_sobre' => [

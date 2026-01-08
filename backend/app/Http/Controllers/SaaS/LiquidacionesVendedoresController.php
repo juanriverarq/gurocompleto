@@ -628,8 +628,9 @@ class LiquidacionesVendedoresController extends Controller
                 'total_polizas' => 0,
                 'prima_total' => 0,
                 'comision_bruta_total' => 0,
-                'retencion_total' => 0,
+                'iva_comision_total' => 0,
                 'reteiva_total' => 0,
+                'retencion_total' => 0,
                 'retencion_ica_total' => 0,
                 'comision_neta_total' => 0,
             ];
@@ -647,34 +648,48 @@ class LiquidacionesVendedoresController extends Controller
                             'numero_documento' => $liq->vendedor?->numero_documento ?? '',
                             'comision' => $liq->vendedor?->porcentaje_comision ?? 0,
                             'retencion' => $liq->vendedor?->porcentaje_retencion ?? 0,
-                            'retencion_iva' => $liq->vendedor?->porcentaje_retencion_iva ?? 0,
+                            'iva' => $liq->vendedor?->porcentaje_iva ?? 19, // Por defecto 19%
+                            'retencion_iva' => $liq->vendedor?->porcentaje_retencion_iva ?? 15, // Por defecto 15%
                             'retencion_ica' => $liq->vendedor?->porcentaje_retencion_ica ?? 0,
                         ],
                         'total_polizas' => 0,
                         'total_comisiones_manuales' => 0,
                         'prima_total' => 0,
                         'comision_bruta_total' => 0,
-                        'retencion_total' => 0,
+                        'iva_comision_total' => 0,
                         'reteiva_total' => 0,
+                        'retencion_total' => 0,
                         'retencion_ica_total' => 0,
                         'comision_neta_total' => 0,
                     ];
                 }
 
+                // Calcular IVA de la comisión (19% del valor comisión)
+                $comisionBruta = (float) $liq->monto_bruto_total;
+                $porcentajeIva = $liq->vendedor?->porcentaje_iva ?? 19;
+                $porcentajeReteiva = $liq->vendedor?->porcentaje_retencion_iva ?? 15;
+                
+                // IVA = 19% de la comisión bruta
+                $ivaComision = $comisionBruta * ($porcentajeIva / 100);
+                // ReteIVA = 15% del IVA
+                $reteiva = $ivaComision * ($porcentajeReteiva / 100);
+
                 $porVendedor[$vendedorId]['total_polizas'] += $liq->cantidad_polizas ?? 0;
                 $porVendedor[$vendedorId]['prima_total'] += (float) $liq->prima_total;
-                $porVendedor[$vendedorId]['comision_bruta_total'] += (float) $liq->monto_bruto_total;
+                $porVendedor[$vendedorId]['comision_bruta_total'] += $comisionBruta;
+                $porVendedor[$vendedorId]['iva_comision_total'] += $ivaComision;
+                $porVendedor[$vendedorId]['reteiva_total'] += $reteiva;
                 $porVendedor[$vendedorId]['retencion_total'] += (float) $liq->monto_retencion_total;
-                $porVendedor[$vendedorId]['reteiva_total'] += (float) ($liq->monto_iva_total ?? 0);
                 $porVendedor[$vendedorId]['retencion_ica_total'] += (float) $liq->monto_retencion_ica_total;
                 $porVendedor[$vendedorId]['comision_neta_total'] += (float) $liq->monto_neto_total;
 
                 // Acumular totales generales
                 $totalesGenerales['total_polizas'] += $liq->cantidad_polizas ?? 0;
                 $totalesGenerales['prima_total'] += (float) $liq->prima_total;
-                $totalesGenerales['comision_bruta_total'] += (float) $liq->monto_bruto_total;
+                $totalesGenerales['comision_bruta_total'] += $comisionBruta;
+                $totalesGenerales['iva_comision_total'] += $ivaComision;
+                $totalesGenerales['reteiva_total'] += $reteiva;
                 $totalesGenerales['retencion_total'] += (float) $liq->monto_retencion_total;
-                $totalesGenerales['reteiva_total'] += (float) ($liq->monto_iva_total ?? 0);
                 $totalesGenerales['retencion_ica_total'] += (float) $liq->monto_retencion_ica_total;
                 $totalesGenerales['comision_neta_total'] += (float) $liq->monto_neto_total;
             }

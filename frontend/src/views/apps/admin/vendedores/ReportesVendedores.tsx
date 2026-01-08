@@ -14,70 +14,87 @@ interface FieldConfig {
   category?: string;
 }
 
-// Campos disponibles para cada tipo de reporte
+// Campos disponibles para cada tipo de reporte (usando nombres del backend transformado)
 const CAMPOS_POLIZAS: FieldConfig[] = [
   // Información básica
-  { key: 'policy_number', label: 'Número de Póliza', selected: true, category: 'Básico' },
-  { key: 'internal_number', label: 'Número Interno', selected: false, category: 'Básico' },
-  { key: 'type', label: 'Tipo/Ramo', selected: true, category: 'Básico' },
-  { key: 'product_name', label: 'Producto', selected: false, category: 'Básico' },
-  { key: 'status', label: 'Estado', selected: true, category: 'Básico' },
-  { key: 'payment_status', label: 'Estado de Pago', selected: false, category: 'Básico' },
+  { key: 'numero_poliza', label: 'Número de Póliza', selected: true, category: 'Básico' },
+  { key: 'ramo_principal', label: 'Ramo', selected: true, category: 'Básico' },
+  { key: 'subramo', label: 'Producto/Subramo', selected: false, category: 'Básico' },
+  { key: 'estado', label: 'Estado', selected: true, category: 'Básico' },
+  { key: 'riesgo', label: 'Riesgo/Descripción', selected: false, category: 'Básico' },
   // Aseguradora
-  { key: 'insurance_company', label: 'Aseguradora', selected: true, category: 'Aseguradora' },
+  { key: 'aseguradora', label: 'Aseguradora', selected: true, category: 'Aseguradora' },
   { key: 'aseguradora_nombre', label: 'Nombre Aseguradora', selected: false, category: 'Aseguradora' },
   // Cliente
-  { key: 'client_name', label: 'Nombre Cliente', selected: true, category: 'Cliente' },
-  { key: 'client_document', label: 'Documento Cliente', selected: false, category: 'Cliente' },
+  { key: 'nombres_cliente', label: 'Nombre Cliente', selected: true, category: 'Cliente' },
+  { key: 'dni_cliente', label: 'Documento Cliente', selected: false, category: 'Cliente' },
+  { key: 'telefono_cliente', label: 'Teléfono Cliente', selected: false, category: 'Cliente' },
+  { key: 'correo_cliente', label: 'Email Cliente', selected: false, category: 'Cliente' },
   // Fechas
-  { key: 'issue_date', label: 'Fecha Emisión', selected: false, category: 'Fechas' },
-  { key: 'start_date', label: 'Fecha Inicio', selected: true, category: 'Fechas' },
-  { key: 'end_date', label: 'Fecha Fin', selected: true, category: 'Fechas' },
-  { key: 'renewal_date', label: 'Fecha Renovación', selected: false, category: 'Fechas' },
+  { key: 'fecha_emision', label: 'Fecha Emisión', selected: false, category: 'Fechas' },
+  { key: 'fecha_inicio', label: 'Fecha Inicio', selected: true, category: 'Fechas' },
+  { key: 'fecha_fin', label: 'Fecha Fin', selected: true, category: 'Fechas' },
+  { key: 'fecha_renovacion', label: 'Fecha Renovación', selected: false, category: 'Fechas' },
   // Valores
-  { key: 'premium_amount', label: 'Prima', selected: true, category: 'Valores' },
-  { key: 'insured_amount', label: 'Valor Asegurado', selected: false, category: 'Valores' },
-  { key: 'commission_percentage', label: '% Comisión', selected: true, category: 'Valores' },
-  { key: 'commission_amount', label: 'Valor Comisión', selected: false, category: 'Valores' },
-  { key: 'total_amount', label: 'Total', selected: false, category: 'Valores' },
+  { key: 'prima_neta', label: 'Prima Neta', selected: true, category: 'Valores' },
+  { key: 'valor_riesgo_asegurado', label: 'Valor Asegurado', selected: false, category: 'Valores' },
+  { key: 'porcentaje_comision', label: '% Comisión', selected: true, category: 'Valores' },
+  { key: 'comision', label: 'Valor Comisión', selected: false, category: 'Valores' },
+  { key: 'total', label: 'Total', selected: false, category: 'Valores' },
+  { key: 'iva', label: 'IVA', selected: false, category: 'Valores' },
   // Vendedor
-  { key: 'seller_name', label: 'Vendedor', selected: true, category: 'Vendedor' },
-  { key: 'seller_name_2', label: 'Vendedor 2', selected: false, category: 'Vendedor' },
+  { key: 'vendedor', label: 'Vendedor', selected: true, category: 'Vendedor' },
+  { key: 'vendedor_2', label: 'Vendedor 2', selected: false, category: 'Vendedor' },
   // Otros
-  { key: 'payment_frequency', label: 'Frecuencia de Pago', selected: false, category: 'Otros' },
-  { key: 'payment_method', label: 'Método de Pago', selected: false, category: 'Otros' },
-  { key: 'notes', label: 'Notas', selected: false, category: 'Otros' },
-  { key: 'created_at', label: 'Fecha Creación', selected: false, category: 'Otros' },
+  { key: 'periodicidad_pago', label: 'Periodicidad Pago', selected: false, category: 'Otros' },
+  { key: 'forma_pago', label: 'Forma de Pago', selected: false, category: 'Otros' },
+  { key: 'medio_pago', label: 'Medio de Pago', selected: false, category: 'Otros' },
+  { key: 'notas', label: 'Notas', selected: false, category: 'Otros' },
 ];
 
 const CAMPOS_CLIENTES: FieldConfig[] = [
   // Información básica
   { key: 'first_name', label: 'Nombres', selected: true, category: 'Básico' },
   { key: 'last_name', label: 'Apellidos', selected: true, category: 'Básico' },
+  { key: 'client_type', label: 'Tipo Cliente', selected: false, category: 'Básico' },
   { key: 'document_type', label: 'Tipo Documento', selected: true, category: 'Básico' },
   { key: 'document_number', label: 'Número Documento', selected: true, category: 'Básico' },
+  { key: 'document_issue_date', label: 'Fecha Expedición Doc.', selected: false, category: 'Básico' },
   // Contacto
   { key: 'email', label: 'Email', selected: true, category: 'Contacto' },
   { key: 'phone', label: 'Teléfono', selected: true, category: 'Contacto' },
-  { key: 'mobile', label: 'Celular', selected: false, category: 'Contacto' },
+  { key: 'mobile_phone', label: 'Celular', selected: false, category: 'Contacto' },
+  { key: 'emergency_contact_name', label: 'Contacto Emergencia', selected: false, category: 'Contacto' },
+  { key: 'emergency_contact_phone', label: 'Tel. Emergencia', selected: false, category: 'Contacto' },
   // Dirección
   { key: 'address', label: 'Dirección', selected: false, category: 'Dirección' },
   { key: 'city', label: 'Ciudad', selected: false, category: 'Dirección' },
-  { key: 'state', label: 'Departamento', selected: false, category: 'Dirección' },
+  { key: 'department', label: 'Departamento', selected: false, category: 'Dirección' },
   { key: 'country', label: 'País', selected: false, category: 'Dirección' },
+  { key: 'postal_code', label: 'Código Postal', selected: false, category: 'Dirección' },
+  // Personal
+  { key: 'birth_date', label: 'Fecha Nacimiento', selected: false, category: 'Personal' },
+  { key: 'gender', label: 'Género', selected: false, category: 'Personal' },
+  { key: 'marital_status', label: 'Estado Civil', selected: false, category: 'Personal' },
+  { key: 'occupation', label: 'Ocupación', selected: false, category: 'Personal' },
+  // Empresa
+  { key: 'company', label: 'Empresa', selected: false, category: 'Empresa' },
+  { key: 'company_legal_name', label: 'Razón Social', selected: false, category: 'Empresa' },
+  { key: 'legal_representative_name', label: 'Rep. Legal', selected: false, category: 'Empresa' },
+  { key: 'work_address', label: 'Dir. Trabajo', selected: false, category: 'Empresa' },
   // Otros
-  { key: 'birth_date', label: 'Fecha Nacimiento', selected: false, category: 'Otros' },
-  { key: 'gender', label: 'Género', selected: false, category: 'Otros' },
-  { key: 'occupation', label: 'Ocupación', selected: false, category: 'Otros' },
-  { key: 'company_name', label: 'Empresa', selected: false, category: 'Otros' },
+  { key: 'status', label: 'Estado', selected: false, category: 'Otros' },
+  { key: 'source', label: 'Fuente', selected: false, category: 'Otros' },
   { key: 'notes', label: 'Notas', selected: false, category: 'Otros' },
   { key: 'created_at', label: 'Fecha Creación', selected: false, category: 'Otros' },
   // Estadísticas
-  { key: 'polizas_count', label: 'Cantidad Pólizas', selected: true, category: 'Estadísticas' },
+  { key: 'total_policies_count', label: 'Cantidad Pólizas', selected: true, category: 'Estadísticas' },
+  { key: 'total_policies_value', label: 'Valor Total Pólizas', selected: false, category: 'Estadísticas' },
 ];
 
 const CAMPOS_VENDEDORES: FieldConfig[] = [
   // Información básica
+  { key: 'id', label: 'ID', selected: false, category: 'Básico' },
   { key: 'nombres', label: 'Nombres', selected: true, category: 'Básico' },
   { key: 'tipo_documento', label: 'Tipo Documento', selected: true, category: 'Básico' },
   { key: 'numero_documento', label: 'Número Documento', selected: true, category: 'Básico' },
@@ -89,20 +106,24 @@ const CAMPOS_VENDEDORES: FieldConfig[] = [
   { key: 'tipo_persona', label: 'Tipo Persona', selected: true, category: 'Configuración' },
   { key: 'tipo_retencion', label: 'Tipo Retención', selected: false, category: 'Configuración' },
   { key: 'es_agencia', label: 'Es Agencia', selected: false, category: 'Configuración' },
+  { key: 'comisiones_diferentes_por_ano', label: 'Comisiones Dif. por Año', selected: false, category: 'Configuración' },
   // Comisiones
   { key: 'porcentaje_comision', label: '% Comisión', selected: true, category: 'Comisiones' },
   { key: 'calcular_comision_sobre', label: 'Calcular Sobre', selected: false, category: 'Comisiones' },
   // Retenciones
   { key: 'porcentaje_retencion', label: '% Retención Fuente', selected: true, category: 'Retenciones' },
-  { key: 'porcentaje_retencion_iva', label: '% Retención IVA', selected: true, category: 'Retenciones' },
+  { key: 'porcentaje_retencion_iva', label: '% Retención IVA', selected: false, category: 'Retenciones' },
   { key: 'porcentaje_retencion_ica', label: '% Retención ICA', selected: false, category: 'Retenciones' },
   { key: 'porcentaje_iva', label: '% IVA', selected: false, category: 'Retenciones' },
-  // Otros
-  { key: 'cuenta_bancaria', label: 'Cuenta Bancaria', selected: false, category: 'Otros' },
-  { key: 'fecha_vinculacion', label: 'Fecha Vinculación', selected: false, category: 'Otros' },
-  { key: 'created_at', label: 'Fecha Creación', selected: false, category: 'Otros' },
-  // Estadísticas
-  { key: 'polizas_count', label: 'Cantidad Pólizas', selected: true, category: 'Estadísticas' },
+  // Bancario
+  { key: 'cuenta_bancaria', label: 'Cuenta Bancaria', selected: false, category: 'Bancario' },
+  // Fechas
+  { key: 'fecha_vinculacion', label: 'Fecha Vinculación', selected: false, category: 'Fechas' },
+  { key: 'created_at', label: 'Fecha Creación', selected: false, category: 'Fechas' },
+  { key: 'updated_at', label: 'Fecha Actualización', selected: false, category: 'Fechas' },
+  // Estadísticas/Producción
+  { key: 'polizas_count', label: 'Cantidad Pólizas', selected: true, category: 'Producción' },
+  { key: 'polizas_sum_premium_amount', label: 'Producción Total (Primas)', selected: true, category: 'Producción' },
 ];
 
 interface Props {
@@ -193,60 +214,63 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
     setCurrentFields(currentFields.map(f => ({ ...f, selected: false })));
   };
 
+  // Estado para paginación de vista previa
+  const [previewPage, setPreviewPage] = useState(1);
+  const previewPerPage = 20;
+
   // Generar reporte
   const handleGenerateReport = async () => {
     setLoading(true);
     setData([]);
+    setPreviewPage(1);
     
     try {
       const headers = await saasApi.getAuthHeaders();
       const baseUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
       
-      let url = '';
       const params = new URLSearchParams();
-      
       if (selectedVendedor) params.append('vendedor_id', selectedVendedor);
       if (fechaInicio) params.append('fecha_inicio', fechaInicio);
       if (fechaFin) params.append('fecha_fin', fechaFin);
       if (estadoPoliza) params.append('estado', estadoPoliza);
-      params.append('per_page', '1000'); // Obtener todos los registros
+      params.append('per_page', '20000'); // Límite aumentado
       
+      let endpoint = '';
       switch (reportType) {
-        case 'polizas':
-          url = `${baseUrl}/saas/polizas?${params.toString()}`;
-          break;
-        case 'clientes':
-          url = `${baseUrl}/saas/clientes?${params.toString()}`;
-          break;
-        case 'vendedores':
-          url = `${baseUrl}/saas/vendedores?${params.toString()}`;
-          break;
+        case 'polizas': endpoint = '/saas/polizas'; break;
+        case 'clientes': endpoint = '/saas/clientes'; break;
+        case 'vendedores': endpoint = '/saas/vendedores'; break;
       }
       
+      const url = `${baseUrl}${endpoint}?${params.toString()}`;
       console.log('Fetching:', url);
+      
       const res = await fetch(url, { headers });
       const result = await res.json();
       console.log('Response:', result);
       
-      if (result.success !== false && (result.data || Array.isArray(result))) {
-        // Manejar diferentes estructuras de respuesta
-        let items: any[] = [];
-        if (Array.isArray(result.data)) {
-          items = result.data;
-        } else if (result.data?.data && Array.isArray(result.data.data)) {
-          items = result.data.data;
-        } else if (Array.isArray(result)) {
-          items = result;
-        }
-        
-        setData(items);
-        if (items.length > 0) {
-          toast({ title: 'Éxito', description: `Se encontraron ${items.length} registros` });
-        } else {
-          toast({ title: 'Info', description: 'No se encontraron registros con los filtros seleccionados' });
-        }
+      if (!res.ok) {
+        toast({ title: 'Error', description: result.message || `Error HTTP ${res.status}`, variant: 'destructive' });
+        return;
+      }
+      
+      // Extraer items de la respuesta
+      let items: any[] = [];
+      if (Array.isArray(result.data)) {
+        items = result.data;
+      } else if (result.data?.data && Array.isArray(result.data.data)) {
+        items = result.data.data;
+      } else if (Array.isArray(result)) {
+        items = result;
+      }
+      
+      console.log('Items extraídos:', items.length, items.slice(0, 2));
+      setData(items);
+      
+      if (items.length > 0) {
+        toast({ title: 'Éxito', description: `Se encontraron ${items.length} registros` });
       } else {
-        toast({ title: 'Error', description: result.message || 'Error al generar reporte', variant: 'destructive' });
+        toast({ title: 'Info', description: 'No se encontraron registros con los filtros seleccionados' });
       }
     } catch (e) {
       console.error('Error generando reporte:', e);
@@ -254,6 +278,42 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Datos paginados para vista previa
+  const paginatedData = useMemo(() => {
+    const start = (previewPage - 1) * previewPerPage;
+    return data.slice(start, start + previewPerPage);
+  }, [data, previewPage]);
+  
+  const totalPreviewPages = Math.ceil(data.length / previewPerPage);
+
+  // Función auxiliar para formatear valor de exportación
+  const formatExportValue = (value: any, key: string): string => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+    if (typeof value === 'object') return JSON.stringify(value);
+    
+    // Formatear fechas
+    if (key.includes('fecha') || key.includes('date') || key.includes('created_at') || key.includes('updated_at')) {
+      if (value) {
+        try {
+          return new Date(value).toLocaleDateString('es-CO');
+        } catch { return String(value); }
+      }
+    }
+    
+    // Formatear números/moneda
+    if (key.includes('prima') || key.includes('comision') || key.includes('total') || key.includes('iva') || key.includes('valor')) {
+      if (typeof value === 'number') return value.toLocaleString('es-CO');
+    }
+    
+    // Formatear porcentajes
+    if (key.includes('porcentaje')) {
+      if (typeof value === 'number') return `${value}%`;
+    }
+    
+    return String(value);
   };
 
   // Exportar a Excel
@@ -267,27 +327,15 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
     try {
       const selectedFields = currentFields.filter(f => f.selected);
       
-      // Crear contenido del archivo Excel (formato CSV con extensión xlsx para compatibilidad)
+      // Headers
       const headers = selectedFields.map(f => `"${f.label}"`).join('\t');
       
+      // Rows con todos los campos seleccionados
       const rows = data.map(item => {
         return selectedFields.map(field => {
-          let value = item[field.key];
-          
-          // Formatear valores especiales
-          if (value === null || value === undefined) value = '';
-          if (typeof value === 'boolean') value = value ? 'Sí' : 'No';
-          if (field.key.includes('date') || field.key.includes('fecha') || field.key.includes('created_at')) {
-            if (value) value = new Date(value).toLocaleDateString('es-CO');
-          }
-          if (field.key.includes('amount') || field.key.includes('prima') || field.key.includes('comision')) {
-            if (typeof value === 'number') value = value.toLocaleString('es-CO');
-          }
-          
-          // Escapar comillas y envolver en comillas
-          if (typeof value === 'string') {
-            value = value.replace(/"/g, '""');
-          }
+          let value = formatExportValue(item[field.key], field.key);
+          // Escapar comillas
+          value = String(value).replace(/"/g, '""');
           return `"${value}"`;
         }).join('\t');
       }).join('\n');
@@ -304,7 +352,7 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
       link.click();
       URL.revokeObjectURL(url);
       
-      toast({ title: 'Éxito', description: 'Archivo exportado correctamente' });
+      toast({ title: 'Éxito', description: `Exportados ${data.length} registros con ${selectedFields.length} campos` });
     } catch (e) {
       console.error('Error:', e);
       toast({ title: 'Error', description: 'Error al exportar', variant: 'destructive' });
@@ -324,27 +372,29 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
       const selectedFields = currentFields.filter(f => f.selected);
       
       // Headers
-      const headers = selectedFields.map(f => f.label).join(',');
+      const headers = selectedFields.map(f => `"${f.label}"`).join(',');
       
-      // Rows
+      // Rows con todos los campos seleccionados
       const rows = data.map(item => {
         return selectedFields.map(field => {
-          let value = item[field.key];
-          if (value === null || value === undefined) value = '';
-          if (typeof value === 'string' && value.includes(',')) value = `"${value}"`;
-          return value;
+          let value = formatExportValue(item[field.key], field.key);
+          // Escapar comillas y envolver en comillas
+          value = String(value).replace(/"/g, '""');
+          return `"${value}"`;
         }).join(',');
       }).join('\n');
 
+      const BOM = '\uFEFF'; // UTF-8 BOM
       const csv = `${headers}\n${rows}`;
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `reporte_${reportType}_${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
+      URL.revokeObjectURL(url);
       
-      toast({ title: 'Éxito', description: 'Archivo CSV exportado correctamente' });
+      toast({ title: 'Éxito', description: `Exportados ${data.length} registros con ${selectedFields.length} campos` });
     } catch (e) {
       console.error('Error:', e);
       toast({ title: 'Error', description: 'Error al exportar CSV', variant: 'destructive' });
@@ -544,20 +594,20 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
               <p className="text-xs text-gray-500 uppercase">Prima Total</p>
               <p className="text-xl font-bold text-blue-600">
                 {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
-                  .format(data.reduce((sum, p) => sum + (parseFloat(p.premium_amount) || 0), 0))}
+                  .format(data.reduce((sum, p) => sum + (parseFloat(p.prima_neta) || 0), 0))}
               </p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-4 text-center shadow-sm">
               <p className="text-xs text-gray-500 uppercase">Comisión Total</p>
               <p className="text-xl font-bold text-green-600">
                 {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
-                  .format(data.reduce((sum, p) => sum + (parseFloat(p.commission_amount) || 0), 0))}
+                  .format(data.reduce((sum, p) => sum + (parseFloat(p.comision) || 0), 0))}
               </p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-4 text-center shadow-sm">
               <p className="text-xs text-gray-500 uppercase">Vendedores</p>
               <p className="text-2xl font-bold text-purple-600">
-                {new Set(data.map(p => p.seller_name).filter(Boolean)).size}
+                {new Set(data.map(p => p.vendedor).filter(Boolean)).size}
               </p>
             </div>
           </div>
@@ -575,7 +625,7 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
             </h4>
           </div>
           
-          <div className="overflow-x-auto max-h-96">
+          <div className="overflow-x-auto">
             <Table striped>
               <Table.Head>
                 {currentFields.filter(f => f.selected).slice(0, 8).map(field => (
@@ -588,7 +638,7 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
                 )}
               </Table.Head>
               <Table.Body>
-                {data.slice(0, 10).map((item, idx) => (
+                {paginatedData.map((item, idx) => (
                   <Table.Row key={idx}>
                     {currentFields.filter(f => f.selected).slice(0, 8).map(field => (
                       <Table.Cell key={field.key} className="whitespace-nowrap">
@@ -602,12 +652,37 @@ const ReportesVendedores: React.FC<Props> = ({ vendedorId }) => {
                 ))}
               </Table.Body>
             </Table>
-            {data.length > 10 && (
-              <p className="text-sm text-gray-500 mt-2 text-center">
-                Mostrando 10 de {data.length} registros. Exporta para ver todos.
-              </p>
-            )}
           </div>
+          
+          {/* Paginación de vista previa */}
+          {totalPreviewPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <p className="text-sm text-gray-500">
+                Mostrando {((previewPage - 1) * previewPerPage) + 1} - {Math.min(previewPage * previewPerPage, data.length)} de {data.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button 
+                  size="xs" 
+                  color="gray" 
+                  disabled={previewPage === 1}
+                  onClick={() => setPreviewPage(p => p - 1)}
+                >
+                  Anterior
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Página {previewPage} de {totalPreviewPages}
+                </span>
+                <Button 
+                  size="xs" 
+                  color="gray" 
+                  disabled={previewPage === totalPreviewPages}
+                  onClick={() => setPreviewPage(p => p + 1)}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>

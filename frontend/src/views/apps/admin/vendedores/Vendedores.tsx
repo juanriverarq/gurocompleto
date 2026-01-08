@@ -189,24 +189,24 @@ const Vendedores = () => {
     setSelectedItem(item);
     setIsEditing(true);
     setFormData({ 
-      nombres: item.nombres,
-      tipo_documento: item.tipo_documento,
-      numero_documento: item.numero_documento,
-      telefono: item.telefono,
-      celular: item.celular,
-      email: item.email,
-      cuenta_bancaria: item.cuenta_bancaria,
-      tipo_persona: item.tipo_persona,
-      tipo_retencion: item.tipo_retencion,
-      es_agencia: item.es_agencia,
+      nombres: item.nombres || '',
+      tipo_documento: item.tipo_documento || 'CC',
+      numero_documento: item.numero_documento || '',
+      telefono: item.telefono || '',
+      celular: item.celular || '',
+      email: item.email || '',
+      cuenta_bancaria: item.cuenta_bancaria || '',
+      tipo_persona: item.tipo_persona || 'natural',
+      tipo_retencion: item.tipo_retencion || undefined,
+      es_agencia: item.es_agencia ?? false,
       porcentaje_comision: parseFloat(String(item.porcentaje_comision)) || 0,
-      calcular_comision_sobre: item.calcular_comision_sobre,
+      calcular_comision_sobre: item.calcular_comision_sobre || 'agencia',
       porcentaje_retencion: parseFloat(String(item.porcentaje_retencion)) || 0,
       porcentaje_retencion_ica: parseFloat(String(item.porcentaje_retencion_ica)) || 0,
       porcentaje_iva: parseFloat(String(item.porcentaje_iva)) || 0,
       porcentaje_retencion_iva: parseFloat(String(item.porcentaje_retencion_iva)) || 0,
-      comisiones_diferentes_por_ano: item.comisiones_diferentes_por_ano,
-      fecha_vinculacion: item.fecha_vinculacion
+      comisiones_diferentes_por_ano: item.comisiones_diferentes_por_ano ?? false,
+      fecha_vinculacion: item.fecha_vinculacion || undefined
     });
     setShowModal(true);
   };
@@ -217,13 +217,25 @@ const Vendedores = () => {
 
     try {
       setIsSubmitting(true);
+      // Limpiar datos antes de enviar - convertir strings vacíos a null
+      const cleanedData = {
+        ...formData,
+        fecha_vinculacion: formData.fecha_vinculacion || null,
+        telefono: formData.telefono || null,
+        celular: formData.celular || null,
+        email: formData.email || null,
+        cuenta_bancaria: formData.cuenta_bancaria || null,
+        tipo_retencion: formData.tipo_retencion || null,
+      };
+      
       if (isEditing && selectedItem) {
-        await updateVendedor(selectedItem.id, formData);
+        await updateVendedor(selectedItem.id, cleanedData);
       } else {
-        await createVendedor(formData);
+        await createVendedor(cleanedData);
       }
       setShowModal(false);
     } catch (error) {
+      console.error('Error al guardar vendedor:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -637,7 +649,7 @@ const Vendedores = () => {
           {isEditing ? `Editar ${terminologia.vendedor}` : `Datos del ${terminologia.vendedor}`}
         </Modal.Header>
         <form onSubmit={handleSubmit}>
-          <Modal.Body>
+          <Modal.Body className="max-h-[70vh] overflow-y-auto">
             <Tabs>
               <Tabs.Item active title="Datos principales">
                 <div className="space-y-6 mt-4">

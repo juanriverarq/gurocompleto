@@ -1497,7 +1497,7 @@ const brokerClientsFiltered = React.useMemo(() => {
         // Requisitos: phone_number y opcionalmente custom_data
         const contacts = campaignData.selectedContacts.map(client => {
           const fullName = `${client.nombre} ${client.apellidos}`.trim();
-          const companyName = (campaignData.customVariables?.company_name || tenant?.branding?.nombre_comercial || tenant?.nombre || 'POSITIVA SEGUROS');
+          const companyName = (campaignData.customVariables?.company_name || tenant?.branding?.nombre_comercial || tenant?.nombre || 'sebra seguros');
           const policyNumber = (campaignData.customVariables?.policy_number || 'uno, dos, veinticinco,catorce, once');
           const debtAmount = Number(campaignData.customVariables?.debt_amount) || 'Ciento cincuenta mil pesos';
           const dueDate =

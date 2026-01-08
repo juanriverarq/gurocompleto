@@ -85,6 +85,22 @@ class Vendedor extends Model
         return $this->belongsTo(Broker::class);
     }
 
+    /**
+     * Relación con las pólizas donde es vendedor principal
+     */
+    public function polizas()
+    {
+        return $this->hasMany(Poliza::class, 'seller_id');
+    }
+
+    /**
+     * Relación con las pólizas donde es vendedor secundario
+     */
+    public function polizasSecundarias()
+    {
+        return $this->hasMany(Poliza::class, 'seller_id_2');
+    }
+
     // ===== SCOPES =====
 
     /**

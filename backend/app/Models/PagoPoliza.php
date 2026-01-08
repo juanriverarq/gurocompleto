@@ -26,6 +26,7 @@ class PagoPoliza extends Model
         'comprobante_url',
         'estado',
         'observaciones',
+        'recaudo_import_id',
     ];
 
     protected $casts = [
@@ -49,6 +50,11 @@ class PagoPoliza extends Model
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);
+    }
+
+    public function recaudoImport(): BelongsTo
+    {
+        return $this->belongsTo(RecaudoImport::class, 'recaudo_import_id');
     }
 
     // Scopes

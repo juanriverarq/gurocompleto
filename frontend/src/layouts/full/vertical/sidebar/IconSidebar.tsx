@@ -15,7 +15,7 @@ export const IconSidebar = () => {
   // Mapeo de íconos a módulos que habilitan su visibilidad
   const iconAccessMap: Record<number, string[]> = {
     1: ['dashboard'],
-    2: ['clientes', 'polizas', 'siniestros', 'renovaciones', 'anexos_condiciones'],
+    2: ['clientes', 'polizas', 'siniestros', 'renovaciones', 'anexos_condiciones', 'automoviles'],
     3: [
       'pipeline_ventas',
       'metas_objetivos',
@@ -24,31 +24,23 @@ export const IconSidebar = () => {
       'embudo_ventas',
       'seguimiento_comercial',
     ],
-    4: ['whatsapp_business', 'email_marketing'],
-    5: [
-      'leads',
-      'sms_marketing',
-      'enlaces_cotizacion',
-      'plantillas_campana',
-      'recordatorios_automaticos',
+    4: ['whatsapp_business', 'email_marketing', 'sms_marketing', 'enlaces_cotizacion', 'mini_web', 'plantillas_campana'],
+    5: ['asistentes_ia', 'voice_ai', 'analytics_predictivo'],
+    6: [
+      'cartera',
       'cartera_clientes',
+      'recaudos',
+      'pagos_polizas',
       'comisiones',
+      'liquidar_vendedores',
       'reportes_financieros',
     ],
-    6: ['asistentes_ia', 'voice_ai', 'analytics_predictivo'],
-    7: ['contratos', 'proteccion_datos', 'documentos_clientes', 'cumplimiento_legal'],
-    8: ['integraciones_externas', 'sincronizacion'],
-    9: [
+    7: ['contratos', 'proteccion_datos', 'documentos_clientes', 'documentos_poliza', 'documentos_siniestro', 'cumplimiento_legal'],
+    10: [
       'gestion_usuarios',
       'roles_permisos',
       'auditoria_accesos',
       'informacion_agencia',
-      'aseguradoras',
-
-      'configuracion_sistema',
-      'monitoreo_logs',
-    ],
-    10: [
       'sedes',
       'aseguradoras',
       'ramos',
@@ -58,6 +50,10 @@ export const IconSidebar = () => {
       'estados_siniestros',
       'motivos_estados_poliza',
       'mensajeros',
+      'configuracion_sistema',
+      'monitoreo_logs',
+      'integraciones_externas',
+      'sincronizacion',
     ],
   };
 

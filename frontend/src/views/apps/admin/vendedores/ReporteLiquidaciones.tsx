@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Card, Button, Label, Spinner, Table, TextInput, Badge, Modal } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { saasApi } from 'src/services/saasApi';
@@ -14,9 +14,11 @@ interface VendedorLiquidacion {
   porcentaje_retencion: number;
   porcentaje_retencion_iva: number;
   porcentaje_retencion_ica: number;
+  porcentaje_iva: number;
   // Valores calculados
   total_prima: number;
   valor_comision: number;
+  iva_comision: number;
   retencion_fuente: number;
   retencion_iva: number;
   retencion_ica: number;
@@ -68,17 +70,30 @@ interface Pagination {
   has_more: boolean;
 }
 
+interface AgenciaInfo {
+  name: string;
+  legal_name: string;
+  document_number: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  logo_url: string | null;
+}
+
 const ReporteLiquidaciones: React.FC = () => {
   const { toast } = useToast();
   const { tenant } = useUnifiedAuth();
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [agenciaInfo, setAgenciaInfo] = useState<AgenciaInfo | null>(null);
   const [periodoInicio, setPeriodoInicio] = useState('');
   const [periodoFin, setPeriodoFin] = useState('');
   const [liquidaciones, setLiquidaciones] = useState<VendedorLiquidacion[]>([]);
   const [totales, setTotales] = useState({
     total_prima: 0,
     valor_comision: 0,
+    iva_comision: 0,
     retencion_fuente: 0,
     retencion_iva: 0,
     retencion_ica: 0,
@@ -108,9 +123,36 @@ const ReporteLiquidaciones: React.FC = () => {
   });
   const [loadingVendedor, setLoadingVendedor] = useState(false);
 
-  // Obtener logo del tenant
-  const logoUrl = (tenant as any)?.logo_url || (tenant as any)?.branding?.logo || null;
-  const nombreAgencia = (tenant as any)?.nombre || (tenant as any)?.branding?.nombre_comercial || 'Mi Agencia';
+  // Cargar información de la agencia al montar el componente
+  useEffect(() => {
+    const cargarInfoAgencia = async () => {
+      try {
+        const headers = await saasApi.getAuthHeaders();
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
+        const res = await fetch(`${baseUrl}/saas/informacion-agencia`, { headers });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setAgenciaInfo({
+            name: data.data.name || data.data.nombre || '',
+            legal_name: data.data.legal_name || data.data.razon_social || '',
+            document_number: data.data.document_number || data.data.numero_documento || '',
+            email: data.data.email || data.data.correo || '',
+            phone: data.data.phone || data.data.telefono || '',
+            address: data.data.address || data.data.direccion || '',
+            city: data.data.city || data.data.ciudad || '',
+            logo_url: data.data.logo_url || null,
+          });
+        }
+      } catch (e) {
+        console.error('Error cargando info agencia:', e);
+      }
+    };
+    cargarInfoAgencia();
+  }, []);
+
+  // Obtener logo del tenant o de la info de agencia
+  const logoUrl = agenciaInfo?.logo_url || (tenant as any)?.logo_url || (tenant as any)?.branding?.logo || null;
+  const nombreAgencia = agenciaInfo?.name || (tenant as any)?.nombre || (tenant as any)?.branding?.nombre_comercial || 'Mi Agencia';
 
   // Cargar reporte con paginación
   const cargarReporte = useCallback(async (page: number = 1) => {
@@ -133,31 +175,42 @@ const ReporteLiquidaciones: React.FC = () => {
       
       if (result.success && result.data) {
         // El endpoint ya devuelve datos agrupados por vendedor
-        const liquidacionesList: VendedorLiquidacion[] = result.data.map((v: any) => ({
-          id: v.vendedor_id || 0,
-          nombres: v.vendedor || 'Sin nombre',
-          tipo_documento: v.porcentajes?.tipo_documento || '',
-          numero_documento: v.porcentajes?.numero_documento || '',
-          porcentaje_comision: v.porcentajes?.comision || 0,
-          porcentaje_retencion: v.porcentajes?.retencion || 0,
-          porcentaje_retencion_iva: v.porcentajes?.retencion_iva || 0,
-          porcentaje_retencion_ica: v.porcentajes?.retencion_ica || 0,
-          total_prima: v.prima_total || 0,
-          valor_comision: v.comision_bruta_total || 0,
-          retencion_fuente: v.retencion_total || 0,
-          retencion_iva: v.reteiva_total || 0,
-          retencion_ica: v.retencion_ica_total || 0,
-          pago_final: v.comision_neta_total || 0,
-          cantidad_polizas: (v.total_polizas || 0) + (v.total_comisiones_manuales || 0),
-        }));
+        const liquidacionesList: VendedorLiquidacion[] = result.data.map((v: any) => {
+          const comisionBruta = v.comision_bruta_total || 0;
+          const porcentajeIva = v.porcentajes?.iva || 0;
+          const ivaComision = comisionBruta * (porcentajeIva / 100);
+          return {
+            id: v.vendedor_id || 0,
+            nombres: v.vendedor || 'Sin nombre',
+            tipo_documento: v.porcentajes?.tipo_documento || '',
+            numero_documento: v.porcentajes?.numero_documento || '',
+            porcentaje_comision: v.porcentajes?.comision || 0,
+            porcentaje_retencion: v.porcentajes?.retencion || 0,
+            porcentaje_retencion_iva: v.porcentajes?.retencion_iva || 0,
+            porcentaje_retencion_ica: v.porcentajes?.retencion_ica || 0,
+            porcentaje_iva: porcentajeIva,
+            total_prima: v.prima_total || 0,
+            valor_comision: comisionBruta,
+            iva_comision: v.iva_comision_total || ivaComision,
+            retencion_fuente: v.retencion_total || 0,
+            retencion_iva: v.reteiva_total || 0,
+            retencion_ica: v.retencion_ica_total || 0,
+            pago_final: v.comision_neta_total || 0,
+            cantidad_polizas: (v.total_polizas || 0) + (v.total_comisiones_manuales || 0),
+          };
+        });
         
         setLiquidaciones(liquidacionesList);
         
         // Usar totales del backend (calculados sobre todos los datos)
         if (result.totales) {
+          // Calcular IVA total de comisiones
+          const ivaComisionTotal = result.totales.iva_comision_total || 
+            liquidacionesList.reduce((sum, v) => sum + v.iva_comision, 0);
           setTotales({
             total_prima: result.totales.prima_total || 0,
             valor_comision: result.totales.comision_bruta_total || 0,
+            iva_comision: ivaComisionTotal,
             retencion_fuente: result.totales.retencion_total || 0,
             retencion_iva: result.totales.reteiva_total || 0,
             retencion_ica: result.totales.retencion_ica_total || 0,
@@ -209,23 +262,30 @@ const ReporteLiquidaciones: React.FC = () => {
     const result = await res.json();
     
     if (result.success && result.data) {
-      return result.data.map((v: any) => ({
-        id: v.vendedor_id || 0,
-        nombres: v.vendedor || 'Sin nombre',
-        tipo_documento: v.porcentajes?.tipo_documento || '',
-        numero_documento: v.porcentajes?.numero_documento || '',
-        porcentaje_comision: v.porcentajes?.comision || 0,
-        porcentaje_retencion: v.porcentajes?.retencion || 0,
-        porcentaje_retencion_iva: v.porcentajes?.retencion_iva || 0,
-        porcentaje_retencion_ica: v.porcentajes?.retencion_ica || 0,
-        total_prima: v.prima_total || 0,
-        valor_comision: v.comision_bruta_total || 0,
-        retencion_fuente: v.retencion_total || 0,
-        retencion_iva: v.reteiva_total || 0,
-        retencion_ica: v.retencion_ica_total || 0,
-        pago_final: v.comision_neta_total || 0,
-        cantidad_polizas: (v.total_polizas || 0) + (v.total_comisiones_manuales || 0),
-      }));
+      return result.data.map((v: any) => {
+        const comisionBruta = v.comision_bruta_total || 0;
+        const porcentajeIva = v.porcentajes?.iva || 0;
+        const ivaComision = comisionBruta * (porcentajeIva / 100);
+        return {
+          id: v.vendedor_id || 0,
+          nombres: v.vendedor || 'Sin nombre',
+          tipo_documento: v.porcentajes?.tipo_documento || '',
+          numero_documento: v.porcentajes?.numero_documento || '',
+          porcentaje_comision: v.porcentajes?.comision || 0,
+          porcentaje_retencion: v.porcentajes?.retencion || 0,
+          porcentaje_retencion_iva: v.porcentajes?.retencion_iva || 0,
+          porcentaje_retencion_ica: v.porcentajes?.retencion_ica || 0,
+          porcentaje_iva: porcentajeIva,
+          total_prima: v.prima_total || 0,
+          valor_comision: comisionBruta,
+          iva_comision: v.iva_comision_total || ivaComision,
+          retencion_fuente: v.retencion_total || 0,
+          retencion_iva: v.reteiva_total || 0,
+          retencion_ica: v.retencion_ica_total || 0,
+          pago_final: v.comision_neta_total || 0,
+          cantidad_polizas: (v.total_polizas || 0) + (v.total_comisiones_manuales || 0),
+        };
+      });
     }
     return [];
   };
@@ -250,6 +310,8 @@ const ReporteLiquidaciones: React.FC = () => {
         'Total Prima',
         '% Comisión',
         'Valor Comisión',
+        '% IVA',
+        'IVA Comisión',
         '% Ret. Fuente',
         'Ret. Fuente',
         '% Ret. IVA',
@@ -267,6 +329,8 @@ const ReporteLiquidaciones: React.FC = () => {
         v.total_prima,
         v.porcentaje_comision,
         v.valor_comision,
+        v.porcentaje_iva,
+        v.iva_comision,
         v.porcentaje_retencion,
         v.retencion_fuente,
         v.porcentaje_retencion_iva,
@@ -284,6 +348,8 @@ const ReporteLiquidaciones: React.FC = () => {
         totales.total_prima,
         '""',
         totales.valor_comision,
+        '""',
+        totales.iva_comision,
         '""',
         totales.retencion_fuente,
         '""',
@@ -320,6 +386,22 @@ const ReporteLiquidaciones: React.FC = () => {
     }
   };
 
+  // Función para convertir imagen URL a base64
+  const imageToBase64 = async (url: string): Promise<string | null> => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
   // Imprimir reporte (todos los datos del período)
   const handlePrint = async () => {
     if (liquidaciones.length === 0) {
@@ -332,29 +414,97 @@ const ReporteLiquidaciones: React.FC = () => {
       // Obtener TODOS los datos del período
       const todosLosVendedores = await obtenerTodosLosDatos();
       
+      // Convertir logo a base64 para evitar problemas de CORS en la impresión
+      let logoBase64: string | null = null;
+      if (logoUrl) {
+        logoBase64 = await imageToBase64(logoUrl);
+      }
+      
       const printContent = `
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Reporte de Liquidaciones</title>
+          <title>Reporte de Liquidaciones - ${nombreAgencia}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { text-align: center; margin-bottom: 5px; }
-            .periodo { text-align: center; color: #666; margin-bottom: 5px; }
-            .total-vendedores { text-align: center; color: #333; margin-bottom: 20px; font-weight: bold; }
-            table { width: 100%; border-collapse: collapse; font-size: 10px; }
-            th, td { border: 1px solid #ddd; padding: 4px; text-align: right; }
-            th { background-color: #f5f5f5; font-weight: bold; }
-            td:first-child, th:first-child { text-align: left; }
-            .totales { background-color: #e8f4e8; font-weight: bold; }
-            .currency { font-family: monospace; }
-            @media print { body { padding: 0; } }
+            * { box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; margin: 0; color: #333; }
+            .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #635BFF; }
+            .logo-container { flex: 0 0 auto; }
+            .logo { max-height: 80px; max-width: 200px; object-fit: contain; }
+            .header-info { flex: 1; text-align: right; }
+            .agency-name { font-size: 24px; font-weight: bold; color: #1a1a2e; margin: 0; }
+            .agency-details { font-size: 12px; color: #666; margin-top: 5px; }
+            .report-title { text-align: center; margin: 20px 0; }
+            .report-title h1 { font-size: 22px; color: #1a1a2e; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1px; }
+            .report-title .periodo { font-size: 14px; color: #666; margin: 5px 0; }
+            .report-title .total-vendedores { font-size: 13px; color: #333; font-weight: 600; }
+            .summary-cards { display: flex; justify-content: space-between; margin: 20px 0; gap: 10px; flex-wrap: wrap; }
+            .summary-card { flex: 1; min-width: 120px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #dee2e6; }
+            .summary-card.highlight { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-color: #28a745; }
+            .summary-card .label { font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+            .summary-card .value { font-size: 14px; font-weight: bold; color: #1a1a2e; }
+            .summary-card.highlight .value { color: #155724; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 20px; }
+            th { background: linear-gradient(135deg, #635BFF 0%, #4a47cc 100%); color: white; padding: 10px 6px; text-align: right; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px; }
+            th:first-child { text-align: left; border-radius: 6px 0 0 0; }
+            th:last-child { border-radius: 0 6px 0 0; }
+            td { border-bottom: 1px solid #e9ecef; padding: 8px 6px; text-align: right; }
+            td:first-child { text-align: left; font-weight: 500; }
+            tr:nth-child(even) { background-color: #f8f9fa; }
+            tr:hover { background-color: #e3f2fd; }
+            .totales { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important; font-weight: bold; }
+            .totales td { border-top: 2px solid #28a745; padding: 12px 6px; }
+            .currency { font-family: 'Consolas', monospace; }
+            .text-green { color: #28a745; }
+            .text-purple { color: #6f42c1; }
+            .text-red { color: #dc3545; }
+            .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #999; }
+            .footer-left { text-align: left; }
+            .footer-right { text-align: right; }
+            @media print { 
+              body { padding: 15px; } 
+              .header { margin-bottom: 20px; }
+              .summary-cards { margin: 15px 0; }
+              @page { margin: 1cm; }
+            }
           </style>
         </head>
         <body>
-          <h1>REPORTE DE LIQUIDACIONES</h1>
-          <p class="periodo">Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}</p>
-          <p class="total-vendedores">Total vendedores: ${todosLosVendedores.length}</p>
+          <div class="header">
+            <div class="logo-container">
+              ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="logo" />` : (logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo" />` : `<div style="font-size:28px;font-weight:bold;color:#635BFF;">${nombreAgencia}</div>`)}
+            </div>
+          </div>
+
+          <div class="report-title">
+            <h1>Reporte de Liquidaciones</h1>
+            <p class="periodo">Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}</p>
+            <p class="total-vendedores">${todosLosVendedores.length} vendedor${todosLosVendedores.length !== 1 ? 'es' : ''}</p>
+          </div>
+
+          <div class="summary-cards">
+            <div class="summary-card">
+              <div class="label">Total Prima</div>
+              <div class="value">${formatCurrency(totales.total_prima)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Comisiones</div>
+              <div class="value">${formatCurrency(totales.valor_comision)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">IVA Comisión</div>
+              <div class="value">${formatCurrency(totales.iva_comision)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="label">Retenciones</div>
+              <div class="value">${formatCurrency(totales.retencion_fuente + totales.retencion_iva + totales.retencion_ica)}</div>
+            </div>
+            <div class="summary-card highlight">
+              <div class="label">Pago Final</div>
+              <div class="value">${formatCurrency(totales.pago_final)}</div>
+            </div>
+          </div>
+
           <table>
             <thead>
               <tr>
@@ -362,12 +512,12 @@ const ReporteLiquidaciones: React.FC = () => {
                 <th>Documento</th>
                 <th>Pólizas</th>
                 <th>Total Prima</th>
-                <th>% Com</th>
                 <th>Valor Comisión</th>
+                <th>IVA Comisión</th>
                 <th>Ret. Fuente</th>
                 <th>Ret. IVA</th>
                 <th>Ret. ICA</th>
-                <th>PAGO FINAL</th>
+                <th>Pago Final</th>
               </tr>
             </thead>
             <tbody>
@@ -377,12 +527,12 @@ const ReporteLiquidaciones: React.FC = () => {
                   <td>${v.tipo_documento} ${v.numero_documento}</td>
                   <td style="text-align:center">${v.cantidad_polizas}</td>
                   <td class="currency">${formatCurrency(v.total_prima)}</td>
-                  <td style="text-align:center">${v.porcentaje_comision}%</td>
                   <td class="currency">${formatCurrency(v.valor_comision)}</td>
-                  <td class="currency">${formatCurrency(v.retencion_fuente)}</td>
-                  <td class="currency">${formatCurrency(v.retencion_iva)}</td>
-                  <td class="currency">${formatCurrency(v.retencion_ica)}</td>
-                  <td class="currency" style="font-weight:bold;color:green">${formatCurrency(v.pago_final)}</td>
+                  <td class="currency text-purple">${formatCurrency(v.iva_comision)}</td>
+                  <td class="currency text-red">${formatCurrency(v.retencion_fuente)}</td>
+                  <td class="currency text-red">${formatCurrency(v.retencion_iva)}</td>
+                  <td class="currency text-red">${formatCurrency(v.retencion_ica)}</td>
+                  <td class="currency text-green" style="font-weight:bold">${formatCurrency(v.pago_final)}</td>
                 </tr>
               `).join('')}
               <tr class="totales">
@@ -390,18 +540,24 @@ const ReporteLiquidaciones: React.FC = () => {
                 <td></td>
                 <td style="text-align:center">${totales.cantidad_polizas}</td>
                 <td class="currency">${formatCurrency(totales.total_prima)}</td>
-                <td></td>
                 <td class="currency">${formatCurrency(totales.valor_comision)}</td>
-                <td class="currency">${formatCurrency(totales.retencion_fuente)}</td>
-                <td class="currency">${formatCurrency(totales.retencion_iva)}</td>
-                <td class="currency">${formatCurrency(totales.retencion_ica)}</td>
-                <td class="currency" style="color:green">${formatCurrency(totales.pago_final)}</td>
+                <td class="currency text-purple">${formatCurrency(totales.iva_comision)}</td>
+                <td class="currency text-red">${formatCurrency(totales.retencion_fuente)}</td>
+                <td class="currency text-red">${formatCurrency(totales.retencion_iva)}</td>
+                <td class="currency text-red">${formatCurrency(totales.retencion_ica)}</td>
+                <td class="currency text-green">${formatCurrency(totales.pago_final)}</td>
               </tr>
             </tbody>
           </table>
-          <p style="text-align:right;margin-top:20px;font-size:10px;color:#999">
-            Generado el ${new Date().toLocaleString('es-CO')}
-          </p>
+
+          <div class="footer">
+            <div class="footer-left">
+              ${agenciaInfo?.document_number ? `NIT: ${agenciaInfo.document_number}` : ''}
+            </div>
+            <div class="footer-right">
+              Generado el ${new Date().toLocaleString('es-CO')}
+            </div>
+          </div>
         </body>
         </html>
       `;
@@ -410,7 +566,8 @@ const ReporteLiquidaciones: React.FC = () => {
       if (printWindow) {
         printWindow.document.write(printContent);
         printWindow.document.close();
-        printWindow.print();
+        // Pequeño delay para asegurar que el contenido se renderice
+        setTimeout(() => printWindow.print(), 300);
       }
     } catch (e) {
       console.error('Error:', e);
@@ -527,32 +684,98 @@ const ReporteLiquidaciones: React.FC = () => {
   };
 
   // Imprimir reporte del vendedor
-  const imprimirReporteVendedor = () => {
+  const imprimirReporteVendedor = async () => {
     if (!vendedorSeleccionado || polizasVendedor.length === 0) return;
+
+    // Convertir logo a base64 para evitar problemas de CORS en la impresión
+    let logoBase64: string | null = null;
+    if (logoUrl) {
+      logoBase64 = await imageToBase64(logoUrl);
+    }
 
     const printContent = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Reporte ${vendedorSeleccionado.nombres}</title>
+        <title>Reporte ${vendedorSeleccionado.nombres} - ${nombreAgencia}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          h1 { text-align: center; margin-bottom: 5px; font-size: 18px; }
-          .vendedor-info { text-align: center; margin-bottom: 5px; }
-          .periodo { text-align: center; color: #666; margin-bottom: 15px; }
-          table { width: 100%; border-collapse: collapse; font-size: 9px; }
-          th, td { border: 1px solid #ddd; padding: 3px; text-align: right; }
-          th { background-color: #f5f5f5; font-weight: bold; }
-          td:nth-child(1), td:nth-child(2), td:nth-child(3), td:nth-child(4), th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: left; }
-          .totales { background-color: #e8f4e8; font-weight: bold; }
-          .currency { font-family: monospace; }
-          @media print { body { padding: 0; } }
+          * { box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; margin: 0; color: #333; }
+          .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #635BFF; }
+          .logo-container { flex: 0 0 auto; }
+          .logo { max-height: 80px; max-width: 200px; object-fit: contain; }
+          .report-title { text-align: center; margin: 20px 0; }
+          .report-title h1 { font-size: 22px; color: #1a1a2e; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1px; }
+          .report-title .vendedor-info { font-size: 16px; color: #333; margin: 5px 0; font-weight: 600; }
+          .report-title .periodo { font-size: 14px; color: #666; margin: 5px 0; }
+          .summary-cards { display: flex; justify-content: space-between; margin: 20px 0; gap: 10px; flex-wrap: wrap; }
+          .summary-card { flex: 1; min-width: 100px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #dee2e6; }
+          .summary-card.highlight { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-color: #28a745; }
+          .summary-card .label { font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+          .summary-card .value { font-size: 14px; font-weight: bold; color: #1a1a2e; }
+          .summary-card.highlight .value { color: #155724; }
+          table { width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 20px; }
+          th { background: linear-gradient(135deg, #635BFF 0%, #4a47cc 100%); color: white; padding: 8px 4px; text-align: right; font-weight: 600; text-transform: uppercase; font-size: 8px; letter-spacing: 0.5px; }
+          th:first-child { text-align: left; border-radius: 6px 0 0 0; }
+          th:last-child { border-radius: 0 6px 0 0; }
+          td { border-bottom: 1px solid #e9ecef; padding: 6px 4px; text-align: right; }
+          td:nth-child(1), td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: left; }
+          th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: left; }
+          tr:nth-child(even) { background-color: #f8f9fa; }
+          tr:hover { background-color: #e3f2fd; }
+          .totales { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important; font-weight: bold; }
+          .totales td { border-top: 2px solid #28a745; padding: 10px 4px; }
+          .currency { font-family: 'Consolas', monospace; }
+          .text-green { color: #28a745; }
+          .text-red { color: #dc3545; }
+          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #999; }
+          .footer-left { text-align: left; }
+          .footer-right { text-align: right; }
+          @media print { 
+            body { padding: 15px; } 
+            .header { margin-bottom: 20px; }
+            .summary-cards { margin: 15px 0; }
+            @page { margin: 1cm; }
+          }
         </style>
       </head>
       <body>
-        <h1>REPORTE DE LIQUIDACIONES</h1>
-        <p class="vendedor-info"><strong>${vendedorSeleccionado.nombres}</strong> - ${vendedorSeleccionado.tipo_documento}: ${vendedorSeleccionado.numero_documento}</p>
-        <p class="periodo">Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}</p>
+        <div class="header">
+          <div class="logo-container">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="logo" />` : (logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo" />` : `<div style="font-size:28px;font-weight:bold;color:#635BFF;">${nombreAgencia}</div>`)}
+          </div>
+        </div>
+
+        <div class="report-title">
+          <h1>Reporte de Comisiones</h1>
+          <p class="vendedor-info">${vendedorSeleccionado.nombres}</p>
+          <p class="periodo">${vendedorSeleccionado.tipo_documento}: ${vendedorSeleccionado.numero_documento}</p>
+          <p class="periodo">Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}</p>
+        </div>
+
+        <div class="summary-cards">
+          <div class="summary-card">
+            <div class="label">Pólizas</div>
+            <div class="value">${totalesVendedor.cantidad_polizas}</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">Prima Total</div>
+            <div class="value">${formatCurrency(totalesVendedor.prima_total)}</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">Comisión Bruta</div>
+            <div class="value">${formatCurrency(totalesVendedor.comision_bruta_total)}</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">Retenciones</div>
+            <div class="value">${formatCurrency(totalesVendedor.retencion_total + totalesVendedor.reteiva_total + totalesVendedor.retencion_ica_total)}</div>
+          </div>
+          <div class="summary-card highlight">
+            <div class="label">Comisión Neta</div>
+            <div class="value">${formatCurrency(totalesVendedor.comision_neta_total)}</div>
+          </div>
+        </div>
+
         <table>
           <thead>
             <tr>
@@ -577,26 +800,32 @@ const ReporteLiquidaciones: React.FC = () => {
                 <td>${p.ramo}</td>
                 <td class="currency">${formatCurrency(p.prima_neta)}</td>
                 <td class="currency">${formatCurrency(p.comision_bruta)}</td>
-                <td class="currency">${formatCurrency(p.retencion_fuente)}</td>
-                <td class="currency">${formatCurrency(p.retencion_iva)}</td>
-                <td class="currency">${formatCurrency(p.retencion_ica)}</td>
-                <td class="currency" style="font-weight:bold;color:green">${formatCurrency(p.comision_neta)}</td>
+                <td class="currency text-red">${formatCurrency(p.retencion_fuente)}</td>
+                <td class="currency text-red">${formatCurrency(p.retencion_iva)}</td>
+                <td class="currency text-red">${formatCurrency(p.retencion_ica)}</td>
+                <td class="currency text-green" style="font-weight:bold">${formatCurrency(p.comision_neta)}</td>
               </tr>
             `).join('')}
             <tr class="totales">
               <td colspan="4">TOTALES (${totalesVendedor.cantidad_polizas} pólizas)</td>
               <td class="currency">${formatCurrency(totalesVendedor.prima_total)}</td>
               <td class="currency">${formatCurrency(totalesVendedor.comision_bruta_total)}</td>
-              <td class="currency">${formatCurrency(totalesVendedor.retencion_total)}</td>
-              <td class="currency">${formatCurrency(totalesVendedor.reteiva_total)}</td>
-              <td class="currency">${formatCurrency(totalesVendedor.retencion_ica_total)}</td>
-              <td class="currency" style="color:green">${formatCurrency(totalesVendedor.comision_neta_total)}</td>
+              <td class="currency text-red">${formatCurrency(totalesVendedor.retencion_total)}</td>
+              <td class="currency text-red">${formatCurrency(totalesVendedor.reteiva_total)}</td>
+              <td class="currency text-red">${formatCurrency(totalesVendedor.retencion_ica_total)}</td>
+              <td class="currency text-green">${formatCurrency(totalesVendedor.comision_neta_total)}</td>
             </tr>
           </tbody>
         </table>
-        <p style="text-align:right;margin-top:15px;font-size:9px;color:#999">
-          Generado el ${new Date().toLocaleString('es-CO')}
-        </p>
+
+        <div class="footer">
+          <div class="footer-left">
+            ${agenciaInfo?.document_number ? `NIT: ${agenciaInfo.document_number}` : ''}
+          </div>
+          <div class="footer-right">
+            Generado el ${new Date().toLocaleString('es-CO')}
+          </div>
+        </div>
       </body>
       </html>
     `;
@@ -605,7 +834,8 @@ const ReporteLiquidaciones: React.FC = () => {
     if (printWindow) {
       printWindow.document.write(printContent);
       printWindow.document.close();
-      printWindow.print();
+      // Pequeño delay para asegurar que el contenido se renderice
+      setTimeout(() => printWindow.print(), 300);
     }
   };
 
@@ -696,7 +926,7 @@ const ReporteLiquidaciones: React.FC = () => {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
                 <p className="text-xs text-gray-500">Vendedores</p>
                 <p className="text-xl font-bold text-primary">{liquidaciones.length}</p>
@@ -712,6 +942,10 @@ const ReporteLiquidaciones: React.FC = () => {
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
                 <p className="text-xs text-gray-500">Comisiones</p>
                 <p className="text-lg font-bold text-blue-600">{formatCurrency(totales.valor_comision)}</p>
+              </div>
+              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center">
+                <p className="text-xs text-gray-500">IVA Comisión</p>
+                <p className="text-lg font-bold text-purple-600">{formatCurrency(totales.iva_comision)}</p>
               </div>
               <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center">
                 <p className="text-xs text-gray-500">Ret. Fuente</p>
@@ -744,6 +978,7 @@ const ReporteLiquidaciones: React.FC = () => {
                   <Table.HeadCell className="text-right">Total Prima</Table.HeadCell>
                   <Table.HeadCell className="text-center">% Com</Table.HeadCell>
                   <Table.HeadCell className="text-right">Valor Comisión</Table.HeadCell>
+                  <Table.HeadCell className="text-right">IVA Comisión</Table.HeadCell>
                   <Table.HeadCell className="text-right">Ret. Fuente</Table.HeadCell>
                   <Table.HeadCell className="text-right">Ret. IVA</Table.HeadCell>
                   <Table.HeadCell className="text-right">Ret. ICA</Table.HeadCell>
@@ -759,6 +994,7 @@ const ReporteLiquidaciones: React.FC = () => {
                       <Table.Cell className="text-right font-mono">{formatCurrency(v.total_prima)}</Table.Cell>
                       <Table.Cell className="text-center">{v.porcentaje_comision}%</Table.Cell>
                       <Table.Cell className="text-right font-mono text-blue-600">{formatCurrency(v.valor_comision)}</Table.Cell>
+                      <Table.Cell className="text-right font-mono text-purple-600">{formatCurrency(v.iva_comision)}</Table.Cell>
                       <Table.Cell className="text-right font-mono text-red-500">-{formatCurrency(v.retencion_fuente)}</Table.Cell>
                       <Table.Cell className="text-right font-mono text-orange-500">-{formatCurrency(v.retencion_iva)}</Table.Cell>
                       <Table.Cell className="text-right font-mono text-orange-500">-{formatCurrency(v.retencion_ica)}</Table.Cell>
@@ -778,6 +1014,7 @@ const ReporteLiquidaciones: React.FC = () => {
                     <Table.Cell className="text-right font-mono">{formatCurrency(totales.total_prima)}</Table.Cell>
                     <Table.Cell></Table.Cell>
                     <Table.Cell className="text-right font-mono text-blue-600">{formatCurrency(totales.valor_comision)}</Table.Cell>
+                    <Table.Cell className="text-right font-mono text-purple-600">{formatCurrency(totales.iva_comision)}</Table.Cell>
                     <Table.Cell className="text-right font-mono text-red-500">-{formatCurrency(totales.retencion_fuente)}</Table.Cell>
                     <Table.Cell className="text-right font-mono text-orange-500">-{formatCurrency(totales.retencion_iva)}</Table.Cell>
                     <Table.Cell className="text-right font-mono text-orange-500">-{formatCurrency(totales.retencion_ica)}</Table.Cell>

@@ -37,6 +37,7 @@ export type ModuleItem = {
   videoSrc?: string; // url o ruta al video del módulo
   annualOnly?: boolean; // solo disponible en plan anual
   annualPrice?: number; // COP/año por cuenta cuando es solo anual
+  consumptionBased?: boolean; // se factura por consumo adicional
 };
 
 // Precios de referencia en COP (pueden ajustarse luego o venir desde backend)
@@ -89,7 +90,7 @@ export const MODULES: ModuleItem[] = [
     key: 'automoviles',
     name: 'Automóviles',
     description: 'Módulo especializado de autos',
-    icon: 'solar:car-bold-duotone',
+    icon: 'mdi:car',
     color: 'bg-lightwarning',
     pricePerUser: 6000,
     mandatory: true,
@@ -99,10 +100,10 @@ export const MODULES: ModuleItem[] = [
   {
     key: 'crm',
     name: 'Negocios (CRM)',
-    description: 'Embudo y oportunidades',
+    description: 'Embudo de ventas y oportunidades',
     icon: 'solar:target-bold-duotone',
     color: 'bg-lightwarning',
-    pricePerUser: 9000,
+    pricePerUser: 12000,
     longDescription:
       'Gestiona leads, oportunidades y embudos por etapas. Actividades, notas, responsables y métricas de conversión.',
   },
@@ -120,67 +121,75 @@ export const MODULES: ModuleItem[] = [
   {
     key: 'cartera',
     name: 'Cartera',
-    description: 'Cobros y estado de cuenta',
+    description: 'Cobros, recaudos y estados de cuenta',
     icon: 'solar:wallet-bold-duotone',
     color: 'bg-lightprimary',
-    pricePerUser: 6000,
+    pricePerUser: 15000,
     longDescription:
-      'Control de recaudos, estados de cuenta, conciliaciones y reportes de morosidad con notificaciones.',
+      'Control de recaudos, estados de cuenta, conciliaciones, reportes de morosidad y notificaciones automáticas de cobro.',
   },
   {
     key: 'comisiones',
     name: 'Comisiones',
-    description: 'Cálculo y liquidación',
+    description: 'Cálculo y liquidación de vendedores',
     icon: 'solar:dollar-minimalistic-bold-duotone',
     color: 'bg-lightwarning',
-    pricePerUser: 9000,
+    pricePerUser: 18000,
+    longDescription:
+      'Cálculo automático de comisiones por póliza, liquidación de vendedores, anticipos, ajustes y reportes detallados.',
   },
   {
     key: 'reportes',
-    name: 'Reportes',
-    description: 'Dashboards y KPIs',
+    name: 'Reportes Avanzados',
+    description: 'Dashboards, KPIs y analítica',
     icon: 'solar:chart-square-bold-duotone',
     color: 'bg-lightsecondary',
-    pricePerUser: 6000,
+    pricePerUser: 10000,
+    longDescription:
+      'Dashboards personalizables, KPIs en tiempo real, reportes exportables y analítica avanzada del negocio.',
   },
   {
     key: 'whatsapp',
     name: 'WhatsApp Marketing',
-    description: 'Envíos masivos y bots',
+    description: 'Envíos masivos y automatizaciones',
     icon: 'solar:chat-round-dots-bold-duotone',
     color: 'bg-lightprimary',
     pricePerUser: 0,
     mandatory: true,
+    consumptionBased: true,
     longDescription:
-      'Campañas y automatizaciones por WhatsApp, con plantillas y mensajes transaccionales. Se factura por consumo (envíos).',
+      'Campañas y automatizaciones por WhatsApp, con plantillas y mensajes transaccionales. Se factura por consumo (envíos). Incluye 500 mensajes/mes.',
   },
   {
     key: 'email',
     name: 'Email Marketing',
-    description: 'Campañas y automatizaciones',
+    description: 'Campañas y recordatorios automáticos',
     icon: 'solar:letter-bold-duotone',
     color: 'bg-lightsecondary',
     pricePerUser: 0,
     mandatory: true,
+    consumptionBased: true,
     longDescription:
-      'Email marketing y recordatorios automáticos. Se factura por consumo (envíos/volumen).',
+      'Email marketing y recordatorios automáticos. Se factura por consumo (envíos). Incluye 2,000 emails/mes.',
   },
   {
     key: 'miniweb',
     name: 'Mini Web',
-    description: 'Landing de cotización',
+    description: 'Landing page de cotización',
     icon: 'solar:smartphone-2-bold-duotone',
     color: 'bg-lightsuccess',
-    pricePerUser: 3000,
+    pricePerUser: 8000,
+    longDescription:
+      'Página web personalizada para captar leads y cotizaciones online. Incluye formularios y conexión al CRM.',
   },
   {
     key: 'marca_blanca',
     name: 'Marca Blanca',
-    description: 'Personaliza branding y dominio',
+    description: 'Personaliza branding y dominio propio',
     icon: 'solar:palette-round-line-duotone',
     color: 'bg-lightsecondary',
-    pricePerUser: 2000,
-    longDescription: 'Personalización de logotipo, colores, dominio y marca para tu empresa.',
+    pricePerUser: 12000,
+    longDescription: 'Personalización completa: logotipo, colores, dominio propio y marca para tu empresa.',
   },
   {
     key: 'facturacion_electronica',
@@ -207,11 +216,11 @@ export const MODULES: ModuleItem[] = [
   {
     key: 'lector_pdf_ia',
     name: 'Lector PDF con IA',
-    description: 'Extrae datos de PDFs',
+    description: 'Extrae datos de pólizas automáticamente',
     icon: 'solar:document-text-bold-duotone',
     color: 'bg-lightsuccess',
-    pricePerUser: 5000,
-    longDescription: 'Procesa pólizas/soportes en PDF con IA para extraer campos clave y acelerar el registro. Incluye hasta 500 documentos por mes.'
+    pricePerUser: 15000,
+    longDescription: 'Procesa pólizas y soportes en PDF con IA para extraer campos clave. Incluye 100 documentos/mes.'
   },
   {
     key: 'app_movil',
@@ -249,37 +258,41 @@ export const MODULES: ModuleItem[] = [
   {
     key: 'ia_chatbot',
     name: 'IA Chatbot',
-    description: 'Asistente IA para ventas/soporte',
+    description: 'Asistente IA 24/7 para ventas y soporte',
     icon: 'solar:cpu-bolt-bold-duotone',
     color: 'bg-lightprimary',
-    pricePerUser: 9000,
+    pricePerUser: 25000,
+    longDescription: 'Chatbot con IA avanzada para atención al cliente, ventas y soporte 24/7. Incluye 1,000 conversaciones/mes.',
   },
   {
     key: 'ia_callcenter',
     name: 'IA Call Center',
-    description: 'Atención telefónica con IA',
+    description: 'Agentes de voz con IA',
     icon: 'solar:phone-calling-rounded-outline',
     color: 'bg-lighterror',
     pricePerUser: 0,
     mandatory: true,
+    consumptionBased: true,
     longDescription:
-      'Agentes de voz para llamadas entrantes y salientes con IA. Se factura por consumo (minutos).',
+      'Agentes de voz para llamadas entrantes y salientes con IA. Se factura por consumo (minutos). Incluye 60 min/mes.',
   },
   {
     key: 'ia_predicciones',
     name: 'IA Predicciones',
-    description: 'Analítica predictiva',
+    description: 'Analítica predictiva y riesgo de fuga',
     icon: 'solar:chart-square-bold-duotone',
     color: 'bg-lightsecondary',
-    pricePerUser: 6000,
+    pricePerUser: 18000,
+    longDescription: 'Predicción de renovaciones, riesgo de fuga de clientes y oportunidades de venta basadas en IA.',
   },
   {
     key: 'ia_ventas_cruzadas',
     name: 'IA Ventas Cruzadas',
-    description: 'Recomendaciones automáticas',
+    description: 'Recomendaciones inteligentes de productos',
     icon: 'solar:graph-up-bold-duotone',
     color: 'bg-lightsuccess',
-    pricePerUser: 6000,
+    pricePerUser: 15000,
+    longDescription: 'Recomendaciones automáticas de productos adicionales basadas en el perfil del cliente y comportamiento.',
   },
 ];
 

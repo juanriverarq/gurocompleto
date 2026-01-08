@@ -16,6 +16,7 @@ import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { polizaService } from '../../../services/polizaService';
 import { useToast } from 'src/hooks/use-toast';
 import { auth } from 'src/config/firebase';
+import api from 'src/config/api';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface PolizaCartera {
@@ -146,6 +147,7 @@ const CarteraClientes = () => {
     exitosos: number;
     fallidos: number;
     errores: { fila: number; poliza: string; motivo: string }[];
+    importId?: number;
   } | null>(null);
   const [tipoRecaudoImportacion, setTipoRecaudoImportacion] = useState<'oficina' | 'aseguradora_directo'>('aseguradora_directo');
   const [progresoImportacion, setProgresoImportacion] = useState<{
@@ -155,6 +157,22 @@ const CarteraClientes = () => {
     fallidos: number;
     ultimaPoliza: string;
   }>({ procesados: 0, total: 0, exitosos: 0, fallidos: 0, ultimaPoliza: '' });
+
+  // Estados para historial de importaciones
+  const [showHistorialImportaciones, setShowHistorialImportaciones] = useState(false);
+  const [historialImportaciones, setHistorialImportaciones] = useState<any[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [revertiendoImportacion, setRevertiendoImportacion] = useState<number | null>(null);
+
+  // Estados para pagos de aseguradora individuales (tab Recaudos Completados)
+  const [pagosAseguradora, setPagosAseguradora] = useState<any[]>([]);
+  const [pagosAseguradoraPagination, setPagosAseguradoraPagination] = useState<{
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  } | null>(null);
+  const [cargandoPagosAseguradora, setCargandoPagosAseguradora] = useState(false);
 
   // Estado para paginación del servidor
   const [serverPagination, setServerPagination] = useState<{
@@ -542,7 +560,7 @@ const CarteraClientes = () => {
     }
   };
 
-  // Ejecutar importación de recaudos
+  // Ejecutar importación de recaudos usando la nueva API masiva con registro
   const ejecutarImportacionRecaudos = async () => {
     if (!mapeoColumnas.numero_poliza) {
       toast({
@@ -556,59 +574,65 @@ const CarteraClientes = () => {
     setPasoImportacion('procesando');
     setProcesandoRecaudoMasivo(true);
     
-    // Inicializar progreso
     const total = datosImportacion.length;
     setProgresoImportacion({ procesados: 0, total, exitosos: 0, fallidos: 0, ultimaPoliza: '' });
 
-    const errores: { fila: number; poliza: string; motivo: string }[] = [];
-    let exitosos = 0;
-    let procesados = 0;
-
-    for (const fila of datosImportacion) {
-      const numeroPoliza = fila[mapeoColumnas.numero_poliza];
-      procesados++;
-      
-      if (!numeroPoliza) {
-        errores.push({ fila: fila._fila, poliza: '', motivo: 'Número de póliza vacío' });
-        setProgresoImportacion({ procesados, total, exitosos, fallidos: errores.length, ultimaPoliza: '(vacío)' });
-        continue;
-      }
-
-      try {
-        const monto = mapeoColumnas.monto ? parseFloat(fila[mapeoColumnas.monto]?.replace(/[^0-9.-]/g, '') || '0') : undefined;
-        const fechaPago = mapeoColumnas.fecha_pago ? fila[mapeoColumnas.fecha_pago] : undefined;
-        const metodoPago = mapeoColumnas.metodo_pago ? fila[mapeoColumnas.metodo_pago] : undefined;
-        const referencia = mapeoColumnas.referencia ? fila[mapeoColumnas.referencia] : undefined;
-
-        const response = await polizaService.registrarRecaudoPorNumeroPoliza({
-          numero_poliza: String(numeroPoliza).trim(),
-          tipo_recaudo: tipoRecaudoImportacion,
+    try {
+      // Preparar los recaudos para enviar al backend
+      const recaudos = datosImportacion.map(fila => {
+        const numeroPoliza = fila[mapeoColumnas.numero_poliza];
+        const montoStr = mapeoColumnas.monto ? fila[mapeoColumnas.monto] : null;
+        // Soportar valores negativos (ajustes)
+        const monto = montoStr ? parseFloat(String(montoStr).replace(/[^0-9.-]/g, '') || '0') : undefined;
+        
+        return {
+          numero_poliza: String(numeroPoliza || '').trim(),
           monto_pagado: monto,
-          fecha_pago: fechaPago,
-          metodo_pago: metodoPago,
-          referencia_pago: referencia,
-        });
+          fecha_pago: mapeoColumnas.fecha_pago ? fila[mapeoColumnas.fecha_pago] : undefined,
+          metodo_pago: mapeoColumnas.metodo_pago ? fila[mapeoColumnas.metodo_pago] : undefined,
+          referencia_pago: mapeoColumnas.referencia ? fila[mapeoColumnas.referencia] : undefined,
+        };
+      }).filter(r => r.numero_poliza); // Filtrar filas sin número de póliza
 
-        if (response.success) {
-          exitosos++;
-        } else {
-          errores.push({ fila: fila._fila, poliza: String(numeroPoliza), motivo: response.message || 'Error desconocido' });
-        }
-      } catch (error: any) {
-        errores.push({ fila: fila._fila, poliza: String(numeroPoliza), motivo: error.message || 'Error de conexión' });
+      // Usar la nueva API de importación masiva con registro
+      const response = await polizaService.importarRecaudosMasivo({
+        tipo_recaudo: tipoRecaudoImportacion,
+        recaudos,
+        filename: archivoImportacion?.name,
+        mapping: mapeoColumnas,
+      });
+
+      if (response.success && response.data) {
+        const { exitosos, fallidos, errores, import_id } = response.data;
+        
+        setResultadoImportacion({ 
+          exitosos, 
+          fallidos, 
+          errores: errores || [],
+          importId: import_id, // Guardar ID para poder revertir
+        });
+        setProgresoImportacion({ procesados: total, total, exitosos, fallidos, ultimaPoliza: 'Completado' });
+        
+        toast({
+          title: 'Importación completada',
+          description: `${exitosos} recaudos exitosos, ${fallidos} fallidos. ID: ${import_id}`,
+        });
+      } else {
+        throw new Error(response.message || 'Error en importación');
       }
-      
-      // Actualizar progreso en tiempo real
-      setProgresoImportacion({ procesados, total, exitosos, fallidos: errores.length, ultimaPoliza: String(numeroPoliza) });
+    } catch (error: any) {
+      toast({
+        title: 'Error en importación',
+        description: error.message || 'Error de conexión',
+        variant: 'destructive',
+      });
+      setResultadoImportacion({ exitosos: 0, fallidos: total, errores: [{ fila: 0, poliza: '', motivo: error.message }] });
     }
 
-    setResultadoImportacion({ exitosos, fallidos: errores.length, errores });
     setPasoImportacion('resultado');
     setProcesandoRecaudoMasivo(false);
-
-    if (exitosos > 0) {
-      await cargarCartera();
-    }
+    await cargarCartera();
+    await cargarHistorialImportaciones(); // Recargar historial
   };
 
   // Descargar informe de errores
@@ -637,6 +661,101 @@ const CarteraClientes = () => {
     setMapeoColumnas({});
     setPasoImportacion('subir');
     setResultadoImportacion(null);
+  };
+
+  // Cargar historial de importaciones
+  const cargarHistorialImportaciones = async () => {
+    try {
+      setCargandoHistorial(true);
+      const response = await polizaService.listarImportaciones(20);
+      if (response.success && response.data) {
+        setHistorialImportaciones(response.data);
+      }
+    } catch (error) {
+      console.error('Error cargando historial:', error);
+    } finally {
+      setCargandoHistorial(false);
+    }
+  };
+
+  // Revertir una importación masiva
+  const revertirImportacionMasiva = async (importId: number) => {
+    if (!confirm('¿Está seguro de revertir esta importación? Se eliminarán TODOS los recaudos creados en esta importación.')) {
+      return;
+    }
+
+    try {
+      setRevertiendoImportacion(importId);
+      const response = await polizaService.revertirImportacion(importId);
+      
+      if (response.success) {
+        toast({
+          title: 'Importación revertida',
+          description: response.message || 'Los recaudos han sido eliminados',
+        });
+        await cargarHistorialImportaciones();
+        await cargarCartera();
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'No se pudo revertir la importación',
+        variant: 'destructive',
+      });
+    } finally {
+      setRevertiendoImportacion(null);
+    }
+  };
+
+  // Cargar pagos de aseguradora individuales (para tab Recaudos Completados)
+  const cargarPagosAseguradora = async (page: number = 1, search: string = '') => {
+    try {
+      setCargandoPagosAseguradora(true);
+      const response = await api.get(`/saas/pagos/aseguradora?page=${page}&per_page=25&search=${encodeURIComponent(search)}`);
+      const data = response.data;
+      
+      if (data.success) {
+        setPagosAseguradora(data.data || []);
+        setPagosAseguradoraPagination(data.pagination || null);
+      }
+    } catch (error) {
+      console.error('Error cargando pagos aseguradora:', error);
+    } finally {
+      setCargandoPagosAseguradora(false);
+    }
+  };
+
+  // Revertir un pago individual de aseguradora
+  const revertirPagoAseguradoraIndividual = async (pagoId: number, monto: number) => {
+    if (!confirm(`¿Está seguro de revertir este pago de ${formatCurrency(monto)}?`)) {
+      return;
+    }
+
+    try {
+      const response = await api.delete(`/saas/pagos/aseguradora/${pagoId}`);
+      const data = response.data;
+      
+      if (data.success) {
+        toast({
+          title: 'Pago revertido',
+          description: data.message || 'El pago ha sido eliminado',
+        });
+        await cargarPagosAseguradora(pagosAseguradoraPagination?.current_page || 1, filtros.busqueda);
+        await cargarCartera(); // Actualizar contadores
+      } else {
+        toast({
+          title: 'Error',
+          description: data.message || 'No se pudo revertir el pago',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || error.message || 'No se pudo revertir el pago',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Registrar recaudo directo por aseguradora (va directo a recaudos completados)
@@ -773,8 +892,19 @@ const CarteraClientes = () => {
   useEffect(() => {
     if (!authLoading && authUser) {
       cargarCartera(1, filtros.busqueda, tabActivo);
+      // Si estamos en tab recaudosCompletados, cargar pagos individuales
+      if (tabActivo === 'recaudosCompletados') {
+        cargarPagosAseguradora(1, filtros.busqueda);
+      }
     }
   }, [authLoading, authUser]);
+
+  // Cargar pagos de aseguradora cuando se cambia al tab recaudosCompletados
+  useEffect(() => {
+    if (tabActivo === 'recaudosCompletados' && authUser) {
+      cargarPagosAseguradora(1, filtros.busqueda);
+    }
+  }, [tabActivo]);
 
   // Recargar cuando cambie la búsqueda (con debounce implícito al escribir)
   useEffect(() => {
@@ -931,6 +1061,7 @@ const CarteraClientes = () => {
             primaTotal: 0,
             comisiones: 0,
             porCobrar: 0,
+            recaudado: 0,
             proximoVenc: '',
           };
         }
@@ -939,7 +1070,12 @@ const CarteraClientes = () => {
           acc[p.clienteId].primaTotal += p.primaNeta;
           acc[p.clienteId].comisiones += p.comision;
         }
-        acc[p.clienteId].porCobrar += p.valorPendienteCliente;
+        // Calcular pendiente real descontando pagos de oficina y aseguradora
+        const total = p.total || 0;
+        const recaudadoOficina = p.recaudo_oficina?.recaudado || 0;
+        const pagadoAseguradora = p.recaudo_aseguradora?.pagado || 0;
+        acc[p.clienteId].porCobrar += Math.max(0, total - recaudadoOficina - pagadoAseguradora);
+        acc[p.clienteId].recaudado += recaudadoOficina + pagadoAseguradora;
         if (!acc[p.clienteId].proximoVenc || p.fechaVencimiento < acc[p.clienteId].proximoVenc) {
           acc[p.clienteId].proximoVenc = p.fechaVencimiento;
         }
@@ -1155,8 +1291,9 @@ const CarteraClientes = () => {
                   <Table.HeadCell>Cliente</Table.HeadCell>
                   <Table.HeadCell className="text-center">Pólizas</Table.HeadCell>
                   <Table.HeadCell className="text-right">Prima Total</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Comisiones</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Recaudado</Table.HeadCell>
                   <Table.HeadCell className="text-right">Por Cobrar</Table.HeadCell>
+                  <Table.HeadCell className="text-right">Comisiones</Table.HeadCell>
                   <Table.HeadCell>Próximo Venc.</Table.HeadCell>
                   <Table.HeadCell>Acciones</Table.HeadCell>
                 </Table.Head>
@@ -1176,10 +1313,13 @@ const CarteraClientes = () => {
                         {formatCurrency(data.primaTotal)}
                       </Table.Cell>
                       <Table.Cell className="text-right font-semibold text-green-600">
-                        {formatCurrency(data.comisiones)}
+                        {formatCurrency(data.recaudado)}
                       </Table.Cell>
                       <Table.Cell className="text-right font-semibold text-orange-600">
                         {formatCurrency(data.porCobrar)}
+                      </Table.Cell>
+                      <Table.Cell className="text-right font-semibold text-indigo-600">
+                        {formatCurrency(data.comisiones)}
                       </Table.Cell>
                       <Table.Cell>
                         {formatDate(data.proximoVenc)}
@@ -1266,7 +1406,15 @@ const CarteraClientes = () => {
             icon={() => <Icon icon="solar:wallet-money-bold-duotone" />}
           >
             {/* Barra de acciones */}
-            <div className="mb-4 flex items-center justify-end">
+            <div className="mb-4 flex items-center justify-end gap-2">
+              <Button
+                size="sm"
+                color="gray"
+                onClick={() => { setShowHistorialImportaciones(true); cargarHistorialImportaciones(); }}
+              >
+                <Icon icon="solar:history-bold-duotone" className="w-4 h-4 mr-2" />
+                Historial Importaciones
+              </Button>
               <Button
                 size="sm"
                 color="purple"
@@ -1281,9 +1429,14 @@ const CarteraClientes = () => {
             <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
                 <div className="text-center">
-                  <p className="text-sm text-gray-500">Total Pendiente de Clientes</p>
+                  <p className="text-sm text-gray-500">Total Pendiente</p>
                   <p className="text-2xl font-bold text-orange-600">
-                    {formatCurrency(polizasPorCobrar.reduce((sum, p) => sum + (p.recaudo_oficina?.pendiente || p.total || 0), 0))}
+                    {formatCurrency(polizasPorCobrar.reduce((sum, p) => {
+                      const total = p.total || 0;
+                      const recaudadoOficina = p.recaudo_oficina?.recaudado || 0;
+                      const pagadoAseguradora = p.recaudo_aseguradora?.pagado || 0;
+                      return sum + Math.max(0, total - recaudadoOficina - pagadoAseguradora);
+                    }, 0))}
                   </p>
                   <p className="text-xs text-gray-500">{polizasPorCobrar.length} pólizas</p>
                 </div>
@@ -1292,9 +1445,9 @@ const CarteraClientes = () => {
                 <div className="text-center">
                   <p className="text-sm text-gray-500">Ya Recaudado</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(polizasPorCobrar.reduce((sum, p) => sum + (p.recaudo_oficina?.recaudado || 0), 0))}
+                    {formatCurrency(polizasPorCobrar.reduce((sum, p) => sum + (p.recaudo_oficina?.recaudado || 0) + (p.recaudo_aseguradora?.pagado || 0), 0))}
                   </p>
-                  <p className="text-xs text-gray-500">Pagos parciales</p>
+                  <p className="text-xs text-gray-500">Oficina + Aseguradora</p>
                 </div>
               </Card>
               <Card>
@@ -1339,19 +1492,17 @@ const CarteraClientes = () => {
                       </Table.Cell>
                       <Table.Cell className="text-center">
                         <div className="space-y-1">
-                          {(poliza.recaudo_oficina?.recaudado || 0) > 0 ? (
-                            <>
-                              <div className="text-sm font-semibold text-orange-600">
-                                Pendiente: {formatCurrency(poliza.recaudo_oficina?.pendiente || 0)}
-                              </div>
-                              <div className="text-xs text-green-600">
-                                Recaudado: {formatCurrency(poliza.recaudo_oficina?.recaudado || 0)}
-                              </div>
-                              <Badge color="warning" size="xs">Pago Parcial</Badge>
-                            </>
-                          ) : (
-                            <div className="text-sm font-semibold text-orange-600">
-                              Pendiente: {formatCurrency(poliza.total || 0)}
+                          <div className="text-sm font-semibold text-orange-600">
+                            Pendiente: {formatCurrency(Math.max(0, (poliza.total || 0) - (poliza.recaudo_oficina?.recaudado || 0) - (poliza.recaudo_aseguradora?.pagado || 0)))}
+                          </div>
+                          {(poliza.recaudo_oficina?.recaudado || 0) > 0 && (
+                            <div className="text-xs text-blue-600">
+                              Recaudado Oficina: {formatCurrency(poliza.recaudo_oficina?.recaudado || 0)}
+                            </div>
+                          )}
+                          {(poliza.recaudo_aseguradora?.pagado || 0) > 0 && (
+                            <div className="text-xs text-green-600">
+                              Pagado Aseguradora: {formatCurrency(poliza.recaudo_aseguradora?.pagado || 0)}
                             </div>
                           )}
                         </div>
@@ -1593,15 +1744,15 @@ const CarteraClientes = () => {
                 <div className="text-center">
                   <p className="text-sm text-gray-500">Total Pagado a Aseguradoras</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(polizasRecaudosCompletados.reduce((sum, p) => sum + (p.recaudo_aseguradora?.pagado || 0), 0))}
+                    {formatCurrency(pagosAseguradora.reduce((sum, p) => sum + (p.monto_pagado || 0), 0))}
                   </p>
                 </div>
               </Card>
               <Card>
                 <div className="text-center">
-                  <p className="text-sm text-gray-500">Pólizas Completadas</p>
+                  <p className="text-sm text-gray-500">Pagos Registrados</p>
                   <p className="text-2xl font-bold text-blue-600">
-                    {polizasRecaudosCompletados.length}
+                    {pagosAseguradoraPagination?.total || pagosAseguradora.length}
                   </p>
                 </div>
               </Card>
@@ -1609,101 +1760,100 @@ const CarteraClientes = () => {
                 <div className="text-center">
                   <p className="text-sm text-gray-500">Comisiones Generadas</p>
                   <p className="text-2xl font-bold text-indigo-600">
-                    {formatCurrency(polizasRecaudosCompletados.reduce((sum, p) => sum + p.comision, 0))}
+                    {formatCurrency(pagosAseguradora.reduce((sum, p) => sum + (p.comision || 0), 0))}
                   </p>
                 </div>
               </Card>
             </div>
 
             <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Póliza</Table.HeadCell>
-                  <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell>Aseguradora</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Prima Neta</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Recaudado Oficina</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Pagado Aseguradora</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Comisión</Table.HeadCell>
-                  <Table.HeadCell>Estado</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
-                  {polizasRecaudosCompletadosPaginadas.map((poliza) => (
-                      <Table.Row key={poliza.id}>
-                        <Table.Cell className="font-medium">{poliza.numeroPoliza}</Table.Cell>
-                        <Table.Cell>
-                          <div>
-                            <div className="font-medium">{poliza.cliente}</div>
-                            <div className="text-xs text-gray-500">{poliza.documento}</div>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>{poliza.aseguradora}</Table.Cell>
-                        <Table.Cell className="text-right font-semibold">
-                          {formatCurrency(poliza.primaNeta)}
-                        </Table.Cell>
-                        <Table.Cell className="text-right font-semibold text-blue-600">
-                          {formatCurrency(poliza.recaudo_oficina?.recaudado || 0)}
-                        </Table.Cell>
-                        <Table.Cell className="text-right font-semibold text-green-600">
-                          {formatCurrency(poliza.recaudo_aseguradora?.pagado || 0)}
-                        </Table.Cell>
-                        <Table.Cell className="text-right font-semibold text-indigo-600">
-                          {formatCurrency(poliza.comision)}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Badge color="success" size="sm">
-                            Completado
-                          </Badge>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Button
-                            size="sm"
-                            color="red"
-                            onClick={() => revertirRecaudoCompleto(poliza)}
-                            title="Revertir todo el recaudo"
-                          >
-                            <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4" />
-                          </Button>
-                        </Table.Cell>
-                      </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table>
+              {cargandoPagosAseguradora ? (
+                <div className="text-center py-12">
+                  <Spinner size="lg" />
+                  <p className="text-gray-500 mt-2">Cargando pagos...</p>
+                </div>
+              ) : (
+                <Table hoverable>
+                  <Table.Head>
+                    <Table.HeadCell>Póliza</Table.HeadCell>
+                    <Table.HeadCell>Cliente</Table.HeadCell>
+                    <Table.HeadCell>Aseguradora</Table.HeadCell>
+                    <Table.HeadCell className="text-right">Monto Pagado</Table.HeadCell>
+                    <Table.HeadCell>Fecha Pago</Table.HeadCell>
+                    <Table.HeadCell>Método</Table.HeadCell>
+                    <Table.HeadCell>Acciones</Table.HeadCell>
+                  </Table.Head>
+                  <Table.Body className="divide-y">
+                    {pagosAseguradora.map((pago) => (
+                        <Table.Row key={pago.pago_id}>
+                          <Table.Cell className="font-medium">{pago.numero_poliza}</Table.Cell>
+                          <Table.Cell>
+                            <div>
+                              <div className="font-medium">{pago.cliente}</div>
+                              <div className="text-xs text-gray-500">{pago.documento}</div>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>{pago.aseguradora}</Table.Cell>
+                          <Table.Cell className="text-right font-semibold text-green-600">
+                            {formatCurrency(pago.monto_pagado)}
+                          </Table.Cell>
+                          <Table.Cell>
+                            {pago.fecha_pago ? new Date(pago.fecha_pago).toLocaleDateString('es-CO') : '-'}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Badge color="info" size="sm">
+                              {pago.metodo_pago || 'Directo'}
+                            </Badge>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Button
+                              size="sm"
+                              color="red"
+                              onClick={() => revertirPagoAseguradoraIndividual(pago.pago_id, pago.monto_pagado)}
+                              title="Revertir este pago"
+                            >
+                              <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4" />
+                            </Button>
+                          </Table.Cell>
+                        </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table>
+              )}
 
-              {polizasRecaudosCompletados.length === 0 && (
+              {!cargandoPagosAseguradora && pagosAseguradora.length === 0 && (
                 <div className="text-center py-12">
                   <Icon icon="solar:inbox-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No hay recaudos completados</p>
-                  <p className="text-xs text-gray-400 mt-2">Aquí aparecen las pólizas donde ya se pagó a la aseguradora</p>
+                  <p className="text-gray-500">No hay pagos de aseguradora</p>
+                  <p className="text-xs text-gray-400 mt-2">Aquí aparecen los pagos individuales realizados a las aseguradoras</p>
                 </div>
               )}
             </div>
 
-            {/* Paginación del Servidor */}
-            {serverPagination && serverPagination.last_page > 1 && (
+            {/* Paginación de Pagos Aseguradora */}
+            {pagosAseguradoraPagination && pagosAseguradoraPagination.last_page > 1 && (
               <div className="flex items-center justify-between p-4 border-t">
                 <div className="text-sm text-gray-600">
-                  Mostrando página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} pólizas totales)
+                  Mostrando página {pagosAseguradoraPagination.current_page} de {pagosAseguradoraPagination.last_page} ({pagosAseguradoraPagination.total} pagos totales)
                 </div>
                 <div className="flex items-center gap-3">
                   <Button
                     size="sm"
                     color="gray"
-                    disabled={loading || serverPagination.current_page === 1}
-                    onClick={() => cambiarPagina(serverPagination.current_page - 1)}
+                    disabled={cargandoPagosAseguradora || pagosAseguradoraPagination.current_page === 1}
+                    onClick={() => cargarPagosAseguradora(pagosAseguradoraPagination.current_page - 1, filtros.busqueda)}
                     className="rounded-[10px]"
                   >
                     <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
                   </Button>
                   <span className="text-sm text-gray-600">
-                    Página {serverPagination.current_page} de {serverPagination.last_page}
+                    Página {pagosAseguradoraPagination.current_page} de {pagosAseguradoraPagination.last_page}
                   </span>
                   <Button
                     size="sm"
                     color="gray"
-                    disabled={loading || serverPagination.current_page === serverPagination.last_page}
-                    onClick={() => cambiarPagina(serverPagination.current_page + 1)}
+                    disabled={cargandoPagosAseguradora || pagosAseguradoraPagination.current_page === pagosAseguradoraPagination.last_page}
+                    onClick={() => cargarPagosAseguradora(pagosAseguradoraPagination.current_page + 1, filtros.busqueda)}
                     className="rounded-[10px]"
                   >
                     <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
@@ -2498,6 +2648,107 @@ const CarteraClientes = () => {
               Nueva Importación
             </Button>
           )}
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal Historial de Importaciones */}
+      <Modal show={showHistorialImportaciones} onClose={() => setShowHistorialImportaciones(false)} size="xl">
+        <Modal.Header>
+          <div className="flex items-center gap-2">
+            <Icon icon="solar:history-bold-duotone" className="w-6 h-6 text-purple-600" />
+            Historial de Importaciones de Recaudos
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          {cargandoHistorial ? (
+            <div className="flex justify-center py-8">
+              <Spinner size="xl" />
+            </div>
+          ) : historialImportaciones.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Icon icon="solar:inbox-bold-duotone" className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+              <p>No hay importaciones registradas</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-3 py-2 text-left">ID</th>
+                    <th className="px-3 py-2 text-left">Archivo</th>
+                    <th className="px-3 py-2 text-left">Tipo</th>
+                    <th className="px-3 py-2 text-center">Exitosos</th>
+                    <th className="px-3 py-2 text-center">Fallidos</th>
+                    <th className="px-3 py-2 text-right">Monto Total</th>
+                    <th className="px-3 py-2 text-left">Fecha</th>
+                    <th className="px-3 py-2 text-center">Estado</th>
+                    <th className="px-3 py-2 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historialImportaciones.map((imp: any) => (
+                    <tr key={imp.id} className="border-t hover:bg-gray-50">
+                      <td className="px-3 py-2 font-mono text-gray-500">#{imp.id}</td>
+                      <td className="px-3 py-2 font-medium truncate max-w-[150px]" title={imp.filename}>
+                        {imp.filename || 'Sin nombre'}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Badge color={imp.tipo_recaudo === 'oficina' ? 'warning' : 'success'}>
+                          {imp.tipo_recaudo === 'oficina' ? 'Oficina' : 'Aseguradora'}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 text-center text-green-600 font-medium">{imp.exitosos}</td>
+                      <td className="px-3 py-2 text-center text-red-600 font-medium">{imp.fallidos}</td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {formatCurrency(imp.monto_total_importado || 0)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">{imp.created_at}</td>
+                      <td className="px-3 py-2 text-center">
+                        {imp.status === 'reverted' ? (
+                          <Badge color="gray">Revertida</Badge>
+                        ) : imp.status === 'completed' ? (
+                          <Badge color="success">Completada</Badge>
+                        ) : (
+                          <Badge color="warning">{imp.status}</Badge>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {imp.can_revert && (
+                          <Button
+                            size="xs"
+                            color="failure"
+                            onClick={() => revertirImportacionMasiva(imp.id)}
+                            disabled={revertiendoImportacion === imp.id}
+                          >
+                            {revertiendoImportacion === imp.id ? (
+                              <Spinner size="xs" className="mr-1" />
+                            ) : (
+                              <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4 mr-1" />
+                            )}
+                            Revertir
+                          </Button>
+                        )}
+                        {imp.reverted_at && (
+                          <span className="text-xs text-gray-500">
+                            Revertida: {imp.reverted_at}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowHistorialImportaciones(false)}>
+            Cerrar
+          </Button>
+          <Button color="purple" onClick={cargarHistorialImportaciones} disabled={cargandoHistorial}>
+            <Icon icon="solar:refresh-bold-duotone" className="w-4 h-4 mr-2" />
+            Actualizar
+          </Button>
         </Modal.Footer>
       </Modal>
 
