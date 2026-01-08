@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\PagoPoliza;
 use App\Models\CobroComision;
 use App\Models\Poliza;
+use App\Models\RecaudoImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 
 class PagoPolizaController extends Controller
 {
@@ -79,7 +81,7 @@ class PagoPolizaController extends Controller
                 $montoPendienteRestante = max(0, $montoTotalPoliza - $nuevoTotalRecaudado);
                 
                 // Determinar estado: 'pagado' si este abono completa el total
-                $estado = $montoPendienteRestante <= 0 ? 'pagado' : 'abono';
+                $estado = $montoPendienteRestante <= 0 ? 'pagado' : 'parcial';
                 
                 // Crear registro individual para este abono
                 $pago = PagoPoliza::create([
@@ -789,7 +791,7 @@ class PagoPolizaController extends Controller
                             'metodo_pago' => $metodoPago,
                             'referencia_pago' => $referencia,
                             'fecha_pago' => $fechaPago,
-                            'estado' => $monto >= $montoTotalPoliza ? 'pagado' : 'abono',
+                            'estado' => $monto >= $montoTotalPoliza ? 'pagado' : 'parcial',
                             'observaciones' => 'CSV: ' . $observaciones,
                         ]);
 
@@ -918,16 +920,18 @@ class PagoPolizaController extends Controller
 
     /**
      * Registrar recaudo por número de póliza (para importación masiva)
+     * Soporta búsqueda por últimos 5 dígitos y pagos parciales (positivos/negativos)
      */
     public function recaudoPorNumeroPoliza(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'numero_poliza' => 'required|string',
             'tipo_recaudo' => 'required|in:oficina,aseguradora_directo',
-            'monto_pagado' => 'nullable|numeric|min:0',
+            'monto_pagado' => 'nullable|numeric', // Puede ser negativo para ajustes
             'fecha_pago' => 'nullable|string',
             'metodo_pago' => 'nullable|string',
             'referencia_pago' => 'nullable|string',
+            'recaudo_import_id' => 'nullable|integer', // Para rastrear importación masiva
         ]);
 
         if ($validator->fails()) {
@@ -941,11 +945,35 @@ class PagoPolizaController extends Controller
             $brokerId = $request->get('authenticated_broker_id');
             $numeroPoliza = trim($request->numero_poliza);
 
-            // Buscar la póliza por número
+            // Buscar la póliza por número exacto primero
             $poliza = Poliza::where('broker_id', $brokerId)
                 ->where('policy_number', $numeroPoliza)
                 ->where('status', 'active')
                 ->first();
+
+            $matchType = 'exacto';
+
+            // Si no se encuentra, buscar por últimos 5 dígitos
+            if (!$poliza && strlen($numeroPoliza) >= 5) {
+                $ultimos5 = substr($numeroPoliza, -5);
+                $polizasPosibles = Poliza::where('broker_id', $brokerId)
+                    ->where('status', 'active')
+                    ->where('policy_number', 'LIKE', '%' . $ultimos5)
+                    ->get();
+
+                if ($polizasPosibles->count() === 1) {
+                    $poliza = $polizasPosibles->first();
+                    $matchType = 'ultimos_5_digitos';
+                    Log::info("Póliza encontrada por últimos 5 dígitos: {$numeroPoliza} -> {$poliza->policy_number}");
+                } elseif ($polizasPosibles->count() > 1) {
+                    $numeros = $polizasPosibles->pluck('policy_number')->join(', ');
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Múltiples pólizas coinciden con los últimos 5 dígitos '{$ultimos5}': {$numeros}. Use el número completo.",
+                        'match_type' => 'multiple'
+                    ], 422);
+                }
+            }
 
             if (!$poliza) {
                 return response()->json([
@@ -957,7 +985,7 @@ class PagoPolizaController extends Controller
             DB::beginTransaction();
 
             $montoTotalPoliza = $poliza->total_amount ?? ($poliza->premium_amount + ($poliza->vat_amount ?? 0));
-            $montoRecibido = $request->monto_pagado ?? $montoTotalPoliza;
+            $montoRecibido = $request->monto_pagado !== null ? (float)$request->monto_pagado : $montoTotalPoliza;
             
             // Parsear fecha si viene
             $fechaPago = null;
@@ -971,34 +999,44 @@ class PagoPolizaController extends Controller
                 $fechaPago = now();
             }
 
-            // Validar duplicados: mismo número de póliza + monto + fecha (solo registros pagados)
-            $tipoRecaudoCheck = $request->tipo_recaudo === 'aseguradora_directo' ? 'aseguradora' : $request->tipo_recaudo;
-            $duplicado = PagoPoliza::where('poliza_id', $poliza->id)
-                ->where('tipo_recaudo', $tipoRecaudoCheck)
-                ->where('monto_pagado', $montoRecibido)
-                ->where('estado', 'pagado')
-                ->whereDate('fecha_pago', $fechaPago->toDateString())
-                ->first();
+            // Para pagos positivos, validar duplicados
+            if ($montoRecibido > 0) {
+                $tipoRecaudoCheck = $request->tipo_recaudo === 'aseguradora_directo' ? 'aseguradora' : $request->tipo_recaudo;
+                $duplicado = PagoPoliza::where('poliza_id', $poliza->id)
+                    ->where('tipo_recaudo', $tipoRecaudoCheck)
+                    ->where('monto_pagado', $montoRecibido)
+                    ->where('estado', 'pagado')
+                    ->whereDate('fecha_pago', $fechaPago->toDateString())
+                    ->first();
 
-            if ($duplicado) {
-                DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => "Recaudo duplicado: ya existe un pago de \${$montoRecibido} para la póliza {$numeroPoliza} en la fecha {$fechaPago->toDateString()}"
-                ], 422);
+                if ($duplicado) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Recaudo duplicado: ya existe un pago de \${$montoRecibido} para la póliza {$poliza->policy_number} en la fecha {$fechaPago->toDateString()}"
+                    ], 422);
+                }
             }
 
+            $pagoCreado = null;
+
             if ($request->tipo_recaudo === 'oficina') {
-                // Recaudo por oficina
+                // Recaudo por oficina - soporta pagos parciales y negativos (ajustes)
                 $totalRecaudadoAnterior = (float) PagoPoliza::where('poliza_id', $poliza->id)
                     ->where('tipo_recaudo', 'oficina')
                     ->sum('monto_pagado');
                 
                 $nuevoTotalRecaudado = $totalRecaudadoAnterior + $montoRecibido;
                 $montoPendienteRestante = max(0, $montoTotalPoliza - $nuevoTotalRecaudado);
-                $estado = $montoPendienteRestante <= 0 ? 'pagado' : 'abono';
+                
+                // Determinar estado basado en el monto (ENUM: pendiente, parcial, pagado)
+                if ($montoPendienteRestante <= 0) {
+                    $estado = 'pagado';
+                } else {
+                    $estado = 'parcial'; // Incluye pagos parciales y ajustes negativos
+                }
 
-                PagoPoliza::create([
+                $pagoCreado = PagoPoliza::create([
                     'broker_id' => $poliza->broker_id,
                     'poliza_id' => $poliza->id,
                     'cliente_id' => $poliza->client_id,
@@ -1010,39 +1048,55 @@ class PagoPolizaController extends Controller
                     'referencia_pago' => $request->referencia_pago,
                     'fecha_pago' => $fechaPago,
                     'estado' => $estado,
-                    'observaciones' => 'Importado desde CSV',
+                    'observaciones' => $matchType === 'ultimos_5_digitos' 
+                        ? "Importado CSV (match por últimos 5 dígitos: {$numeroPoliza})" 
+                        : 'Importado desde CSV',
+                    'recaudo_import_id' => $request->recaudo_import_id,
                 ]);
             } else {
-                // Recaudo directo por aseguradora: el cliente pagó directamente a la aseguradora
-                // NO se crea registro de oficina, solo el pago a aseguradora
+                // Recaudo directo por aseguradora
                 $primaNeta = $poliza->premium_amount;
                 
-                // Verificar si ya existe un pago a aseguradora pagado
-                $pagoAseguradoraExistente = PagoPoliza::where('poliza_id', $poliza->id)
-                    ->where('tipo_recaudo', 'aseguradora')
-                    ->where('estado', 'pagado')
-                    ->first();
+                // Para recaudo directo aseguradora, siempre crear el pago
+                // La validación de duplicados se hace a nivel de importación (mismo import_id)
+                $pagoExactoDuplicado = null;
+                if ($request->recaudo_import_id) {
+                    // Solo verificar duplicados dentro de la misma importación
+                    $pagoExactoDuplicado = PagoPoliza::where('poliza_id', $poliza->id)
+                        ->where('tipo_recaudo', 'aseguradora')
+                        ->where('monto_pagado', $montoRecibido ?: $primaNeta)
+                        ->where('recaudo_import_id', $request->recaudo_import_id)
+                        ->first();
+                }
 
-                if (!$pagoAseguradoraExistente) {
-                    // Eliminar pagos pendientes a aseguradora que pudieran existir
+                if (!$pagoExactoDuplicado) {
+                    // Eliminar pagos pendientes (placeholder) si existen
                     PagoPoliza::where('poliza_id', $poliza->id)
                         ->where('tipo_recaudo', 'aseguradora')
                         ->where('estado', 'pendiente')
                         ->delete();
                     
-                    PagoPoliza::create([
+                    $montoEfectivo = $montoRecibido ?: $primaNeta;
+                    // Recaudo directo aseguradora: siempre estado 'pagado' porque el cliente ya pagó
+                    $montoPendiente = 0;
+                    $estado = 'pagado';
+                    
+                    $pagoCreado = PagoPoliza::create([
                         'broker_id' => $poliza->broker_id,
                         'poliza_id' => $poliza->id,
                         'cliente_id' => $poliza->client_id,
                         'monto_total' => $primaNeta,
-                        'monto_pagado' => $montoRecibido ?: $primaNeta,
-                        'monto_pendiente' => 0,
+                        'monto_pagado' => $montoEfectivo,
+                        'monto_pendiente' => $montoPendiente,
                         'tipo_recaudo' => 'aseguradora',
                         'metodo_pago' => $request->metodo_pago ?? 'aseguradora_directo',
                         'referencia_pago' => $request->referencia_pago,
                         'fecha_pago' => $fechaPago,
-                        'estado' => 'pagado',
-                        'observaciones' => 'Recaudo directo aseguradora - Importado CSV',
+                        'estado' => $estado,
+                        'observaciones' => $matchType === 'ultimos_5_digitos' 
+                            ? "Recaudo directo aseguradora - CSV (match: {$numeroPoliza})" 
+                            : 'Recaudo directo aseguradora - Importado CSV',
+                        'recaudo_import_id' => $request->recaudo_import_id,
                     ]);
                 }
             }
@@ -1051,14 +1105,299 @@ class PagoPolizaController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Recaudo registrado para póliza {$numeroPoliza}"
+                'message' => "Recaudo registrado para póliza {$poliza->policy_number}",
+                'match_type' => $matchType,
+                'poliza_encontrada' => $poliza->policy_number,
+                'pago_id' => $pagoCreado ? $pagoCreado->id : null,
+                'monto_pendiente' => $pagoCreado ? $pagoCreado->monto_pendiente : null,
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error("Error en recaudoPorNumeroPoliza: " . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Error al registrar recaudo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Importación masiva de recaudos con registro para reversión
+     */
+    public function importarRecaudosMasivo(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'tipo_recaudo' => 'required|in:oficina,aseguradora_directo',
+            'recaudos' => 'required|array|min:1',
+            'recaudos.*.numero_poliza' => 'required|string',
+            'recaudos.*.monto_pagado' => 'nullable|numeric',
+            'recaudos.*.fecha_pago' => 'nullable|string',
+            'recaudos.*.metodo_pago' => 'nullable|string',
+            'recaudos.*.referencia_pago' => 'nullable|string',
+            'filename' => 'nullable|string',
+            'mapping' => 'nullable|array',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $brokerId = $request->get('authenticated_broker_id');
+            $userId = $request->get('authenticated_user_id');
+            
+            $import = RecaudoImport::create([
+                'broker_id' => $brokerId,
+                'user_id' => $userId,
+                'filename' => $request->filename,
+                'tipo_recaudo' => $request->tipo_recaudo,
+                'status' => 'running',
+                'total_rows' => count($request->recaudos),
+                'mapping' => $request->mapping,
+                'started_at' => now(),
+            ]);
+
+            $exitosos = 0;
+            $fallidos = 0;
+            $montoTotal = 0;
+            $pagoIds = [];
+            $errores = [];
+
+            foreach ($request->recaudos as $index => $recaudo) {
+                try {
+                    $internalRequest = new Request(array_merge($recaudo, [
+                        'tipo_recaudo' => $request->tipo_recaudo,
+                        'recaudo_import_id' => $import->id,
+                    ]));
+                    $internalRequest->merge(['authenticated_broker_id' => $brokerId]);
+
+                    $response = $this->recaudoPorNumeroPoliza($internalRequest);
+                    $responseData = json_decode($response->getContent(), true);
+
+                    if ($responseData['success']) {
+                        $exitosos++;
+                        $montoTotal += abs((float)($recaudo['monto_pagado'] ?? 0));
+                        if (isset($responseData['pago_id'])) {
+                            $pagoIds[] = $responseData['pago_id'];
+                        }
+                    } else {
+                        $fallidos++;
+                        $errores[] = [
+                            'fila' => $index + 2,
+                            'poliza' => $recaudo['numero_poliza'] ?? '',
+                            'motivo' => $responseData['message'] ?? 'Error desconocido',
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    $fallidos++;
+                    $errores[] = [
+                        'fila' => $index + 2,
+                        'poliza' => $recaudo['numero_poliza'] ?? '',
+                        'motivo' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            $import->update([
+                'status' => 'completed',
+                'exitosos' => $exitosos,
+                'fallidos' => $fallidos,
+                'monto_total_importado' => $montoTotal,
+                'pago_ids' => $pagoIds,
+                'errores' => array_slice($errores, 0, 100),
+                'finished_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Importación completada: {$exitosos} exitosos, {$fallidos} fallidos",
+                'data' => [
+                    'import_id' => $import->id,
+                    'exitosos' => $exitosos,
+                    'fallidos' => $fallidos,
+                    'monto_total' => $montoTotal,
+                    'errores' => $errores,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error en importarRecaudosMasivo: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error en importación masiva: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Listar importaciones de recaudos del broker
+     */
+    public function listarImportaciones(Request $request)
+    {
+        try {
+            $brokerId = $request->get('authenticated_broker_id');
+            $limit = (int) $request->query('limit', 20);
+
+            $imports = RecaudoImport::where('broker_id', $brokerId)
+                ->orderBy('created_at', 'desc')
+                ->limit($limit)
+                ->get()
+                ->map(function ($import) {
+                    return [
+                        'id' => $import->id,
+                        'filename' => $import->filename,
+                        'tipo_recaudo' => $import->tipo_recaudo,
+                        'status' => $import->status,
+                        'total_rows' => $import->total_rows,
+                        'exitosos' => $import->exitosos,
+                        'fallidos' => $import->fallidos,
+                        'monto_total_importado' => $import->monto_total_importado,
+                        'pagos_count' => $import->getPagosCount(),
+                        'can_revert' => $import->canRevert(),
+                        'created_at' => $import->created_at->format('Y-m-d H:i:s'),
+                        'reverted_at' => $import->reverted_at ? $import->reverted_at->format('Y-m-d H:i:s') : null,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $imports
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al listar importaciones: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Revertir una importación masiva de recaudos
+     */
+    public function revertirImportacion(Request $request, $importId)
+    {
+        try {
+            $brokerId = $request->get('authenticated_broker_id');
+            $userId = $request->get('authenticated_user_id');
+
+            $import = RecaudoImport::where('broker_id', $brokerId)
+                ->where('id', $importId)
+                ->first();
+
+            if (!$import) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Importación no encontrada'
+                ], 404);
+            }
+
+            if (!$import->canRevert()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta importación no puede ser revertida'
+                ], 422);
+            }
+
+            DB::beginTransaction();
+
+            $pagosEliminados = PagoPoliza::where('recaudo_import_id', $import->id)->delete();
+
+            if (!empty($import->pago_ids)) {
+                PagoPoliza::whereIn('id', $import->pago_ids)
+                    ->where('broker_id', $brokerId)
+                    ->delete();
+            }
+
+            $import->update([
+                'status' => 'reverted',
+                'reverted_at' => now(),
+                'reverted_by' => $userId,
+                'notas' => "Revertida el " . now()->format('Y-m-d H:i:s') . ". Pagos eliminados: {$pagosEliminados}",
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Importación revertida. Se eliminaron {$pagosEliminados} pagos.",
+                'pagos_eliminados' => $pagosEliminados
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error al revertir importación: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al revertir importación: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener detalle de una importación
+     */
+    public function detalleImportacion(Request $request, $importId)
+    {
+        try {
+            $brokerId = $request->get('authenticated_broker_id');
+
+            $import = RecaudoImport::where('broker_id', $brokerId)
+                ->where('id', $importId)
+                ->first();
+
+            if (!$import) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Importación no encontrada'
+                ], 404);
+            }
+
+            $pagos = PagoPoliza::where('recaudo_import_id', $import->id)
+                ->with(['poliza:id,policy_number,client_name'])
+                ->get()
+                ->map(function ($pago) {
+                    return [
+                        'id' => $pago->id,
+                        'poliza_numero' => $pago->poliza->policy_number ?? 'N/A',
+                        'cliente' => $pago->poliza->client_name ?? 'N/A',
+                        'monto_pagado' => $pago->monto_pagado,
+                        'monto_pendiente' => $pago->monto_pendiente,
+                        'fecha_pago' => $pago->fecha_pago->format('Y-m-d'),
+                        'estado' => $pago->estado,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'import' => [
+                        'id' => $import->id,
+                        'filename' => $import->filename,
+                        'tipo_recaudo' => $import->tipo_recaudo,
+                        'status' => $import->status,
+                        'total_rows' => $import->total_rows,
+                        'exitosos' => $import->exitosos,
+                        'fallidos' => $import->fallidos,
+                        'monto_total_importado' => $import->monto_total_importado,
+                        'errores' => $import->errores,
+                        'can_revert' => $import->canRevert(),
+                        'created_at' => $import->created_at->format('Y-m-d H:i:s'),
+                        'reverted_at' => $import->reverted_at ? $import->reverted_at->format('Y-m-d H:i:s') : null,
+                    ],
+                    'pagos' => $pagos,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener detalle: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -1109,6 +1448,146 @@ class PagoPolizaController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener estadísticas: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Listar pagos de aseguradora individuales (para tab Recaudos Completados)
+     */
+    public function listarPagosAseguradora(Request $request)
+    {
+        try {
+            $brokerId = $request->get('authenticated_broker_id');
+            $perPage = min($request->input('per_page', 25), 100);
+            $page = $request->input('page', 1);
+            $search = $request->input('search', '');
+
+            $query = PagoPoliza::where('pagos_polizas.broker_id', $brokerId)
+                ->where('pagos_polizas.tipo_recaudo', 'aseguradora')
+                ->where('pagos_polizas.estado', 'pagado')
+                ->join('polizas', 'pagos_polizas.poliza_id', '=', 'polizas.id')
+                ->leftJoin('clientes', 'polizas.client_id', '=', 'clientes.id')
+                ->leftJoin('aseguradoras', 'polizas.aseguradora_id', '=', 'aseguradoras.id')
+                ->select([
+                    'pagos_polizas.id as pago_id',
+                    'pagos_polizas.poliza_id',
+                    'pagos_polizas.monto_pagado',
+                    'pagos_polizas.monto_total',
+                    'pagos_polizas.fecha_pago',
+                    'pagos_polizas.metodo_pago',
+                    'pagos_polizas.referencia_pago',
+                    'pagos_polizas.observaciones',
+                    'pagos_polizas.recaudo_import_id',
+                    'pagos_polizas.created_at',
+                    'polizas.policy_number',
+                    'polizas.premium_amount',
+                    'polizas.total_amount',
+                    'polizas.commission_amount',
+                    'polizas.commission_percentage',
+                    DB::raw("CONCAT(COALESCE(clientes.first_name, ''), ' ', COALESCE(clientes.last_name, '')) as cliente_nombre"),
+                    'clientes.document_number as cliente_documento',
+                    'aseguradoras.nombre as aseguradora_nombre',
+                ]);
+
+            // Búsqueda
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('polizas.policy_number', 'LIKE', "%{$search}%")
+                      ->orWhere('clientes.first_name', 'LIKE', "%{$search}%")
+                      ->orWhere('clientes.last_name', 'LIKE', "%{$search}%")
+                      ->orWhere('clientes.document_number', 'LIKE', "%{$search}%");
+                });
+            }
+
+            $query->orderBy('pagos_polizas.fecha_pago', 'desc')
+                  ->orderBy('pagos_polizas.id', 'desc');
+
+            $paginated = $query->paginate($perPage, ['*'], 'page', $page);
+
+            // Transformar datos
+            $pagos = $paginated->getCollection()->map(function($pago) {
+                $primaNeta = (float) $pago->premium_amount;
+                $comision = (float) ($pago->commission_amount ?? ($primaNeta * ($pago->commission_percentage ?? 15) / 100));
+                
+                return [
+                    'pago_id' => $pago->pago_id,
+                    'poliza_id' => $pago->poliza_id,
+                    'numero_poliza' => $pago->policy_number,
+                    'cliente' => $pago->cliente_nombre ?? 'Sin nombre',
+                    'documento' => $pago->cliente_documento ?? '',
+                    'aseguradora' => $pago->aseguradora_nombre ?? '',
+                    'prima_neta' => $primaNeta,
+                    'monto_pagado' => (float) $pago->monto_pagado,
+                    'comision' => $comision,
+                    'fecha_pago' => $pago->fecha_pago,
+                    'metodo_pago' => $pago->metodo_pago,
+                    'referencia_pago' => $pago->referencia_pago,
+                    'observaciones' => $pago->observaciones,
+                    'import_id' => $pago->recaudo_import_id,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $pagos,
+                'pagination' => [
+                    'current_page' => $paginated->currentPage(),
+                    'last_page' => $paginated->lastPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Error en listarPagosAseguradora: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al listar pagos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Revertir un pago individual de aseguradora
+     */
+    public function revertirPagoAseguradora(Request $request, $pagoId)
+    {
+        try {
+            $brokerId = $request->get('authenticated_broker_id');
+
+            $pago = PagoPoliza::where('id', $pagoId)
+                ->where('broker_id', $brokerId)
+                ->where('tipo_recaudo', 'aseguradora')
+                ->first();
+
+            if (!$pago) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pago no encontrado'
+                ], 404);
+            }
+
+            DB::beginTransaction();
+
+            $polizaId = $pago->poliza_id;
+            $montoPagado = $pago->monto_pagado;
+            $pago->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Pago de " . number_format($montoPagado, 0, ',', '.') . " revertido exitosamente",
+                'poliza_id' => $polizaId
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error al revertir pago aseguradora: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al revertir pago: ' . $e->getMessage()
             ], 500);
         }
     }

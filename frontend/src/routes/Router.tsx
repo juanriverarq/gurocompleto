@@ -409,8 +409,7 @@ const Router = [
       { path: '/ayuda/faq', element: <Navigate to="/apps/ayuda/faq" /> },
       {
         path: '/precios',
-        element: <FrontendLayout />,
-        children: [{ path: '', element: <PricingCalculatorPage /> }],
+        element: <Navigate to="/comenzar" />,
       },
       {
         path: '/checkout',
@@ -420,6 +419,9 @@ const Router = [
       // Nuevo flujo de onboarding simplificado
       { path: '/comenzar', element: <SelectAppsFlow /> },
       { path: '/comenzar/registro', element: <SignupFlow /> },
+      // Variante con branding SURA
+      { path: '/sura', element: <SelectAppsFlow /> },
+      { path: '/sura/registro', element: <SignupFlow /> },
       { path: '/web/:slug', element: <MiniWebPublic /> },
       { path: '/web/:slug/:tipo', element: <QuoteForm /> },
       { path: '/empleados', element: <Navigate to="/empleados/login" /> },

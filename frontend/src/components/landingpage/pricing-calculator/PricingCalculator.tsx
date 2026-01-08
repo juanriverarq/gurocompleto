@@ -25,7 +25,7 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
   // const [selectedModuleKey, setSelectedModuleKey] = useState<ModuleKey | null>(null);
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [showModuleLines, setShowModuleLines] = useState(false);
-  const [storageGB, setStorageGB] = useState(5); // 5 GB incluidos
+  const [storageGB, setStorageGB] = useState(10); // 10 GB incluidos
   const [showMobileSummary, setShowMobileSummary] = useState(false);
   // Se removió comparación y buscador para simplificar la UI
   // Preseleccionar todos los módulos obligatorios
@@ -323,16 +323,16 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                   <label className="text-sm font-medium mb-1 block">Almacenamiento (GB)</label>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setStorageGB((v) => Math.max(5, v - 1))}
+                      onClick={() => setStorageGB((v) => Math.max(10, v - 1))}
                       className="w-8 h-8 rounded border hover:bg-gray-100 flex items-center justify-center"
                     >
                       -
                     </button>
                     <input
                       type="number"
-                      min={5}
+                      min={10}
                       value={storageGB}
-                      onChange={(e) => setStorageGB(Math.max(5, Number(e.target.value) || 5))}
+                      onChange={(e) => setStorageGB(Math.max(10, Number(e.target.value) || 10))}
                       className="w-16 text-center border rounded py-1 text-sm"
                     />
                     <button
@@ -356,7 +356,7 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
               const billableUsers = (totals as any).users.billableUsers as number;
               const perUserMonthly = (totals as any).users.perUserMonthly as number;
               // almacenamiento extra
-              const extraGB = Math.max(storageGB - 5, 0);
+              const extraGB = Math.max(storageGB - 10, 0);
               const storageMonthly = extraGB * 2000;
               const storageAnnualBefore = storageMonthly * 12;
               const storageAnnualAfter = Math.round(storageAnnualBefore * 0.75);
@@ -724,9 +724,9 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
               Total:{' '}
               {numberFormat(
                 period === 'monthly'
-                  ? (totals as any).subtotalMonthly + Math.max(storageGB - 5, 0) * 2000
+                  ? (totals as any).subtotalMonthly + Math.max(storageGB - 10, 0) * 2000
                   : (totals as any).subtotalAnnual +
-                      Math.round(Math.max(storageGB - 5, 0) * 2000 * 12 * 0.75),
+                      Math.round(Math.max(storageGB - 10, 0) * 2000 * 12 * 0.75),
               )}
             </p>
             <div className="space-y-3">

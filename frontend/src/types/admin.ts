@@ -375,14 +375,14 @@ export interface Vendedor {
 
 export interface VendedorCreate {
   nombres: string;
-  tipo_documento: string;
+  tipo_documento?: string | null;
   numero_documento: string;
-  telefono: string;
-  celular: string;
-  email: string;
-  cuenta_bancaria: string;
+  telefono?: string | null;
+  celular?: string | null;
+  email?: string | null;
+  cuenta_bancaria?: string | null;
   tipo_persona: 'natural' | 'juridica';
-  tipo_retencion?: 'natural_ss' | 'natural_sin_ss_rf10' | 'juridica_simplificado' | 'juridica_no_simplificado_rf11';
+  tipo_retencion?: string | null;
   es_agencia: boolean;
   porcentaje_comision: number;
   calcular_comision_sobre: 'agencia' | 'prima_neta';
@@ -391,7 +391,7 @@ export interface VendedorCreate {
   porcentaje_iva: number;
   porcentaje_retencion_iva: number;
   comisiones_diferentes_por_ano: boolean;
-  fecha_vinculacion?: string;
+  fecha_vinculacion?: string | null;
 }
 
 // Ramos

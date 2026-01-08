@@ -701,7 +701,7 @@ class SaasPolizasController extends Controller
                 ->selectRaw("
                     SUM(CASE WHEN ({$totalPolizaExpr} - {$recaudadoOficinaExpr}) > 1 THEN 1 ELSE 0 END) as count_por_cobrar,
                     SUM(CASE WHEN ({$totalPolizaExpr} - {$recaudadoOficinaExpr}) <= 1 AND {$recaudadoOficinaExpr} > 0 AND {$pendienteAseguradoraRealExpr} > 0 THEN 1 ELSE 0 END) as count_por_pagar,
-                    SUM(CASE WHEN {$recaudadoOficinaExpr} > 0 AND {$pagadoAseguradoraExpr} > 0 THEN 1 ELSE 0 END) as count_recaudos_completados
+                    SUM(CASE WHEN {$pagadoAseguradoraExpr} > 0 THEN 1 ELSE 0 END) as count_recaudos_completados
                 ")
                 ->first();
 
@@ -750,7 +750,7 @@ class SaasPolizasController extends Controller
                     polizas.created_at,
                     polizas.assigned_user_id,
                     polizas.seller_name,
-                    CONCAT(clientes.first_name, " ", clientes.last_name) as cliente_nombre,
+                    TRIM(CONCAT(COALESCE(clientes.first_name, ""), " ", COALESCE(clientes.last_name, ""))) as cliente_nombre,
                     clientes.document_number as cliente_documento,
                     aseguradoras.nombre as aseguradora_nombre,
                     ramos.nombre as ramo_nombre,
@@ -771,7 +771,7 @@ class SaasPolizasController extends Controller
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('polizas.policy_number', 'like', "%{$search}%")
-                  ->orWhereRaw('CONCAT(clientes.first_name, " ", clientes.last_name) LIKE ?', ["%{$search}%"])
+                  ->orWhereRaw('TRIM(CONCAT(COALESCE(clientes.first_name, ""), " ", COALESCE(clientes.last_name, ""))) LIKE ?', ["%{$search}%"])
                   ->orWhere('clientes.document_number', 'like', "%{$search}%")
                   ->orWhere('polizas.insurance_company', 'like', "%{$search}%");
             });
@@ -835,8 +835,7 @@ class SaasPolizasController extends Controller
 
             switch ($tab) {
                 case 'porCobrar':
-                    // Pendiente por oficina > 0 (con tolerancia de 1 peso por decimales)
-                    // Lógica: Total - Recaudado > 1
+                    // Pendiente por oficina > 0 (puede tener pagos parciales de aseguradora)
                     $query->whereRaw("({$totalPolizaSql} - {$recaudadoOficinaSql}) > 1"); 
                     break;
 
@@ -848,9 +847,8 @@ class SaasPolizasController extends Controller
                     break;
 
                 case 'recaudosCompletados':
-                    // Recaudado por oficina y pagado a aseguradora
-                    $query->whereRaw("{$recaudadoOficinaSql} > 0")
-                          ->whereRaw("{$pagadoAseguradoraSql} > 0");
+                    // Tiene pago a aseguradora completado (sin importar si pasó por oficina o no)
+                    $query->whereRaw("{$pagadoAseguradoraSql} > 0");
                     break;
             }
         }

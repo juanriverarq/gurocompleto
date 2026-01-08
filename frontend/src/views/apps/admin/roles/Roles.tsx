@@ -142,6 +142,21 @@ const defaultModulosDisponibles = {
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'calcular', 'pagar'],
   },
   cartera: { label: 'Cartera', icon: 'solar:wallet-bold-duotone', permisos: ['ver', 'gestionar'] },
+  cartera_clientes: { 
+    label: 'Cartera de Clientes', 
+    icon: 'solar:wallet-money-bold-duotone', 
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'importar', 'exportar'] 
+  },
+  recaudos: { 
+    label: 'Recaudos', 
+    icon: 'solar:hand-money-bold-duotone', 
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'importar', 'revertir'] 
+  },
+  pagos_polizas: { 
+    label: 'Pagos de Pólizas', 
+    icon: 'solar:card-bold-duotone', 
+    permisos: ['ver', 'crear', 'editar', 'eliminar'] 
+  },
   reportes_financieros: {
     label: 'Reportes Financieros',
     icon: 'solar:chart-square-bold-duotone',
@@ -308,7 +323,7 @@ const buildCategorias = (
     // Gestión Financiera
     [
       'Gestión Financiera',
-      ['cartera', 'comisiones', 'liquidar_vendedores', 'reportes_financieros'],
+      ['cartera', 'cartera_clientes', 'recaudos', 'pagos_polizas', 'comisiones', 'liquidar_vendedores', 'reportes_financieros'],
     ],
 
     // Gestión Documental
@@ -391,6 +406,15 @@ const LABEL_OVERRIDES: Record<string, string> = {
   asistentes_ia: 'Chatbot',
   voice_ai: 'Call center IA',
   analytics_predictivo: 'Predicciones de venta',
+
+  // Gestión Financiera
+  cartera: 'Cartera General',
+  cartera_clientes: 'Cartera de Clientes',
+  recaudos: 'Recaudos',
+  pagos_polizas: 'Pagos de Pólizas',
+  comisiones: 'Comisiones',
+  liquidar_vendedores: 'Liquidar Vendedores',
+  reportes_financieros: 'Reportes Financieros',
 
   // Gestión Documental
   contratos: 'Contratos',
