@@ -23,11 +23,12 @@ const MobileDrawer = () => {
         <Button
           onClick={() => setIsOpen(true)}
           className="flex items-center justify-center text-dark h-10 w-10 rounded-full bg-transparent hover:bg-lightprimary"
+          aria-label="Abrir menú de navegación"
         >
-          <IconMenu2 />
+          <IconMenu2 aria-hidden="true" />
         </Button>
       </div>
-      <Drawer open={isOpen} onClose={handleClose} className="h-full">
+      <Drawer open={isOpen} onClose={handleClose} className="h-full" aria-label="Menú de navegación principal">
         <Drawer.Items className="p-6">
           <FullLogo />
           
@@ -84,7 +85,7 @@ const MobileDrawer = () => {
             </p>
             <p className="text-sm text-center mt-2">
               <a 
-                href="mailto:soporte@guro.com" 
+                href="mailto:soporte@guro.co" 
                 className="text-primary hover:underline"
                 onClick={handleClose}
               >

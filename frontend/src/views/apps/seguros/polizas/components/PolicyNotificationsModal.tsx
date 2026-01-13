@@ -19,7 +19,6 @@ import policyNotificationService, {
 import { useToast } from 'src/hooks/use-toast';
 import { useTerminologia } from 'src/context/TerminologiaContext';
 import api from 'src/config/api';
-import saasApi from 'src/services/saasApi';
 import whatsappInstanceService from 'src/services/whatsappInstanceService';
 
 interface Props {
@@ -39,8 +38,6 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [loadingClientes, setLoadingClientes] = useState(false);
   const [clienteSearch, setClienteSearch] = useState('');
   const [polizas, setPolizas] = useState<any[]>([]);
-  const [loadingPolizas, setLoadingPolizas] = useState(false);
-  const [polizaSearch, setPolizaSearch] = useState('');
 
   // Helpers para normalizar campos de cliente
   const getClientName = (c: any): string => {
@@ -248,14 +245,11 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const loadPolizas = async () => {
     try {
-      setLoadingPolizas(true);
       const response = await api.get('/saas/polizas', { params: { per_page: 1000 } });
       const data = Array.isArray(response.data.data) ? response.data.data : [];
       setPolizas(data);
     } catch (error) {
       console.error('Error cargando pólizas:', error);
-    } finally {
-      setLoadingPolizas(false);
     }
   };
 
@@ -579,20 +573,21 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {(config.expiration_days_before_multiple || [config.expiration_days_before]).map((days, index) => (
-                          <div key={index} className="flex items-center gap-1 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 rounded-lg px-3 py-2">
+                          <div key={`exp-${index}-${days}`} className="flex items-center gap-1 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 rounded-lg px-3 py-2">
                             <Input
                               type="number"
-                              min="1"
+                              min="0"
                               max="365"
-                              value={days}
-                              onChange={(e) => {
-                                const newDays = parseInt(e.target.value) || 30;
+                              defaultValue={days}
+                              onBlur={(e) => {
+                                const parsed = parseInt(e.target.value);
+                                const newDays = isNaN(parsed) ? 30 : parsed;
                                 const current = config.expiration_days_before_multiple || [config.expiration_days_before];
                                 const updated = [...current];
                                 updated[index] = newDays;
                                 updateConfig({
-                                  expiration_days_before_multiple: updated.sort((a, b) => b - a),
-                                  expiration_days_before: updated[0] // Mantener compatibilidad
+                                  expiration_days_before_multiple: updated,
+                                  expiration_days_before: Math.max(...updated)
                                 });
                               }}
                               className="w-16 h-8 text-center text-sm font-medium"
@@ -605,7 +600,7 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                   const updated = current.filter((_, i) => i !== index);
                                   updateConfig({
                                     expiration_days_before_multiple: updated,
-                                    expiration_days_before: updated[0] || 30
+                                    expiration_days_before: Math.max(...updated) || 30
                                   });
                                 }}
                                 className="ml-1 text-red-500 hover:text-red-700"
@@ -675,20 +670,21 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {(config.renewal_days_before_multiple || [config.renewal_days_before]).map((days, index) => (
-                          <div key={index} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 rounded-lg px-3 py-2">
+                          <div key={`ren-${index}-${days}`} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 rounded-lg px-3 py-2">
                             <Input
                               type="number"
-                              min="1"
+                              min="0"
                               max="365"
-                              value={days}
-                              onChange={(e) => {
-                                const newDays = parseInt(e.target.value) || 45;
+                              defaultValue={days}
+                              onBlur={(e) => {
+                                const parsed = parseInt(e.target.value);
+                                const newDays = isNaN(parsed) ? 45 : parsed;
                                 const current = config.renewal_days_before_multiple || [config.renewal_days_before];
                                 const updated = [...current];
                                 updated[index] = newDays;
                                 updateConfig({
-                                  renewal_days_before_multiple: updated.sort((a, b) => b - a),
-                                  renewal_days_before: updated[0]
+                                  renewal_days_before_multiple: updated,
+                                  renewal_days_before: Math.max(...updated)
                                 });
                               }}
                               className="w-16 h-8 text-center text-sm font-medium"
@@ -701,7 +697,7 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                   const updated = current.filter((_, i) => i !== index);
                                   updateConfig({
                                     renewal_days_before_multiple: updated,
-                                    renewal_days_before: updated[0] || 45
+                                    renewal_days_before: Math.max(...updated) || 45
                                   });
                                 }}
                                 className="ml-1 text-red-500 hover:text-red-700"
@@ -770,20 +766,21 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {(config.payment_days_before_multiple || [config.payment_days_before]).map((days, index) => (
-                          <div key={index} className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 border border-green-200 rounded-lg px-3 py-2">
+                          <div key={`pay-${index}-${days}`} className="flex items-center gap-1 bg-green-50 dark:bg-green-900/20 border border-green-200 rounded-lg px-3 py-2">
                             <Input
                               type="number"
-                              min="1"
+                              min="0"
                               max="90"
-                              value={days}
-                              onChange={(e) => {
-                                const newDays = parseInt(e.target.value) || 7;
+                              defaultValue={days}
+                              onBlur={(e) => {
+                                const parsed = parseInt(e.target.value);
+                                const newDays = isNaN(parsed) ? 7 : parsed;
                                 const current = config.payment_days_before_multiple || [config.payment_days_before];
                                 const updated = [...current];
                                 updated[index] = newDays;
                                 updateConfig({
-                                  payment_days_before_multiple: updated.sort((a, b) => b - a),
-                                  payment_days_before: updated[0]
+                                  payment_days_before_multiple: updated,
+                                  payment_days_before: Math.max(...updated)
                                 });
                               }}
                               className="w-16 h-8 text-center text-sm font-medium"
@@ -796,7 +793,7 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                   const updated = current.filter((_, i) => i !== index);
                                   updateConfig({
                                     payment_days_before_multiple: updated,
-                                    payment_days_before: updated[0] || 7
+                                    payment_days_before: Math.max(...updated) || 7
                                   });
                                 }}
                                 className="ml-1 text-red-500 hover:text-red-700"
@@ -1449,25 +1446,22 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         <Icon icon="solar:calendar-mark-bold" className="w-4 h-4 text-gray-500" />
                         <span className="text-sm text-gray-600">Próxima ejecución:</span>
                       </div>
-                      <span className="font-medium text-sm">{config.stats.next_execution || 'No programada'}</span>
+                      <div className="text-right">
+                        <span className="font-medium text-sm block">{config.stats.next_execution_formatted || 'No programada'}</span>
+                        {config.stats.next_execution && (
+                          <span className="text-xs text-gray-400">{config.stats.next_execution}</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Botón para ver historial completo */}
-                  <div className="flex justify-center">
-                    <Button
-                      color="light"
-                      size="sm"
-                      onClick={() => {
-                        toast({
-                          title: 'Próximamente',
-                          description: 'El historial detallado estará disponible pronto',
-                        });
-                      }}
-                    >
-                      <Icon icon="solar:history-bold" className="w-4 h-4 mr-2" />
-                      Ver Historial Completo
-                    </Button>
+                    {config.stats.send_time && (
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <div className="flex items-center gap-2">
+                          <Icon icon="solar:alarm-bold" className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-600">Hora de envío:</span>
+                        </div>
+                        <span className="font-medium text-sm">{config.stats.send_time?.substring(0, 5)}</span>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -1500,16 +1494,19 @@ const PolicyNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 };
 
 // Componente de Logs
-const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config }) => {
+const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config: _config }) => {
+  const { toast } = useToast();
   const [logs, setLogs] = useState<any[]>([]);
-  const [pendingPolicies, setPendingPolicies] = useState<any[]>([]);
+  const [scheduledNotifications, setScheduledNotifications] = useState<any[]>([]);
+  const [scheduledInfo, setScheduledInfo] = useState<any>(null);
   const [loadingLogs, setLoadingLogs] = useState(false);
-  const [loadingPending, setLoadingPending] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'logs' | 'pending'>('logs');
+  const [loadingScheduled, setLoadingScheduled] = useState(false);
+  const [skippingId, setSkippingId] = useState<number | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'scheduled' | 'logs'>('scheduled');
 
   useEffect(() => {
     loadLogs();
-    loadPendingPolicies();
+    loadScheduledNotifications();
   }, []);
 
   const loadLogs = async () => {
@@ -1525,36 +1522,129 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config }) => 
     }
   };
 
-  const loadPendingPolicies = async () => {
+  const loadScheduledNotifications = async () => {
     try {
-      setLoadingPending(true);
-      const response = await policyNotificationService.getPendingPolicies();
-      // Combinar todos los tipos de pólizas pendientes en un solo array
-      const allPending = [
-        ...(response.expiration || []).map((p: any) => ({ ...p, notification_type: 'expiration' })),
-        ...(response.renewal || []).map((p: any) => ({ ...p, notification_type: 'renewal' })),
-        ...(response.payment_due || []).map((p: any) => ({ ...p, notification_type: 'payment_due' }))
-      ];
-      setPendingPolicies(allPending);
+      setLoadingScheduled(true);
+      const response = await policyNotificationService.getScheduledNotifications(50);
+      setScheduledNotifications(response.data || []);
+      setScheduledInfo({
+        next_execution: response.next_execution,
+        next_execution_formatted: response.next_execution_formatted,
+        next_execution_human: response.next_execution_human,
+        send_time: response.send_time,
+        send_days_labels: response.send_days_labels,
+      });
     } catch (error) {
-      console.error('Error cargando pólizas pendientes:', error);
-      setPendingPolicies([]);
+      console.error('Error cargando notificaciones programadas:', error);
+      setScheduledNotifications([]);
     } finally {
-      setLoadingPending(false);
+      setLoadingScheduled(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const handleSkipNotification = async (notification: any) => {
+    try {
+      setSkippingId(notification.policy_id);
+      await policyNotificationService.skipNotification({
+        poliza_id: notification.policy_id,
+        notification_type: notification.notification_type,
+        reason: 'Omitido manualmente desde el panel',
+      });
+      toast({
+        title: 'Notificación omitida',
+        description: `La notificación de ${notification.notification_type_label} para la póliza ${notification.policy_number} ha sido omitida`,
+      });
+      // Recargar la lista
+      await loadScheduledNotifications();
+    } catch (error) {
+      console.error('Error omitiendo notificación:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo omitir la notificación',
+        variant: 'destructive',
+      });
+    } finally {
+      setSkippingId(null);
+    }
+  };
+
+  const getStatusBadge = (status: string, errorMessage?: string) => {
     switch (status) {
       case 'sent':
         return <Badge color="success">Enviado</Badge>;
       case 'failed':
-        return <Badge color="failure">Fallido</Badge>;
+        return (
+          <div className="flex flex-col gap-1">
+            <Badge color="failure">Fallido</Badge>
+            {errorMessage && (
+              <span className="text-xs text-red-500">{translateError(errorMessage)}</span>
+            )}
+          </div>
+        );
       case 'skipped':
-        return <Badge color="warning">Omitido</Badge>;
+        return (
+          <div className="flex flex-col gap-1">
+            <Badge color="warning">Omitido</Badge>
+            {errorMessage && (
+              <span className="text-xs text-gray-500">{translateError(errorMessage)}</span>
+            )}
+          </div>
+        );
       default:
         return <Badge color="gray">{status}</Badge>;
     }
+  };
+
+  const translateError = (error: string): string => {
+    // Traducciones de errores comunes
+    const translations: Record<string, string> = {
+      'Error desconocido': 'Error desconocido al enviar',
+      'Instance not connected': 'WhatsApp desconectado',
+      'instance not connected': 'WhatsApp desconectado',
+      'Connection closed': 'Conexión cerrada',
+      'connection closed': 'Conexión cerrada',
+      'Phone number not registered': 'Número no registrado en WhatsApp',
+      'Invalid phone number': 'Número de teléfono inválido',
+      'Rate limit exceeded': 'Límite de envíos excedido',
+      'Timeout': 'Tiempo de espera agotado',
+      'timeout': 'Tiempo de espera agotado',
+      'Network error': 'Error de red',
+      'Omitido manualmente': 'Omitido por el usuario',
+      'Omitido por el usuario': 'Omitido por el usuario',
+    };
+
+    // Buscar traducción exacta
+    if (translations[error]) {
+      return translations[error];
+    }
+
+    // Buscar patrones comunes
+    if (error.includes('[HTTP 4') || error.includes('[HTTP 5')) {
+      const match = error.match(/\[HTTP (\d+)\]/);
+      if (match) {
+        const code = match[1];
+        if (code === '401') return 'No autorizado - Verificar credenciales';
+        if (code === '403') return 'Acceso denegado';
+        if (code === '404') return 'Servicio no encontrado';
+        if (code === '429') return 'Demasiadas solicitudes - Esperar';
+        if (code === '500') return 'Error del servidor de WhatsApp';
+        if (code === '502' || code === '503') return 'Servicio de WhatsApp no disponible';
+        return `Error del servidor (${code})`;
+      }
+    }
+
+    if (error.toLowerCase().includes('disconnect')) {
+      return 'WhatsApp desconectado';
+    }
+    if (error.toLowerCase().includes('not found')) {
+      return 'No encontrado';
+    }
+    if (error.toLowerCase().includes('invalid')) {
+      return 'Datos inválidos';
+    }
+
+    // Si no hay traducción, mostrar el error original truncado
+    return error.length > 40 ? error.substring(0, 40) + '...' : error;
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -1578,6 +1668,20 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config }) => 
       {/* Sub-tabs */}
       <div className="flex gap-2 border-b">
         <button
+          onClick={() => setActiveSubTab('scheduled')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeSubTab === 'scheduled'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Icon icon="solar:clock-circle-bold" className="w-4 h-4 inline mr-2" />
+          Próximos Envíos
+          {scheduledNotifications.length > 0 && (
+            <Badge color="info" size="xs" className="ml-2">{scheduledNotifications.length}</Badge>
+          )}
+        </button>
+        <button
           onClick={() => setActiveSubTab('logs')}
           className={`px-4 py-2 font-medium transition-colors ${
             activeSubTab === 'logs'
@@ -1588,21 +1692,118 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config }) => 
           <Icon icon="solar:history-bold" className="w-4 h-4 inline mr-2" />
           Historial de Envíos
         </button>
-        <button
-          onClick={() => setActiveSubTab('pending')}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeSubTab === 'pending'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Icon icon="solar:clock-circle-bold" className="w-4 h-4 inline mr-2" />
-          Envíos Pendientes
-          {pendingPolicies.length > 0 && (
-            <Badge color="info" size="xs" className="ml-2">{pendingPolicies.length}</Badge>
-          )}
-        </button>
       </div>
+
+      {/* Próximos Envíos Programados */}
+      {activeSubTab === 'scheduled' && (
+        <div>
+          {loadingScheduled ? (
+            <div className="flex items-center justify-center gap-2 py-8">
+              <Spinner size="sm" />
+              <span className="text-sm text-gray-500">Cargando envíos programados...</span>
+            </div>
+          ) : scheduledNotifications.length === 0 ? (
+            <div className="text-center py-12">
+              <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
+              <p className="text-gray-500">No hay envíos programados</p>
+              <p className="text-sm text-gray-400 mt-2">Configura los tipos de notificación y días de anticipación</p>
+            </div>
+          ) : (
+            <>
+              {/* Info de próxima ejecución */}
+              {scheduledInfo && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Icon icon="solar:calendar-mark-bold" className="w-5 h-5 text-blue-600" />
+                      <span className="font-medium">Próximo envío:</span>
+                      <span className="text-blue-700 dark:text-blue-300 font-semibold">
+                        {scheduledInfo.next_execution_formatted || 'No programado'}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        ({scheduledInfo.next_execution_human})
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      <span className="font-medium">Hora:</span> {scheduledInfo.send_time?.substring(0, 5)} | 
+                      <span className="font-medium ml-2">Días:</span> {scheduledInfo.send_days_labels?.join(', ')}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <Alert color="info" className="mb-4">
+                <Icon icon="solar:info-circle-bold" className="w-4 h-4 mr-2" />
+                Estas notificaciones se enviarán en la próxima ejecución programada. Si cambias la hora o los días, se recalculará automáticamente.
+              </Alert>
+              
+              <div className="border rounded-lg overflow-hidden">
+                <div className="max-h-96 overflow-y-auto">
+                  <Table>
+                    <Table.Head>
+                      <Table.HeadCell>Póliza</Table.HeadCell>
+                      <Table.HeadCell>Cliente</Table.HeadCell>
+                      <Table.HeadCell>Tipo</Table.HeadCell>
+                      <Table.HeadCell>Fecha Evento</Table.HeadCell>
+                      <Table.HeadCell>Días</Table.HeadCell>
+                      <Table.HeadCell>Acción</Table.HeadCell>
+                    </Table.Head>
+                    <Table.Body>
+                      {scheduledNotifications.map((notification: any, index: number) => (
+                        <Table.Row key={index}>
+                          <Table.Cell className="font-medium text-sm">
+                            {notification.policy_number || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-sm">
+                            {notification.client_name || '-'}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Badge 
+                              color={notification.notification_type === 'expiration' ? 'warning' : 
+                                     notification.notification_type === 'renewal' ? 'info' : 'success'} 
+                              size="xs"
+                            >
+                              {notification.notification_type_label || notification.notification_type}
+                            </Badge>
+                          </Table.Cell>
+                          <Table.Cell className="text-sm">
+                            {notification.event_date || '-'}
+                          </Table.Cell>
+                          <Table.Cell className="text-sm">
+                            <span className={notification.days_until_event !== null && notification.days_until_event < 7 ? 'text-red-600 font-medium' : 'text-gray-600'}>
+                              {notification.days_until_event !== null ? `${notification.days_until_event}d` : '-'}
+                            </span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Button
+                              size="xs"
+                              color="failure"
+                              onClick={() => handleSkipNotification(notification)}
+                              disabled={skippingId === notification.policy_id}
+                            >
+                              {skippingId === notification.policy_id ? (
+                                <Spinner size="xs" />
+                              ) : (
+                                <>
+                                  <Icon icon="solar:close-circle-bold" className="w-3 h-3 mr-1" />
+                                  Omitir
+                                </>
+                              )}
+                            </Button>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Total: {scheduledNotifications.length} notificación(es) programada(s)
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Historial de Envíos */}
       {activeSubTab === 'logs' && (
@@ -1627,7 +1828,6 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config }) => 
                     <Table.HeadCell>Póliza</Table.HeadCell>
                     <Table.HeadCell>Cliente</Table.HeadCell>
                     <Table.HeadCell>Tipo</Table.HeadCell>
-                    <Table.HeadCell>Fecha Evento</Table.HeadCell>
                     <Table.HeadCell>Estado</Table.HeadCell>
                     <Table.HeadCell>Teléfono</Table.HeadCell>
                   </Table.Head>
@@ -1650,16 +1850,8 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config }) => 
                              log.notification_type === 'payment_due' ? 'Pago' : log.notification_type}
                           </Badge>
                         </Table.Cell>
-                        <Table.Cell className="text-sm">
-                          {formatDateTime(
-                            log.event_date ||
-                            log.expiration_date ||
-                            log.renewal_date ||
-                            log.payment_due_date
-                          )}
-                        </Table.Cell>
                         <Table.Cell>
-                          {getStatusBadge(log.status)}
+                          {getStatusBadge(log.status, log.error_message)}
                         </Table.Cell>
                         <Table.Cell className="text-sm text-gray-500">
                           {log.phone_number || '-'}
@@ -1670,74 +1862,6 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config }) => 
                 </Table>
               </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Envíos Pendientes */}
-      {activeSubTab === 'pending' && (
-        <div>
-          {loadingPending ? (
-            <div className="flex items-center justify-center gap-2 py-8">
-              <Spinner size="sm" />
-              <span className="text-sm text-gray-500">Cargando pólizas pendientes...</span>
-            </div>
-          ) : pendingPolicies.length === 0 ? (
-            <div className="text-center py-12">
-              <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
-              <p className="text-gray-500">No hay envíos pendientes</p>
-              <p className="text-sm text-gray-400 mt-2">Todas las notificaciones están al día</p>
-            </div>
-          ) : (
-            <>
-              <Alert color="info" className="mb-4">
-                <Icon icon="solar:info-circle-bold" className="w-4 h-4 mr-2" />
-                Estas pólizas recibirán notificaciones en la próxima ejecución programada
-              </Alert>
-              <div className="border rounded-lg overflow-hidden">
-                <div className="max-h-96 overflow-y-auto">
-                  <Table>
-                    <Table.Head>
-                      <Table.HeadCell>Póliza</Table.HeadCell>
-                      <Table.HeadCell>Cliente</Table.HeadCell>
-                      <Table.HeadCell>Tipo Notificación</Table.HeadCell>
-                      <Table.HeadCell>Fecha Evento</Table.HeadCell>
-                      <Table.HeadCell>Días Restantes</Table.HeadCell>
-                    </Table.Head>
-                    <Table.Body>
-                      {pendingPolicies.map((policy: any, index: number) => (
-                        <Table.Row key={index}>
-                          <Table.Cell className="font-medium text-sm">
-                            {policy.policy_number || '-'}
-                          </Table.Cell>
-                          <Table.Cell className="text-sm">
-                            {policy.client_name || '-'}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Badge color="warning" size="xs">
-                              {policy.notification_type === 'expiration' ? 'Vencimiento' :
-                               policy.notification_type === 'renewal' ? 'Renovación' :
-                               policy.notification_type === 'payment_due' ? 'Pago' : policy.notification_type}
-                            </Badge>
-                          </Table.Cell>
-                          <Table.Cell className="text-sm">
-                            {policy.event_date ? formatDateTime(policy.event_date) : '-'}
-                          </Table.Cell>
-                          <Table.Cell className="text-sm">
-                            <span className={policy.days_until < 7 ? 'text-red-600 font-medium' : 'text-gray-600'}>
-                              {policy.days_until} días
-                            </span>
-                          </Table.Cell>
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table>
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Total: {pendingPolicies.length} notificación(es) pendiente(s)
-              </p>
-            </>
           )}
         </div>
       )}

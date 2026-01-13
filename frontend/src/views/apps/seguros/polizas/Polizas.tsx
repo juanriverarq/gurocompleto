@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PermissionGate from 'src/components/PermissionGate';
 import {
   Card,
@@ -30,10 +30,11 @@ import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import PolizasFilterModal from './components/PolizasFilterModal';
 import ColumnsCustomizationModal from './components/ColumnsCustomizationModal';
 import PolizasExportModal from './components/PolizasExportModal';
-import PolicyNotificationsModal from './components/PolicyNotificationsModal';
+import PolicyNotificationsModal from './components/PolicyNotificationsModalV2';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import OnboardingGuard from '../../../../components/auth/OnboardingGuard';
 import policyNotificationService from 'src/services/policyNotificationService';
+import { useWhatsAppSocket } from 'src/hooks/useWhatsAppSocket';
 
 const Polizas: React.FC = () => {
   const [polizas, setPolizas] = useState<Poliza[]>([]);
@@ -51,6 +52,64 @@ const Polizas: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<any>(null);
+  
+  // Ref para acceder al estado actual sin causar re-renders en callbacks
+  const notificationStatusRef = useRef(notificationStatus);
+  useEffect(() => {
+    notificationStatusRef.current = notificationStatus;
+  }, [notificationStatus]);
+
+  // WebSocket para actualizar estado de WhatsApp en tiempo real
+  const { isConnected: socketConnected, subscribeToInstance, unsubscribeFromInstance } = useWhatsAppSocket({
+    autoConnect: true,
+    events: {
+      onConnected: (data) => {
+        console.log('🟢 [Polizas] WhatsApp conectado via WebSocket:', data.instanceId);
+        setNotificationStatus((prev: any) => prev ? {
+          ...prev,
+          whatsapp_status: { ...prev.whatsapp_status, connected: true, status: 'connected' }
+        } : prev);
+      },
+      onDisconnected: (data) => {
+        console.log('🔴 [Polizas] WhatsApp desconectado via WebSocket:', data.instanceId);
+        setNotificationStatus((prev: any) => prev ? {
+          ...prev,
+          whatsapp_status: { ...prev.whatsapp_status, connected: false, status: 'disconnected' }
+        } : prev);
+      },
+      onInstanceUpdate: (data) => {
+        console.log('📡 [Polizas] Actualización de instancia:', data);
+        if (data.event === 'connected') {
+          setNotificationStatus((prev: any) => prev ? {
+            ...prev,
+            whatsapp_status: { ...prev.whatsapp_status, connected: true, status: 'connected' }
+          } : prev);
+        } else if (data.event === 'disconnected') {
+          setNotificationStatus((prev: any) => prev ? {
+            ...prev,
+            whatsapp_status: { ...prev.whatsapp_status, connected: false, status: 'disconnected' }
+          } : prev);
+        }
+      },
+    }
+  });
+
+  // Suscribirse a la instancia de WhatsApp configurada
+  const subscribedInstanceRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!socketConnected || !notificationStatus?.whatsapp_status?.instance_id) return;
+    
+    const instanceId = notificationStatus.whatsapp_status.instance_id;
+    
+    if (instanceId && instanceId !== subscribedInstanceRef.current) {
+      if (subscribedInstanceRef.current) {
+        unsubscribeFromInstance(subscribedInstanceRef.current);
+      }
+      subscribeToInstance(instanceId);
+      subscribedInstanceRef.current = instanceId;
+      console.log('🔔 [Polizas] Suscrito a instancia WhatsApp:', instanceId);
+    }
+  }, [socketConnected, notificationStatus?.whatsapp_status?.instance_id, subscribeToInstance, unsubscribeFromInstance]);
   const [autosTabLoading, setAutosTabLoading] = useState(false);
   const [autosVinculados, setAutosVinculados] = useState<any[]>([]);
 

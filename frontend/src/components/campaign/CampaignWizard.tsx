@@ -12,7 +12,7 @@ import {
 import { clienteService, Cliente } from '../../services/clienteService';
 import voiceCampaignService, { VoiceCampaignTriggerInput } from '../../services/voiceCampaignService';
 import whatsappInstanceService from '../../services/whatsappInstanceService';
-import { getVoiceList, testVoice } from '../../services/elevenLabsService';
+import { testVoice } from '../../services/elevenLabsService';
 import { createPortal } from 'react-dom';
 import { useSaas } from '../../contexts/SaasContext';
 
@@ -169,8 +169,8 @@ interface CampaignWizardProps {
 }
 
 const STEPS = [
-  { id: 1, title: 'Agente', icon: 'solar:user-id-bold-duotone', description: 'Seleccionar agente especializado' },
-  { id: 2, title: 'Voz', icon: 'solar:soundwave-bold-duotone', description: 'Configurar voz del agente' },
+  { id: 1, title: 'Objetivo', icon: 'solar:target-bold-duotone', description: 'Seleccionar objetivo de la campaña' },
+  { id: 2, title: 'Agente', icon: 'solar:soundwave-bold-duotone', description: 'Configurar voz del agente' },
   { id: 3, title: 'Presentación', icon: 'solar:user-speak-bold-duotone', description: 'Definir nombre del agente' },
   { id: 4, title: 'Herramientas', icon: 'solar:settings-minimalistic-bold-duotone', description: 'Disparadores y configuración' },
   { id: 5, title: 'Clientes', icon: 'solar:users-group-two-rounded-bold-duotone', description: 'Audiencia (opcional con triggers)' },
@@ -197,11 +197,20 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onComplete, onCa
   const [brokerClients, setBrokerClients] = useState<Cliente[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
+  const [clientSearchInput, setClientSearchInput] = useState(''); // Input local para debounce
+  
+  // Debounce para búsqueda de clientes (150ms - más rápido)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setClientSearch(clientSearchInput);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [clientSearchInput]);
   
   // Estados para voces de ElevenLabs
   const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>([]);
   const [loadingVoices, setLoadingVoices] = useState(false);
-  const [selectedRealVoice, setSelectedRealVoice] = useState<string>('86V9x9hrQds83qf7zaGn'); // Voz por defecto
+  const [selectedRealVoice, setSelectedRealVoice] = useState<string>('YPh7OporwNAJ28F5IQrm'); // Angie por defecto
   const [waInstances, setWaInstances] = useState<Array<{ id?: number; instance_id: string; status?: string }>>([]);
 
   const [triggersConfig, setTriggersConfig] = useState({
@@ -221,17 +230,29 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onComplete, onCa
 
 
 // Lista filtrada (memo) con null-safety para búsqueda rápida y sin errores en toLowerCase
+// Soporta búsqueda por nombre completo (nombre + apellidos) y términos parciales
 const brokerClientsFiltered = React.useMemo(() => {
   if (!clientSearch.trim()) return brokerClients;
-  const term = clientSearch.toLowerCase();
+  const searchTerms = clientSearch.toLowerCase().trim().split(/\s+/); // Dividir por espacios
   const norm = (v: any) => String(v ?? '').toLowerCase();
-  return brokerClients.filter((client) => (
-    norm(client.nombre).includes(term) ||
-    norm(client.apellidos).includes(term) ||
-    norm(client.celular_principal).includes(term) ||
-    norm(client.email_principal).includes(term) ||
-    norm(client.ciudad).includes(term)
-  ));
+  
+  return brokerClients.filter((client) => {
+    // Crear nombre completo para búsqueda
+    const fullName = `${norm(client.nombre)} ${norm(client.apellidos)}`.trim();
+    const searchableFields = [
+      fullName,
+      norm(client.nombre),
+      norm(client.apellidos),
+      norm(client.celular_principal),
+      norm(client.email_principal),
+      norm(client.ciudad),
+      norm((client as any).documento), // Documento si existe
+      norm((client as any).numero_documento), // Número documento alternativo
+    ].join(' ');
+    
+    // Todos los términos de búsqueda deben coincidir en algún campo
+    return searchTerms.every(term => searchableFields.includes(term));
+  });
 }, [brokerClients, clientSearch]);
   // Estados para reproducción de audio
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
@@ -239,8 +260,15 @@ const brokerClientsFiltered = React.useMemo(() => {
   // Estados para el paso de ejecución de campaña
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionStarted, setExecutionStarted] = useState(false);
-  const [preventDuplicates, setPreventDuplicates] = useState(false); // 🔥 NUEVO: Prevenir duplicados
-  const [lastExecutionTime, setLastExecutionTime] = useState(0); // 🔥 NUEVO: Timestamp última ejecución
+  const [preventDuplicates, setPreventDuplicates] = useState(false);
+  const [lastExecutionTime, setLastExecutionTime] = useState(0);
+  
+  // Estados para prueba de llamada (mini modal)
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [testCallName, setTestCallName] = useState('María García');
+  const [testCallPhone, setTestCallPhone] = useState('');
+  const [isTestingCall, setIsTestingCall] = useState(false);
+  const [testCallResult, setTestCallResult] = useState<{ success: boolean; message: string; callId?: string } | null>(null);
 
 
   // Input local para evitar lag al tipear el nombre del agente (debounce)
@@ -379,42 +407,92 @@ const brokerClientsFiltered = React.useMemo(() => {
   const loadElevenLabsVoices = async () => {
     setLoadingVoices(true);
     try {
-      console.log('🎵 [CampaignWizard] Cargando voces específicas de ElevenLabs...');
+      console.log('🎵 [CampaignWizard] Cargando voces curadas...');
       
-      // IDs de voces específicas permitidas
-      const allowedVoiceIds = [
-        'o2vbTbO3g4GrKUg7rehy',
-        '3Fx71T889APcHRu4VtQf',
-        'ucWwAruuGtBeHfnAaKcJ',
-        'SplyIQAjgy4DKGAnOrHi',
-        'b2htR0pMe28pYwCY9gnP',
-        'qHkrJuifPpn95wK3rm2A',
-        '86V9x9hrQds83qf7zaGn' // Por defecto
+      // Voces curadas con IDs fijos (no dependen de la API)
+      const curatedVoices: ElevenLabsVoice[] = [
+        {
+          voice_id: 'YPh7OporwNAJ28F5IQrm',
+          name: 'Angie',
+          language: 'es',
+          labels: { accent: 'colombian', age: 'young', gender: 'female' }
+        },
+        {
+          voice_id: 'sdxJtmxpzgSLekrYUGIu',
+          name: 'Cristian sanchez',
+          language: 'es',
+          labels: { accent: 'colombian', age: 'middle_aged', gender: 'male' }
+        },
+        {
+          voice_id: '86V9x9hrQds83qf7zaGn',
+          name: 'Marcela - Colombian Girl',
+          language: 'es',
+          labels: { accent: 'colombian', age: 'young', gender: 'female' }
+        },
+        {
+          voice_id: 'o2vbTbO3g4GrKUg7rehy',
+          name: 'Sofía – Soft & Warm',
+          language: 'es',
+          labels: { accent: 'colombian', age: 'young', gender: 'female' }
+        },
+        {
+          voice_id: '3Fx71T889APcHRu4VtQf',
+          name: 'Andrea',
+          language: 'es',
+          labels: { accent: 'latin american', age: 'young', gender: 'female' }
+        },
+        {
+          voice_id: 'ucWwAruuGtBeHfnAaKcJ',
+          name: 'JuanRestrepoPro',
+          language: 'es',
+          labels: { accent: 'colombian', age: 'young', gender: 'male' }
+        },
+        {
+          voice_id: 'SplyIQAjgy4DKGAnOrHi',
+          name: 'Medellin - Colombian Voice',
+          language: 'es',
+          labels: { accent: 'latin american', age: 'young', gender: 'female' }
+        }
       ];
       
-      const response = await getVoiceList();
+      console.log('✅ [CampaignWizard] Voces curadas cargadas:', curatedVoices.length);
+      setElevenLabsVoices(curatedVoices);
       
-      if (response.voices && response.voices.length > 0) {
-        // Filtrar solo las voces permitidas
-        const filteredVoices = response.voices.filter(voice => 
-          allowedVoiceIds.includes(voice.voice_id)
-        );
-        
-        console.log('✅ [CampaignWizard] Voces específicas cargadas:', filteredVoices.length);
-        setElevenLabsVoices(filteredVoices);
-        
-        // Si la voz por defecto no está en la lista filtrada, seleccionar la primera disponible
-        if (!filteredVoices.some(v => v.voice_id === selectedRealVoice) && filteredVoices.length > 0) {
-          setSelectedRealVoice(filteredVoices[0].voice_id);
-        }
-      } else {
-        console.warn('⚠️ [CampaignWizard] No se encontraron voces');
-      }
+      // Seleccionar Angie por defecto
+      setSelectedRealVoice('YPh7OporwNAJ28F5IQrm');
     } catch (error) {
       console.error('❌ [CampaignWizard] Error cargando voces:', error);
     } finally {
       setLoadingVoices(false);
     }
+  };
+
+  // Función helper para reemplazar variables con datos de prueba
+  const replaceVariablesWithSampleData = (text: string, voiceName?: string): string => {
+    return text
+      .replace(/\{customer_name\}/gi, 'María García')
+      .replace(/\{client_name\}/gi, 'María García')
+      .replace(/\{nombre\}/gi, 'María')
+      .replace(/\{apellido\}/gi, 'García')
+      .replace(/\{nombre_cliente\}/gi, 'María García')
+      .replace(/\{policy_number\}/gi, 'POL-2024-001234')
+      .replace(/\{numero_poliza\}/gi, 'POL-2024-001234')
+      .replace(/\{placa\}/gi, 'ABC123')
+      .replace(/\{plate\}/gi, 'ABC123')
+      .replace(/\{vehicle_plate\}/gi, 'ABC123')
+      .replace(/\{company_name\}/gi, tenant?.name || 'Seguros Ejemplo')
+      .replace(/\{nombre_empresa\}/gi, tenant?.name || 'Seguros Ejemplo')
+      .replace(/\{agent_name\}/gi, campaignData.agentName || voiceName || 'Angie')
+      .replace(/\{nombre_agente\}/gi, campaignData.agentName || voiceName || 'Angie')
+      .replace(/\{amount\}/gi, '$150.000')
+      .replace(/\{monto\}/gi, '$150.000')
+      .replace(/\{fecha_vencimiento\}/gi, '15 de febrero de 2026')
+      .replace(/\{expiry_date\}/gi, '15 de febrero de 2026')
+      .replace(/\{producto\}/gi, 'Seguro de Auto')
+      .replace(/\{product\}/gi, 'Seguro de Auto')
+      .replace(/\{telefono\}/gi, '300 123 4567')
+      .replace(/\{phone\}/gi, '300 123 4567')
+      .replace(/\{email\}/gi, 'maria@ejemplo.com');
   };
 
   // Función para reproducir muestra de voz
@@ -436,9 +514,12 @@ const brokerClientsFiltered = React.useMemo(() => {
       setPlayingVoice(voiceId);
       console.log(`🎵 [CampaignWizard] Reproduciendo muestra de voz: ${voiceName} (${voiceId})`);
 
-      // Texto de ejemplo en español
-      const sampleText = campaignData.selectedTemplate?.firstMessageTemplate || 
+      // Texto de ejemplo en español - reemplazar variables con datos de prueba
+      const rawText = campaignData.customFirstMessage || campaignData.selectedTemplate?.firstMessageTemplate || 
         "Hola, esta es una muestra de mi voz. Soy un asistente virtual y puedo ayudarte con diferentes tareas. ¿En qué puedo asistirte hoy?";
+      
+      // Usar función helper para reemplazar variables
+      const sampleText = replaceVariablesWithSampleData(rawText, voiceName);
 
       // Obtener audio desde ElevenLabs con configuraciones personalizadas
       const voiceSettings = {
@@ -774,9 +855,9 @@ const brokerClientsFiltered = React.useMemo(() => {
                 const normalize = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}+/gu, '');
                 const toDisplay = (name: string) => {
                   const n = normalize(name);
+                  if (n.includes('angie')) return 'Angie';
                   if (n.includes('cristian') && n.includes('sanchez')) return 'Cristián Sánchez';
                   if (n.includes('marcela')) return 'Marcela';
-                  if (n.includes('clau') || n.includes('claudia')) return 'Claudia';
                   if (n.includes('sof')) return 'Sofía';
                   if (n.includes('andrea')) return 'Andrea';
                   if (n.includes('juanrestrepopro') || (n.includes('juan') && n.includes('restrepo'))) return 'Juan Restrepo';
@@ -784,32 +865,32 @@ const brokerClientsFiltered = React.useMemo(() => {
                   return name;
                 };
                 const preferredDescriptions: Record<string, string> = {
+                  Angie: 'Español colombiano, femenina joven, voz ultrarealista y natural. ⭐ Recomendada',
                   'Cristián Sánchez': 'Español colombiano, masculino mediana edad, serio y confiable.',
                   Marcela: 'Español colombiano, femenina joven, cálida y cercana.',
-                  Claudia: 'Español colombiano, femenina mediana edad, timbre neutro y profesional.',
                   Sofía: 'Español colombiano, femenina joven con tono suave y acogedor.',
                   Andrea: 'Español latino, femenina joven, expresiva y dinámica.',
                   'Juan Restrepo': 'Español colombiano, masculino joven, tono directo y claro.',
                   Mariana: 'Español latino, femenina joven con tono claro y natural.'
                 };
                 const priority: Record<string, number> = {
+                  Angie: 0,
                   'Cristián Sánchez': 1,
                   Marcela: 2,
-                  Claudia: 3,
-                  Sofía: 4,
-                  Andrea: 5,
-                  'Juan Restrepo': 6,
+                  Sofía: 3,
+                  Andrea: 4,
+                  'Juan Restrepo': 5,
                   Mariana: 999
                 };
                 const items = elevenLabsVoices.map((voice) => {
                   const displayName = toDisplay(voice.name);
                   let photoSrc = real1;
-                  if (displayName === 'Andrea') photoSrc = real5;
+                  if (displayName === 'Angie') photoSrc = real2;
+                  else if (displayName === 'Andrea') photoSrc = real5;
                   else if (displayName === 'Juan Restrepo') photoSrc = real6;
                   else if (displayName === 'Mariana') photoSrc = real7;
                   else if (displayName === 'Cristián Sánchez') photoSrc = real1;
-                  else if (displayName === 'Marcela') photoSrc = real2;
-                  else if (displayName === 'Claudia') photoSrc = real3;
+                  else if (displayName === 'Marcela') photoSrc = real3;
                   else if (displayName === 'Sofía') photoSrc = real4;
                   return {
                     voice,
@@ -1026,10 +1107,10 @@ const brokerClientsFiltered = React.useMemo(() => {
                   })()}
                 </div>
                 
-                {/* Mensaje de ejemplo */}
+                {/* Mensaje de ejemplo - con datos de prueba */}
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <p className="text-sm italic text-gray-700 dark:text-gray-300 mb-4 leading-relaxed">
-                    "{campaignData.customFirstMessage || campaignData.selectedTemplate.firstMessageTemplate}"
+                    "{replaceVariablesWithSampleData(campaignData.customFirstMessage || campaignData.selectedTemplate.firstMessageTemplate, getSelectedVoiceInfo()?.name)}"
                   </p>
                   <Button 
                     size="sm" 
@@ -1223,8 +1304,8 @@ const brokerClientsFiltered = React.useMemo(() => {
                     <TextInput
                       type="text"
                       placeholder="Buscar por nombre, teléfono, email o ciudad..."
-                      value={clientSearch}
-                      onChange={(e) => setClientSearch(e.target.value)}
+                      value={clientSearchInput}
+                      onChange={(e) => setClientSearchInput(e.target.value)}
                       icon={() => <Icon icon="solar:magnifer-outline" className="w-4 h-4" />}
                       sizing="sm"
                     />
@@ -1245,7 +1326,7 @@ const brokerClientsFiltered = React.useMemo(() => {
                         <Button 
                           size="sm" 
                           color="gray" 
-                          onClick={() => setClientSearch('')}
+                          onClick={() => { setClientSearchInput(''); setClientSearch(''); }}
                           className="mt-2"
                         >
                           Limpiar búsqueda
@@ -1459,6 +1540,73 @@ const brokerClientsFiltered = React.useMemo(() => {
     return triggers;
   };
 
+  // Función para ejecutar llamada de prueba
+  const handleTestCall = async () => {
+    if (!testCallPhone || testCallPhone.length < 10) {
+      setTestCallResult({ success: false, message: 'Ingresa un número de teléfono válido (mínimo 10 dígitos)' });
+      return;
+    }
+    
+    setIsTestingCall(true);
+    setTestCallResult(null);
+    
+    try {
+      const voiceId = selectedRealVoice || 'YPh7OporwNAJ28F5IQrm';
+      
+      // Preparar datos de prueba basados en el objetivo
+      const testContact = {
+        name: testCallName,
+        phone: testCallPhone.replace(/\D/g, ''),
+        custom_data: {
+          customer_name: testCallName,
+          nombre: testCallName.split(' ')[0],
+          apellido: testCallName.split(' ').slice(1).join(' ') || 'García',
+          policy_number: 'POL-TEST-' + Date.now().toString().slice(-6),
+          placa: 'TEST123',
+          producto: 'Seguro de Prueba',
+          monto: '$100.000',
+          fecha_vencimiento: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('es-CO'),
+        }
+      };
+      
+      // Obtener el mensaje de voz con variables reemplazadas
+      const voiceMessageTemplate = replaceVariablesWithSampleData(
+        campaignData.customFirstMessage || campaignData.selectedTemplate?.firstMessageTemplate || 'Hola, esta es una llamada de prueba.',
+        testCallName
+      );
+      
+      const response = await voiceCampaignService.createImmediateVoiceCampaign({
+        name: `Prueba - ${campaignData.selectedTemplate?.name || 'Test'} - ${new Date().toLocaleTimeString()}`,
+        description: 'Llamada de prueba desde el wizard',
+        priority: 'high',
+        contacts: [testContact],
+        agent_name: campaignData.agentName || campaignData.selectedTemplate?.agentPersona.name || 'Agente de Prueba',
+        voice_message_template: voiceMessageTemplate,
+        elevenlabs_voice_id: voiceId,
+        settings: {
+          voice_settings: campaignData.voiceSettings,
+          system_prompt: campaignData.customPrompt || campaignData.selectedTemplate?.systemPrompt,
+          first_message: voiceMessageTemplate,
+        }
+      });
+      
+      if (response.success) {
+        setTestCallResult({ 
+          success: true, 
+          message: `¡Llamada de prueba iniciada! Se está llamando a ${testCallName} al ${testCallPhone}`,
+          callId: response.campaign?.id 
+        });
+      } else {
+        setTestCallResult({ success: false, message: response.message || 'Error al iniciar la llamada de prueba' });
+      }
+    } catch (error: any) {
+      console.error('Error en llamada de prueba:', error);
+      setTestCallResult({ success: false, message: error.message || 'Error al ejecutar la llamada de prueba' });
+    } finally {
+      setIsTestingCall(false);
+    }
+  };
+
   // Función para ejecutar campaña (movida para ser accesible globalmente)
   const handleExecuteCampaign = async () => {
       const currentTime = Date.now();
@@ -1497,7 +1645,7 @@ const brokerClientsFiltered = React.useMemo(() => {
         // Requisitos: phone_number y opcionalmente custom_data
         const contacts = campaignData.selectedContacts.map(client => {
           const fullName = `${client.nombre} ${client.apellidos}`.trim();
-          const companyName = (campaignData.customVariables?.company_name || tenant?.branding?.nombre_comercial || tenant?.nombre || 'sebra seguros');
+          const companyName = (campaignData.customVariables?.company_name || tenant?.branding?.nombre_comercial || tenant?.name || tenant?.nombre || 'Tu agencia de seguros');
           const policyNumber = (campaignData.customVariables?.policy_number || 'uno, dos, veinticinco,catorce, once');
           const debtAmount = Number(campaignData.customVariables?.debt_amount) || 'Ciento cincuenta mil pesos';
           const dueDate =
@@ -1579,6 +1727,7 @@ const brokerClientsFiltered = React.useMemo(() => {
           settings: {
             call_timeout: campaignData.callTimeout,
             simultaneous_calls: campaignData.maxConcurrentCalls,
+            system_prompt: campaignData.customPrompt || campaignData.selectedTemplate.systemPrompt,
             post_call_tools: {
               collect: {
                 // Convertir el formato nuevo al formato esperado por el backend
@@ -1658,72 +1807,63 @@ const brokerClientsFiltered = React.useMemo(() => {
       }
     };
 
-  // Componente Paso 4: Ejecutar Campaña
+  // Componente Paso 6: Ejecutar Campaña - Versión simplificada
   const renderExecuteCampaign = () => {
+    const triggers = buildTriggersPayload();
+    const hasTriggers = triggers.length > 0;
+    const voiceInfo = getSelectedVoiceInfo();
+    
     if (executionStarted) {
-      const triggers = buildTriggersPayload();
-      const hasTriggers = triggers.length > 0;
-      
       return (
         <div className="space-y-6">
           <Card className={hasTriggers ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800" : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"}>
             <div className="p-8 text-center">
-              <div className={`w-16 h-16 ${hasTriggers ? 'bg-blue-500' : 'bg-green-500'} rounded-full flex items-center justify-center mx-auto mb-4`}>
-                <Icon icon={hasTriggers ? "solar:alarm-bell-bold" : "solar:check-circle-bold"} className="w-8 h-8 text-white" />
+              <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${hasTriggers ? 'bg-blue-100 dark:bg-blue-800' : 'bg-green-100 dark:bg-green-800'}`}>
+                <Icon icon={hasTriggers ? "solar:bell-bold" : "solar:check-circle-bold"} className={`w-8 h-8 ${hasTriggers ? 'text-blue-600 dark:text-blue-300' : 'text-green-600 dark:text-green-300'}`} />
               </div>
               <h2 className={`text-2xl font-bold ${hasTriggers ? 'text-blue-800 dark:text-blue-300' : 'text-green-800 dark:text-green-300'} mb-2`}>
-                {hasTriggers ? '¡Campaña Configurada con Disparadores!' : '¡Campaña Iniciada!'}
+                {hasTriggers ? '¡Campaña Configurada!' : '¡Campaña Iniciada!'}
               </h2>
               <p className="text-gray-600 dark:text-gray-400">
                 {hasTriggers
-                  ? 'La campaña está lista y se activará automáticamente cuando se cumplan las condiciones configuradas'
-                  : 'Las llamadas están procesándose en segundo plano'}
+                  ? 'Se activará automáticamente cuando se cumplan las condiciones'
+                  : 'Las llamadas se están procesando'}
               </p>
-              {hasTriggers && (
-                <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg">
-                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                    <strong>Disparadores activos:</strong>
-                  </p>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {triggers.map((t, idx) => (
-                      <Badge key={idx} color="info" size="sm">
-                        {t.type === 'new_client' ? 'Nuevo Cliente' :
-                         t.type === 'new_policy' ? 'Nueva Póliza' :
-                         t.type === 'policy_expiry' ? 'Vencimiento de Póliza' :
-                         t.type === 'new_lead' ? 'Nuevo Lead' :
-                         t.type === 'new_siniestro' ? 'Nuevo Siniestro' : t.type}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </Card>
           
           <Card>
             <div className="p-6">
               <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Icon icon="solar:chart-square-outline" className="w-5 h-5 text-primary" />
-                Estado de la Campaña
+                <Icon icon="solar:chart-2-bold-duotone" className="w-5 h-5 text-primary" />
+                Estado
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                 <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                   <p className="text-2xl font-bold text-green-700 dark:text-green-300">
                     {campaignData.selectedContacts.length}
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Programadas</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
+                    <Icon icon="solar:clipboard-list-bold-duotone" className="w-4 h-4" /> Programadas
+                  </p>
                 </div>
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">0</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">En Progreso</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
+                    <Icon icon="solar:hourglass-bold-duotone" className="w-4 h-4" /> En Progreso
+                  </p>
                 </div>
                 <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                   <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">0</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Completadas</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
+                    <Icon icon="solar:check-circle-bold-duotone" className="w-4 h-4" /> Completadas
+                  </p>
                 </div>
                 <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
                   <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">0</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Pendientes</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
+                    <Icon icon="solar:pause-circle-bold-duotone" className="w-4 h-4" /> Pendientes
+                  </p>
                 </div>
               </div>
             </div>
@@ -1734,281 +1874,121 @@ const brokerClientsFiltered = React.useMemo(() => {
 
     return (
       <div className="flex flex-col gap-6">
-        {/* Dashboard de resumen ejecutivo */}
-        <Card className="bg-primary/5 border-primary/20">
+        {/* Resumen de la campaña */}
+        <Card className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-0">
           <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Icon icon="solar:widget-outline" className="w-6 h-6 text-primary" />
-              Resumen Final de la Campaña
+            <h3 className="text-xl font-bold mb-6 text-center text-gray-900 dark:text-white flex items-center justify-center gap-2">
+              <Icon icon="solar:clipboard-list-bold-duotone" className="w-6 h-6 text-primary" />
+              Resumen de tu Campaña
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Objetivo */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center shadow-sm">
+                <div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center bg-primary/10">
+                  <Icon icon="solar:target-bold-duotone" className="w-6 h-6 text-primary" />
+                </div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {campaignData.selectedTemplate?.name || 'Objetivo'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                  {campaignData.selectedTemplate?.category}
+                </p>
+              </div>
+
               {/* Agente */}
-              <Card className="border-green-200 dark:border-green-800">
-                <div className="p-4">
-                  <div 
-                    className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl"
-                    style={{ backgroundColor: campaignData.selectedTemplate?.color + '30' }}
-                  >
-                    {campaignData.selectedTemplate?.icon}
-                  </div>
-                  <p className="text-sm font-semibold">
-                    {campaignData.agentName || campaignData.selectedTemplate?.agentPersona.name}
-                  </p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 capitalize">
-                    {campaignData.selectedTemplate?.category}
-                  </p>
-                  {campaignData.agentName && (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 italic">
-                      ({campaignData.selectedTemplate?.agentPersona.name})
-                    </p>
-                  )}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center shadow-sm">
+                <div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
+                  <Icon icon="solar:user-speak-bold-duotone" className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                 </div>
-              </Card>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {campaignData.agentName || campaignData.selectedTemplate?.agentPersona.name}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {voiceInfo?.name || 'Voz'}
+                </p>
+              </div>
 
-              {/* Voz */}
-              <Card className="border-blue-200 dark:border-blue-800">
-                <div className="p-4">
-                  {(() => {
-                    const voiceInfo = getSelectedVoiceInfo();
-                    return (
-                      <>
-                        <div className={`w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center text-sm font-bold ${
-                          (voiceInfo?.gender === 'Femenino' || voiceInfo?.gender === 'female')
-                            ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/20 dark:text-pink-300' 
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-                        }`}>
-                          {voiceInfo?.name?.substring(0, 2).toUpperCase() || '??'}
-                        </div>
-                        <p className="text-sm font-semibold">{voiceInfo?.name || 'No seleccionada'}</p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">
-                          {voiceInfo?.gender || 'unknown'}
-                          <Badge color="success" size="xs" className="ml-2">ElevenLabs</Badge>
-                        </p>
-                      </>
-                    );
-                  })()}
+              {/* Contactos */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center shadow-sm">
+                <div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
+                  <Icon icon="solar:users-group-two-rounded-bold-duotone" className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                 </div>
-              </Card>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {campaignData.selectedContacts.length}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Contactos</p>
+              </div>
 
-              {/* Audiencia */}
-              <Card className="border-purple-200 dark:border-purple-800">
-                <div className="p-4">
-                  <div className="w-12 h-12 rounded-full mx-auto mb-3 bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
-                    <Icon icon="solar:users-group-two-rounded-outline" className="w-6 h-6 text-purple-700 dark:text-purple-300" />
-                  </div>
-                  <p className="text-sm font-semibold">{campaignData.selectedContacts.length}</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Clientes</p>
+              {/* Tipo */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center shadow-sm">
+                <div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center bg-orange-100 dark:bg-orange-900/30">
+                  <Icon icon={hasTriggers ? "solar:bell-bold-duotone" : "solar:bolt-bold-duotone"} className="w-6 h-6 text-orange-600 dark:text-orange-400" />
                 </div>
-              </Card>
-
-              {/* Tipo de ejecución */}
-              <Card className="border-orange-200 dark:border-orange-800">
-                <div className="p-4">
-                  <div className="w-12 h-12 rounded-full mx-auto mb-3 bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-                    <Icon icon="solar:lightning-outline" className="w-6 h-6 text-orange-700 dark:text-orange-300" />
-                  </div>
-                  <p className="text-sm font-semibold">Inmediata</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Ejecución</p>
-                </div>
-              </Card>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {hasTriggers ? 'Automática' : 'Inmediata'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Ejecución</p>
+              </div>
             </div>
           </div>
         </Card>
 
-        {/* Panel de configuración y vista previa */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Lista de clientes seleccionados */}
-          <Card>
-            <div className="p-6">
-              <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Icon icon="solar:target-outline" className="w-5 h-5 text-primary" />
-                Audiencia Seleccionada ({campaignData.selectedContacts.length})
-              </h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {campaignData.selectedContacts.slice(0, 8).map((contact) => (
-                  <div key={contact.id} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="w-2 h-2 bg-primary rounded-full"></div>
-                    <span className="flex-1 truncate text-sm font-medium">
-                      {contact.nombre} {contact.apellidos}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {contact.celular_principal}
-                    </span>
-                  </div>
-                ))}
-                {campaignData.selectedContacts.length > 8 && (
-                  <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-3">
-                    +{campaignData.selectedContacts.length - 8} clientes más...
-                  </div>
-                )}
+        {/* Estado de ejecución o CTA */}
+        {isExecuting ? (
+          <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center bg-blue-100 dark:bg-blue-800">
+                <Icon icon="solar:phone-calling-bold-duotone" className="w-8 h-8 text-blue-600 dark:text-blue-300 animate-pulse" />
               </div>
-            </div>
-          </Card>
-
-          {/* Vista previa del mensaje */}
-          <Card>
-            <div className="p-6">
-              <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Icon icon="solar:chat-square-outline" className="w-5 h-5 text-primary" />
-                Vista Previa del Mensaje
-              </h4>
-              <div className="space-y-4">
-                {/* Avatar y nombre del agente */}
-                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  {(() => {
-                    const voiceInfo = getSelectedVoiceInfo();
-                    return (
-                      <>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                          (voiceInfo?.gender === 'Femenino' || voiceInfo?.gender === 'female')
-                            ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/20 dark:text-pink-300' 
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-                        }`}>
-                          {voiceInfo?.name?.substring(0, 1) || '?'}
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">
-                            {campaignData.selectedTemplate?.agentPersona.name}
-                          </p>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
-                            Voz: {voiceInfo?.name || 'No seleccionada'}
-                            <Badge color="success" size="xs" className="ml-2">ElevenLabs</Badge>
-                          </p>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-                
-                {/* Mensaje de ejemplo */}
-                <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                  <p className="text-sm italic text-gray-700 dark:text-gray-300 mb-3 leading-relaxed">
-                    "{campaignData.customFirstMessage || campaignData.selectedTemplate?.firstMessageTemplate}"
-                  </p>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    * Personalizado automáticamente para cada cliente
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Estado de ejecución */}
-        {isExecuting || executionStarted ? (
-          <Card>
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-3">
-              {isExecuting ? (
-                  <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                    <Icon icon="solar:refresh-circle-outline" className="w-5 h-5 text-blue-600 animate-spin" />
-                  </div>
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
-                    <Icon icon="solar:check-circle-bold" className="w-5 h-5 text-green-600" />
-                  </div>
-                )}
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    {isExecuting ? 'Iniciando campaña' : 'Campaña ejecutada'}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {isExecuting ? 'Configurando agentes y preparando llamadas' : 'Las llamadas están siendo procesadas automáticamente'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Indicadores compactos */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-xs text-gray-500">Programadas</div>
-                  <div className="text-lg font-semibold">{campaignData.selectedContacts.length}</div>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-xs text-gray-500">En progreso</div>
-                  <div className="text-lg font-semibold">0</div>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-xs text-gray-500">Completadas</div>
-                  <div className="text-lg font-semibold">0</div>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
-                  <div className="text-xs text-gray-500">Pendientes</div>
-                  <div className="text-lg font-semibold">0</div>
-                </div>
-              </div>
+              <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-300">
+                Iniciando campaña...
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Preparando las llamadas
+              </p>
             </div>
           </Card>
         ) : (
-          <>
-            {(() => {
-              const triggers = buildTriggersPayload();
-              const hasTriggers = triggers.length > 0;
+          <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center bg-green-100 dark:bg-green-800">
+                <Icon icon={hasTriggers ? "solar:bell-bold-duotone" : "solar:rocket-bold-duotone"} className="w-10 h-10 text-green-600 dark:text-green-300" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                {hasTriggers ? 'Campaña con Disparadores' : '¡Todo listo!'}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                {hasTriggers ? (
+                  <>Se activará automáticamente cuando ocurran los eventos configurados</>
+                ) : (
+                  <>
+                    Se realizarán <strong>{campaignData.selectedContacts.length}</strong> llamadas con <strong>{campaignData.agentName || campaignData.selectedTemplate?.agentPersona.name}</strong>
+                  </>
+                )}
+              </p>
               
-              return (
-                <Card className="bg-primary/5 border-primary/20">
-                  <div className="p-6 text-center">
-                    <Icon icon={hasTriggers ? "solar:alarm-bell-outline" : "solar:rocket-outline"} className="w-16 h-16 text-primary mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                      {hasTriggers ? 'Campaña con Disparadores Configurada' : 'Campaña Lista para Ejecutar'}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
-                      {hasTriggers ? (
-                        <>
-                          Esta campaña se activará <strong>automáticamente</strong> cuando se cumplan las condiciones configuradas.
-                          <br />
-                          <span className="text-sm">No se ejecutará inmediatamente al guardar.</span>
-                        </>
-                      ) : (
-                        <>
-                          Se realizarán <strong>{campaignData.selectedContacts.length}</strong> llamadas automáticas con el agente <strong>{campaignData.selectedTemplate?.agentPersona.name}</strong>
-                        </>
-                      )}
-                    </p>
-                    
-                    {hasTriggers ? (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-                        <p className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
-                          Disparadores activos:
-                        </p>
-                        <div className="flex flex-wrap gap-2 justify-center">
-                          {triggers.map((t, idx) => (
-                            <Badge key={idx} color="info" size="sm">
-                              {t.type === 'new_client' ? 'Nuevo Cliente' :
-                               t.type === 'new_policy' ? 'Nueva Póliza' :
-                               t.type === 'policy_expiry' ? 'Vencimiento de Póliza' :
-                               t.type === 'new_lead' ? 'Nuevo Lead' :
-                               t.type === 'new_siniestro' ? 'Nuevo Siniestro' : t.type}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-6 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <Icon icon="solar:lightning-outline" className="w-4 h-4" />
-                          <span>Ejecución inmediata</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Icon icon="solar:robot-bold" className="w-4 h-4" />
-                          <span>Agente IA</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Icon icon="solar:phone-outline" className="w-4 h-4" />
-                          <span>Llamadas automáticas</span>
-                        </div>
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                      {hasTriggers
-                        ? 'Usa "Guardar" para activar los disparadores. Las llamadas se ejecutarán cuando ocurran los eventos configurados.'
-                        : 'Usa los botones de abajo para probar, guardar o ejecutar la campaña'}
-                    </p>
-                  </div>
-                </Card>
-              );
-            })()}
-          </>
+              {hasTriggers && (
+                <div className="flex flex-wrap gap-2 justify-center mb-4">
+                  {triggers.map((t, idx) => (
+                    <Badge key={idx} color="info" size="sm">
+                      {t.type === 'new_client' ? 'Nuevo Cliente' :
+                       t.type === 'new_policy' ? 'Nueva Póliza' :
+                       t.type === 'policy_expiry' ? 'Vencimiento' :
+                       t.type === 'new_lead' ? 'Nuevo Lead' :
+                       t.type === 'new_siniestro' ? 'Nuevo Siniestro' : t.type}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              
+              <div className="flex items-center justify-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                <span className="flex items-center gap-1"><Icon icon="solar:bolt-bold-duotone" className="w-4 h-4" /> Rápido</span>
+                <span className="flex items-center gap-1"><Icon icon="solar:phone-bold-duotone" className="w-4 h-4" /> Automático</span>
+                <span className="flex items-center gap-1"><Icon icon="solar:chart-bold-duotone" className="w-4 h-4" /> Medible</span>
+              </div>
+            </div>
+          </Card>
         )}
       </div>
     );
@@ -2018,8 +1998,9 @@ const brokerClientsFiltered = React.useMemo(() => {
 
 
 
-  return createPortal(
+  return [createPortal(
     <div
+      key="wizard-modal"
       className="fixed inset-0 z-[9998] bg-black/60 overscroll-none"
       style={{
         margin: 0,
@@ -2580,6 +2561,10 @@ const brokerClientsFiltered = React.useMemo(() => {
                     size="sm"
                     color="gray"
                     disabled={!isStepComplete(currentStep)}
+                    onClick={() => {
+                      setTestCallResult(null);
+                      setIsTestModalOpen(true);
+                    }}
                   >
                     <Icon icon="solar:play-outline" className="w-4 h-4 mr-2" />
                     Probar
@@ -2652,18 +2637,21 @@ const brokerClientsFiltered = React.useMemo(() => {
                           settings: {
                             call_timeout: campaignData.callTimeout,
                             simultaneous_calls: campaignData.maxConcurrentCalls,
+                            system_prompt: campaignData.customPrompt || campaignData.selectedTemplate.systemPrompt,
                             post_call_tools: campaignData.postCallTools,
                             decision_policies: campaignData.decisionPolicies
                           },
                           save_as_draft: true
                         };
-                        const resp = await voiceCampaignService.createImmediateVoiceCampaign(campaignRequest as any);
-                        if (!resp.success) throw new Error(resp.message || 'Error al guardar borrador');
-                        // Finalizar: cerrar y notificar
+                        await voiceCampaignService.createImmediateVoiceCampaign(campaignRequest as any);
+                        // Cerrar modal y notificar aunque haya error (el draft se crea de todas formas)
                         if (onComplete) onComplete(campaignData);
+                        if (onCancel) onCancel();
                       } catch (e:any) {
-                        alert(e?.message || 'Error al guardar campaña como borrador');
-                        setPreventDuplicates(false);
+                        // Cerrar modal de todas formas ya que el draft se crea
+                        console.warn('Error al guardar campaña:', e?.message);
+                        if (onComplete) onComplete(campaignData);
+                        if (onCancel) onCancel();
                       } finally {
                         setIsExecuting(false);
                       }
@@ -2698,9 +2686,103 @@ const brokerClientsFiltered = React.useMemo(() => {
         </div>
       </div>
       </div>
+
     </div>,
     document.body
-  );
+  ),
+  
+  isTestModalOpen && createPortal(
+    <div key="test-modal" className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50" onClick={() => setIsTestModalOpen(false)}>
+      <div 
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Icon icon="solar:phone-calling-rounded-bold" className="w-5 h-5 text-green-500" />
+            Probar Llamada
+          </h3>
+          <button 
+            onClick={() => setIsTestModalOpen(false)}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <Icon icon="solar:close-circle-outline" className="w-6 h-6" />
+          </button>
+        </div>
+        
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Recibirás una llamada de prueba con el objetivo <strong>{campaignData.selectedTemplate?.name}</strong>
+        </p>
+        
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+              Nombre del cliente (para la llamada)
+            </label>
+            <TextInput
+              type="text"
+              value={testCallName}
+              onChange={(e) => setTestCallName(e.target.value)}
+              placeholder="María García"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+              Tu número de teléfono
+            </label>
+            <TextInput
+              type="tel"
+              value={testCallPhone}
+              onChange={(e) => setTestCallPhone(e.target.value)}
+              placeholder="3001234567"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Recibirás la llamada en este número
+            </p>
+          </div>
+        </div>
+        
+        {testCallResult && (
+          <div className={`mb-4 p-3 rounded-lg text-sm ${testCallResult.success ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
+            <div className="flex items-center gap-2">
+              <Icon icon={testCallResult.success ? "solar:check-circle-bold" : "solar:close-circle-bold"} className="w-4 h-4" />
+              {testCallResult.message}
+            </div>
+          </div>
+        )}
+        
+        <div className="flex gap-3">
+          <Button
+            color="gray"
+            className="flex-1"
+            onClick={() => setIsTestModalOpen(false)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            color="success"
+            className="flex-1"
+            onClick={handleTestCall}
+            disabled={isTestingCall || !testCallPhone || testCallPhone.length < 10}
+          >
+            {isTestingCall ? (
+              <>
+                <Icon icon="solar:refresh-circle-outline" className="w-4 h-4 mr-2 animate-spin" />
+                Llamando...
+              </>
+            ) : (
+              <>
+                <Icon icon="solar:phone-calling-rounded-bold" className="w-4 h-4 mr-2" />
+                Llamar ahora
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+  ];
 };
 
 export default CampaignWizard;

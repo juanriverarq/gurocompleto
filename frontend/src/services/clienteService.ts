@@ -509,4 +509,51 @@ export const clienteService = {
       throw error;
     }
   },
+
+  // Verificar si existe un cliente con el mismo documento (cédula/NIT)
+  async checkDocumentExists(
+    documentNumber: string,
+    excludeId?: string
+  ): Promise<{ exists: boolean; cliente?: Cliente }> {
+    try {
+      if (!documentNumber || documentNumber.trim().length < 5) {
+        return { exists: false };
+      }
+      
+      console.log('🔍 Verificando documento duplicado:', documentNumber.trim());
+      
+      const response = await this.getClientes({ 
+        document_number: documentNumber.trim(),
+        per_page: 1 
+      });
+      
+      console.log('🔍 Respuesta de verificación:', response);
+      
+      // Manejar diferentes estructuras de respuesta
+      let clientes: Cliente[] = [];
+      if (response.success && response.data) {
+        if (Array.isArray(response.data)) {
+          clientes = response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          clientes = response.data.data;
+        }
+      }
+      
+      console.log('🔍 Clientes encontrados:', clientes.length);
+      
+      if (clientes.length > 0) {
+        const found = clientes[0];
+        // Si estamos editando, excluir el cliente actual
+        if (excludeId && String(found.id) === String(excludeId)) {
+          return { exists: false };
+        }
+        return { exists: true, cliente: found };
+      }
+      
+      return { exists: false };
+    } catch (error) {
+      console.warn('Error verificando documento duplicado:', error);
+      return { exists: false };
+    }
+  },
 };

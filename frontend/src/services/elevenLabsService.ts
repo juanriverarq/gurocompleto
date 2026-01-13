@@ -326,10 +326,6 @@ const normalizePhoneNumber = (phoneNumber: string, defaultCountryCode: string = 
     return `${defaultCountryCode}${cleanNumber}`;
   }
 
-  console.warn(
-    `⚠️ Número telefónico con formato inusual: ${phoneNumber} -> será procesado como: +57${cleanNumber}`,
-  );
-
   // En casos dudosos, agregar código de país colombiano
   return `${defaultCountryCode}${cleanNumber}`;
 };
@@ -463,11 +459,9 @@ export const testVoice = async (
         return await proxyResp.arrayBuffer();
       } else {
         // Si el backend devuelve error, continuar con fallback directo
-        console.warn('Backend TTS proxy failed, falling back to direct API', proxyResp.status);
       }
     } catch (proxyErr) {
       // Si el proxy falla (por configuración), intentar directo
-      console.warn('Backend TTS proxy error, falling back to direct API', proxyErr);
     }
 
     // 2) Fallback: llamada directa a ElevenLabs (puede fallar con 401 en prod si no hay key)
@@ -502,7 +496,6 @@ export const testVoice = async (
  */
 export const getAgentConfiguration = async (agentId: string, apiKey?: string): Promise<any> => {
   try {
-    console.log(`🔍 [AGENT-CONFIG] Verificando configuración del agente: ${agentId}`);
 
     const response = await fetch(`${ELEVENLABS_API_BASE}/convai/agents/${agentId}`, {
       headers: getAuthHeaders(apiKey),
@@ -514,30 +507,13 @@ export const getAgentConfiguration = async (agentId: string, apiKey?: string): P
 
     const agentData = await response.json();
 
-    console.log('🚨 [AGENT-CONFIG] CONFIGURACIÓN COMPLETA DEL AGENTE:');
-    console.log(JSON.stringify(agentData, null, 2));
 
     // Verificar específicamente los security settings
     if (agentData.security_settings) {
-      console.log('🔒 [AGENT-CONFIG] Security Settings encontrados:');
-      console.log(JSON.stringify(agentData.security_settings, null, 2));
-    }
-
-    // Verificar override_config
-    if (agentData.override_config || agentData.conversation_config_override_allowed) {
-      console.log('⚙️ [AGENT-CONFIG] Override Config:');
-      console.log(
-        JSON.stringify(
-          agentData.override_config || agentData.conversation_config_override_allowed,
-          null,
-          2,
-        ),
-      );
     }
 
     return agentData;
   } catch (error) {
-    console.error(`❌ [AGENT-CONFIG] Error obteniendo configuración del agente:`, error);
     return null;
   }
 };
@@ -876,16 +852,12 @@ export const createPhoneCall = async (
   callData: CreatePhoneCallRequest,
   apiKey?: string,
 ): Promise<PhoneCall> => {
-  console.log('🚀 [CAMPAIGN] Iniciando llamada para:', callData.customer_name);
 
   try {
     // Normalizar el número telefónico antes de procesar
     const normalizedPhoneNumber = normalizePhoneNumber(callData.phone_number);
     const isValidNumber = validateColombianPhoneNumber(callData.phone_number);
 
-    console.log(`📞 [CAMPAIGN] Número original: ${callData.phone_number}`);
-    console.log(`📞 [CAMPAIGN] Número normalizado: ${normalizedPhoneNumber}`);
-    console.log(`✅ [CAMPAIGN] Número válido: ${isValidNumber}`);
 
     // Actualizar el objeto callData con el número normalizado
     const normalizedCallData = {
@@ -893,22 +865,13 @@ export const createPhoneCall = async (
       phone_number: normalizedPhoneNumber,
     };
 
-    if (!isValidNumber) {
-      console.warn(
-        `⚠️ [CAMPAIGN] Número telefónico posiblemente inválido: ${normalizedPhoneNumber}`,
-      );
-    }
-
     // Intentar crear llamada real primero con SDK, luego con Twilio Outbound
     try {
-      console.log('🔥 [MAIN] Intentando con SDK oficial de ElevenLabs primero');
       return await createPhoneCallViaSDK(normalizedCallData, apiKey);
     } catch (sdkError) {
-      console.log('⚠️ [MAIN] SDK falló, intentando método manual:', sdkError.message);
       return await createPhoneCallViaTwilioOutbound(normalizedCallData, apiKey);
     }
   } catch (error) {
-    console.log('⚠️ [CAMPAIGN] Error en llamada real, usando simulación:', error.message);
 
     // Si falla, usar simulación para que la campaña continúe (también con número normalizado)
     const normalizedCallData = {
@@ -926,7 +889,6 @@ const createPhoneCallViaSDK = async (
   callData: CreatePhoneCallRequest,
   apiKey?: string,
 ): Promise<PhoneCall> => {
-  console.log('🔥 [SDK] Usando SDK oficial de ElevenLabs para llamada');
 
   try {
     // Verificar que el SDK esté disponible
@@ -939,12 +901,9 @@ const createPhoneCallViaSDK = async (
       apiKey: getApiKey(apiKey),
     });
 
-    console.log(`📞 [SDK] Iniciando llamada para: ${callData.customer_name}`);
-    console.log(`🎯 [SDK] Variables dinámicas recibidas:`, callData.dynamic_variables);
 
     // VALIDAR que user_name esté presente
     if (!callData.dynamic_variables?.user_name) {
-      console.error(`❌ [SDK] FALTA user_name en dynamic_variables`);
       throw new Error('user_name es requerido en dynamic_variables para el SDK');
     }
 
@@ -959,7 +918,6 @@ const createPhoneCallViaSDK = async (
       });
     }
 
-    console.log(`🧹 [SDK] Variables dinámicas limpias:`, cleanDynamicVariables);
 
     // Preparar la llamada saliente usando el SDK con formato correcto
     const outboundCallData: OutboundCall = {
@@ -976,12 +934,10 @@ const createPhoneCallViaSDK = async (
       },
     };
 
-    console.log(`🚀 [SDK] Enviando llamada con SDK:`, outboundCallData);
 
     // Hacer la llamada usando el SDK oficial
     const result = await elevenlabs.convai.createOutboundCall(outboundCallData);
 
-    console.log(`✅ [SDK] Respuesta exitosa del SDK:`, result);
 
     // Crear objeto de llamada telefónica
     const phoneCall: PhoneCall = {
@@ -1005,7 +961,6 @@ const createPhoneCallViaSDK = async (
 
     return phoneCall;
   } catch (error) {
-    console.error(`❌ [SDK] Error con SDK oficial:`, error);
     // Si falla el SDK, intentar el método manual
     throw error;
   }
@@ -1067,15 +1022,7 @@ const createPhoneCallViaTwilioOutbound = async (
     // Usar el endpoint correcto encontrado en el diagnóstico
     const endpoint = `${ELEVENLABS_API_BASE}/convai/twilio/outbound-call`;
 
-    console.log('🚨 [DEBUG] =================');
-    console.log('🚨 [DEBUG] DATOS COMPLETOS RECIBIDOS:');
-    console.log('🚨 [DEBUG] callData COMPLETO:', JSON.stringify(callData, null, 2));
-    console.log('🚨 [DEBUG] =================');
 
-    console.log(`📞 [TWILIO] Iniciando llamada telefónica para: ${callData.customer_name}`);
-    console.log(`📞 [TWILIO] Agent ID: ${callData.agent_id}`);
-    console.log(`📞 [TWILIO] Teléfono: ${callData.phone_number}`);
-    console.log(`🎯 [TWILIO] Variables dinámicas recibidas:`, callData.dynamic_variables);
 
     // Obtener el primer número telefónico disponible dinámicamente
     const phoneCapabilities = await checkPhoneCallCapabilities(apiKey);
@@ -1085,7 +1032,6 @@ const createPhoneCallViaTwilioOutbound = async (
         : 'phnum_01k0avytwkfgesvwxb5bdbp7qy'; // Fallback al número conocido
 
     // 🔥 NUEVO ENFOQUE: PRE-PROCESAR VARIABLES EN EL FRONTEND
-    console.log(`🎯 [TWILIO] Iniciando personalización de contenido para:`, callData.customer_name);
 
     // Preparar datos para personalización
     const personalizationData = {
@@ -1100,7 +1046,6 @@ const createPhoneCallViaTwilioOutbound = async (
         : {}),
     };
 
-    console.log(`📋 [TWILIO] Datos para personalización:`, personalizationData);
 
     // Personalizar el system prompt si está disponible
     let personalizedPrompt = callData.system_prompt;
@@ -1121,11 +1066,8 @@ Cliente ubicado en {{city}}.`;
     }
     personalizedFirstMessage = personalizeContent(personalizedFirstMessage, personalizationData);
 
-    console.log(`✅ [TWILIO] Prompt personalizado:`, personalizedPrompt);
-    console.log(`✅ [TWILIO] First message personalizado:`, personalizedFirstMessage);
 
     // 🔥 VALIDACIONES CRÍTICAS ANTES DE ENVIAR
-    console.log('🔍 [VALIDATION] Validando datos antes de enviar...');
 
     // 1. Validar que el agente existe y está configurado
     if (!callData.agent_id || callData.agent_id.trim() === '') {
@@ -1153,7 +1095,6 @@ Cliente ubicado en {{city}}.`;
       throw new Error('First message personalizado está vacío');
     }
 
-    console.log('✅ [VALIDATION] Todas las validaciones pasaron');
 
     // 🔥 PREPARAR CUSTOMER_DATA LIMPIO
     const cleanCustomerData = {
@@ -1178,7 +1119,6 @@ Cliente ubicado en {{city}}.`;
       }
     });
 
-    console.log('📋 [TWILIO] Customer data limpio:', cleanCustomerData);
 
     // 🔥 USAR OVERRIDES CON ESTRUCTURA CORRECTA - conversation_initiation_client_data
     const requestBody: any = {
@@ -1199,92 +1139,6 @@ Cliente ubicado en {{city}}.`;
       },
     };
 
-    console.log('🎯 [TWILIO] Usando OVERRIDES según guía oficial:');
-    console.log('   - prompt personalizado length:', personalizedPrompt.length);
-    console.log('   - first_message personalizado length:', personalizedFirstMessage.length);
-    console.log(
-      '   - customer_name en contenido:',
-      personalizedFirstMessage.includes(callData.customer_name || 'Cliente'),
-    );
-
-    // 🚨 DEBUGGING EXTREMO: Mostrar contenido completo de los overrides
-    console.log('🚨 [DEBUG-OVERRIDE] CONTENIDO COMPLETO DEL PROMPT:');
-    console.log('-------- INICIO PROMPT --------');
-    console.log(personalizedPrompt);
-    console.log('-------- FIN PROMPT --------');
-
-    console.log('🚨 [DEBUG-OVERRIDE] CONTENIDO COMPLETO DEL FIRST MESSAGE:');
-    console.log('-------- INICIO FIRST MESSAGE --------');
-    console.log(personalizedFirstMessage);
-    console.log('-------- FIN FIRST MESSAGE --------');
-
-    console.log('🚨 [DEBUG-OVERRIDE] ESTRUCTURA COMPLETA DE CONVERSATION_CONFIG_OVERRIDE:');
-    console.log(
-      JSON.stringify(
-        {
-          agent: {
-            prompt: {
-              prompt: personalizedPrompt.trim(),
-            },
-            first_message: personalizedFirstMessage.trim(),
-          },
-        },
-        null,
-        2,
-      ),
-    );
-
-    // 🔥 DEBUGGING CRÍTICO: Verificar que el contenido personalizado sea diferente al por defecto
-    const defaultAgentPrompt = 'Eres Marcela, una asesora de seguros colombiana';
-    const defaultFirstMessage = 'Hola, soy Marcela en que puedo ayudarte el dia de mañana?';
-
-    const isPromptPersonalized = !personalizedPrompt.includes(defaultAgentPrompt.substring(0, 20));
-    const isFirstMessagePersonalized = personalizedFirstMessage !== defaultFirstMessage;
-
-    console.log('🔍 [VALIDATION-OVERRIDE] VERIFICACIÓN DE PERSONALIZACIÓN:');
-    console.log('   ✅ Prompt personalizado (diferente al default):', isPromptPersonalized);
-    console.log(
-      '   ✅ First message personalizado (diferente al default):',
-      isFirstMessagePersonalized,
-    );
-    console.log(
-      '   📝 Contiene nombre del cliente:',
-      personalizedFirstMessage.includes(callData.customer_name || 'Cliente'),
-    );
-
-    if (!isPromptPersonalized) {
-      console.error(
-        '❌ [ERROR-CRITICAL] EL PROMPT NO ESTÁ PERSONALIZADO - USANDO CONTENIDO POR DEFECTO',
-      );
-      console.error('   Expected personalizado, got:', personalizedPrompt.substring(0, 100));
-    }
-
-    if (!isFirstMessagePersonalized) {
-      console.error(
-        '❌ [ERROR-CRITICAL] EL FIRST MESSAGE NO ESTÁ PERSONALIZADO - USANDO CONTENIDO POR DEFECTO',
-      );
-      console.error('   Expected personalizado, got:', personalizedFirstMessage);
-    }
-
-    // ❌ NO ENVIAR customer_data directamente - esto causa el error webhook
-    // ElevenLabs espera que los datos vengan de un webhook o estén embebidos en el prompt
-    // Los datos ya están personalizados en el prompt y first_message
-
-    // Log final del request (sin datos sensibles)
-    console.log('🚀 [TWILIO] Enviando request con estructura:');
-    console.log('   - agent_id:', requestBody.agent_id);
-    console.log('   - agent_phone_number_id:', requestBody.agent_phone_number_id);
-    console.log('   - to_number:', requestBody.to_number);
-    console.log('   - customer_data keys:', Object.keys(requestBody.customer_data || {}));
-    console.log(
-      '   - prompt length:',
-      requestBody.conversation_config_override?.agent?.prompt?.prompt?.length,
-    );
-    console.log(
-      '   - first_message length:',
-      requestBody.conversation_config_override?.agent?.first_message?.length,
-    );
-
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -1300,11 +1154,9 @@ Cliente ubicado en {{city}}.`;
     try {
       data = await response.json();
     } catch (jsonError) {
-      console.error('❌ [TWILIO] Error parsing JSON:', jsonError);
       throw new Error(`Error parsing response: ${jsonError}`);
     }
 
-    console.log(`🔍 [TWILIO] Respuesta completa:`, { status: response.status, data });
 
     // Verificar si hay error 424 o error de webhook (incluso con HTTP 200)
     const hasWebhookError =
@@ -1312,10 +1164,6 @@ Cliente ubicado en {{city}}.`;
       (data && data.success === false && data.message && data.message.includes('424'));
 
     if (hasWebhookError) {
-      console.warn(
-        '⚠️ [TWILIO] Error 424 detectado (webhook), pero MANTENIENDO overrides personalizados',
-      );
-
       // 🔥 VERSIÓN CORREGIDA: Mantener overrides pero con estructura más simple
       const simpleRequestBody = {
         agent_id: callData.agent_id.trim(),
@@ -1333,7 +1181,6 @@ Cliente ubicado en {{city}}.`;
         },
       };
 
-      console.log('🔄 [TWILIO] Reintentando con estructura minimalista:', simpleRequestBody);
 
       const retryResponse = await fetch(endpoint, {
         method: 'POST',
@@ -1349,14 +1196,8 @@ Cliente ubicado en {{city}}.`;
       try {
         retryData = await retryResponse.json();
       } catch (jsonError) {
-        console.error('❌ [TWILIO] Error parsing retry JSON:', jsonError);
         throw new Error(`Error parsing retry response: ${jsonError}`);
       }
-
-      console.log(`🔍 [TWILIO] Respuesta retry completa:`, {
-        status: retryResponse.status,
-        data: retryData,
-      });
 
       // Verificar si el retry fue exitoso
       const retrySuccess =
@@ -1366,7 +1207,6 @@ Cliente ubicado en {{city}}.`;
         (!retryData.message || !retryData.message.includes('424'));
 
       if (retrySuccess) {
-        console.log(`✅ [TWILIO] Respuesta exitosa (versión simple):`, retryData);
 
         const callId =
           retryData.conversation_id || retryData.callSid || `twilio_simple_${Date.now()}`;
@@ -1393,7 +1233,6 @@ Cliente ubicado en {{city}}.`;
 
         return phoneCall;
       } else {
-        console.error(`❌ [TWILIO] Retry también falló:`, retryData);
         throw new Error(`Retry failed: ${retryData?.message || 'Unknown error'}`);
       }
     }
@@ -1406,7 +1245,6 @@ Cliente ubicado en {{city}}.`;
       (!data.message || !data.message.includes('424'));
 
     if (initialSuccess) {
-      console.log(`✅ [TWILIO] Respuesta exitosa:`, data);
 
       const callId = data.conversation_id || data.callSid || `twilio_call_${Date.now()}`;
       const callStartTime = new Date();
@@ -1437,15 +1275,9 @@ Cliente ubicado en {{city}}.`;
 
       return phoneCall;
     } else {
-      console.error(`❌ [TWILIO] Error response:`, {
-        status: response.status,
-        statusText: response.statusText,
-        data: data,
-      });
       throw new Error(`Error ${response.status}: ${data?.message || response.statusText}`);
     }
   } catch (error) {
-    console.error(`❌ [TWILIO] Error en createPhoneCallViaTwilioOutbound:`, error);
     throw error;
   }
 };
@@ -2068,7 +1900,6 @@ export const getPhoneCallDetails = async (
   callId: string,
   apiKey?: string,
 ): Promise<PhoneCall | null> => {
-  console.log(`🔍 getPhoneCallDetails: Generando datos simulados para callId ${callId}`);
 
   // Retornar datos simulados para evitar errores 404
   const simulatedCall: PhoneCall = {
@@ -2134,10 +1965,6 @@ export const getConversationCost = async (
   conversationId: string,
   apiKey?: string,
 ): Promise<number | null> => {
-  console.log(
-    `💰 getConversationCost: Retornando costo simulado para conversación ${conversationId}`,
-  );
-
   // Retornar un costo simulado basado en duración típica de llamada
   const simulatedCost = Math.random() * 0.5 + 0.1; // Entre $0.10 y $0.60
   return parseFloat(simulatedCost.toFixed(2));
@@ -2155,11 +1982,9 @@ export const getConversationDetails = async (
   try {
     const key = getApiKey(apiKey);
     if (!key) {
-      console.warn('⚠️ No API key available for ElevenLabs');
       return null;
     }
 
-    console.log(`📋 getConversationDetails: Fetching real data for conversation ${conversationId}`);
 
     const response = await fetch(`${ELEVENLABS_API_BASE}/convai/conversations/${conversationId}`, {
       method: 'GET',
@@ -2167,21 +1992,12 @@ export const getConversationDetails = async (
     });
 
     if (!response.ok) {
-      console.warn(
-        `⚠️ ElevenLabs API returned ${response.status} for conversation ${conversationId}`,
-      );
       return null;
     }
 
     const conversationData = await response.json();
-    console.log(
-      `✅ Successfully fetched conversation details for ${conversationId}`,
-      conversationData,
-    );
-
     return conversationData;
   } catch (error) {
-    console.warn(`⚠️ Error fetching conversation details for ${conversationId}:`, error);
     return null;
   }
 };
@@ -2198,7 +2014,6 @@ export const getConversationAudio = async (
   try {
     const key = getApiKey(apiKey);
     if (!key) {
-      console.warn('⚠️ No API key available for ElevenLabs');
       return null;
     }
 
@@ -2214,16 +2029,12 @@ export const getConversationAudio = async (
     );
 
     if (!response.ok) {
-      console.warn(
-        `⚠️ ElevenLabs audio API returned ${response.status} for conversation ${conversationId}`,
-      );
       return null;
     }
 
     const blob = await response.blob();
     return URL.createObjectURL(blob);
   } catch (error) {
-    console.warn(`⚠️ Error fetching conversation audio for ${conversationId}:`, error);
     return null;
   }
 };
@@ -2234,7 +2045,6 @@ export const getConversationAudio = async (
  * de conversación no están disponibles en la API actual de ElevenLabs
  */
 export const cancelPhoneCall = async (callId: string, apiKey?: string): Promise<boolean> => {
-  console.log(`❌ cancelPhoneCall: Simulando cancelación de llamada ${callId}`);
 
   // Simular cancelación exitosa
   return true;
@@ -2299,7 +2109,6 @@ export const checkPhoneCallCapabilities = async (
       },
     };
   } catch (error) {
-    console.error('Error verificando configuración ElevenLabs:', error);
     return {
       hasPhoneCallSupport: false,
       twilioConfigured: false,
@@ -2326,7 +2135,6 @@ export const testAgentConfiguration = async (
   securitySettings: any;
   configuration: any;
 }> => {
-  console.log(`🔧 [AGENT-TEST] Verificando configuración específica del agente: ${agentId}`);
 
   try {
     // Verificar configuración específica del agente
@@ -2342,7 +2150,6 @@ export const testAgentConfiguration = async (
       };
     }
 
-    console.log('🔍 [AGENT-TEST] Configuración obtenida, analizando overrides...');
 
     // Verificar específicamente si permite overrides de prompt y first_message
     let allowsOverrides = true;
@@ -2395,7 +2202,6 @@ export const testAgentConfiguration = async (
       configuration: agentConfig,
     };
   } catch (error) {
-    console.error('❌ [AGENT-TEST] Error verificando agente:', error);
     return {
       success: false,
       message: `❌ Error verificando agente: ${error}`,
@@ -2420,7 +2226,6 @@ export const monitorRealTimeConversation = async (
   actualPromptUsed?: string;
   analysis: string[];
 }> => {
-  console.log(`🔍 [MONITOR] Iniciando monitoreo en tiempo real para: ${conversationId}`);
 
   const monitoring = {
     success: false,
@@ -2436,11 +2241,6 @@ export const monitorRealTimeConversation = async (
 
     while (Date.now() < endTime) {
       checkCount++;
-      console.log(
-        `🔄 [MONITOR] Check #${checkCount} - ${Math.ceil(
-          (endTime - Date.now()) / 1000,
-        )}s restantes`,
-      );
 
       try {
         // Intentar obtener detalles de la conversación
@@ -2453,12 +2253,6 @@ export const monitorRealTimeConversation = async (
 
         if (response.ok) {
           const data = await response.json();
-
-          console.log(`📊 [MONITOR] Estado actual:`, {
-            status: data.status,
-            message_count: data.message_count,
-            duration: data.call_duration_secs,
-          });
 
           // Capturar transcript si está disponible
           if (data.transcript && Array.isArray(data.transcript) && data.transcript.length > 0) {
@@ -2473,10 +2267,6 @@ export const monitorRealTimeConversation = async (
                 .slice(0, 3)
                 .map((msg) => msg.message || msg.content || msg.text);
 
-              console.log('🎯 [MONITOR] PRIMER MENSAJE DEL AGENTE DETECTADO:');
-              console.log('================================================');
-              console.log(monitoring.firstMessages[0]);
-              console.log('================================================');
 
               // Analizar si contiene personalización
               const firstMessage = monitoring.firstMessages[0] || '';
@@ -2527,11 +2317,9 @@ export const monitorRealTimeConversation = async (
                 const transcriptData = await transcriptResponse.json();
                 if (transcriptData.transcript) {
                   monitoring.transcript = transcriptData.transcript;
-                  console.log('🔍 [MONITOR] Transcript obtenido del endpoint específico');
                 }
               }
             } catch (transcriptError) {
-              console.log('⚠️ [MONITOR] No se pudo obtener transcript específico');
             }
             break;
           }
@@ -2544,20 +2332,6 @@ export const monitorRealTimeConversation = async (
 
       // Esperar antes del próximo check
       await new Promise((resolve) => setTimeout(resolve, 5000)); // Check cada 5 segundos
-    }
-
-    // Resumen final
-    console.log('\n📊 [MONITOR] RESUMEN FINAL:');
-    console.log('===========================');
-    monitoring.analysis.forEach((analysis) => console.log(analysis));
-
-    if (monitoring.transcript.length > 0) {
-      console.log('\n💬 [MONITOR] TRANSCRIPT COMPLETO:');
-      monitoring.transcript.forEach((msg, idx) => {
-        console.log(
-          `${idx + 1}. [${msg.role || msg.speaker}]: ${msg.message || msg.content || msg.text}`,
-        );
-      });
     }
 
     return monitoring;
@@ -2610,12 +2384,10 @@ export const testRealPhoneCall = async (
 
     // Si es una llamada real, iniciar monitoreo automático
     if (isReal) {
-      console.log('\n🔍 [AUTO-MONITOR] Iniciando monitoreo automático de la llamada...');
       setTimeout(async () => {
         try {
           await monitorRealTimeConversation(result.id, 3, apiKey);
         } catch (error) {
-          console.log('❌ [AUTO-MONITOR] Error en monitoreo:', error.message);
         }
       }, 10000); // Esperar 10 segundos antes de empezar a monitorear
     }

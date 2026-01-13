@@ -3,6 +3,9 @@ import api from 'src/config/api';
 import { Icon } from '@iconify/react';
 import { numberFormat } from 'src/components/landingpage/pricing-calculator/modules';
 
+const SURA_LOGO_URL =
+  'https://www.sura.co/documents/43501/0/Logo-SURA-blanco+1.svg/8937a328-d03b-7aa7-79bd-a5308a3931b3?version=1.0&t=1704405886717';
+
 const Checkout = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,13 +69,49 @@ const Checkout = () => {
   const modules = Array.isArray(intent.modules) ? intent.modules : [];
   const totals = intent.totals || {};
   const period = intent.period;
-  const extraSummary =
+  const coupon = intent.coupon || null;
+  const hasSuraCoupon = coupon?.code === 'SURA30';
+  
+  // Para Sura: usar subtotal SIN descuento 12%, luego aplicar solo 30% Sura
+  const subtotalWithDiscount = (totals.subtotalAnnual as number) ?? 0;
+  const discountAnnual = (totals.discountAnnual as number) ?? 0;
+  const subtotalBeforeDiscount = subtotalWithDiscount + discountAnnual;
+  
+  const subtotal =
     period === 'monthly'
       ? (totals.subtotalMonthly as number) ?? 0
-      : (totals.subtotalAnnual as number) ?? 0;
+      : hasSuraCoupon ? subtotalBeforeDiscount : subtotalWithDiscount;
+  
+  // Calcular descuento Sura (30% solo en plan anual, sin el 12%)
+  const suraDiscountAmount = hasSuraCoupon && period === 'annual' ? Math.round(subtotal * 0.30) : 0;
+  const totalFinal = subtotal - suraDiscountAmount;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
+      {/* Banner Sura */}
+      {hasSuraCoupon && (
+        <div className="mb-6 rounded-2xl bg-gradient-to-r from-[#0033A0] to-[#00A1E4] p-5 shadow-lg">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <img
+                src={SURA_LOGO_URL}
+                alt="Logo SURA"
+                className="h-10 w-auto"
+              />
+              <div className="h-8 w-px bg-white/30 hidden sm:block" />
+              <div>
+                <p className="text-white/80 text-xs font-medium">Convenio exclusivo</p>
+                <h2 className="text-white text-lg font-bold">SURA + Guro</h2>
+              </div>
+            </div>
+            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1.5">
+              <span className="text-white text-sm font-bold">30% OFF</span>
+              <span className="text-white/90 text-xs">aplicado</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-2xl font-bold mb-6">Checkout</h1>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
@@ -112,9 +151,26 @@ const Checkout = () => {
           <h3 className="text-lg font-semibold mb-3">Resumen</h3>
           <div className="flex justify-between text-sm text-gray-700">
             <span>Subtotal ({period === 'annual' ? 'año' : 'mes'})</span>
-            <span className="font-semibold">{numberFormat(extraSummary || 0)}</span>
+            <span className="font-semibold">{numberFormat(subtotal || 0)}</span>
           </div>
+          {hasSuraCoupon && suraDiscountAmount > 0 && (
+            <div className="flex justify-between text-sm text-[#00A1E4] font-medium mt-2">
+              <span>Cupón SURA30 (-30%)</span>
+              <span>-{numberFormat(suraDiscountAmount)}</span>
+            </div>
+          )}
           <div className="border-t my-3" />
+          <div className="flex justify-between text-base font-bold mb-3">
+            <span>Total a pagar</span>
+            <span className={hasSuraCoupon ? 'text-[#00A1E4]' : 'text-primary'}>
+              {numberFormat(totalFinal)}
+            </span>
+          </div>
+          {hasSuraCoupon && (
+            <div className="text-xs text-gray-400 line-through text-right mb-3">
+              Antes: {numberFormat(subtotal)}
+            </div>
+          )}
           <button
             onClick={async () => {
               try {

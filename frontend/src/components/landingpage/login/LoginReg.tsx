@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import Banner from "/src/assets/images/landingpage/background/c2a.png";
+import Banner from "/src/assets/images/landingpage/background/c2a.webp";
 import { Button } from "flowbite-react";
 
 const LoginReg = () => {
@@ -45,8 +45,11 @@ const LoginReg = () => {
               <div className="flex lg:justify-end justify-center">
                 <img
                   src={Banner}
-                  alt="Guro Dashboard"
-                  className="w-auto lg:ms-auto  pt-7"
+                  alt="Guro - Software de seguros con inteligencia artificial para agencias"
+                  className="w-auto lg:ms-auto pt-7"
+                  width={400}
+                  height={400}
+                  loading="lazy"
                 />
               </div>
             </div>

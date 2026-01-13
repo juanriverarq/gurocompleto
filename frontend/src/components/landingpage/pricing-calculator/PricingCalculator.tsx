@@ -1,10 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useContext } from 'react';
 import { Icon } from '@iconify/react';
 import { MODULES, calculateTotals, numberFormat } from './modules';
 import { ModuleKey, BillingPeriod } from './modules';
-import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import { UnifiedAuthContext } from 'src/context/UnifiedAuthContext';
 import api from 'src/config/api';
-import { auth } from 'src/config/firebase';
 // import VideoDemoModal from './VideoDemoModal';
 // import ModuleInfoModal from './ModuleInfoModal';
 
@@ -18,7 +17,9 @@ interface Props {
 }
 
 const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
-  const { user } = useUnifiedAuth();
+  // Usar useContext directamente para evitar error si no hay provider (landing page)
+  const authContext = useContext(UnifiedAuthContext);
+  const user = authContext?.user ?? null;
   const [users, setUsers] = useState(defaultUsers);
   // const [openVideo, setOpenVideo] = useState(false);
   // const [openInfo, setOpenInfo] = useState(false);
@@ -100,6 +101,7 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
       if (user) {
         // Crear intención de suscripción en backend (requiere Firebase Auth)
         try {
+          const { auth } = await import('src/config/firebase');
           await auth.currentUser?.getIdToken(true);
         } catch {}
         await api.post('/pricing/subscription-intents', {

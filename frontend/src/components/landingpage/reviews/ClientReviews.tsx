@@ -73,11 +73,14 @@ const ClientReviews = () => {
                       <div className="flex gap-3 items-center">
                         <img
                           src={item.img}
-                          alt="review"
+                          alt={`Foto de ${item.title}`}
                           className="h-10 w-10 rounded-full"
+                          width={40}
+                          height={40}
+                          loading="lazy"
                         />
                         <div>
-                          <h6 className="text-base">{item.title}</h6>
+                          <p className="text-base font-semibold">{item.title}</p>
                           <p className="text-sm text-ld opacity-80">
                             {item.subtitle}
                           </p>

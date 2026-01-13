@@ -8,6 +8,7 @@ use App\Models\CampaignExecution;
 use App\Models\CampaignMessage;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
+use App\Models\WhatsAppInstance;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -299,6 +300,112 @@ class WhatsAppWebhookController extends Controller
                 'campaign_id' => $campaignId,
                 'execution_id' => $executionId
             ]);
+        }
+    }
+
+    /**
+     * Webhook para recibir cambios de estado de instancias WhatsApp desde el microservicio
+     * Permite sincronización automática cuando el QR se escanea y la instancia se conecta
+     */
+    public function statusChange(Request $request): JsonResponse
+    {
+        try {
+            // Verificar secret del webhook (seguridad básica)
+            $webhookSecret = $request->header('X-Webhook-Secret');
+            $expectedSecret = config('services.whatsapp.webhook_secret', 'guro-whatsapp-webhook-secret');
+            
+            if ($webhookSecret !== $expectedSecret) {
+                Log::warning('⚠️ [WEBHOOK STATUS] Secret inválido recibido', [
+                    'received' => $webhookSecret ? 'presente pero incorrecto' : 'ausente'
+                ]);
+                // No rechazar por ahora para facilitar desarrollo, solo loguear
+            }
+
+            $instanceId = $request->input('instance_id');
+            $status = $request->input('status');
+            $connected = $request->input('connected', false);
+            $timestamp = $request->input('timestamp');
+            $phoneNumber = $request->input('phone_number');
+
+            Log::info('📥 [WEBHOOK STATUS] Recibida notificación de cambio de estado', [
+                'instance_id' => $instanceId,
+                'status' => $status,
+                'connected' => $connected,
+                'timestamp' => $timestamp,
+                'phone_number' => $phoneNumber
+            ]);
+
+            if (!$instanceId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'instance_id es requerido'
+                ], 400);
+            }
+
+            // Buscar la instancia por instance_id
+            $instance = WhatsAppInstance::where('instance_id', $instanceId)->first();
+
+            if (!$instance) {
+                Log::warning('⚠️ [WEBHOOK STATUS] Instancia no encontrada en BD', [
+                    'instance_id' => $instanceId
+                ]);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Instancia no encontrada'
+                ], 404);
+            }
+
+            // Actualizar estado de la instancia
+            $oldStatus = $instance->status;
+            $updateData = [
+                'status' => $status,
+                'last_activity_at' => now()
+            ];
+
+            // Si se conectó, limpiar QR y actualizar timestamp de conexión
+            if ($status === 'connected' || $connected === true) {
+                $updateData['status'] = 'connected';
+                $updateData['qr_code'] = null;
+                $updateData['qr_expires_at'] = null;
+                $updateData['last_connected_at'] = now();
+                $updateData['error_message'] = null;
+                $updateData['reconnect_attempts'] = 0;
+            }
+
+            // Si viene número de teléfono, actualizarlo
+            if ($phoneNumber) {
+                $updateData['phone_number'] = $phoneNumber;
+            }
+
+            $instance->update($updateData);
+
+            Log::info('✅ [WEBHOOK STATUS] Estado de instancia actualizado', [
+                'instance_id' => $instanceId,
+                'old_status' => $oldStatus,
+                'new_status' => $updateData['status'],
+                'broker_id' => $instance->broker_id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Estado actualizado exitosamente',
+                'instance_id' => $instanceId,
+                'old_status' => $oldStatus,
+                'new_status' => $updateData['status']
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [WEBHOOK STATUS] Error procesando webhook de estado', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error procesando webhook',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

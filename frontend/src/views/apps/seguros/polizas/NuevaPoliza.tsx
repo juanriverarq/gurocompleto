@@ -507,6 +507,70 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     clearError,
   } = usePolizaValidation();
 
+  // Estado para validación de póliza duplicada
+  const [polizaError, setPolizaError] = useState<string | null>(null);
+  const [checkingPoliza, setCheckingPoliza] = useState(false);
+  const polizaCheckRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Verificar póliza duplicada con debounce
+  useEffect(() => {
+    if (polizaCheckRef.current) {
+      clearTimeout(polizaCheckRef.current);
+    }
+    
+    const numeroPoliza = formData.numeroPoliza?.trim();
+    if (!numeroPoliza || numeroPoliza.length < 3) {
+      setPolizaError(null);
+      return;
+    }
+    
+    setCheckingPoliza(true);
+    polizaCheckRef.current = setTimeout(async () => {
+      try {
+        const result = await polizaService.checkPolizaExists(
+          numeroPoliza,
+          isEditMode ? polizaToEdit?.id : undefined
+        );
+        if (result.exists && result.poliza) {
+          setPolizaError(`Ya existe una póliza con este número: ${result.poliza.aseguradora || ''} - ${result.poliza.ramo_principal || ''}`);
+        } else {
+          setPolizaError(null);
+        }
+      } catch (e) {
+        setPolizaError(null);
+      } finally {
+        setCheckingPoliza(false);
+      }
+    }, 500);
+    
+    return () => {
+      if (polizaCheckRef.current) {
+        clearTimeout(polizaCheckRef.current);
+      }
+    };
+  }, [formData.numeroPoliza, isEditMode, polizaToEdit?.id]);
+
+  // Verificar si todos los campos obligatorios están completos para habilitar el botón Guardar
+  const canSavePoliza = useCallback((): boolean => {
+    // Paso 1: Información de la póliza
+    if (!formData.numeroPoliza?.trim() || formData.numeroPoliza.trim().length < 3) return false;
+    if (!formData.aseguradora?.trim()) return false;
+    if (!formData.ramoPrincipal?.trim()) return false;
+    if (!formData.fechaInicio) return false;
+    if (!formData.fechaFin) return false;
+    
+    // Paso 2: Cliente seleccionado
+    if (!selectedClient?.id) return false;
+    
+    // Paso 3: Información financiera
+    if (!formData.primaNeta || parseFloat(formData.primaNeta) <= 0) return false;
+    
+    // No permitir guardar si hay error de póliza duplicada (solo en modo crear, no en editar)
+    if (polizaError && !isEditMode) return false;
+    
+    return true;
+  }, [formData, selectedClient, polizaError, isEditMode]);
+
   // Autocompletar de placas (buscar en BD y permitir crear si no existe)
   const [placaInput, setPlacaInput] = useState<string>('');
   const [placaSuggestions, setPlacaSuggestions] = useState<Array<{ id: number; placa: string; client_name?: string; poliza_id?: number }>>([]);
@@ -1233,17 +1297,17 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
 
   // useToast declarado arriba para soportar autocompletado de placas
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, forceSubmit: boolean = false) => {
     e.preventDefault();
     
-    // Solo procesar el submit si estamos en el último paso
-    if (currentStep < steps.length - 1) {
-      // Si no estamos en el último paso, actuar como "siguiente"
+    // Si no es forzado y no estamos en el último paso, actuar como "siguiente"
+    if (!forceSubmit && currentStep < steps.length - 1) {
       nextStep();
       return;
     }
     
-    if (validateStep(currentStep)) {
+    // Validar que se puede guardar
+    if (canSavePoliza()) {
       setIsLoading(true);
       try {
         // Convertir FormData a formato de API
@@ -1505,17 +1569,30 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
               <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Producto</h4>
               <div className="h-px bg-gray-200 dark:bg-gray-700 mt-1" />
             </div>
-            <FormField
-              id="numeroPoliza"
-              name="numeroPoliza"
-              label="Número de Póliza"
-              value={formData.numeroPoliza}
-              onChange={handleInputChange}
-              error={errors.numeroPoliza}
-              required
-              placeholder="POL-2024-XXX"
-              helperText="Usa el número tal como aparece en la carátula de la póliza"
-            />
+            <div className="relative">
+              <FormField
+                id="numeroPoliza"
+                name="numeroPoliza"
+                label="Número de Póliza"
+                value={formData.numeroPoliza}
+                onChange={handleInputChange}
+                error={errors.numeroPoliza}
+                required
+                placeholder="POL-2024-XXX"
+                helperText={checkingPoliza ? 'Verificando...' : 'Usa el número tal como aparece en la carátula de la póliza'}
+              />
+              {checkingPoliza && (
+                <div className="absolute right-3 top-9">
+                  <Spinner size="sm" />
+                </div>
+              )}
+              {!checkingPoliza && polizaError && !isEditMode && (
+                <div className="flex items-center gap-1 mt-1 text-amber-600 text-xs">
+                  <Icon icon="solar:danger-triangle-bold" className="w-4 h-4" />
+                  <span>{polizaError}</span>
+                </div>
+              )}
+            </div>
 
             <FormField
               id="tipoPoliza"
@@ -1762,8 +1839,24 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                   <Icon icon="solar:user-plus-bold" className="w-4 h-4 mr-1" /> Nuevo
                 </Button>
                 {selectedClient && (
-                  <Button type="button" color="light" onClick={() => { 
-                    setClientModalMode('edit'); 
+                  <Button type="button" color="light" onClick={async () => { 
+                    setClientModalMode('edit');
+                    // Cargar el cliente desde el backend para tener datos actualizados
+                    if (selectedClient.id) {
+                      try {
+                        const res = await saasApi.getCliente(selectedClient.id);
+                        if (res.success && res.data) {
+                          // El backend ya devuelve los campos en el formato correcto
+                          // (nombre, apellidos, cuit, domicilio_principal, etc.)
+                          setClienteToEdit(res.data as any);
+                          setShowClientModal(true);
+                          return;
+                        }
+                      } catch (e) {
+                        console.error('Error cargando cliente:', e);
+                      }
+                    }
+                    // Fallback: usar raw si existe
                     const mapped = mapSaasClienteToFormulario(selectedClient.raw);
                     setClienteToEdit({ id: selectedClient.id, ...mapped } as any);
                     setShowClientModal(true); 
@@ -2253,7 +2346,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                   <Icon icon="solar:arrow-left-linear" className="w-4 h-4" />
                   <span>Anterior</span>
                 </Button>
-                {currentStep < steps.length - 1 ? (
+                {currentStep < steps.length - 1 && (
                   <Button
                     type="button"
                     color="primary"
@@ -2262,25 +2355,6 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                   >
                     <span>Siguiente</span>
                     <Icon icon="solar:arrow-right-linear" className="w-4 h-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    color="primary"
-                    disabled={isLoading || !selectedClient?.id}
-                    className="flex items-center gap-2 px-4 py-2 rounded-[10px]"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Spinner size="sm" />
-                        <span>Guardando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Icon icon="solar:diskette-bold" className="w-4 h-4" />
-                        <span>{isEditMode ? 'Actualizar' : 'Crear'} Póliza</span>
-                      </>
-                    )}
                   </Button>
                 )}
               </div>
@@ -2294,6 +2368,30 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                     style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
                   />
                 </div>
+              </div>
+
+              {/* Botón Guardar siempre visible */}
+              <div className="order-3">
+                <Button
+                  type="button"
+                  color="success"
+                  disabled={isLoading || !canSavePoliza()}
+                  onClick={(e) => handleSubmit(e as any, true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-[10px]"
+                  title={!canSavePoliza() ? 'Complete todos los campos obligatorios para guardar' : ''}
+                >
+                  {isLoading ? (
+                    <>
+                      <Spinner size="sm" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon="solar:diskette-bold" className="w-4 h-4" />
+                      <span>{isEditMode ? 'Actualizar' : 'Crear'} Póliza</span>
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
       </form>

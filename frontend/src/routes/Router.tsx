@@ -116,18 +116,15 @@ const Renovaciones = Loadable(
 const Seguimiento = Loadable(lazy(() => import('../views/apps/seguros/seguimiento/Seguimiento')));
 
 // IA Apps
-const AsistenteIA = Loadable(lazy(() => import('../views/apps/ia/asistente/AsistenteDeepSeek')));
+const AsistenteIA = Loadable(lazy(() => import('../views/apps/ia/asistente/AsistenteIA')));
 const VentasCruzadas = Loadable(
   lazy(() => import('../views/apps/ia/ventas-cruzadas/VentasCruzadas')),
 );
-const Predicciones = Loadable(
-  lazy(() => import('../views/apps/ia/analisis-predictivo/Predicciones')),
-);
-const AnalisisPrediccion = Loadable(
-  lazy(() => import('../views/apps/ia/analisis-predictivo/AnalisisPrediccion')),
-);
 const RecomendacionesProducto = Loadable(
   lazy(() => import('../views/apps/ia/recomendaciones/RecomendacionesProducto')),
+);
+const Robots = Loadable(
+  lazy(() => import('../views/apps/ia/robots/Robots')),
 );
 
 // Voice AI
@@ -149,6 +146,9 @@ const EnlacesCotizacion = Loadable(
 );
 const Plantillas = Loadable(lazy(() => import('../views/apps/marketing/plantillas/Plantillas')));
 const MiniWeb = Loadable(lazy(() => import('../views/apps/marketing/mini-web/MiniWeb')));
+const ComparadorSeguros = Loadable(
+  lazy(() => import('../views/apps/marketing/comparador-seguros/ComparadorSeguros')),
+);
 const MiniWebPublic = Loadable(lazy(() => import('../views/public/MiniWebPublic')));
 const QuoteForm = Loadable(lazy(() => import('../views/public/QuoteForm')));
 
@@ -301,9 +301,8 @@ const Router = [
       // IA Routes
       { path: '/apps/ia/asistente', element: <AsistenteIA /> },
       { path: '/apps/ia/ventas-cruzadas', element: <VentasCruzadas /> },
-      { path: '/apps/ia/analisis-predictivo/predicciones', element: <Predicciones /> },
-      { path: '/apps/ia/analisis-predictivo/predicciones/:id', element: <AnalisisPrediccion /> },
       { path: '/apps/ia/recomendaciones-producto', element: <RecomendacionesProducto /> },
+      { path: '/apps/ia/robots', element: <Robots /> },
 
       // ElevenLabs Dashboard Routes
       { path: '/apps/voice-ai/dashboard', element: <VoiceAIDashboard /> },
@@ -314,6 +313,7 @@ const Router = [
       { path: '/apps/marketing/enlaces-cotizacion', element: <EnlacesCotizacion /> },
       { path: '/apps/marketing/plantillas', element: <Plantillas /> },
       { path: '/apps/marketing/mini-web', element: <MiniWeb /> },
+      { path: '/apps/marketing/comparador-seguros', element: <ComparadorSeguros /> },
 
       // Admin Routes
       { path: '/apps/admin/usuarios', element: <Usuarios /> },

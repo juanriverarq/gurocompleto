@@ -18,11 +18,13 @@ class SubscriptionIntent extends Model
         'totals',
         'status',
         'source',
+        'coupon',
     ];
 
     protected $casts = [
         'modules' => 'array',
         'totals' => 'array',
+        'coupon' => 'array',
     ];
 
     public function user(): BelongsTo

@@ -62,11 +62,6 @@ export const IconSidebar = () => {
       const modules = iconAccessMap[mi.id] || [];
 
       if (modules.length === 0) return true;
-      console.log(
-        modules.some((m) => canAccessModule(m)),
-        'modules',
-        modules,
-      );
       return modules.some((m) => canAccessModule(m));
     });
   }, [canAccessModule]);
@@ -76,8 +71,6 @@ export const IconSidebar = () => {
     setSelectedIconId(id);
     setIsCollapse('full-sidebar');
   };
-
-  console.log(visibleIcons, 'visibleIcons');
 
   return (
     <>

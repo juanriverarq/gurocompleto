@@ -38,6 +38,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
   '/apps/marketing/plantillas': 'email_marketing',
   '/apps/marketing/mini-web': 'mini_web',
+  '/apps/marketing/comparador-seguros': 'whatsapp_business',
   '/apps/saas/configuracion-masiva': 'whatsapp_business',
 
   // Inteligencia Artificial
@@ -46,6 +47,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/voice-ai/dashboard': 'voice_ai',
   '/apps/ia/analisis-predictivo/predicciones': 'analytics_predictivo',
   '/apps/ia/ventas-cruzadas': 'analytics_predictivo',
+  '/apps/ia/robots': 'asistentes_ia',
 
   // Gestión Financiera
   '/apps/comisiones/por-poliza': 'comisiones',
@@ -151,6 +153,9 @@ export const filterMenuItemsByPermissions = (
   return menuItems.filter((item) => {
     // Mantener labels de sección si hay elementos válidos después (se limpia abajo)
     if (item.navlabel) return true;
+
+    // Siempre mostrar items con chip "Próximamente" (están deshabilitados pero visibles)
+    if ((item as any).chip === 'Próximamente') return true;
 
     // Si tiene hijos, filtrar recursivamente
     if (item.children && item.children.length > 0) {

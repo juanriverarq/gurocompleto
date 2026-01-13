@@ -5,9 +5,12 @@ namespace App\Services;
 use App\Models\Cliente;
 use App\Models\Poliza;
 use App\Models\Automovil;
+use App\Models\Ramo;
+use App\Models\Aseguradora;
 use App\Models\VentasCruzadasAnalisis;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class VentasCruzadasIAService
@@ -45,8 +48,9 @@ class VentasCruzadasIAService
                 $analisisExistente->invalidar();
             }
 
-            // Preparar datos de entrada
-            $datosEntrada = $this->prepararDatosEntrada($poliza);
+            // Preparar datos de entrada incluyendo catálogo del broker
+            $catalogoBroker = $this->obtenerCatalogoBroker($poliza->broker_id);
+            $datosEntrada = $this->prepararDatosEntrada($poliza, $catalogoBroker);
  
             // Llamar al proveedor de IA para análisis
             $recomendaciones = $this->analizarConIA($datosEntrada);
@@ -96,9 +100,96 @@ class VentasCruzadasIAService
     }
 
     /**
+     * Obtener catálogo de productos del broker (ramos y aseguradoras disponibles)
+     */
+    private function obtenerCatalogoBroker(int $brokerId): array
+    {
+        // Cachear por 1 hora para no consultar en cada análisis
+        return Cache::remember("broker_{$brokerId}_catalogo", 3600, function() use ($brokerId) {
+            // Obtener ramos que el broker maneja (basado en pólizas activas)
+            $ramosActivos = Poliza::where('broker_id', $brokerId)
+                ->where('status', 'active')
+                ->whereNotNull('ramo_id')
+                ->with('ramo')
+                ->get()
+                ->pluck('ramo')
+                ->filter()
+                ->unique('id')
+                ->map(function($ramo) {
+                    return [
+                        'id' => $ramo->id,
+                        'nombre' => $ramo->nombre,
+                        'categoria' => $this->categorizarRamo($ramo->nombre)
+                    ];
+                })
+                ->values()
+                ->toArray();
+
+            // Obtener aseguradoras que el broker maneja
+            $aseguradoras = Poliza::where('broker_id', $brokerId)
+                ->where('status', 'active')
+                ->whereNotNull('aseguradora_id')
+                ->with('aseguradora')
+                ->get()
+                ->pluck('aseguradora')
+                ->filter()
+                ->unique('id')
+                ->map(function($aseg) {
+                    return [
+                        'id' => $aseg->id,
+                        'nombre' => $aseg->nombre ?? $aseg->name ?? 'N/A'
+                    ];
+                })
+                ->values()
+                ->toArray();
+
+            // Agrupar ramos por categoría para facilitar recomendaciones
+            $ramosPorCategoria = collect($ramosActivos)->groupBy('categoria')->map(function($items) {
+                return $items->pluck('nombre')->toArray();
+            })->toArray();
+
+            return [
+                'ramos' => $ramosActivos,
+                'aseguradoras' => $aseguradoras,
+                'ramos_por_categoria' => $ramosPorCategoria,
+                'categorias_disponibles' => array_keys($ramosPorCategoria)
+            ];
+        });
+    }
+
+    /**
+     * Categorizar un ramo para facilitar matching
+     */
+    private function categorizarRamo(string $nombreRamo): string
+    {
+        $nombre = strtolower($nombreRamo);
+        
+        if (str_contains($nombre, 'vida') || str_contains($nombre, 'exequial')) {
+            return 'vida';
+        }
+        if (str_contains($nombre, 'auto') || str_contains($nombre, 'soat') || str_contains($nombre, 'vehículo')) {
+            return 'autos';
+        }
+        if (str_contains($nombre, 'hogar') || str_contains($nombre, 'residencial') || str_contains($nombre, 'incendio') || str_contains($nombre, 'copropiedades')) {
+            return 'hogar';
+        }
+        if (str_contains($nombre, 'salud') || str_contains($nombre, 'hospital') || str_contains($nombre, 'accidentes personales')) {
+            return 'salud';
+        }
+        if (str_contains($nombre, 'empresarial') || str_contains($nombre, 'pyme') || str_contains($nombre, 'multirriesgo') || str_contains($nombre, 'cumplimiento') || str_contains($nombre, 'responsabilidad')) {
+            return 'empresarial';
+        }
+        if (str_contains($nombre, 'transporte') || str_contains($nombre, 'navegacion') || str_contains($nombre, 'carga')) {
+            return 'transporte';
+        }
+        
+        return 'otros';
+    }
+
+    /**
      * Preparar datos de entrada para el análisis de IA
      */
-    private function prepararDatosEntrada(Poliza $poliza): array
+    private function prepararDatosEntrada(Poliza $poliza, array $catalogoBroker = []): array
     {
         $cliente = $poliza->client;
         
@@ -180,7 +271,8 @@ class VentasCruzadasIAService
             'polizas' => $polizasData,
             'vehiculos' => $vehiculosData,
             'historial' => $historial,
-            'contexto' => $contexto
+            'contexto' => $contexto,
+            'catalogo_broker' => $catalogoBroker
         ];
     }
 
@@ -248,100 +340,204 @@ class VentasCruzadasIAService
      */
     private function construirPrompt(array $datos): string
     {
-        $json = json_encode($datos, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        // Extraer catálogo del broker para el prompt
+        $catalogoBroker = $datos['catalogo_broker'] ?? [];
+        $ramosDisponibles = collect($catalogoBroker['ramos'] ?? [])->pluck('nombre')->implode(', ');
+        $aseguradorasDisponibles = collect($catalogoBroker['aseguradoras'] ?? [])->pluck('nombre')->implode(', ');
+        $categorias = $catalogoBroker['categorias_disponibles'] ?? [];
+        
+        // Datos del cliente sin el catálogo (para no duplicar)
+        $datosCliente = $datos;
+        unset($datosCliente['catalogo_broker']);
+        $jsonCliente = json_encode($datosCliente, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        // Productos que ya tiene el cliente
+        $productosActuales = collect($datos['polizas'] ?? [])->pluck('ramo')->implode(', ');
 
         return <<<PROMPT
-Analiza el siguiente perfil de cliente y sus pólizas actuales para identificar oportunidades de ventas cruzadas en Colombia:
+Eres un asesor experto de seguros en Colombia. Analiza el perfil del cliente para identificar oportunidades de VENTA CRUZADA precisas y relevantes.
 
-{$json}
+## DATOS DEL CLIENTE:
+{$jsonCliente}
 
-Genera recomendaciones de productos de seguros complementarios que NO tenga actualmente. Para cada recomendación incluye:
+## PRODUCTOS QUE YA TIENE EL CLIENTE:
+{$productosActuales}
 
-1. **producto**: Nombre del seguro recomendado
-2. **aseguradora**: Aseguradora sugerida (preferir las que ya usa el cliente)
-3. **motivo**: Explicación clara de por qué necesita este seguro (2-3 líneas)
-4. **proteccion_complementaria**: Qué cubre que sus pólizas actuales no cubren
-5. **nivel_urgencia**: Alta/Media/Baja
-6. **canal_recomendado**: WhatsApp/Correo/Llamada (según perfil del cliente)
-7. **probabilidad_conversion**: Número entre 0 y 1 (ej: 0.85 = 85%)
-8. **mensaje**: Mensaje personalizado para contactar al cliente (máximo 200 caracteres, tono amigable)
-9. **cta**: Call-to-action específico (ej: "Cotizar mi seguro de vida")
+## CATÁLOGO DE PRODUCTOS DISPONIBLES DEL BROKER (SOLO PUEDES RECOMENDAR ESTOS):
+**Ramos/Productos disponibles:** {$ramosDisponibles}
 
-Responde ÚNICAMENTE con este JSON (sin markdown, sin explicaciones):
+**Aseguradoras con las que trabajamos:** {$aseguradorasDisponibles}
+
+## REGLAS CRÍTICAS:
+1. **SOLO recomienda productos del catálogo del broker** - NO inventes productos que no están en la lista
+2. **NO recomiendes productos que el cliente YA TIENE** - Revisa sus pólizas actuales
+3. **Prioriza productos complementarios lógicos:**
+   - Si tiene SOAT → recomendar Seguro de Autos completo
+   - Si tiene Auto → recomendar Vida, Hogar
+   - Si tiene Vida → recomendar Salud, Hogar
+   - Si tiene Empresarial → recomendar RC Profesional, Cumplimiento
+4. **Usa SOLO aseguradoras del catálogo** - Preferir las que el cliente ya usa
+5. **Sé específico con el nombre del producto** - Usa el nombre exacto del ramo disponible
+6. **Calcula probabilidad realista** basada en:
+   - Perfil del cliente (edad, ubicación, tipo)
+   - Productos actuales (complementariedad)
+   - Valor de primas actuales (capacidad de pago)
+
+## FORMATO DE RESPUESTA (JSON estricto):
 {
   "recomendaciones": [
     {
-      "producto": "...",
-      "aseguradora": "...",
-      "motivo": "...",
-      "proteccion_complementaria": "...",
-      "nivel_urgencia": "...",
-      "canal_recomendado": "...",
+      "producto": "NOMBRE EXACTO del ramo del catálogo",
+      "aseguradora": "NOMBRE EXACTO de aseguradora del catálogo",
+      "motivo": "Explicación clara y personalizada de por qué este cliente necesita este producto (2-3 líneas)",
+      "proteccion_complementaria": "Qué protege que sus pólizas actuales NO cubren",
+      "nivel_urgencia": "Alta/Media/Baja",
+      "canal_recomendado": "WhatsApp/Correo/Llamada",
       "probabilidad_conversion": 0.XX,
-      "mensaje": "...",
-      "cta": "..."
+      "mensaje": "Mensaje personalizado para WhatsApp (máx 180 caracteres, incluir nombre del cliente, tono amigable colombiano)",
+      "cta": "Acción específica (ej: 'Cotizar mi seguro de vida')"
     }
   ]
 }
 
-Genera entre 2 y 4 recomendaciones priorizadas por urgencia y probabilidad de conversión.
+## INSTRUCCIONES FINALES:
+- Genera entre 1 y 3 recomendaciones (solo las más relevantes)
+- Si no hay oportunidades claras, devuelve array vacío: {"recomendaciones": []}
+- Ordena por probabilidad de conversión (mayor primero)
+- El mensaje debe ser natural, no robótico
+- Responde SOLO con el JSON, sin texto adicional
 PROMPT;
     }
 
     /**
      * Análisis básico de fallback si DeepSeek no está disponible
+     * Usa los productos reales del catálogo del broker
      */
     private function analisisBasicoFallback(array $datosEntrada): array
     {
         $recomendaciones = [];
         $productosActuales = array_map('strtolower', $datosEntrada['historial']['productos_previos'] ?? []);
+        $catalogoBroker = $datosEntrada['catalogo_broker'] ?? [];
+        $ramosPorCategoria = $catalogoBroker['ramos_por_categoria'] ?? [];
+        $aseguradoras = collect($catalogoBroker['aseguradoras'] ?? [])->pluck('nombre')->toArray();
+        
+        // Aseguradora preferida del cliente o primera disponible
+        $aseguradoraCliente = $datosEntrada['polizas'][0]['aseguradora'] ?? ($aseguradoras[0] ?? 'SEGUROS GENERALES SURAMERICANA S.A');
+        $nombreCliente = explode(' ', $datosEntrada['cliente']['nombre'] ?? 'Cliente')[0];
+        $canalPreferido = $datosEntrada['historial']['medio_preferido_contacto'] ?? 'WhatsApp';
 
-        // Seguro de Vida
-        if (!in_array('vida', $productosActuales)) {
+        // Verificar si tiene productos de cada categoría
+        $tieneVida = $this->clienteTieneCategoria($productosActuales, ['vida', 'exequial', 'sucapital']);
+        $tieneHogar = $this->clienteTieneCategoria($productosActuales, ['hogar', 'residencial', 'incendio', 'copropiedades']);
+        $tieneSalud = $this->clienteTieneCategoria($productosActuales, ['salud', 'hospital', 'accidentes']);
+        $tieneAuto = $this->clienteTieneCategoria($productosActuales, ['auto', 'soat', 'vehículo']);
+
+        // Recomendar Vida si no tiene y el broker lo ofrece
+        if (!$tieneVida && !empty($ramosPorCategoria['vida'])) {
+            $productoVida = $ramosPorCategoria['vida'][0] ?? 'VIDA INDIVIDUAL';
             $recomendaciones[] = [
-                'producto' => 'Seguro de Vida Individual',
-                'aseguradora' => $datosEntrada['polizas'][0]['aseguradora'] ?? 'Suramericana',
-                'motivo' => 'Protege a tu familia ante cualquier eventualidad. Complementa tu cobertura actual con protección por fallecimiento o invalidez.',
-                'proteccion_complementaria' => 'Cobertura por fallecimiento o invalidez por enfermedad',
+                'producto' => $productoVida,
+                'aseguradora' => $this->buscarAseguradoraParaCategoria($aseguradoras, 'vida', $aseguradoraCliente),
+                'motivo' => "Protege a tu familia ante cualquier eventualidad. {$productoVida} te brinda tranquilidad financiera.",
+                'proteccion_complementaria' => 'Cobertura por fallecimiento, invalidez y enfermedades graves',
                 'nivel_urgencia' => 'Alta',
-                'canal_recomendado' => $datosEntrada['historial']['medio_preferido_contacto'] ?? 'WhatsApp',
+                'canal_recomendado' => $canalPreferido,
                 'probabilidad_conversion' => 0.75,
-                'mensaje' => 'Hola ' . explode(' ', $datosEntrada['cliente']['nombre'])[0] . ' 👋, protege a tu familia con un Seguro de Vida desde $25.000 mensuales 💚.',
-                'cta' => 'Cotizar mi seguro de vida'
+                'mensaje' => "Hola {$nombreCliente} 👋, protege a tu familia con {$productoVida}. ¿Te comparto una cotización? 💚",
+                'cta' => 'Cotizar seguro de vida'
             ];
         }
 
-        // SOAT si tiene vehículos
-        if (!empty($datosEntrada['vehiculos']) && !in_array('soat', $productosActuales)) {
+        // Recomendar Hogar si no tiene y el broker lo ofrece
+        if (!$tieneHogar && !empty($ramosPorCategoria['hogar'])) {
+            $productoHogar = $ramosPorCategoria['hogar'][0] ?? 'MULTIRRIESGO RESIDENCIAL';
             $recomendaciones[] = [
-                'producto' => 'SOAT y Asistencia Vehicular',
-                'aseguradora' => 'AXA Colpatria',
-                'motivo' => 'El SOAT es obligatorio y puede complementarse con asistencia en carretera y grúa 24/7.',
-                'proteccion_complementaria' => 'Cobertura legal y asistencia vehicular',
-                'nivel_urgencia' => 'Alta',
-                'canal_recomendado' => 'WhatsApp',
-                'probabilidad_conversion' => 0.9,
-                'mensaje' => 'Renueva tu SOAT y agrega asistencia vehicular 24/7. Ahorra tiempo y evita sanciones 🚗.',
-                'cta' => 'Renovar mi SOAT ahora'
-            ];
-        }
-
-        // Seguro de Hogar
-        if (!in_array('hogar', $productosActuales)) {
-            $recomendaciones[] = [
-                'producto' => 'Seguro de Hogar',
-                'aseguradora' => 'SURA',
-                'motivo' => 'Protege tu vivienda, electrodomésticos y bienes personales contra incendio, robo y daños.',
-                'proteccion_complementaria' => 'Bienes personales y vivienda',
+                'producto' => $productoHogar,
+                'aseguradora' => $this->buscarAseguradoraParaCategoria($aseguradoras, 'hogar', $aseguradoraCliente),
+                'motivo' => "Protege tu vivienda y bienes personales contra incendio, robo y daños naturales.",
+                'proteccion_complementaria' => 'Bienes personales, electrodomésticos y estructura de la vivienda',
                 'nivel_urgencia' => 'Media',
                 'canal_recomendado' => 'Correo',
                 'probabilidad_conversion' => 0.65,
-                'mensaje' => 'Protege tu hogar y tus electrodomésticos con cobertura completa y asistencia 24/7.',
-                'cta' => 'Conoce tu cobertura'
+                'mensaje' => "Hola {$nombreCliente}, protege tu hogar con {$productoHogar}. Cobertura completa desde $30.000/mes 🏠",
+                'cta' => 'Conocer cobertura hogar'
             ];
         }
 
-        return $recomendaciones;
+        // Recomendar Salud si no tiene y el broker lo ofrece
+        if (!$tieneSalud && !empty($ramosPorCategoria['salud'])) {
+            $productoSalud = $ramosPorCategoria['salud'][0] ?? 'ACCIDENTES PERSONALES';
+            $recomendaciones[] = [
+                'producto' => $productoSalud,
+                'aseguradora' => $this->buscarAseguradoraParaCategoria($aseguradoras, 'salud', $aseguradoraCliente),
+                'motivo' => "Complementa tu EPS con cobertura adicional para gastos médicos y accidentes.",
+                'proteccion_complementaria' => 'Gastos médicos, hospitalización y accidentes no cubiertos por EPS',
+                'nivel_urgencia' => 'Media',
+                'canal_recomendado' => $canalPreferido,
+                'probabilidad_conversion' => 0.60,
+                'mensaje' => "Hola {$nombreCliente}, complementa tu salud con {$productoSalud}. ¿Te cuento más? 🏥",
+                'cta' => 'Cotizar seguro de salud'
+            ];
+        }
+
+        // Recomendar Auto si tiene vehículos, no tiene seguro y el broker lo ofrece
+        if (!empty($datosEntrada['vehiculos']) && !$tieneAuto && !empty($ramosPorCategoria['autos'])) {
+            $productoAuto = $ramosPorCategoria['autos'][0] ?? 'AUTOMOVILES';
+            $recomendaciones[] = [
+                'producto' => $productoAuto,
+                'aseguradora' => $this->buscarAseguradoraParaCategoria($aseguradoras, 'auto', $aseguradoraCliente),
+                'motivo' => "Protege tu vehículo con cobertura todo riesgo, responsabilidad civil y asistencia 24/7.",
+                'proteccion_complementaria' => 'Daños propios, robo, responsabilidad civil y asistencia vehicular',
+                'nivel_urgencia' => 'Alta',
+                'canal_recomendado' => 'WhatsApp',
+                'probabilidad_conversion' => 0.80,
+                'mensaje' => "Hola {$nombreCliente}, asegura tu vehículo con {$productoAuto}. Cotización sin compromiso 🚗",
+                'cta' => 'Cotizar seguro de auto'
+            ];
+        }
+
+        return array_slice($recomendaciones, 0, 3); // Máximo 3 recomendaciones
+    }
+
+    /**
+     * Verificar si el cliente tiene productos de una categoría
+     */
+    private function clienteTieneCategoria(array $productosActuales, array $keywords): bool
+    {
+        foreach ($productosActuales as $producto) {
+            foreach ($keywords as $keyword) {
+                if (str_contains($producto, $keyword)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Buscar aseguradora apropiada para una categoría
+     */
+    private function buscarAseguradoraParaCategoria(array $aseguradoras, string $categoria, string $default): string
+    {
+        // Mapeo de categorías a aseguradoras preferidas
+        $preferencias = [
+            'vida' => ['SURAMERICANA', 'BOLIVAR', 'POSITIVA', 'PREVISORA'],
+            'hogar' => ['SURAMERICANA', 'BOLIVAR', 'LIBERTY', 'MAPFRE'],
+            'salud' => ['SURAMERICANA', 'COLPATRIA', 'ALLIANZ'],
+            'auto' => ['SURAMERICANA', 'LIBERTY', 'BOLIVAR', 'HDI', 'MAPFRE']
+        ];
+
+        $preferidas = $preferencias[$categoria] ?? [];
+        
+        foreach ($preferidas as $preferida) {
+            foreach ($aseguradoras as $aseg) {
+                if (str_contains(strtoupper($aseg), $preferida)) {
+                    return $aseg;
+                }
+            }
+        }
+
+        return $default;
     }
 
     /**

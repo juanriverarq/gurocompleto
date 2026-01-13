@@ -309,13 +309,247 @@ class PolicyNotificationConfig extends Model
     }
 
     /**
-     * Calcular próxima ejecución
+     * Calcular próxima ejecución basada en la configuración actual
+     * Considera: hora de envío, días permitidos, skip weekends
      */
     public function calculateNextExecution(): void
     {
-        $this->update([
-            'next_execution_at' => now()->addDay()->setTimeFromTimeString($this->send_time)
-        ]);
+        if (!$this->is_active) {
+            $this->update(['next_execution_at' => null]);
+            return;
+        }
+
+        $sendDays = $this->send_days ?? [1, 2, 3, 4, 5]; // Por defecto Lun-Vie
+        $sendTime = $this->send_time ?? '09:00:00';
+        
+        // Empezar desde ahora
+        $nextExecution = now()->copy();
+        
+        // Si ya pasó la hora de hoy, empezar desde mañana
+        $todayAtSendTime = now()->copy()->setTimeFromTimeString($sendTime);
+        if (now()->gte($todayAtSendTime)) {
+            $nextExecution = $nextExecution->addDay();
+        }
+        
+        // Establecer la hora de envío
+        $nextExecution->setTimeFromTimeString($sendTime);
+        
+        // Buscar el próximo día válido (máximo 14 días para evitar loops infinitos)
+        $maxAttempts = 14;
+        $attempts = 0;
+        
+        while ($attempts < $maxAttempts) {
+            $dayOfWeek = $nextExecution->dayOfWeek; // 0 = Domingo, 6 = Sábado
+            
+            // Verificar si es un día permitido
+            if (in_array($dayOfWeek, $sendDays)) {
+                // Verificar skip_weekends
+                if ($this->skip_weekends && in_array($dayOfWeek, [0, 6])) {
+                    $nextExecution->addDay();
+                    $attempts++;
+                    continue;
+                }
+                
+                // Encontramos un día válido
+                break;
+            }
+            
+            $nextExecution->addDay();
+            $attempts++;
+        }
+        
+        $this->update(['next_execution_at' => $nextExecution]);
+    }
+
+    /**
+     * Obtener próximos envíos programados con detalle
+     * Retorna las pólizas que se notificarán y cuándo
+     */
+    public function getScheduledNotifications(int $limit = 50): array
+    {
+        if (!$this->is_active || !$this->next_execution_at) {
+            return [];
+        }
+
+        $scheduled = [];
+        $now = now();
+
+        // Obtener exclusiones
+        $excludedClientIds = $this->excluded_client_ids ?? [];
+        $excludedPolicyTypes = $this->excluded_policy_types ?? [];
+        $excludedPolicyStatuses = $this->excluded_policy_statuses ?? [];
+
+        // Para cada tipo de notificación habilitado
+        $types = [];
+        if ($this->notify_expiration) $types[] = 'expiration';
+        if ($this->notify_renewal) $types[] = 'renewal';
+        if ($this->notify_payment_due) $types[] = 'payment_due';
+
+        foreach ($types as $type) {
+            $daysArray = $this->getDaysBeforeForType($type);
+            $maxDays = max($daysArray);
+            
+            // Buscar todas las pólizas que vencen/renuevan/pagan dentro del rango máximo de días
+            // Incluir múltiples variantes de estados activos
+            $activeStatuses = ['active', 'issued', 'accrued', 'vigente', 'activa', 'emitida', 'devengada', 'pending', 'pendiente'];
+            $query = \App\Models\Poliza::forBroker($this->broker_id)
+                ->where(function($q) use ($activeStatuses) {
+                    $q->whereIn('status', $activeStatuses)
+                      ->orWhereIn(\DB::raw('LOWER(status)'), $activeStatuses);
+                })
+                ->with('client');
+
+            // Excluir clientes
+            if (!empty($excludedClientIds)) {
+                $query->whereNotIn('client_id', $excludedClientIds);
+            }
+
+            // Excluir tipos de póliza (ramos)
+            if (!empty($excludedPolicyTypes)) {
+                $query->where(function($q) use ($excludedPolicyTypes) {
+                    $q->whereNull('type')
+                      ->orWhereNotIn('type', $excludedPolicyTypes);
+                });
+            }
+
+            // Excluir estados de póliza
+            if (!empty($excludedPolicyStatuses)) {
+                $query->whereNotIn('status', array_map('strtolower', $excludedPolicyStatuses));
+            }
+
+            // Calcular rango de fechas (desde hoy a las 00:00 hasta maxDays+1 días)
+            // Esto incluye: día 0 = hoy, día 1 = mañana, etc.
+            $dateFrom = $now->copy()->startOfDay();
+            $dateTo = $now->copy()->startOfDay()->addDays($maxDays + 1);
+
+            // Filtrar por fecha según tipo - buscar todas las pólizas dentro del rango máximo
+            switch ($type) {
+                case 'expiration':
+                    $query->whereNotNull('end_date')
+                          ->whereDate('end_date', '>=', $dateFrom)
+                          ->whereDate('end_date', '<=', $dateTo);
+                    break;
+                case 'renewal':
+                    $query->where(function($q) use ($dateFrom, $dateTo) {
+                        $q->where(function($q2) use ($dateFrom, $dateTo) {
+                            $q2->whereNotNull('renewal_date')
+                               ->whereDate('renewal_date', '>=', $dateFrom)
+                               ->whereDate('renewal_date', '<=', $dateTo);
+                        })->orWhere(function($q2) use ($dateFrom, $dateTo) {
+                            $q2->whereNotNull('end_date')
+                               ->whereDate('end_date', '>=', $dateFrom)
+                               ->whereDate('end_date', '<=', $dateTo);
+                        });
+                    });
+                    break;
+                case 'payment_due':
+                    $query->whereNotNull('payment_due_date')
+                          ->whereDate('payment_due_date', '>=', $dateFrom)
+                          ->whereDate('payment_due_date', '<=', $dateTo);
+                    break;
+            }
+
+            // Excluir pólizas ya notificadas hoy para este tipo
+            $query->whereDoesntHave('notificationLogs', function($q) use ($type) {
+                $q->where('notification_type', $type)
+                  ->where('created_at', '>=', now()->startOfDay());
+            });
+
+            $policies = $query->limit(30)->get();
+            
+            foreach ($policies as $policy) {
+                $client = $policy->client;
+                $eventDate = match($type) {
+                    'expiration' => $policy->end_date,
+                    'renewal' => $policy->renewal_date ?? $policy->end_date,
+                    'payment_due' => $policy->payment_due_date,
+                    default => null
+                };
+                
+                if (!$eventDate) continue;
+                
+                $daysUntilEvent = max(0, (int)$now->diffInDays($eventDate, false));
+                
+                // Encontrar cuál recordatorio aplica para esta póliza
+                $applicableReminder = null;
+                foreach ($daysArray as $daysBefore) {
+                    if ($daysUntilEvent <= $daysBefore && $daysUntilEvent >= 0) {
+                        $applicableReminder = $daysBefore;
+                        break;
+                    }
+                }
+                
+                // Calcular cuándo se enviará esta notificación
+                $sendDate = $this->calculateSendDateForPolicy($eventDate, $daysArray);
+
+                $scheduled[] = [
+                    'policy_id' => $policy->id,
+                    'policy_number' => $policy->policy_number ?? $policy->numero_poliza ?? '-',
+                    'client_name' => $client 
+                        ? ($client->full_name ?? $client->nombre_completo ?? 
+                           trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: '-')
+                        : '-',
+                    'notification_type' => $type,
+                    'notification_type_label' => match($type) {
+                        'expiration' => 'Vencimiento',
+                        'renewal' => 'Renovación',
+                        'payment_due' => 'Pago',
+                        default => $type
+                    },
+                    'event_date' => $eventDate->format('Y-m-d'),
+                    'days_until_event' => $daysUntilEvent,
+                    'days_before_reminder' => $applicableReminder ?? $daysUntilEvent,
+                    'scheduled_send_at' => $sendDate?->format('Y-m-d H:i:s'),
+                    'scheduled_send_at_human' => $sendDate?->diffForHumans() ?? 'Próximamente',
+                ];
+            }
+        }
+
+        // Ordenar por fecha de evento
+        usort($scheduled, fn($a, $b) => ($a['days_until_event'] ?? 999) <=> ($b['days_until_event'] ?? 999));
+
+        return array_slice($scheduled, 0, $limit);
+    }
+
+    /**
+     * Calcular cuándo se enviará la notificación para una póliza específica
+     */
+    private function calculateSendDateForPolicy($eventDate, array $daysArray): ?\Carbon\Carbon
+    {
+        $now = now();
+        $sendDays = $this->send_days ?? [1, 2, 3, 4, 5];
+        $sendTime = $this->send_time ?? '09:00:00';
+        
+        // Ordenar días de anticipación de mayor a menor
+        rsort($daysArray);
+        
+        foreach ($daysArray as $daysBefore) {
+            $sendDate = $eventDate->copy()->subDays($daysBefore)->setTimeFromTimeString($sendTime);
+            
+            // Si la fecha de envío ya pasó, continuar al siguiente recordatorio
+            if ($sendDate->lt($now)) {
+                continue;
+            }
+            
+            // Buscar el próximo día válido desde la fecha de envío
+            $maxAttempts = 14;
+            $attempts = 0;
+            
+            while ($attempts < $maxAttempts) {
+                $dayOfWeek = $sendDate->dayOfWeek;
+                
+                if (in_array($dayOfWeek, $sendDays)) {
+                    if (!($this->skip_weekends && in_array($dayOfWeek, [0, 6]))) {
+                        return $sendDate;
+                    }
+                }
+                
+                $sendDate->addDay();
+                $attempts++;
+            }
+        }
+        
+        return $this->next_execution_at;
     }
 
     /**
@@ -333,20 +567,35 @@ class PolicyNotificationConfig extends Model
             ')
             ->first();
 
+        // Recalcular próxima ejecución si es necesario
+        if ($this->is_active && (!$this->next_execution_at || $this->next_execution_at->isPast())) {
+            $this->calculateNextExecution();
+            $this->refresh();
+        }
+
         return [
-            'total_sent' => $this->total_sent,
-            'total_failed' => $this->total_failed,
+            'total_sent' => $this->total_sent ?? 0,
+            'total_failed' => $this->total_failed ?? 0,
             'last_30_days' => [
                 'total' => $recentLogs->total ?? 0,
                 'sent' => $recentLogs->sent ?? 0,
                 'failed' => $recentLogs->failed ?? 0,
                 'skipped' => $recentLogs->skipped ?? 0,
             ],
-            'success_rate' => $this->total_sent > 0 
-                ? round(($this->total_sent / ($this->total_sent + $this->total_failed)) * 100, 2)
+            'success_rate' => ($this->total_sent ?? 0) > 0 
+                ? round(($this->total_sent / ($this->total_sent + ($this->total_failed ?? 0))) * 100, 2)
                 : 0,
-            'last_execution' => $this->last_execution_at?->diffForHumans(),
-            'next_execution' => $this->next_execution_at?->diffForHumans(),
+            // Última ejecución
+            'last_execution' => $this->last_execution_at?->diffForHumans() ?? 'Nunca',
+            'last_execution_at' => $this->last_execution_at?->format('Y-m-d H:i:s'),
+            'last_execution_formatted' => $this->last_execution_at?->format('d/m/Y H:i') ?? 'Nunca',
+            // Próxima ejecución
+            'next_execution' => $this->next_execution_at?->diffForHumans() ?? 'No programada',
+            'next_execution_at' => $this->next_execution_at?->format('Y-m-d H:i:s'),
+            'next_execution_formatted' => $this->next_execution_at?->format('d/m/Y H:i') ?? 'No programada',
+            // Configuración de envío
+            'send_time' => $this->send_time,
+            'send_days' => $this->send_days ?? [1, 2, 3, 4, 5],
         ];
     }
 }

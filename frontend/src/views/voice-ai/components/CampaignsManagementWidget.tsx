@@ -69,7 +69,7 @@ interface DecisionPolicy {
   actions: DecisionAction[];
 }
 
-interface ElevenLabsAgent {
+interface VAPIAgent {
   id: string;
   name: string;
   type: string;
@@ -85,7 +85,7 @@ interface ElevenLabsAgent {
 const CampaignsManagementWidget: React.FC = () => {
 // Estados principales
   const [campaigns, setCampaigns] = useState<VoiceCampaign[]>([]);
-  const [agents, setAgents] = useState<ElevenLabsAgent[]>([]);
+  const [agents, setAgents] = useState<VAPIAgent[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<VoiceCampaignStats | null>(null);
@@ -146,13 +146,8 @@ const CampaignsManagementWidget: React.FC = () => {
 
   // Función para manejar la creación desde el wizard
   const handleWizardCampaignCreate = async (campaignData: any) => {
-    console.log('🎯 [WIZARD] Creando campaña desde wizard:', campaignData);
-    console.log('🔍 [WIZARD] Campaign type detected:', campaignData?.type);
-
     // Si el propio Wizard ya hizo el POST exitosamente, evitamos doble envío
-    if (campaignData?.created_by_wizard) {
-      console.log('✅ [WIZARD] Campaign already created by wizard, skipping duplicate POST');
-      alert('Campaña creada exitosamente');
+    if (campaignData?.created_by_wizard) {      alert('Campaña creada exitosamente');
       setShowWizard(false);
       await loadCampaigns();
       await loadStats();
@@ -166,28 +161,18 @@ const CampaignsManagementWidget: React.FC = () => {
       const isImmediate = campaignData?.type === 'immediate' || (!campaignData?.scheduled_date && !campaignData?.scheduledDate);
 
       // Siempre usar campaña inmediata desde el CampaignWizard (por diseño actual)
-      if (isImmediate) {
-        console.log('🚀 [WIZARD] Creating immediate campaign...');
-        response = await voiceCampaignService.createImmediateVoiceCampaign(campaignData);
-      } else {
-        console.log('📅 [WIZARD] Creating scheduled campaign...');
-        response = await voiceCampaignService.createScheduledVoiceCampaign(campaignData);
+      if (isImmediate) {        response = await voiceCampaignService.createImmediateVoiceCampaign(campaignData);
+      } else {        response = await voiceCampaignService.createScheduledVoiceCampaign(campaignData);
       }
 
-      if (response.success) {
-        console.log('✅ [WIZARD] Campaign created successfully');
-        alert(response.message);
+      if (response.success) {        alert(response.message);
         setShowWizard(false);
         // Recargar la lista de campañas
         await loadCampaigns();
         await loadStats();
-      } else {
-        console.error('❌ [WIZARD] Failed to create campaign:', response.message);
-        alert(response.message);
+      } else {        alert(response.message);
       }
-    } catch (error) {
-      console.error('❌ [WIZARD] Error creating campaign from wizard:', error);
-      alert('Error al crear la campaña desde el wizard: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+    } catch (error) {      alert('Error al crear la campaña desde el wizard: ' + (error instanceof Error ? error.message : 'Error desconocido'));
     }
   };
 
@@ -195,6 +180,47 @@ const CampaignsManagementWidget: React.FC = () => {
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  // Polling para sincronizar campañas en ejecución en tiempo real desde VAPI
+  // Solo hace polling mientras hay campañas activas, y deja de hacerlo cuando se completan
+  useEffect(() => {
+    const runningCampaigns = campaigns.filter(c => c.status === 'running');
+    
+    if (runningCampaigns.length > 0) {
+      const interval = setInterval(async () => {
+        let shouldReload = false;
+        
+        // Sincronizar cada campaña en ejecución directamente desde VAPI
+        for (const campaign of runningCampaigns) {
+          try {
+            const result = await voiceCampaignService.syncCampaignRealtime(campaign.id);
+            
+            // Si la campaña se completó o hubo cambios, marcar para recargar
+            if (result.campaign_completed || (result.synced || 0) > 0) {
+              shouldReload = true;
+              break;
+            }
+            
+            // Si no hay llamadas activas restantes, la campaña terminó
+            if (result.remaining_active_calls === 0) {
+              shouldReload = true;
+              break;
+            }
+          } catch (e) {
+            // Ignorar errores de sincronización individual
+          }
+        }
+        
+        // Solo recargar si hubo cambios
+        if (shouldReload) {
+          await loadCampaigns();
+          await loadStats();
+        }
+      }, 3000); // Sincronizar cada 3 segundos para tiempo real
+      
+      return () => clearInterval(interval);
+    }
+  }, [campaigns]);
 
   const loadInitialData = async () => {
     setIsLoading(true);
@@ -206,9 +232,7 @@ const CampaignsManagementWidget: React.FC = () => {
         loadStats(),
         loadWhatsAppInstances()
       ]);
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    } finally {
+    } catch (error) {    } finally {
       setIsLoading(false);
     }
   };
@@ -232,9 +256,7 @@ const CampaignsManagementWidget: React.FC = () => {
       if (Array.isArray(agentsData)) {
         setAgents(agentsData);
       }
-    } catch (error) {
-      console.error('Error loading agents:', error);
-      setAgents([]);
+    } catch (error) {      setAgents([]);
     }
   };
 
@@ -248,27 +270,17 @@ const CampaignsManagementWidget: React.FC = () => {
         );
         setClients(activeClients);
       }
-    } catch (error) {
-      console.error('Error loading clients:', error);
-      setClients([]);
+    } catch (error) {      setClients([]);
     }
   };
 
   const loadCampaigns = async () => {
-    try {
-      console.log('🔄 [CAMPAIGNS] Loading voice campaigns...');
-      const response = await voiceCampaignService.getVoiceCampaigns();
+    try {      const response = await voiceCampaignService.getVoiceCampaigns();
       
-      if (response.success) {
-        console.log('✅ [CAMPAIGNS] Voice campaigns loaded:', response.campaigns);
-        setCampaigns(response.campaigns);
-      } else {
-        console.error('❌ [CAMPAIGNS] Failed to load campaigns');
-        setCampaigns([]);
+      if (response.success) {        setCampaigns(response.campaigns);
+      } else {        setCampaigns([]);
       }
-    } catch (error) {
-      console.error('❌ [CAMPAIGNS] Error loading campaigns:', error);
-      setCampaigns([]);
+    } catch (error) {      setCampaigns([]);
     }
   };
 
@@ -312,20 +324,12 @@ const CampaignsManagementWidget: React.FC = () => {
   }, [campaigns]);
 
   const loadStats = async () => {
-    try {
-      console.log('📊 [CAMPAIGNS] Loading voice campaign stats...');
-      const response = await voiceCampaignService.getVoiceCampaignStats();
+    try {      const response = await voiceCampaignService.getVoiceCampaignStats();
       
-      if (response.success && response.stats) {
-        console.log('✅ [CAMPAIGNS] Stats loaded:', response.stats);
-        setStats(response.stats);
-      } else {
-        console.error('❌ [CAMPAIGNS] Failed to load stats');
-        setStats(null);
+      if (response.success && response.stats) {        setStats(response.stats);
+      } else {        setStats(null);
       }
-    } catch (error) {
-      console.error('❌ [CAMPAIGNS] Error loading stats:', error);
-      setStats(null);
+    } catch (error) {      setStats(null);
     }
   };
 
@@ -435,27 +439,18 @@ const CampaignsManagementWidget: React.FC = () => {
           }
         }
       };
-
-      console.log('🚀 [CREATE CAMPAIGN] Creating voice campaign:', campaignRequest);
-
       const response = formData.type === 'immediate'
         ? await voiceCampaignService.createImmediateVoiceCampaign(campaignRequest)
         : await voiceCampaignService.createScheduledVoiceCampaign(campaignRequest);
 
-      if (response.success) {
-        console.log('✅ [CREATE CAMPAIGN] Campaign created successfully');
-        setIsCreateModalOpen(false);
+      if (response.success) {        setIsCreateModalOpen(false);
         resetForm();
         // Recargar la lista de campañas
         await loadCampaigns();
         await loadStats();
-      } else {
-        console.error('❌ [CREATE CAMPAIGN] Failed to create campaign:', response.message);
-      }
+      } else {      }
       
-    } catch (error) {
-      console.error('❌ [CREATE CAMPAIGN] Error creating campaign:', error);
-    }
+    } catch (error) {    }
   };
 
   const resetForm = () => {
@@ -503,25 +498,17 @@ const CampaignsManagementWidget: React.FC = () => {
     if (!campaignToEdit) return;
 
     try {
-      console.log('🔊 [UPDATE CAMPAIGN] Updating campaign:', campaignToEdit.id, updatedData);
-
       const response = await voiceCampaignService.updateVoiceCampaign(campaignToEdit.id, updatedData);
 
-      if (response.success) {
-        console.log('✅ [UPDATE CAMPAIGN] Campaign updated successfully');
-        setIsEditModalOpen(false);
+      if (response.success) {        setIsEditModalOpen(false);
         setCampaignToEdit(null);
         
         // Recargar la lista de campañas
         await loadCampaigns();
         await loadStats();
-      } else {
-        console.error('❌ [UPDATE CAMPAIGN] Failed to update campaign:', response.message);
-        alert(response.message || 'Error al actualizar la campaña');
+      } else {        alert(response.message || 'Error al actualizar la campaña');
       }
-    } catch (error) {
-      console.error('❌ [UPDATE CAMPAIGN] Error updating campaign:', error);
-      alert('Error al actualizar la campaña: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+    } catch (error) {      alert('Error al actualizar la campaña: ' + (error instanceof Error ? error.message : 'Error desconocido'));
     }
   };
 
@@ -533,25 +520,17 @@ const CampaignsManagementWidget: React.FC = () => {
 
     try {
       setIsDeleting(true);
-      console.log('🔊 [DELETE CAMPAIGN] Deleting campaign:', campaignToDelete.id);
-
       const response = await voiceCampaignService.deleteVoiceCampaign(campaignToDelete.id);
 
-      if (response.success) {
-        console.log('✅ [DELETE CAMPAIGN] Campaign deleted successfully');
-        setIsDeleteModalOpen(false);
+      if (response.success) {        setIsDeleteModalOpen(false);
         setCampaignToDelete(null);
         
         // Recargar la lista de campañas
         await loadCampaigns();
         await loadStats();
-      } else {
-        console.error('❌ [DELETE CAMPAIGN] Failed to delete campaign:', response.message);
-        alert(response.message || 'Error al eliminar la campaña');
+      } else {        alert(response.message || 'Error al eliminar la campaña');
       }
-    } catch (error) {
-      console.error('❌ [DELETE CAMPAIGN] Error deleting campaign:', error);
-      alert('Error al eliminar la campaña: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+    } catch (error) {      alert('Error al eliminar la campaña: ' + (error instanceof Error ? error.message : 'Error desconocido'));
     } finally {
       setIsDeleting(false);
     }
@@ -884,6 +863,16 @@ const CampaignsManagementWidget: React.FC = () => {
                                   {actionLoading[c.id] === 'cancel' ? <Spinner size="sm" /> : <Icon icon="solar:stop-bold-duotone" height={18} />} Cancelar
                                 </Dropdown.Item>
                               )}
+                              {(c.status === 'completed' || c.status === 'cancelled') && (
+                                <Dropdown.Item className="flex gap-3" onClick={async () => {
+                                  await runWithLoading(c.id, 'restart', async () => {
+                                    const r = await voiceCampaignService.restartVoiceCampaign(c.id);
+                                    if (r.success) await loadCampaigns();
+                                  });
+                                }}>
+                                  {actionLoading[c.id] === 'restart' ? <Spinner size="sm" /> : <Icon icon="solar:restart-bold-duotone" height={18} />} Repetir
+                                </Dropdown.Item>
+                              )}
                               <Dropdown.Item className="flex gap-3" onClick={() => { setCampaignToEdit(c); setIsEditModalOpen(true); }}>
                                 <Icon icon="solar:pen-bold-duotone" height={18} /> Editar
                               </Dropdown.Item>
@@ -1006,15 +995,18 @@ const CampaignsManagementWidget: React.FC = () => {
 
 // Componente para vista detallada de campaña
 const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign }) => {
-  // Normalizar origen de estadísticas
+  // Normalizar origen de estadísticas - buscar en stats, statistics, o directamente en campaign
   const statsRaw: any = (campaign as any).statistics || (campaign as any).stats || {};
-  const totalContacts = Number(statsRaw.total_contacts ?? statsRaw.total_targets ?? campaign.contacts?.length ?? 0);
-  const completed = Number(statsRaw.completed_calls ?? statsRaw.calls_successful ?? 0);
-  const failed = Number(statsRaw.failed_calls ?? statsRaw.calls_failed ?? 0);
+  const campaignData: any = campaign;
+  const totalContacts = Number(statsRaw.total_contacts ?? statsRaw.total_targets ?? campaignData.total_targets ?? campaign.contacts?.length ?? 0);
+  const completed = Number(statsRaw.completed_calls ?? statsRaw.calls_successful ?? campaignData.calls_successful ?? 0);
+  const failed = Number(statsRaw.failed_calls ?? statsRaw.calls_failed ?? campaignData.calls_failed ?? 0);
   const noAnswer = Number(statsRaw.no_answer_calls ?? 0);
   const busy = Number(statsRaw.busy_calls ?? 0);
   const cancelled = Number(statsRaw.cancelled_calls ?? 0);
-  const processedTerm = completed + failed + noAnswer + busy + cancelled;
+  // Usar calls_made del backend si está disponible, sino sumar los estados conocidos
+  const callsMade = Number(statsRaw.calls_made ?? campaignData.calls_made ?? 0);
+  const processedTerm = callsMade > 0 ? callsMade : (completed + failed + noAnswer + busy + cancelled);
   const successRate = Number(
     typeof statsRaw.success_rate === 'number'
       ? Math.round(statsRaw.success_rate)
@@ -1145,23 +1137,47 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
     setSelectedContactCall(call);
     setIsCallModalOpen(true);
     cleanupAudio();
-    if (call?.conversation_id) {
+    
+    // Intentar obtener URL de audio de diferentes fuentes
+    let recordingUrl: string | null = null;
+    
+    // 1. Primero intentar con call_recording_url (VAPI)
+    if (call?.raw?.call_recording_url) {
+      recordingUrl = call.raw.call_recording_url;
+    }
+    // 2. Luego intentar con recording_url directo
+    else if (call?.recording_url) {
+      recordingUrl = call.recording_url;
+    }
+    // 3. Finalmente intentar con conversation_id (ElevenLabs)
+    else if (call?.conversation_id) {
       try {
         setIsLoadingAudio(true);
-        const url = await getConversationAudio(call.conversation_id);
-        if (url) {
-          const audio = new Audio(url);
-          audio.preload = 'metadata';
-          audio.addEventListener('loadedmetadata', () => setAudioDuration(audio.duration));
-          audio.addEventListener('timeupdate', () => {
-            if (!isSeekingRef.current) setCurrentTime(audio.currentTime);
-          });
-          audio.addEventListener('ended', () => setIsPlayingAudio(false));
-          audioRef.current = audio;
-          setAudioUrl(url);
-        }
-      } catch {}
-      finally {
+        recordingUrl = await getConversationAudio(call.conversation_id);
+      } catch {
+        recordingUrl = null;
+      }
+    }
+    
+    if (recordingUrl) {
+      try {
+        setIsLoadingAudio(true);
+        const audio = new Audio(recordingUrl);
+        audio.preload = 'metadata';
+        audio.addEventListener('loadedmetadata', () => setAudioDuration(audio.duration));
+        audio.addEventListener('timeupdate', () => {
+          if (!isSeekingRef.current) setCurrentTime(audio.currentTime);
+        });
+        audio.addEventListener('ended', () => setIsPlayingAudio(false));
+        audio.addEventListener('error', () => {
+          console.error('Error loading audio from:', recordingUrl);
+          setIsLoadingAudio(false);
+        });
+        audioRef.current = audio;
+        setAudioUrl(recordingUrl);
+      } catch {
+        console.error('Error setting up audio');
+      } finally {
         setIsLoadingAudio(false);
       }
     }
@@ -1208,11 +1224,18 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
   }, []);
 
   
+  // Calcular contactados vs no contactados
+  const contacted = completed + failed; // Llamadas que se conectaron (independiente del objetivo)
+  const notContacted = noAnswer + busy + cancelled;
+  const contactRate = totalContacts > 0 ? Math.round((contacted / totalContacts) * 100) : 0;
+  const objectiveRate = contacted > 0 ? Math.round((completed / contacted) * 100) : 0;
+  
   return (
     <div className="space-y-6">
       {/* Header con información básica */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Fila 1: Métricas principales */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
               {totalContacts}
@@ -1220,22 +1243,53 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
             <div className="text-sm text-gray-600 dark:text-gray-400">Total Contactos</div>
           </div>
           <div className="text-center">
+            <div className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">
+              {contacted}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Contactados</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+              {notContacted}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">No Contactados</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+              {contactRate}%
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Tasa Contactabilidad</div>
+          </div>
+        </div>
+        
+        {/* Separador */}
+        <div className="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+        
+        {/* Fila 2: Métricas de objetivo */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center">
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">
               {completed}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Completadas</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Objetivo Cumplido</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-red-600 dark:text-red-400">
               {failed}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Fallidas</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Objetivo No Cumplido</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {successRate}%
+              {objectiveRate}%
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">Tasa de Éxito</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">
+              {successRate}%
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Éxito Global</div>
           </div>
         </div>
       </div>
@@ -1289,13 +1343,24 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
               </p>
             </div>
 
-            <div>
-              <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Agente Asignado</Label>
-              <div className="mt-1 flex items-center gap-2">
-                <Icon icon="solar:user-speak-rounded-bold" className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                  {campaign.agent_name || 'Sin asignar'}
-                </span>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Objetivo</Label>
+                <div className="mt-1 flex items-center gap-2">
+                  <Icon icon="solar:target-bold" className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {(campaign as any).template_name || (campaign as any).objective || campaign.name || 'No especificado'}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Agente</Label>
+                <div className="mt-1 flex items-center gap-2">
+                  <Icon icon="solar:user-speak-rounded-bold" className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {campaign.agent_name || 'Sin asignar'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1410,9 +1475,9 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
                   <tr className="border-b border-gray-200 dark:border-gray-700">
                     <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Contacto</th>
                     <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Teléfono</th>
-                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Estado</th>
+                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Contactado</th>
+                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Objetivo</th>
                     <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Duración</th>
-                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Costo total</th>
                     <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Acciones</th>
                   </tr>
                 </thead>
@@ -1422,22 +1487,36 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
                       <td colSpan={6} className="py-6 text-center text-gray-500 dark:text-gray-400">Sin conversaciones registradas para esta campaña</td>
                     </tr>
                   ) : (
-                    contactCalls.slice(0, 10).map((c) => (
-                      <tr key={c.id} className="border-b border-gray-100 dark:border-gray-800">
-                        <td className="py-2 text-gray-900 dark:text-white">{c.name}</td>
-                        <td className="py-2 text-gray-600 dark:text-gray-400">{c.phone}</td>
-                        <td className="py-2">
-                          <Badge className={`text-xs ${getContactStatusBadgeClasses(c.status)}`}>{getStatusLabel(c.status)}</Badge>
-                      </td>
-                      <td className="py-2 text-gray-600 dark:text-gray-400">{formatDuration(c.duration)}</td>
-                      <td className="py-2 text-gray-900 dark:text-white">{`COP ${(Number(c.cost_total) || 0).toFixed(2)}`}</td>
-                      <td className="py-2">
-                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => openCallDetail(c)}>
-                            Ver detalles
-                          </Button>
-                      </td>
-                    </tr>
-                    ))
+                    contactCalls.slice(0, 10).map((c) => {
+                      const wasContacted = (c.duration || 0) >= 10 && !['no-answer', 'busy', 'failed', 'machine-detected', 'voicemail'].includes(c.raw?.call_result?.termination_reason);
+                      const objectiveSuccess = c.raw?.call_result?.call_successful ?? null;
+                      return (
+                        <tr key={c.id} className="border-b border-gray-100 dark:border-gray-800">
+                          <td className="py-2 text-gray-900 dark:text-white">{c.name}</td>
+                          <td className="py-2 text-gray-600 dark:text-gray-400">{c.phone}</td>
+                          <td className="py-2">
+                            <Badge className={`text-xs ${wasContacted ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'}`}>
+                              {wasContacted ? 'Sí' : 'No'}
+                            </Badge>
+                          </td>
+                          <td className="py-2">
+                            {objectiveSuccess === null ? (
+                              <Badge className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">N/A</Badge>
+                            ) : (
+                              <Badge className={`text-xs ${objectiveSuccess ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' : 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300'}`}>
+                                {objectiveSuccess ? 'Cumplido' : 'No cumplido'}
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="py-2 text-gray-600 dark:text-gray-400">{formatDuration(c.duration)}</td>
+                          <td className="py-2">
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => openCallDetail(c)}>
+                              Ver detalles
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1492,7 +1571,8 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
               />
             )}
 
-            {(selectedContactCall?.conversation_id) && (
+            {/* Reproductor de audio - soporta VAPI y ElevenLabs */}
+            {(selectedContactCall?.conversation_id || selectedContactCall?.raw?.call_recording_url || selectedContactCall?.recording_url || audioUrl) && (
               <div className="rounded-lg p-4 border bg-white border-gray-200 text-gray-900 dark:bg-gray-900 dark:border-gray-700 dark:text-white">
                 <div className="flex items-center gap-3">
                   <Button
@@ -1529,6 +1609,45 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
                 {!audioRef.current && !isLoadingAudio && (
                   <div className="text-xs text-gray-500 mt-2">Pulsa reproducir para cargar el audio</div>
                 )}
+              </div>
+            )}
+
+            {/* Transcripción de la llamada */}
+            {(selectedContactCall?.raw?.call_metadata?.transcript || selectedContactCall?.raw?.call_result?.transcript_summary) && (
+              <div className="rounded-lg p-4 border bg-white border-gray-200 dark:bg-gray-900 dark:border-gray-700">
+                <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <Icon icon="solar:document-text-bold" className="w-4 h-4 text-blue-500" />
+                  {selectedContactCall?.raw?.call_metadata?.transcript ? 'Transcripción' : 'Resumen de la Conversación'}
+                </h4>
+                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                  {selectedContactCall?.raw?.call_metadata?.transcript || selectedContactCall?.raw?.call_result?.transcript_summary}
+                </div>
+              </div>
+            )}
+
+            {/* Resultado del objetivo */}
+            {selectedContactCall?.raw?.call_result && (
+              <div className="rounded-lg p-4 border bg-white border-gray-200 dark:bg-gray-900 dark:border-gray-700">
+                <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <Icon icon="solar:chart-bold" className="w-4 h-4 text-purple-500" />
+                  Resultado de la Llamada
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Objetivo Cumplido</span>
+                    <div className="mt-1">
+                      <Badge className={`text-xs ${selectedContactCall.raw.call_result.call_successful ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' : 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300'}`}>
+                        {selectedContactCall.raw.call_result.call_successful ? 'Sí' : 'No'}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Razón de Finalización</span>
+                    <div className="mt-1 text-sm text-gray-900 dark:text-white">
+                      {selectedContactCall.raw.call_result.termination_reason || 'N/A'}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>

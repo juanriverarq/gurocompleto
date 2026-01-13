@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react';
 import { saasApi } from 'src/services/saasApi';
 import { useToast } from 'src/hooks/use-toast';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import * as XLSX from 'xlsx';
 
 interface VendedorLiquidacion {
   id: number;
@@ -302,80 +303,64 @@ const ReporteLiquidaciones: React.FC = () => {
       // Obtener TODOS los datos del período
       const todosLosVendedores = await obtenerTodosLosDatos();
       
-      // Headers
-      const headers = [
-        'Vendedor',
-        'Documento',
-        'Cant. Pólizas',
-        'Total Prima',
-        '% Comisión',
-        'Valor Comisión',
-        '% IVA',
-        'IVA Comisión',
-        '% Ret. Fuente',
-        'Ret. Fuente',
-        '% Ret. IVA',
-        'Ret. IVA',
-        '% Ret. ICA',
-        'Ret. ICA',
-        'Pago Final'
-      ].map(h => `"${h}"`).join('\t');
+      // Helper para redondear a 2 decimales (centavos COP)
+      const round2 = (n: number) => Math.round(n * 100) / 100;
       
-      // Rows (todos los vendedores)
-      const rows = todosLosVendedores.map(v => [
-        `"${v.nombres}"`,
-        `"${v.tipo_documento} ${v.numero_documento}"`,
-        v.cantidad_polizas,
-        v.total_prima,
-        v.porcentaje_comision,
-        v.valor_comision,
-        v.porcentaje_iva,
-        v.iva_comision,
-        v.porcentaje_retencion,
-        v.retencion_fuente,
-        v.porcentaje_retencion_iva,
-        v.retencion_iva,
-        v.porcentaje_retencion_ica,
-        v.retencion_ica,
-        v.pago_final
-      ].join('\t')).join('\n');
+      // Crear datos para Excel
+      const excelData = [
+        ['REPORTE DE LIQUIDACIONES'],
+        [`Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}`],
+        [`Generado: ${new Date().toLocaleDateString('es-CO')}`],
+        [`Total vendedores: ${todosLosVendedores.length}`],
+        [], // Fila vacía
+        ['Vendedor', 'Documento', 'Cant. Pólizas', 'Total Prima', '% Comisión', 'Valor Comisión', '% IVA', 'IVA Comisión', '% Ret. Fuente', 'Ret. Fuente', '% Ret. IVA', 'Ret. IVA', '% Ret. ICA', 'Ret. ICA', 'Pago Final'],
+        ...todosLosVendedores.map(v => [
+          v.nombres,
+          `${v.tipo_documento} ${v.numero_documento}`,
+          v.cantidad_polizas,
+          round2(v.total_prima),
+          round2(v.porcentaje_comision),
+          round2(v.valor_comision),
+          round2(v.porcentaje_iva),
+          round2(v.iva_comision),
+          round2(v.porcentaje_retencion),
+          round2(v.retencion_fuente),
+          round2(v.porcentaje_retencion_iva),
+          round2(v.retencion_iva),
+          round2(v.porcentaje_retencion_ica),
+          round2(v.retencion_ica),
+          round2(v.pago_final)
+        ]),
+        ['TOTALES', '', totales.cantidad_polizas, round2(totales.total_prima), '', round2(totales.valor_comision), '', round2(totales.iva_comision), '', round2(totales.retencion_fuente), '', round2(totales.retencion_iva), '', round2(totales.retencion_ica), round2(totales.pago_final)]
+      ];
       
-      // Fila de totales (usar los totales del estado que ya tienen el total general)
-      const totalesRow = [
-        '"TOTALES"',
-        '""',
-        totales.cantidad_polizas,
-        totales.total_prima,
-        '""',
-        totales.valor_comision,
-        '""',
-        totales.iva_comision,
-        '""',
-        totales.retencion_fuente,
-        '""',
-        totales.retencion_iva,
-        '""',
-        totales.retencion_ica,
-        totales.pago_final
-      ].join('\t');
-
-      // Encabezado del reporte
-      const titulo = `"REPORTE DE LIQUIDACIONES"\t\t\t\t\t\t\t\t\t\t\t\t`;
-      const periodo = `"Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}"\t\t\t\t\t\t\t\t\t\t\t\t`;
-      const fechaGen = `"Generado: ${new Date().toLocaleDateString('es-CO')}"\t\t\t\t\t\t\t\t\t\t\t\t`;
-      const totalVendedores = `"Total vendedores: ${todosLosVendedores.length}"\t\t\t\t\t\t\t\t\t\t\t\t`;
+      // Crear workbook y worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
       
-      const content = `${titulo}\n${periodo}\n${fechaGen}\n${totalVendedores}\n\n${headers}\n${rows}\n${totalesRow}`;
+      // Ajustar ancho de columnas
+      ws['!cols'] = [
+        { wch: 30 }, // Vendedor
+        { wch: 20 }, // Documento
+        { wch: 12 }, // Cant. Pólizas
+        { wch: 15 }, // Total Prima
+        { wch: 12 }, // % Comisión
+        { wch: 15 }, // Valor Comisión
+        { wch: 8 },  // % IVA
+        { wch: 15 }, // IVA Comisión
+        { wch: 12 }, // % Ret. Fuente
+        { wch: 15 }, // Ret. Fuente
+        { wch: 10 }, // % Ret. IVA
+        { wch: 12 }, // Ret. IVA
+        { wch: 10 }, // % Ret. ICA
+        { wch: 12 }, // Ret. ICA
+        { wch: 15 }, // Pago Final
+      ];
       
-      // Crear y descargar archivo
-      const BOM = '\uFEFF';
-      const blob = new Blob([BOM + content], { type: 'application/vnd.ms-excel;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `liquidaciones_${periodoInicio}_${periodoFin}.xls`;
-      link.click();
-      URL.revokeObjectURL(url);
+      XLSX.utils.book_append_sheet(wb, ws, 'Liquidaciones');
+      
+      // Descargar archivo Excel
+      XLSX.writeFile(wb, `liquidaciones_${periodoInicio}_${periodoFin}.xlsx`);
       
       toast({ title: 'Éxito', description: `Exportados ${todosLosVendedores.length} vendedores correctamente` });
     } catch (e) {
@@ -613,68 +598,61 @@ const ReporteLiquidaciones: React.FC = () => {
     }
   };
 
-  // Exportar reporte del vendedor a Excel
+  // Exportar reporte del vendedor a Excel (XLSX real)
   const exportarReporteVendedor = () => {
     if (!vendedorSeleccionado || polizasVendedor.length === 0) return;
 
     try {
-      const headers = [
-        'Nº Póliza',
-        'Cliente',
-        'Aseguradora',
-        'Ramo',
-        'Fecha Póliza',
-        'Prima Neta',
-        'Comisión Bruta',
-        'Ret. Fuente',
-        'Ret. IVA',
-        'Ret. ICA',
-        'Comisión Neta'
-      ].map(h => `"${h}"`).join('\t');
-
-      const rows = polizasVendedor.map(p => [
-        `"${p.numero_poliza}"`,
-        `"${p.cliente}"`,
-        `"${p.aseguradora}"`,
-        `"${p.ramo}"`,
-        `"${p.fecha_poliza ? new Date(p.fecha_poliza).toLocaleDateString('es-CO') : ''}"`,
-        p.prima_neta,
-        p.comision_bruta,
-        p.retencion_fuente,
-        p.retencion_iva,
-        p.retencion_ica,
-        p.comision_neta
-      ].join('\t')).join('\n');
-
-      const totalesRow = [
-        '"TOTALES"',
-        '""',
-        '""',
-        '""',
-        `"${totalesVendedor.cantidad_polizas} pólizas"`,
-        totalesVendedor.prima_total,
-        totalesVendedor.comision_bruta_total,
-        totalesVendedor.retencion_total,
-        totalesVendedor.reteiva_total,
-        totalesVendedor.retencion_ica_total,
-        totalesVendedor.comision_neta_total
-      ].join('\t');
-
-      const titulo = `"REPORTE DE LIQUIDACIONES - ${vendedorSeleccionado.nombres}"\t\t\t\t\t\t\t\t\t\t\t`;
-      const documento = `"${vendedorSeleccionado.tipo_documento}: ${vendedorSeleccionado.numero_documento}"\t\t\t\t\t\t\t\t\t\t\t`;
-      const periodo = `"Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}"\t\t\t\t\t\t\t\t\t\t\t`;
-      const fechaGen = `"Generado: ${new Date().toLocaleDateString('es-CO')}"\t\t\t\t\t\t\t\t\t\t\t`;
-
-      const content = `${titulo}\n${documento}\n${periodo}\n${fechaGen}\n\n${headers}\n${rows}\n${totalesRow}`;
-
-      const BOM = '\uFEFF';
-      const blob = new Blob([BOM + content], { type: 'application/vnd.ms-excel;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `liquidaciones_${vendedorSeleccionado.nombres.replace(/\s+/g, '_')}_${periodoInicio}_${periodoFin}.xls`;
-      link.click();
-      URL.revokeObjectURL(url);
+      // Helper para redondear a 2 decimales (centavos COP)
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      
+      // Crear datos para Excel
+      const excelData = [
+        [`REPORTE DE LIQUIDACIONES - ${vendedorSeleccionado.nombres}`],
+        [`${vendedorSeleccionado.tipo_documento}: ${vendedorSeleccionado.numero_documento}`],
+        [`Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}`],
+        [`Generado: ${new Date().toLocaleDateString('es-CO')}`],
+        [], // Fila vacía
+        ['Nº Póliza', 'Cliente', 'Aseguradora', 'Ramo', 'Fecha Póliza', 'Prima Neta', 'Comisión Bruta', 'Ret. Fuente', 'Ret. IVA', 'Ret. ICA', 'Comisión Neta'],
+        ...polizasVendedor.map(p => [
+          p.numero_poliza,
+          p.cliente,
+          p.aseguradora,
+          p.ramo,
+          p.fecha_poliza ? new Date(p.fecha_poliza).toLocaleDateString('es-CO') : '',
+          round2(p.prima_neta),
+          round2(p.comision_bruta),
+          round2(p.retencion_fuente),
+          round2(p.retencion_iva),
+          round2(p.retencion_ica),
+          round2(p.comision_neta)
+        ]),
+        ['TOTALES', '', '', '', `${totalesVendedor.cantidad_polizas} pólizas`, round2(totalesVendedor.prima_total), round2(totalesVendedor.comision_bruta_total), round2(totalesVendedor.retencion_total), round2(totalesVendedor.reteiva_total), round2(totalesVendedor.retencion_ica_total), round2(totalesVendedor.comision_neta_total)]
+      ];
+      
+      // Crear workbook y worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+      
+      // Ajustar ancho de columnas
+      ws['!cols'] = [
+        { wch: 15 }, // Nº Póliza
+        { wch: 25 }, // Cliente
+        { wch: 20 }, // Aseguradora
+        { wch: 15 }, // Ramo
+        { wch: 12 }, // Fecha Póliza
+        { wch: 15 }, // Prima Neta
+        { wch: 15 }, // Comisión Bruta
+        { wch: 12 }, // Ret. Fuente
+        { wch: 12 }, // Ret. IVA
+        { wch: 12 }, // Ret. ICA
+        { wch: 15 }, // Comisión Neta
+      ];
+      
+      XLSX.utils.book_append_sheet(wb, ws, 'Liquidación Vendedor');
+      
+      // Descargar archivo Excel
+      XLSX.writeFile(wb, `liquidaciones_${vendedorSeleccionado.nombres.replace(/\s+/g, '_')}_${periodoInicio}_${periodoFin}.xlsx`);
 
       toast({ title: 'Éxito', description: `Exportadas ${polizasVendedor.length} pólizas` });
     } catch (e) {

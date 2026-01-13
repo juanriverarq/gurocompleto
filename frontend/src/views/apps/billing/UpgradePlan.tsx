@@ -2,17 +2,50 @@ import { useState, useMemo, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import { MODULES, calculateTotals, numberFormat, ModuleKey, BillingPeriod } from 'src/components/landingpage/pricing-calculator/modules';
+import api from 'src/config/api';
+
+const SURA_LOGO_URL =
+  'https://www.sura.co/documents/43501/0/Logo-SURA-blanco+1.svg/8937a328-d03b-7aa7-79bd-a5308a3931b3?version=1.0&t=1704405886717';
 
 const UpgradePlan = () => {
   const { tenant, trialEndsAt } = useUnifiedAuth();
-  const [period, setPeriod] = useState<BillingPeriod>('monthly');
+  const [period, setPeriod] = useState<BillingPeriod>('annual');
   const [users, setUsers] = useState(1);
+  const [storageGB, setStorageGB] = useState(10);
   const [selectedModules, setSelectedModules] = useState<Set<ModuleKey>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingIntent, setPendingIntent] = useState<any>(null);
+  const [loadingIntent, setLoadingIntent] = useState(true);
 
-  // Cargar módulos del broker (features)
+  // Cargar subscription_intent pendiente del usuario
   useEffect(() => {
-    if (tenant) {
+    const loadPendingIntent = async () => {
+      try {
+        const resp = await api.get('/billing/status');
+        const data = resp.data?.data || {};
+        if (data.pending_intent) {
+          setPendingIntent(data.pending_intent);
+          // Cargar datos del intent
+          const intent = data.pending_intent;
+          if (intent.period) setPeriod(intent.period);
+          if (intent.users_count) setUsers(intent.users_count);
+          if (intent.storage_gb) setStorageGB(intent.storage_gb);
+          if (intent.modules && Array.isArray(intent.modules)) {
+            setSelectedModules(new Set(intent.modules as ModuleKey[]));
+          }
+        }
+      } catch (e) {
+        console.error('Error loading pending intent:', e);
+      } finally {
+        setLoadingIntent(false);
+      }
+    };
+    loadPendingIntent();
+  }, []);
+
+  // Cargar módulos del broker (features) si no hay intent pendiente
+  useEffect(() => {
+    if (!loadingIntent && !pendingIntent && tenant) {
       const t = tenant as any;
       const features = t.features || [];
       if (features.length > 0) {
@@ -27,7 +60,11 @@ const UpgradePlan = () => {
         setUsers(t.max_users);
       }
     }
-  }, [tenant]);
+  }, [tenant, loadingIntent, pendingIntent]);
+
+  // Detectar cupón Sura
+  const suraCoupon = pendingIntent?.coupon;
+  const hasSuraCoupon = suraCoupon?.code === 'SURA30';
 
   // Calcular totales
   const totals = useMemo(() => calculateTotals(selectedModules, users, period), [selectedModules, users, period]);
@@ -59,18 +96,94 @@ const UpgradePlan = () => {
 
   const handleSubscribe = async () => {
     setIsLoading(true);
-    // TODO: Integrar con pasarela de pago
-    setTimeout(() => {
-      alert('Redirigiendo a pasarela de pago...');
+    try {
+      // Si hay cambios respecto al intent original, actualizar el intent primero
+      if (!pendingIntent) {
+        // Crear nuevo intent si no existe
+        await api.post('/pricing/subscription-intents', {
+          users,
+          period,
+          storageGB: 10,
+          modules: Array.from(selectedModules),
+          totals,
+          source: 'upgrade_plan',
+        });
+      }
+      
+      // Obtener link de checkout de Wompi
+      const resp = await api.post('/billing/checkout-link', {});
+      const url = resp.data?.data?.checkout_url;
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error('No se pudo generar link de pago');
+      }
+    } catch (e: any) {
+      console.error('Error al procesar pago:', e);
+      alert(e?.response?.data?.message || e?.message || 'Error al procesar el pago. Intenta nuevamente.');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const trialExpired = trialEndsAt ? new Date(trialEndsAt) < new Date() : false;
 
+  // Calcular almacenamiento extra (10GB incluidos)
+  const extraGB = Math.max(storageGB - 10, 0);
+  const storageMonthly = extraGB * 2000;
+  const storageAnnualBefore = storageMonthly * 12;
+  const storageAnnualAfter = Math.round(storageAnnualBefore * 0.88); // 12% descuento
+
+  // Calcular totales con descuento Sura (30% solo en plan anual, sin el 12%)
+  const subtotalWithDiscount = (totals as any).subtotalAnnual ?? 0;
+  const discountAnnual = (totals as any).discountAnnual ?? 0;
+  const subtotalBeforeDiscount = subtotalWithDiscount + discountAnnual + storageAnnualBefore;
+  
+  const subtotal = period === 'monthly' 
+    ? ((totals as any).subtotalMonthly ?? 0) + storageMonthly
+    : hasSuraCoupon ? subtotalBeforeDiscount : (subtotalWithDiscount + storageAnnualAfter);
+  
+  const suraDiscountAmount = hasSuraCoupon && period === 'annual' ? Math.round(subtotal * 0.30) : 0;
+  const totalFinal = subtotal - suraDiscountAmount;
+
+  if (loadingIntent) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-darkgray py-8 px-4 flex items-center justify-center">
+        <div className="text-center">
+          <Icon icon="svg-spinners:ring-resize" className="text-4xl text-primary mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Cargando tu plan...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-darkgray py-8 px-4 font-['Manrope',sans-serif]">
       <div className="max-w-6xl mx-auto">
+        {/* Banner Sura */}
+        {hasSuraCoupon && (
+          <div className="mb-6 rounded-2xl bg-gradient-to-r from-[#0033A0] to-[#00A1E4] p-5 shadow-lg">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <img
+                  src={SURA_LOGO_URL}
+                  alt="Logo SURA"
+                  className="h-10 w-auto"
+                />
+                <div className="h-8 w-px bg-white/30 hidden sm:block" />
+                <div>
+                  <p className="text-white/80 text-xs font-medium">Convenio exclusivo</p>
+                  <h2 className="text-white text-lg font-bold">SURA + Guro</h2>
+                </div>
+              </div>
+              <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1.5">
+                <span className="text-white text-sm font-bold">30% OFF</span>
+                <span className="text-white/90 text-xs">aplicado</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="text-center mb-8">
           {trialExpired ? (
@@ -125,24 +238,28 @@ const UpgradePlan = () => {
                     }`}
                   >
                     Anual
-                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
-                      -20%
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      hasSuraCoupon 
+                        ? 'bg-[#00A1E4]/10 text-[#0033A0]' 
+                        : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    }`}>
+                      {hasSuraCoupon ? '-30%' : '-12%'}
                     </span>
                   </button>
                 </div>
               </div>
 
               {/* Usuarios */}
-              <div>
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
                   Cantidad de usuarios
                 </label>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setUsers(Math.max(1, users - 1))}
-                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-darkgray hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center transition"
+                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-darkgray hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center transition text-dark dark:text-white text-xl font-bold"
                   >
-                    <Icon icon="solar:minus-linear" />
+                    −
                   </button>
                   <input
                     type="number"
@@ -152,11 +269,40 @@ const UpgradePlan = () => {
                   />
                   <button
                     onClick={() => setUsers(users + 1)}
-                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-darkgray hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center transition"
+                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-darkgray hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center transition text-dark dark:text-white text-xl font-bold"
                   >
-                    <Icon icon="solar:add-linear" />
+                    +
                   </button>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">1er usuario gratis</p>
+              </div>
+
+              {/* Almacenamiento */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                  Almacenamiento (GB)
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setStorageGB(Math.max(10, storageGB - 1))}
+                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-darkgray hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center transition text-dark dark:text-white text-xl font-bold"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    value={storageGB}
+                    onChange={(e) => setStorageGB(Math.max(10, parseInt(e.target.value) || 10))}
+                    className="w-20 text-center px-3 py-2 rounded-lg border border-gray-200 dark:border-darkborder bg-white dark:bg-darkgray text-dark dark:text-white font-semibold"
+                  />
+                  <button
+                    onClick={() => setStorageGB(storageGB + 1)}
+                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-darkgray hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center transition text-dark dark:text-white text-xl font-bold"
+                  >
+                    +
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">10 GB incluidos</p>
               </div>
             </div>
 
@@ -253,31 +399,64 @@ const UpgradePlan = () => {
                     {period === 'monthly' ? 'Mensual' : 'Anual'}
                   </span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">Almacenamiento</span>
+                  <span className="font-medium text-dark dark:text-white">{storageGB} GB</span>
+                </div>
                 
-                <div className="border-t border-gray-100 dark:border-darkborder pt-3">
+                <div className="border-t border-gray-100 dark:border-darkborder pt-3 space-y-1">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Subtotal</span>
+                    <span className="text-gray-600 dark:text-gray-400">Base plataforma</span>
                     <span className="font-medium text-dark dark:text-white">
-                      {numberFormat((totals as any).subtotal)}
+                      {numberFormat(period === 'monthly' ? (totals as any).baseMonthly : (totals as any).baseAnnual)}
                     </span>
                   </div>
-                  {period === 'annual' && (
+                  {(totals as any).users?.billableUsers > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        Usuarios ({(totals as any).users.billableUsers} × {numberFormat((totals as any).users.perUserMonthly)})
+                      </span>
+                      <span className="font-medium text-dark dark:text-white">
+                        {numberFormat(period === 'monthly' ? (totals as any).users.usersMonthly : (totals as any).users.usersAnnualTotal)}
+                      </span>
+                    </div>
+                  )}
+                  {extraGB > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Almacenamiento extra ({extraGB} GB)</span>
+                      <span className="font-medium text-dark dark:text-white">
+                        {numberFormat(period === 'monthly' ? storageMonthly : storageAnnualBefore)}
+                      </span>
+                    </div>
+                  )}
+                  {period === 'annual' && !hasSuraCoupon && discountAnnual > 0 && (
                     <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
-                      <span>Descuento anual (20%)</span>
-                      <span>-{numberFormat((totals as any).subtotal * 0.2)}</span>
+                      <span>Descuento anual (12%)</span>
+                      <span>-{numberFormat(discountAnnual + (storageAnnualBefore - storageAnnualAfter))}</span>
+                    </div>
+                  )}
+                  {hasSuraCoupon && period === 'annual' && suraDiscountAmount > 0 && (
+                    <div className="flex justify-between text-sm text-[#00A1E4] font-medium">
+                      <span>Cupón SURA30 (-30%)</span>
+                      <span>-{numberFormat(suraDiscountAmount)}</span>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Total */}
-              <div className="bg-gray-50 dark:bg-darkgray rounded-xl p-4 mb-6">
+              <div className={`rounded-xl p-4 mb-6 ${hasSuraCoupon ? 'bg-gradient-to-r from-[#0033A0]/10 to-[#00A1E4]/10' : 'bg-gray-50 dark:bg-darkgray'}`}>
                 <div className="flex justify-between items-end">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">Total {period === 'monthly' ? 'mensual' : 'anual'}</p>
-                    <p className="text-2xl font-bold text-dark dark:text-white">
-                      {numberFormat((totals as any).total)}
+                    <p className={`text-2xl font-bold ${hasSuraCoupon ? 'text-[#00A1E4]' : 'text-dark dark:text-white'}`}>
+                      {numberFormat(totalFinal)}
                     </p>
+                    {hasSuraCoupon && period === 'annual' && (
+                      <p className="text-xs text-gray-400 line-through">
+                        Antes: {numberFormat(subtotal)}
+                      </p>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">COP/{period === 'monthly' ? 'mes' : 'año'}</p>
                 </div>
@@ -324,7 +503,7 @@ const UpgradePlan = () => {
         {/* FAQ o info adicional */}
         <div className="mt-8 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            ¿Tienes preguntas? <a href="mailto:soporte@guro.com" className="text-primary hover:underline">Contáctanos</a>
+            ¿Tienes preguntas? <a href="mailto:soporte@guro.co" className="text-primary hover:underline">Contáctanos</a>
           </p>
         </div>
       </div>

@@ -220,18 +220,38 @@ const { getRootProps, getInputProps, isDragActive } = useDropzone({
     }
   };
 
+  // Función para traducir estados a español
+  const translateStatus = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'connected': '✅ Conectado',
+      'authenticated': '✅ Autenticado',
+      'connecting': '🔄 Conectando...',
+      'disconnected': '❌ Desconectado',
+      'qr_pending': '📱 Esperando QR',
+      'error': '⚠️ Error',
+      'unknown': '❓ Desconocido'
+    };
+    return statusMap[status.toLowerCase()] || `❓ ${status}`;
+  };
+
   const loadWhatsAppInstances = async () => {
     try {
       // Usar el endpoint filtrado por broker del backend para asegurar IDs válidos
       const result = await campaignService.getAvailableWhatsAppInstances();
       if (result.success && result.instances) {
         const mappedInstances = result.instances.map((inst) => {
-          const baseName = inst.display_name || inst.phone_number || inst.instance_id || `Instancia ${inst.id}`;
-          const status = (inst.status || '').toLowerCase();
+          const phoneNumber = inst.phone_number || 'Sin número';
+          const status = (inst.status || 'unknown').toLowerCase();
+          const statusText = translateStatus(status);
+          
+          // Formato: "Número - Estado" para mejor legibilidad
+          const displayName = `${phoneNumber} - ${statusText}`;
+          
           return {
             id: inst.id || 0,
-            name: `${baseName} (${status || 'unknown'})`,
-            status
+            name: displayName,
+            status,
+            phoneNumber: inst.phone_number
           };
         });
         setWhatsappInstances(mappedInstances);

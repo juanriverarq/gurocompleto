@@ -11,17 +11,17 @@ use Carbon\Carbon;
 class VoiceCampaignCallService
 {
     /**
-     * Inicia una sola llamada de campaña de voz con ElevenLabs y registra la VoiceCampaignCall.
+     * Inicia una sola llamada de campaña de voz con VAPI y registra la VoiceCampaignCall.
      *
      * Opciones soportadas:
      * - execution_id?: int (para asociar a una ejecución existente)
      * - message_template?: string (override del template de la campaña)
-     * - agent_id?: string
      * - phone_number_id?: string
-     * - voice_id?: string
+     * - voice_id?: string (ElevenLabs voice ID)
      * - voice_settings?: array
      * - agent_name?: string
      * - collect_config?: array (override de post_call_tools.collect)
+     * - background_sound?: string ('office', 'off')
      *
      * Retorna:
      *   [
@@ -36,18 +36,18 @@ class VoiceCampaignCallService
     public function startSingleCall(VoiceCampaign $campaign, array $contact, array $options = []): array
     {
         try {
-            // 1) Resolver overrides y configuración base
-            $agentId       = $options['agent_id']        ?? $campaign->elevenlabs_agent_id ?? env('ELEVENLABS_AGENT_ID');
-            $phoneNumberId = $options['phone_number_id'] ?? $campaign->elevenlabs_phone_number_id ?? env('ELEVENLABS_PHONE_NUMBER_ID');
-            $voiceId       = $options['voice_id']        ?? $campaign->elevenlabs_voice_id ?? null;
-            $voiceSettings = $options['voice_settings']  ?? $campaign->voice_settings ?? null;
+            // 1) Resolver overrides y configuración base (VAPI)
+            // IMPORTANTE: Siempre usar el phoneNumberId de VAPI, no el de ElevenLabs
+            $phoneNumberId = env('VAPI_PHONE_NUMBER_ID');
+            $voiceId       = $options['voice_id']        ?? $campaign->elevenlabs_voice_id ?? 'YPh7OporwNAJ28F5IQrm'; // Angie por defecto
             $agentName     = $options['agent_name']      ?? ($campaign->agent_name ?: 'tu asesor');
             $messageTpl    = $options['message_template'] ?? (string) $campaign->voice_message_template;
             $collectConfig = $options['collect_config']   ?? (is_array($campaign->settings) ? data_get($campaign->settings, 'post_call_tools.collect', null) : null);
+            $backgroundSound = $options['background_sound'] ?? 'office'; // Sonido de oficina por defecto
 
-            $elevenApiKey  = env('ELEVENLABS_API_KEY');
-            if (!$elevenApiKey || !$agentId || !$phoneNumberId) {
-                throw new \RuntimeException('Missing ElevenLabs credentials (API key / agent_id / phone_number_id)');
+            $vapiApiKey    = env('VAPI_PRIVATE_KEY');
+            if (!$vapiApiKey || !$phoneNumberId) {
+                throw new \RuntimeException('Missing VAPI credentials (VAPI_PRIVATE_KEY or VAPI_PHONE_NUMBER_ID)');
             }
 
             // 2) Normalizar teléfono y mensaje
@@ -66,7 +66,7 @@ class VoiceCampaignCallService
                     'status' => \App\Models\VoiceCampaignExecution::STATUS_PENDING,
                     'started_at' => now(),
                     'targets_found' => 1,
-                    'elevenlabs_agent_id_used' => $agentId,
+                    'elevenlabs_agent_id_used' => 'vapi_transient', // VAPI usa agentes transient
                     'elevenlabs_phone_number_id_used' => $phoneNumberId,
                 ]);
                 $executionId = $execution->id;
@@ -82,23 +82,42 @@ class VoiceCampaignCallService
                 'recipient_name'               => $contact['name'] ?? null,
                 'voice_message_content'        => $personalizedMsg,
                 'status'                       => VoiceCampaignCall::STATUS_PENDING,
-                'elevenlabs_agent_id'          => $agentId,
+                'elevenlabs_agent_id'          => 'vapi_transient',
                 'elevenlabs_phone_number_id'   => $phoneNumberId,
             ]);
 
-            // 5) Preparar payload ElevenLabs (reutiliza la misma lógica del controlador)
-            $companyName   = $contact['company_name'] ?? data_get($contact, 'custom_data.company_name') ?? env('DEFAULT_COMPANY_NAME', 'GURO Seguros');
+            // 5) Preparar payload VAPI
+            // Obtener nombre comercial del broker
+            $broker = null;
+            if ($campaign->broker_id) {
+                $broker = \App\Models\Broker::find($campaign->broker_id);
+            }
+            $brokerCommercialName = $broker?->name ?? env('DEFAULT_COMPANY_NAME', 'GURO Seguros');
+            
+            // IMPORTANTE: Usar siempre el nombre del broker, no el del contacto
+            // El contacto puede tener company_name de la aseguradora, no de la agencia
+            $companyName = $brokerCommercialName;
+            
+            Log::info('🏢 [VOICE CALL] Nombre de empresa para llamada', [
+                'broker_id' => $campaign->broker_id,
+                'broker_name' => $broker?->name,
+                'brokerCommercialName' => $brokerCommercialName,
+                'companyName_final' => $companyName,
+            ]);
             $policyNumber  = $contact['policy_number'] ?? data_get($contact, 'custom_data.policy_number') ?? 'N/A';
             $debtAmountRaw = $contact['debt_amount'] ?? data_get($contact, 'custom_data.debt_amount') ?? 0;
-            $dueDate       = $contact['payment_due_date'] ?? data_get($contact, 'custom_data.payment_due_date') ?? Carbon::now()->addDays(5)->format('Y-m-d');
+            $dueDateRaw    = $contact['payment_due_date'] ?? data_get($contact, 'custom_data.payment_due_date') ?? Carbon::now()->addDays(5)->format('Y-m-d');
             $customerName  = $contact['name'] ?? data_get($contact, 'custom_data.customer_name') ?? 'Cliente';
+            
+            // Formatear fecha en español (ej: "15 de enero de 2026")
+            $dueDate = $this->formatDateInSpanish($dueDateRaw);
 
             $dynamicVars = [
                 'customer_name'    => $customerName,
                 'company_name'     => $companyName,
                 'policy_number'    => (string) $policyNumber,
                 'debt_amount'      => is_numeric($debtAmountRaw) ? (float) $debtAmountRaw : (string) $debtAmountRaw,
-                'payment_due_date' => (string) $dueDate,
+                'payment_due_date' => $dueDate,
                 // Aliases
                 'user_name'        => $customerName,
                 'client_name'      => $customerName,
@@ -142,7 +161,7 @@ class VoiceCampaignCallService
             }
 
             $agentDisplayName = $agentName ?: 'tu asesor';
-            $safeCompany      = $companyName ?: 'tu compañía de seguros';
+            $safeCompany      = $companyName ?: $brokerCommercialName;
             $firstMessage     = "Hola {$customerName}, soy {$agentDisplayName} de {$safeCompany}. " .
                                 "Quería hablar contigo sobre tu póliza {$policyNumber}. ¿Te puedo contar los detalles?";
 
@@ -155,6 +174,31 @@ class VoiceCampaignCallService
             $whatsappGuardrail = $whatsappEnabled
                 ? "\n- Solo ofrece el envío por WhatsApp si el cliente lo acepta. Si no tiene WhatsApp, simplemente confirma la fecha de pago."
                 : "\n- NO menciones WhatsApp en ningún momento. Solo confirma la fecha en que puede realizar el pago.";
+
+            // Construir sección de cierre según si hay recolección de datos o no
+            $hasDataCollection = !empty($collectInstruction);
+            $cierreSection = $hasDataCollection
+                ? "4) Cierre (recolección de datos al final):
+   - Solo si corresponde y el cliente acepta continuar o finalizar, realiza la recolección de datos requerida.
+   - Pide todos los datos en una sola tanda (no interrumpas el flujo con datos administrativos antes).
+   - Anuncia la transición: \"Antes de finalizar, necesito confirmar unos datos cortos\".
+   - Para cada dato activo, usa EXACTAMENTE el formato: \"campo: valor\"
+     (ej.: \"email: usuario@dominio.com\", \"número de documento: 123456789\", \"address: Calle 10 # 20-30\").
+   - Si ya obtuviste un dato durante la conversación, no lo repitas; confírmalo una única vez.{$whatsappCierre}
+   - Al final, pregunta: \"¿Hay algo más en lo que pueda ayudarte?\" y ESPERA la respuesta del cliente.
+   - Solo después de que el cliente responda (\"no\", \"nada más\", \"eso es todo\", etc.), despídete cordialmente."
+                : "4) Cierre y despedida:
+   - Una vez confirmada la acción (fecha de pago, compromiso, etc.), pregunta: \"¿Hay algo más en lo que pueda ayudarte?\"
+   - IMPORTANTE: ESPERA a que el cliente responda antes de despedirte. No te despidas inmediatamente después de preguntar.
+   - Solo cuando el cliente confirme que no necesita nada más, despídete cordialmente: \"Perfecto, {$customerName}. Muchas gracias por tu tiempo. Que tengas un excelente día. ¡Hasta pronto!\"{$whatsappCierre}
+   - NO solicites datos adicionales si no están configurados.";
+
+            $toolsSection = $hasDataCollection
+                ? "# Tools
+Usa estas instrucciones únicamente en el paso 4 (Cierre), no antes.
+{$collectInstruction}"
+                : "# Tools
+No hay datos adicionales que recolectar en esta llamada. Procede directamente al cierre y despedida una vez confirmada la acción del cliente.";
 
             $finalPrompt = trim("
 # Personality
@@ -187,14 +231,7 @@ Plan de conversación y orden:
 3) Confirmación de decisiones (según políticas):
    - Confirma con el cliente la acción acordada (p. ej., envío del enlace por WhatsApp al mismo número u otro, compromiso de pago inmediato o fecha y recordatorio).
    - NO solicites datos aún. Primero cierra la decisión y recibe la respuesta del cliente.
-4) Cierre (recolección de datos al final):
-   - Solo si corresponde y el cliente acepta continuar o finalizar, realiza la recolección de datos requerida.
-   - Pide todos los datos en una sola tanda (no interrumpas el flujo con datos administrativos antes).
-   - Anuncia la transición: \"Antes de finalizar, necesito confirmar unos datos cortos\".
-   - Para cada dato activo, usa EXACTAMENTE el formato: \"campo: valor\"
-     (ej.: \"email: usuario@dominio.com\", \"número de documento: 123456789\", \"address: Calle 10 # 20-30\").
-   - Si ya obtuviste un dato durante la conversación, no lo repitas; confírmalo una única vez.{$whatsappCierre}
-   - SIEMPRE despídete cordialmente antes de finalizar la llamada
+{$cierreSection}
 5) Si el cliente está ocupado:
    - Ofrece reagendar de forma proactiva y NO recolectes datos en ese momento.
 
@@ -208,105 +245,128 @@ Plan de conversación y orden:
 - Mantén el control del flujo y redirige con suavidad si el cliente se desvía.
 - No pidas datos administrativos hasta el cierre, salvo que sean imprescindibles para avanzar.
 - Siempre usa español de Colombia.{$whatsappGuardrail}
-- CRÍTICO: NUNCA termines la llamada sin una despedida cordial. Incluso si el cliente dice \"no\" o \"nada más\", DEBES responder con una despedida apropiada antes de colgar.
+- CRÍTICO: NUNCA termines la llamada sin una despedida cordial.
 - La despedida es OBLIGATORIA en todas las llamadas, sin excepción.
+- IMPORTANTE: Cuando preguntes \"¿Hay algo más en lo que pueda ayudarte?\", ESPERA a que el cliente responda. No hables encima de su respuesta.
+- Solo después de que el cliente confirme que no necesita nada más (\"no\", \"no gracias\", \"eso es todo\", \"nada más\"), despídete cordialmente: \"Perfecto, muchas gracias por tu tiempo. Que tengas un excelente día. ¡Hasta pronto!\"
+- NO te despidas mientras el cliente aún está hablando o antes de que responda a tu pregunta.
 
-# Tools
-Usa estas instrucciones únicamente en el paso 4 (Cierre), no antes.
-{$collectInstruction}
+{$toolsSection}
 ");
 
+            // Payload VAPI con agente transient (inline)
             $payload = [
-                'agent_id' => $agentId,
-                'agent_phone_number_id' => $phoneNumberId,
-                'to_number' => $formattedPhone,
-                'dynamic_variables' => $dynamicVars,
-                'conversation_config_override' => [
-                    'agent' => [
-                        'prompt' => [ 'prompt' => $finalPrompt ],
-                        'first_message' => $firstMessage,
-                        'firstMessage' => $firstMessage,
-                        'language' => 'es',
-                    ],
-                    'tts' => array_filter([
-                        'voice_id' => $voiceId ?: null,
-                    ]),
+                'phoneNumberId' => $phoneNumberId,
+                'customer' => [
+                    'number' => $formattedPhone,
+                    'name' => $customerName,
                 ],
-                'conversation_initiation_client_data' => [
-                    'conversation_config_override' => [
-                        'agent' => [
-                            'prompt' => [ 'prompt' => $finalPrompt ],
-                            'first_message' => $firstMessage,
-                            'firstMessage' => $firstMessage,
-                            'language' => 'es',
+                // Agente transient (inline) - no requiere crear agente previamente
+                'assistant' => [
+                    'name' => $agentDisplayName,
+                    'firstMessage' => $firstMessage,
+                    'model' => [
+                        'provider' => 'openai',
+                        'model' => 'gpt-4o-mini',
+                        'temperature' => 0.4,
+                        'messages' => [
+                            [
+                                'role' => 'system',
+                                'content' => $finalPrompt,
+                            ],
                         ],
-                        'tts' => array_filter([
-                            'voice_id' => $voiceId ?: null,
-                        ]),
                     ],
-                    'custom_variables' => [
-                        'customer_name' => $customerName,
-                        'phone_number'  => $contact['phone'] ?? '',
-                        'email'         => $contact['email'] ?? '',
-                        'company_name'  => $companyName,
-                        'policy_number' => (string) $policyNumber,
-                        'payment_due_date' => (string) $dueDate,
+                    'voice' => [
+                        'provider' => '11labs',
+                        'voiceId' => $voiceId,
+                        'stability' => 0.5, // Balance entre consistencia y expresividad
+                        'similarityBoost' => 0.75,
+                        'style' => 0.4, // Más expresividad emocional
+                        'useSpeakerBoost' => true, // Mejora claridad
                     ],
-                    'temperature' => 0.4,
-                ],
-                'overrides' => [
-                    'agent' => [
-                        'prompt' => [ 'prompt' => trim("Eres un asistente virtual profesional de una compañía de seguros.
-Contexto de campaña: {$personalizedMsg}
-{$collectInstruction}") ],
-                        'first_message' => $firstMessage,
-                        'firstMessage' => $firstMessage,
-                        'language' => 'es',
+                    'language' => 'es',
+                    'transcriber' => [
+                        'provider' => 'deepgram',
+                        'model' => 'nova-2',
+                        'language' => 'es-419', // Español Latinoamérica
                     ],
-                    'tts' => array_filter([
-                        'voice_id' => $voiceId ?: null,
-                        'voiceId'  => $voiceId ?: null,
-                    ]),
+                    'backgroundSound' => $backgroundSound, // 'office' para sonido de fondo
+                    'backchannelingEnabled' => true, // Sonidos de confirmación "mmhm"
+                    'backgroundDenoisingEnabled' => true,
+                    'maxDurationSeconds' => 600, // 10 minutos máximo
+                    'numWordsToInterruptAssistant' => 2,
+                    'endCallPhrases' => ['hasta pronto', 'que tengas buen día', 'adiós'],
+                    'silenceTimeoutSeconds' => 30,
+                    'responseDelaySeconds' => 0.4,
+                    'startSpeakingPlan' => [
+                        'waitSeconds' => 0.4,
+                        'smartEndpointingEnabled' => true,
+                    ],
+                    'stopSpeakingPlan' => [
+                        'numWords' => 2,
+                        'voiceSeconds' => 0.2,
+                    ],
+                    'voicemailDetection' => [
+                        'provider' => 'twilio',
+                        'enabled' => true,
+                        'machineDetectionTimeout' => 15,
+                        'voicemailDetectionTypes' => ['machine_end_beep', 'machine_end_silence', 'machine_start'],
+                    ],
                 ],
                 'metadata' => [
                     'contact_name' => $customerName,
+                    'campaign_id' => $campaign->id,
                     'campaign_type' => 'voice_campaign',
-                    'dynamic_variables_sent' => array_keys($dynamicVars),
-                    'collect_instruction' => !empty($collectInstruction),
+                    'voice_campaign_call_id' => $call->id,
+                    'broker_id' => $campaign->broker_id,
                 ],
             ];
 
-            Log::info('🔊 [VOICE CALL SERVICE] Enviando llamada (single) con ElevenLabs', [
+            Log::info('🔊 [VOICE CALL SERVICE] Enviando llamada con VAPI', [
                 'campaign_id' => $campaign->id,
                 'to' => $formattedPhone,
-                'agent_id' => $agentId,
+                'phone_number_id' => $phoneNumberId,
+                'background_sound' => $backgroundSound,
             ]);
 
-            // 6) Llamar a ElevenLabs
+            // 6) Llamar a VAPI
             $resp = Http::withHeaders([
-                'xi-api-key'   => $elevenApiKey,
+                'Authorization' => 'Bearer ' . $vapiApiKey,
                 'Content-Type' => 'application/json',
-            ])->timeout(30)->post('https://api.elevenlabs.io/v1/convai/twilio/outbound-call', $payload);
+            ])->timeout(30)->post('https://api.vapi.ai/call/phone', $payload);
 
             if ($resp->successful()) {
                 $data = $resp->json();
-                $convId = $data['conversation_id'] ?? $data['id'] ?? null;
+                $callId = $data['id'] ?? null; // VAPI usa 'id' para el call ID
 
                 // Marcar iniciada y guardar metadata remota
-                $call->markAsInitiated($convId);
-                $call->updateElevenLabsInfo($data);
+                $call->markAsInitiated($callId);
+                $call->updateElevenLabsInfo($data); // Reutilizamos el método existente
+
+                Log::info('✅ [VAPI] Llamada iniciada exitosamente', [
+                    'vapi_call_id' => $callId,
+                    'status' => $data['status'] ?? 'queued',
+                ]);
 
                 return [
                     'success' => true,
-                    'call_id' => $convId,
-                    'status' => $data['status'] ?? 'initiated',
+                    'call_id' => $callId,
+                    'status' => $data['status'] ?? 'queued',
                     'response_data' => $data,
                     'error' => null,
                     'voice_campaign_call_id' => $call->id,
                 ];
             }
 
-            $errorMessage = $resp->json('detail') ?? ('ElevenLabs API Error (' . $resp->status() . ')');
+            $errorBody = $resp->json();
+            $errorMessage = $errorBody['message'] ?? $errorBody['error'] ?? ('VAPI API Error (' . $resp->status() . ')');
+            
+            Log::error('❌ [VAPI] Error en llamada', [
+                'status' => $resp->status(),
+                'error' => $errorMessage,
+                'body' => $errorBody,
+            ]);
+            
             $call->markAsFailed(VoiceCampaignCall::RESULT_API_ERROR, $errorMessage);
 
             return [
@@ -380,5 +440,33 @@ Contexto de campaña: {$personalizedMsg}
             $processed = preg_replace('/\{\s*' . preg_quote($key, '/') . '\s*\}/', (string)$value, $processed);
         }
         return $processed;
+    }
+
+    /**
+     * Formatear fecha en español para pronunciación natural (sin año)
+     * Ej: "2026-01-15" -> "15 de enero"
+     */
+    private function formatDateInSpanish($date): string
+    {
+        try {
+            if (empty($date) || $date === 'N/A') {
+                return 'próximamente';
+            }
+            
+            $carbon = $date instanceof Carbon ? $date : Carbon::parse($date);
+            
+            $meses = [
+                1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril',
+                5 => 'mayo', 6 => 'junio', 7 => 'julio', 8 => 'agosto',
+                9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre'
+            ];
+            
+            $dia = $carbon->day;
+            $mes = $meses[$carbon->month];
+            
+            return "{$dia} de {$mes}";
+        } catch (\Throwable $e) {
+            return (string) $date;
+        }
     }
 }

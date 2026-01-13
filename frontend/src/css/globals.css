@@ -1,5 +1,3 @@
-
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap");
 @import './layouts/container.css';
 @import './layouts/sidebar.css';
 @import './layouts/horizontal.css';
@@ -485,22 +483,22 @@ textarea:active {
   border-color: #d1d5db !important;
 }
 
-html:not(.dark) form input,
-html:not(.dark) form input:focus,
-html:not(.dark) form input:hover,
-html:not(.dark) form input:active,
-html:not(.dark) input,
-html:not(.dark) input:focus,
-html:not(.dark) input:hover,
-html:not(.dark) input:active,
-form input,
-form input:focus,
-form input:hover,
-form input:active,
-input,
-input:focus,
-input:hover,
-input:active {
+html:not(.dark) form input:not([data-plate-input]),
+html:not(.dark) form input:not([data-plate-input]):focus,
+html:not(.dark) form input:not([data-plate-input]):hover,
+html:not(.dark) form input:not([data-plate-input]):active,
+html:not(.dark) input:not([data-plate-input]),
+html:not(.dark) input:not([data-plate-input]):focus,
+html:not(.dark) input:not([data-plate-input]):hover,
+html:not(.dark) input:not([data-plate-input]):active,
+form input:not([data-plate-input]),
+form input:not([data-plate-input]):focus,
+form input:not([data-plate-input]):hover,
+form input:not([data-plate-input]):active,
+input:not([data-plate-input]),
+input:not([data-plate-input]):focus,
+input:not([data-plate-input]):hover,
+input:not([data-plate-input]):active {
   background-color: #ffffff !important;
   color: #111827 !important;
   border-color: #d1d5db !important;
@@ -923,4 +921,14 @@ header {
 .fixed.inset-0 > div[class*="bg-white"],
 .fixed.inset-0 > div[class*="bg-darkgray"] {
   z-index: 51 !important;
+}
+
+/* ==== Inputs de placa colombiana ==== */
+input[data-plate-input],
+input[data-plate-input]:focus,
+input[data-plate-input]:hover,
+input[data-plate-input]:active {
+  background-color: #F7C600 !important;
+  color: #1a1a1a !important;
+  border: none !important;
 }

@@ -10,12 +10,25 @@
     <meta name="author" content="Guro" />
     <meta name="robots" content="index, follow" />
     
+    <!-- Preconnect to external origins for faster loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://firebase.googleapis.com" />
+    <link rel="preconnect" href="https://firebaseinstallations.googleapis.com" />
+    <link rel="preconnect" href="https://www.googleapis.com" />
+    <link rel="preconnect" href="https://apis.google.com" />
+    <link rel="preconnect" href="https://guro-b3911.firebaseapp.com" />
+    <link rel="dns-prefetch" href="https://api.iconify.design" />
+    
+    <!-- Preload LCP image for faster rendering -->
+    <link rel="preload" as="image" type="image/webp" href="/assets/bannerimg1-IyKbKOBP.webp" fetchpriority="high" />
+    
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Guro - Software de Seguros con IA | Agencia de Seguros Digital" />
     <meta property="og:description" content="Revoluciona tu agencia de seguros con Guro, el software más avanzado con inteligencia artificial. Automatización, gestión de pólizas, siniestros y análisis predictivo. ¡Prueba gratis!" />
     <meta property="og:image" content="/favicon.png" />
-    <meta property="og:url" content="https://guro.com" />
+    <meta property="og:url" content="https://guro.co" />
     <meta property="og:site_name" content="Guro" />
     <meta property="og:locale" content="es_ES" />
     
@@ -35,7 +48,7 @@
     <meta name="apple-mobile-web-app-title" content="Guro" />
     
     <!-- Canonical URL -->
-    <link rel="canonical" href="https://guro.com" />
+    <link rel="canonical" href="https://guro.co" />
     
     <!-- Sitemap -->
     <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
@@ -56,7 +69,7 @@
       "@type": "SoftwareApplication",
       "name": "Guro",
       "description": "Software de seguros con inteligencia artificial para agencias de seguros. Gestión automatizada de pólizas, siniestros, clientes y análisis predictivo.",
-      "url": "https://guro.com",
+      "url": "https://guro.co",
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "Web",
       "offers": {
@@ -68,7 +81,7 @@
       "provider": {
         "@type": "Organization",
         "name": "Guro",
-        "url": "https://guro.com"
+        "url": "https://guro.co"
       },
       "featureList": [
         "Gestión de pólizas de seguros",
@@ -83,12 +96,13 @@
     }
     </script>
     
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
   </head>
   <body>
     <div id="root"></div>
-    <!-- Runtime config (editable sin rebuild en prod) -->
-    <script src="/env.js"></script>
+    <!-- Runtime config (debe cargar antes de la app) -->
+    <script src="/assets/env.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

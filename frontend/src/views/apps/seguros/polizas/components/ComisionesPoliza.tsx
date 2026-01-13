@@ -629,9 +629,10 @@ const ComisionesPoliza: React.FC<Props> = ({
                         <th className="px-2 py-2 text-left" style={{ minWidth: '70px' }}>Anexo</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '120px' }}>Prima</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% Com</th>
+                        <th className="px-2 py-2 text-right bg-purple-50 dark:bg-purple-900/30" style={{ minWidth: '110px' }}>VALOR COMISIÓN</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>% Agencia</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>% Asesor</th>
-                        <th className="px-2 py-2 text-right bg-blue-50 dark:bg-blue-900/30" style={{ minWidth: '110px' }}>Val. Com.</th>
+                        <th className="px-2 py-2 text-right bg-blue-50 dark:bg-blue-900/30" style={{ minWidth: '110px' }}>COMISIÓN asesor</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% RTF</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% IVA</th>
                         <th className="px-2 py-2 text-right bg-blue-50 dark:bg-blue-900/30" style={{ minWidth: '100px' }}>IVA</th>
@@ -717,6 +718,9 @@ const ComisionesPoliza: React.FC<Props> = ({
                                 placeholder="%"
                                 className="text-right"
                               />
+                            </td>
+                            <td className="px-1 py-2 text-right font-mono text-purple-600">
+                              {formatCurrency(calc.comision_total_ramo)}
                             </td>
                             <td className="px-1 py-2">
                               <TextInput
@@ -811,7 +815,7 @@ const ComisionesPoliza: React.FC<Props> = ({
                       <tr className="bg-gray-200 dark:bg-gray-600 font-semibold">
                         <td colSpan={3} className="px-3 py-3 text-right text-sm">TOTALES:</td>
                         <td className="px-2 py-3 text-right font-mono">{formatCurrency(totalesModal.abono_prima)}</td>
-                        <td colSpan={3} className="px-2 py-3"></td>
+                        <td colSpan={4} className="px-2 py-3"></td>
                         <td className="px-2 py-3 text-right font-mono bg-blue-100 dark:bg-blue-900/50">{formatCurrency(totalesModal.valor_comision)}</td>
                         <td colSpan={5} className="px-2 py-3 text-center text-xs text-gray-600 dark:text-gray-300">+ IVA − Retenciones</td>
                         <td className="px-2 py-3 text-right font-mono font-bold text-green-700 bg-green-100 dark:bg-green-900/50">{formatCurrency(totalesModal.neto_comision)}</td>

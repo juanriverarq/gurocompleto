@@ -11,6 +11,7 @@ use App\Models\Poliza;
 use App\Models\Automovil;
 use App\Models\Siniestro;
 use App\Models\Campaign;
+use App\Models\Vendedor;
 // Modelos opcionales (la tabla puede no existir en algunas instalaciones)
 use App\Models\VoiceCampaign;
 use App\Models\EmailCampaign;
@@ -310,15 +311,83 @@ class GlobalSearchController extends Controller
             $counts['campaign_email'] = $counts['campaign_email'] ?? 0;
         }
 
+        // Vendedores/Asesores - con pólizas, clientes y autos relacionados
+        try {
+            // Usar withoutGlobalScope para evitar conflictos y aplicar filtro manualmente
+            $vendedoresQuery = Vendedor::withoutGlobalScope('broker')
+                ->where(function ($qb) use ($q) {
+                    $qb->where('nombres', 'like', '%' . $q . '%')
+                       ->orWhere('email', 'like', '%' . $q . '%')
+                       ->orWhere('numero_documento', 'like', '%' . $q . '%')
+                       ->orWhere('celular', 'like', '%' . $q . '%');
+                });
+            
+            // Aplicar filtro de broker si existe
+            if ($brokerId) {
+                $vendedoresQuery->where('broker_id', $brokerId);
+            }
+            
+            $vendedores = $vendedoresQuery->limit($perType)->get();
+            
+            Log::info('GlobalSearch vendedores', [
+                'count' => $vendedores->count(),
+                'q' => $q,
+                'broker_id' => $brokerId,
+            ]);
+
+            foreach ($vendedores as $v) {
+                // Contar pólizas, clientes y autos relacionados
+                $polizasCount = Poliza::where('vendedor_id', $v->id)
+                    ->when($brokerId, fn($qb) => $qb->forBroker($brokerId))
+                    ->count();
+                $polizasCount2 = Poliza::where('vendedor_id_2', $v->id)
+                    ->when($brokerId, fn($qb) => $qb->forBroker($brokerId))
+                    ->count();
+                $totalPolizas = $polizasCount + $polizasCount2;
+                
+                // Clientes únicos de las pólizas del vendedor
+                $clientesCount = Poliza::where('vendedor_id', $v->id)
+                    ->orWhere('vendedor_id_2', $v->id)
+                    ->when($brokerId, fn($qb) => $qb->forBroker($brokerId))
+                    ->distinct('client_id')
+                    ->count('client_id');
+
+                $title = $v->nombres ?: ('Vendedor #' . $v->id);
+                $subtitleParts = array_filter([
+                    $v->email ?: null,
+                    $v->celular ?: $v->telefono,
+                    $totalPolizas > 0 ? ($totalPolizas . ' póliza' . ($totalPolizas > 1 ? 's' : '')) : null,
+                    $clientesCount > 0 ? ($clientesCount . ' cliente' . ($clientesCount > 1 ? 's' : '')) : null,
+                ]);
+                $results[] = [
+                    'type' => 'vendedor',
+                    'id' => $v->id,
+                    'title' => $title,
+                    'subtitle' => implode(' • ', $subtitleParts),
+                    'url' => '/apps/admin/vendedores?open_vendedor_id=' . $v->id,
+                    'icon' => 'solar:user-id-bold-duotone',
+                    'extra' => [
+                        'polizas_count' => $totalPolizas,
+                        'clientes_count' => $clientesCount,
+                    ],
+                ];
+            }
+            $counts['vendedor'] = isset($vendedores) ? $vendedores->count() : 0;
+        } catch (\Throwable $e) {
+            Log::warning('GlobalSearch vendedores error', ['q' => $q, 'error' => $e->getMessage()]);
+            $counts['vendedor'] = 0;
+        }
+
         // Ordenar por tipo y por título
         $typeOrder = [
-            'cliente' => 1,
-            'poliza' => 2,
-            'automovil' => 3,
-            'siniestro' => 4,
-            'campaign_whatsapp' => 5,
-            'campaign_voice' => 6,
-            'campaign_email' => 7,
+            'vendedor' => 1,
+            'cliente' => 2,
+            'poliza' => 3,
+            'automovil' => 4,
+            'siniestro' => 5,
+            'campaign_whatsapp' => 6,
+            'campaign_voice' => 7,
+            'campaign_email' => 8,
         ];
         try {
             usort($results, function ($a, $b) use ($typeOrder) {

@@ -108,7 +108,9 @@ const Search = () => {
       }
     };
 
-    if (t.includes("cliente") || t.includes("client")) {
+    if (t.includes("vendedor") || t.includes("asesor") || t.includes("seller")) {
+      ensureParam("open_vendedor_id", "/apps/admin/vendedores");
+    } else if (t.includes("cliente") || t.includes("client")) {
       ensureParam("open_client_id", "/apps/seguros/clientes");
     } else if (t.includes("poliz") || t.includes("policy")) {
       ensureParam("open_policy_id", "/apps/seguros/polizas");
@@ -168,7 +170,7 @@ const Search = () => {
         <div className="p-6 border-b border-ld">
           <div className="relative">
             <TextInput
-              placeholder="Buscar clientes, pólizas, autos, campañas, siniestros..."
+              placeholder="Buscar vendedores, clientes, pólizas, autos, siniestros..."
               className="form-control"
               sizing="md"
               value={searchTerm}

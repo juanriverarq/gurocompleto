@@ -214,6 +214,13 @@ class SaasClientesController extends Controller
                 \Log::info('🔍 [DEBUG] Filtro de prioridad aplicado', ['priority' => $request->priority]);
             }
 
+            // Filtro exacto por número de documento (para validación de duplicados)
+            if ($request->has('document_number') && !empty($request->document_number)) {
+                $docNumber = trim($request->document_number);
+                $query->where('document_number', $docNumber);
+                \Log::info('🔍 [DEBUG] Filtro exacto de document_number aplicado', ['document_number' => $docNumber]);
+            }
+
             // Filtro por género (aceptar M/F/O o Masculino/Femenino/Otro)
             if ($request->has('genero') && !empty($request->genero)) {
                 $genero = strtoupper(trim($request->genero));

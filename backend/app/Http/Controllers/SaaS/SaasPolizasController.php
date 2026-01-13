@@ -267,7 +267,7 @@ class SaasPolizasController extends Controller
             // OPTIMIZACIÓN: Construir la query base con aislamiento multi-tenant y eager loading optimizado
             $query = Poliza::where('broker_id', $brokerId)
                 ->with([
-                    'client:id,first_name,last_name,email,phone,mobile_phone',
+                    'client:id,client_type,first_name,last_name,company,company_legal_name,document_type,document_number,email,phone,mobile_phone,address,birth_date',
                     'assignedUser:id,name,email',
                     'createdBy:id,name,email',
                     'ramo:id,nombre,subramo',
@@ -431,7 +431,7 @@ class SaasPolizasController extends Controller
             // OPTIMIZACIÓN: Construir la query base con aislamiento multi-tenant y eager loading optimizado
             $query = Poliza::where('broker_id', $brokerId)
                 ->with([
-                    'client:id,first_name,last_name,email,phone,mobile_phone',
+                    'client:id,client_type,first_name,last_name,company,company_legal_name,document_type,document_number,email,phone,mobile_phone,address,birth_date',
                     'assignedUser:id,name,email',
                     'createdBy:id,name,email',
                     'ramo:id,nombre,subramo',
@@ -1099,6 +1099,34 @@ class SaasPolizasController extends Controller
     }
 
     /**
+     * Obtener nombre de cliente para mostrar (maneja personas y empresas)
+     */
+    private function getClientDisplayName($poliza): string
+    {
+        $client = $poliza->client;
+        
+        // Si no hay cliente relacionado, usar client_name de la póliza
+        if (!$client) {
+            return $poliza->client_name ?? '';
+        }
+        
+        // Si es empresa (client_type = 'business' o 'empresa'), usar company o company_legal_name
+        $clientType = strtolower($client->client_type ?? '');
+        if (in_array($clientType, ['business', 'empresa', 'juridica', 'juridico'])) {
+            // Priorizar company_legal_name (razón social), luego company
+            return $client->company_legal_name ?: ($client->company ?: ($client->first_name ?? ''));
+        }
+        
+        // Para personas naturales, usar first_name + last_name
+        $firstName = $client->first_name ?? '';
+        $lastName = $client->last_name ?? '';
+        $fullName = trim($firstName . ' ' . $lastName);
+        
+        // Si no hay nombre, usar client_name de la póliza como fallback
+        return $fullName ?: ($poliza->client_name ?? '');
+    }
+
+    /**
      * Transform Poliza model to frontend format
      */
     private function transformPolizaToFrontend($poliza)
@@ -1128,10 +1156,11 @@ class SaasPolizasController extends Controller
             'tipo_poliza' => $poliza->type,
             
             // Información del cliente
-                'cliente_id' => $poliza->client_id,
-            'nombres_cliente' => $poliza->client_name,
-            'apellidos_cliente' => '', // Se puede extraer del client_name si es necesario
-            'dni_cliente' => $poliza->client_document,
+            'cliente_id' => $poliza->client_id,
+            // Para empresas usar company o company_legal_name, para personas usar first_name + last_name
+            'nombres_cliente' => $this->getClientDisplayName($poliza),
+            'apellidos_cliente' => $poliza->client?->last_name ?? '',
+            'dni_cliente' => $poliza->client_document ?: ($poliza->client?->document_number ?? ''),
             'tipo_documento' => strtolower((string)($poliza->client?->document_type ?? 'cc')),
             'telefono_cliente' => $poliza->client?->phone ?? '',
             'celular_cliente' => $poliza->client?->mobile_phone ?? '',
@@ -2073,6 +2102,9 @@ class SaasPolizasController extends Controller
                 'beneficiario_en_remision' => 'nullable|boolean',
                 'beneficiario_oneroso_nombre' => 'nullable|string|max:255',
                 'beneficiario_oneroso_documento' => 'nullable|string|max:255',
+                
+                // Cliente (para cambiar el cliente asociado a la póliza)
+                'cliente_id' => 'nullable|integer|exists:clientes,id',
             ]);
 
             \Log::info('POLIZAS: update incoming', [
@@ -2082,8 +2114,22 @@ class SaasPolizasController extends Controller
                 'placas' => $request->input('placas'),
             ]);
 
-            // Actualizar cliente si es necesario
-            if (isset($validated['dni_cliente']) || isset($validated['nombres_cliente'])) {
+            // Si viene cliente_id, cambiar el cliente asociado a la póliza
+            if (isset($validated['cliente_id']) && $validated['cliente_id'] !== $poliza->client_id) {
+                $nuevoCliente = Cliente::where('broker_id', $brokerId)->find($validated['cliente_id']);
+                if ($nuevoCliente) {
+                    $poliza->client_id = $nuevoCliente->id;
+                    $poliza->client_name = trim(($nuevoCliente->first_name ?? '') . ' ' . ($nuevoCliente->last_name ?? '')) ?: $nuevoCliente->company_name;
+                    $poliza->client_document = $nuevoCliente->document_number;
+                    \Log::info('POLIZAS: Cambiando cliente de póliza', [
+                        'poliza_id' => $poliza->id,
+                        'cliente_anterior' => $poliza->getOriginal('client_id'),
+                        'cliente_nuevo' => $nuevoCliente->id,
+                    ]);
+                }
+            }
+            // Actualizar datos del cliente existente si NO se cambió el cliente
+            elseif (isset($validated['dni_cliente']) || isset($validated['nombres_cliente'])) {
                 $cliente = $poliza->client;
                 if ($cliente) {
                     $cliente->update([

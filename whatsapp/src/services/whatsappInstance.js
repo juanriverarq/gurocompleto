@@ -1,10 +1,10 @@
-const {
-    default: makeWASocket,
-    DisconnectReason,
-    useMultiFileAuthState,
-    downloadMediaMessage,
-    fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys');
+/**
+ * WhatsApp Instance
+ * =================
+ * Usa el BaileysAdapter para abstraer la librería Baileys.
+ * Para actualizar Baileys, solo modifica /adapters/baileysAdapter.js
+ */
+const BaileysAdapter = require('../adapters/baileysAdapter');
 const qrcode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
@@ -72,50 +72,23 @@ class WhatsAppInstance {
                 this.sock = null;
             }
             
-            // Usar el nuevo sistema de autenticación multi-archivo
-            const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
+            // Usar el adapter para autenticación
+            const { state, saveCreds } = await BaileysAdapter.getAuthState(this.authDir);
             
             console.log(`📁 [${this.instanceId}] Estado de autenticación cargado:`, {
                 hasKeys: !!state.keys,
                 hasCreds: !!state.creds
             });
             
-            // Forzar versión de WhatsApp Web para evitar bloqueos por incompatibilidad
-            const { version, isLatest } = await fetchLatestBaileysVersion();
-            try {
-                console.log(`🧩 [${this.instanceId}] Usando WhatsApp Web v${version?.join?.('.')}, latest=${isLatest}`);
-            } catch (e) {}
+            // Obtener versión de WhatsApp Web via adapter
+            const { version, isLatest } = await BaileysAdapter.getLatestVersion();
+            console.log(`🧩 [${this.instanceId}] Usando WhatsApp Web v${version?.join?.('.')}, latest=${isLatest}`);
 
-            // Logger compatible con Baileys (pino-like)
-            const logger = {
-                level: 'silent',
-                fatal: () => {},
-                error: () => {},
-                warn: () => {},
-                info: () => {},
-                debug: () => {},
-                trace: () => {},
-                child: () => logger
-            };
-
-            this.sock = makeWASocket({
+            // Crear socket usando el adapter
+            this.sock = BaileysAdapter.createSocket({
                 auth: state,
                 version,
-                printQRInTerminal: false,
                 browser: this.config.browser,
-                generateHighQualityLinkPreview: true,
-                // mantener offline al conectar para reducir fricción inicial durante pairing
-                markOnlineOnConnect: false,
-                // Configuraciones adicionales para evitar error 515
-                syncFullHistory: false,
-                defaultQueryTimeoutMs: 60000,
-                connectTimeoutMs: 60000,
-                keepAliveIntervalMs: 30000,
-                // Configuración de reconexión mejorada
-                retryRequestDelayMs: 250,
-                maxMsgRetryCount: 5,
-                // Logger compatible con Baileys
-                logger
             });
 
             // Eventos de conexión
@@ -205,12 +178,11 @@ class WhatsAppInstance {
         if (connection === 'close') {
             this.connecting = false;
             const statusCode = lastDisconnect?.error?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             
             console.log(`❌ [${this.instanceId}] Conexión cerrada:`, {
                 reason: lastDisconnect?.error?.message,
                 statusCode,
-                shouldReconnect
+                shouldAutoReconnect: BaileysAdapter.shouldAutoReconnect(statusCode)
             });
             
             this.connected = false;
@@ -224,47 +196,28 @@ class WhatsAppInstance {
                 data: { statusCode, reason: lastDisconnect?.error?.message }
             });
             
-            // Manejar diferentes tipos de desconexión
-            if (this.config.autoReconnect) {
-                switch (statusCode) {
-                    case DisconnectReason.badSession:
-                        console.log(`🗑️ [${this.instanceId}] Sesión corrupta, eliminando archivos de auth...`);
-                        await this.clearAuthState();
-                        setTimeout(() => this.connect(), 2000);
-                        break;
-                        
-                    case DisconnectReason.connectionClosed:
-                    case DisconnectReason.connectionLost:
-                    case DisconnectReason.restartRequired:
-                        console.log(`🔁 [${this.instanceId}] Reconectando en 5 segundos...`);
-                        setTimeout(() => this.connect(), 5000);
-                        break;
-                        
-                    case 515: // Error específico "Stream Errored"
-                        console.log(`⚠️ [${this.instanceId}] Error 515 detectado - Reconectando inmediatamente...`);
-                        setTimeout(() => this.connect(), 2000);
-                        break;
-                        
-                    case DisconnectReason.loggedOut:
-                        console.log(`🚪 [${this.instanceId}] Usuario deslogueado, limpiando sesión...`);
-                        await this.clearAuthState();
-                        this.io.emit(`qr_code_${this.instanceId}`, null);
-                        // Intentar reconectar para generar nuevo QR
-                        setTimeout(() => this.connect(), 2000);
-                        break;
-                        
-                    default:
-                        if (shouldReconnect) {
-                            console.log(`🔁 [${this.instanceId}] Reconectando en 10 segundos...`);
-                            setTimeout(() => this.connect(), 10000);
-                        }
-                }
+            // Manejar diferentes tipos de desconexión usando el adapter
+            if (BaileysAdapter.isBadSession(statusCode)) {
+                console.log(`🗑️ [${this.instanceId}] Sesión corrupta, eliminando archivos de auth...`);
+                await this.clearAuthState();
+                this.notifyLaravelStatusChange('disconnected');
+                this.io.emit(`qr_code_${this.instanceId}`, null);
+                console.log(`⏹️ [${this.instanceId}] Instancia marcada como desconectada. El usuario debe escanear QR nuevamente.`);
+            } else if (BaileysAdapter.isUserLogout(statusCode)) {
+                console.log(`🚪 [${this.instanceId}] Usuario deslogueado desde WhatsApp, limpiando sesión...`);
+                await this.clearAuthState();
+                this.notifyLaravelStatusChange('disconnected');
+                this.io.emit(`qr_code_${this.instanceId}`, null);
+                console.log(`⏹️ [${this.instanceId}] Instancia marcada como desconectada. El usuario debe escanear QR nuevamente.`);
+            } else if (BaileysAdapter.shouldAutoReconnect(statusCode)) {
+                // Error técnico que requiere reconexión automática (515, connectionLost, etc.)
+                console.log(`⚠️ [${this.instanceId}] Error técnico ${statusCode} - Reconectando automáticamente en 2 segundos...`);
+                setTimeout(() => this.connect(), 2000);
             } else {
-                // Incluso sin autoReconnect, manejar error 515 automáticamente
-                if (statusCode === 515) {
-                    console.log(`⚠️ [${this.instanceId}] Error 515 detectado - Reconectando automáticamente (override autoReconnect)...`);
-                    setTimeout(() => this.connect(), 2000);
-                }
+                // Otros errores - marcar como desconectado
+                console.log(`❌ [${this.instanceId}] Error desconocido (${statusCode}) - Marcando como desconectado`);
+                this.notifyLaravelStatusChange('disconnected');
+                this.io.emit(`qr_code_${this.instanceId}`, null);
             }
         } else if (connection === 'connecting') {
             console.log(`🔄 [${this.instanceId}] Conectando...`);
@@ -275,7 +228,7 @@ class WhatsAppInstance {
             this.qrCode = null;
             this.lastActivity = new Date();
             
-            // Emitir eventos de conexión exitosa
+            // Emitir eventos de conexión exitosa via WebSocket
             this.io.emit(`connection_status_${this.instanceId}`, { connected: true });
             this.io.emit(`qr_code_${this.instanceId}`, null);
             this.io.emit('instance_update', {
@@ -283,6 +236,10 @@ class WhatsAppInstance {
                 event: 'connected',
                 data: { timestamp: this.lastActivity }
             });
+            
+            // ========== SINCRONIZACIÓN AUTOMÁTICA CON LARAVEL ==========
+            // Notificar a Laravel que la instancia se conectó para actualizar el estado en BD
+            this.notifyLaravelStatusChange('connected');
             
             // Sincronizar contactos
             try {
@@ -741,6 +698,48 @@ class WhatsAppInstance {
         const inactiveTime = Date.now() - this.lastActivity.getTime();
         const maxInactiveTime = 30 * 60 * 1000; // 30 minutos
         return inactiveTime < maxInactiveTime;
+    }
+
+    // ========== SINCRONIZACIÓN CON LARAVEL ==========
+    /**
+     * Notifica a Laravel sobre cambios de estado de la instancia
+     * Esto permite que Laravel mantenga su BD sincronizada con el estado real
+     */
+    async notifyLaravelStatusChange(newStatus) {
+        try {
+            const laravelUrl = process.env.LARAVEL_API_URL || 'http://127.0.0.1:8001/api';
+            const webhookUrl = `${laravelUrl}/webhooks/whatsapp-status`;
+            
+            console.log(`📡 [${this.instanceId}] Notificando a Laravel cambio de estado: ${newStatus}`);
+            
+            const payload = {
+                instance_id: this.instanceId,
+                status: newStatus,
+                connected: this.connected,
+                timestamp: new Date().toISOString(),
+                phone_number: this.phoneNumber || null,
+                last_activity: this.lastActivity?.toISOString()
+            };
+            
+            // Usar fetch nativo de Node.js 18+ o axios si está disponible
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Webhook-Secret': process.env.WEBHOOK_SECRET || 'guro-whatsapp-webhook-secret'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (response.ok) {
+                console.log(`✅ [${this.instanceId}] Laravel notificado exitosamente del cambio a: ${newStatus}`);
+            } else {
+                console.warn(`⚠️ [${this.instanceId}] Laravel respondió con error:`, response.status);
+            }
+        } catch (error) {
+            // No fallar si Laravel no está disponible - solo loguear
+            console.warn(`⚠️ [${this.instanceId}] No se pudo notificar a Laravel (puede no estar disponible):`, error.message);
+        }
     }
 }
 

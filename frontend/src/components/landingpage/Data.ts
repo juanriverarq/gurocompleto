@@ -1,30 +1,30 @@
-import img1 from "/src/assets/images/landingpage/demos/demo-main.jpg";
-import img2 from "/src/assets/images/landingpage/demos/demo-dark.jpg";
-import img3 from "/src/assets/images/landingpage/demos/demo-horizontal.jpg";
-import img4 from "/src/assets/images/landingpage/demos/demo-mini.jpg";
-import img5 from "/src/assets/images/landingpage/demos/demo-rtl.jpg";
-import defaultdemo from "/src/assets/images/landingpage/demos/demo-default.jpg";
+import img1 from "/src/assets/images/landingpage/demos/demo-main.webp";
+import img2 from "/src/assets/images/landingpage/demos/demo-dark.webp";
+import img3 from "/src/assets/images/landingpage/demos/demo-horizontal.webp";
+import img4 from "/src/assets/images/landingpage/demos/demo-mini.webp";
+import img5 from "/src/assets/images/landingpage/demos/demo-rtl.webp";
+import defaultdemo from "/src/assets/images/landingpage/demos/demo-default.webp";
 
-import img6 from "/src/assets/images/landingpage/apps/app-calendar.jpg";
-import img7 from "/src/assets/images/landingpage/apps/app-chat.jpg";
-import img8 from "/src/assets/images/landingpage/apps/app-contact.jpg";
-import img9 from "/src/assets/images/landingpage/apps/app-user-profile.jpg";
-import img10 from "/src/assets/images/landingpage/apps/app-note.jpg";
-import img11 from "/src/assets/images/landingpage/apps/app-blog.jpg";
-import img12 from "/src/assets/images/landingpage/apps/app-shop.jpg";
-import img13 from "/src/assets/images/landingpage/apps/app-productlist.jpg";
-import img14 from "/src/assets/images/landingpage/apps/app-invoice.jpg";
-import img15 from "/src/assets/images/landingpage/apps/app-blog-detail.jpg";
-import img16 from "/src/assets/images/landingpage/apps/app-product-detail.jpg";
-import img17 from "/src/assets/images/landingpage/apps/app-kanban.jpg";
+import img6 from "/src/assets/images/landingpage/apps/app-calendar.webp";
+import img7 from "/src/assets/images/landingpage/apps/app-chat.webp";
+import img8 from "/src/assets/images/landingpage/apps/app-contact.webp";
+import img9 from "/src/assets/images/landingpage/apps/app-user-profile.webp";
+import img10 from "/src/assets/images/landingpage/apps/app-note.webp";
+import img11 from "/src/assets/images/landingpage/apps/app-blog.webp";
+import img12 from "/src/assets/images/landingpage/apps/app-shop.webp";
+import img13 from "/src/assets/images/landingpage/apps/app-productlist.webp";
+import img14 from "/src/assets/images/landingpage/apps/app-invoice.webp";
+import img15 from "/src/assets/images/landingpage/apps/app-blog-detail.webp";
+import img16 from "/src/assets/images/landingpage/apps/app-product-detail.webp";
+import img17 from "/src/assets/images/landingpage/apps/app-kanban.webp";
 
 /*Front Pages Megamenu*/
-import front1 from "/src/assets/images/landingpage/front-pages/front-homepage.jpg";
-import front2 from "/src/assets/images/landingpage/front-pages/front-aboutus.jpg";
-import front3 from "/src/assets/images/landingpage/front-pages/front-contactus.jpg";
-import front4 from "/src/assets/images/landingpage/front-pages/front-portfolio.jpg";
-import front5 from "/src/assets/images/landingpage/front-pages/front-pricing.jpg";
-import front6 from "/src/assets/images/landingpage/front-pages/front-blog.jpg";
+import front1 from "/src/assets/images/landingpage/front-pages/front-homepage.webp";
+import front2 from "/src/assets/images/landingpage/front-pages/front-aboutus.webp";
+import front3 from "/src/assets/images/landingpage/front-pages/front-contactus.webp";
+import front4 from "/src/assets/images/landingpage/front-pages/front-portfolio.webp";
+import front5 from "/src/assets/images/landingpage/front-pages/front-pricing.webp";
+import front6 from "/src/assets/images/landingpage/front-pages/front-blog.webp";
 
 interface DemoTypes {
   link: string;
@@ -236,9 +236,9 @@ const listFeature: ListFeatureTypes[] = [
 ];
 
 /*User Review Section*/
-import review1 from "/src/assets/images/profile/user-2.jpg";
-import review2 from "/src/assets/images/profile/user-3.jpg";
-import review3 from "/src/assets/images/profile/user-4.jpg";
+import review1 from "/src/assets/images/profile/user-2.webp";
+import review2 from "/src/assets/images/profile/user-3.webp";
+import review3 from "/src/assets/images/profile/user-4.webp";
 
 interface UserReviewTypes {
   img: any;

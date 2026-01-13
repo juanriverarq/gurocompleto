@@ -79,6 +79,12 @@ if (env('APP_ENV') !== 'production') {
 // =============================================================
 Route::post('/saas/whatsapp/webhook/bulk-send-complete', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'bulkSendComplete']);
 
+// =============================================================
+// Webhook WhatsApp status change (PÚBLICO - llamado por microservicio)
+// Permite sincronización automática de estado cuando QR se escanea
+// =============================================================
+Route::post('/webhooks/whatsapp-status', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'statusChange']);
+
 // Rutas públicas de autenticación (sin middleware)
 Route::prefix('auth')->group(function () {
     // Estas rutas no necesitan autenticación
@@ -124,6 +130,11 @@ Route::middleware(['firebase.auth'])->prefix('billing')->group(function () {
 // Webhook ElevenLabs público (fuera de cualquier middleware)
 // =============================================================
 Route::post('/saas/voice-campaigns/webhooks/elevenlabs', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'receiveElevenLabsWebhook']);
+
+// =============================================================
+// Webhook VAPI público (fuera de cualquier middleware)
+// =============================================================
+Route::post('/saas/voice-campaigns/webhooks/vapi', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'receiveVapiWebhook']);
 
 // =============================================================
 // Custom Tools de ElevenLabs (públicos - llamados durante la llamada)
@@ -457,7 +468,7 @@ Route::post('/test/voice-call-fix/{conversationId}', function(string $conversati
         }
 
         $twilioMinutes = (int) ceil(max(0, $durationSeconds) / 60);
-        $TWILIO_RATE_PER_MINUTE = 0.0287;
+        $TWILIO_RATE_PER_MINUTE = 0.0338; // Tarifa Colombia móvil por minuto anticipado
         $twilioUsd = $twilioMinutes * $TWILIO_RATE_PER_MINUTE;
         $totalUsd = $elevenUsd + $twilioUsd;
 
@@ -1886,6 +1897,13 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
             // Historial de llamadas
             Route::get('/call-history', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'getCallHistory']);
             
+            // Sincronizar datos de llamadas desde VAPI (cuando webhook falló)
+            Route::post('/calls/{callId}/sync-vapi', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'syncCallFromVapi']);
+            Route::post('/calls/sync-pending', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'syncPendingCallsFromVapi']);
+            
+            // Sincronización en tiempo real de campaña desde VAPI API (para polling)
+            Route::post('/{id}/sync-realtime', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'syncCampaignRealtime'])->whereNumber('id');
+            
 // =============================
 // Voice Campaign Triggers (CRUD + utilities)
 // IMPORTANT: Keep these BEFORE '/{id}' routes to avoid conflicts
@@ -1915,6 +1933,7 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
             Route::post('/{id}/pause', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'pause'])->whereNumber('id');
             Route::post('/{id}/resume', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'resume'])->whereNumber('id');
             Route::post('/{id}/cancel', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'cancel'])->whereNumber('id');
+            Route::post('/{id}/restart', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'restart'])->whereNumber('id');
             // Ejecutar campaña manualmente (para inmediatas/programadas)
             Route::post('/{id}/execute', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'execute'])->whereNumber('id');
             
@@ -2435,6 +2454,17 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
     });
 });
 
+# ===== Asistente IA Guro - Chatbot con acceso a BD =====
+Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->group(function () {
+    Route::prefix('assistant')->group(function () {
+        Route::post('/query', [\App\Http\Controllers\Api\ChatbotController::class, 'assistant']);
+        Route::post('/chat', [\App\Http\Controllers\Api\ChatbotController::class, 'assistant']);
+    });
+    
+    // Soporte - Tickets por email
+    Route::post('/support/ticket', [\App\Http\Controllers\Api\ChatbotController::class, 'sendSupportTicket']);
+});
+
 // Ruta pública stub para evitar 404 en flujos que intenten login SaaS tradicional
 Route::post('/saas/login', function (\Illuminate\Http\Request $request) {
     return response()->json([
@@ -2618,6 +2648,8 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::get('/logs', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getLogs']);
         Route::get('/stats', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getStats']);
         Route::get('/pending-policies', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getPendingPolicies']);
+        Route::get('/scheduled', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getScheduledNotifications']);
+        Route::post('/skip', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'skipNotification']);
         Route::post('/test', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'testNotification']);
     });
 

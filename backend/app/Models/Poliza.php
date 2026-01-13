@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\BrokerScoped;
 use App\Models\PagoPoliza;
 use App\Models\CobroComision;
+use App\Models\PolicyNotificationLog;
 use App\Events\PolizaCreated;
 
 class Poliza extends Model
@@ -258,6 +259,14 @@ class Poliza extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
+     * Relación con logs de notificaciones
+     */
+    public function notificationLogs(): HasMany
+    {
+        return $this->hasMany(PolicyNotificationLog::class, 'poliza_id');
     }
 
     // ===== SCOPES =====

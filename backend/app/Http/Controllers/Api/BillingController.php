@@ -83,12 +83,27 @@ class BillingController extends Controller
         // Calcular monto
         $currency = 'COP';
         $totals = is_array($intent->totals) ? $intent->totals : [];
+        $coupon = is_array($intent->coupon) ? $intent->coupon : [];
+        $hasSuraCoupon = ($coupon['code'] ?? '') === 'SURA30';
+        
         $amount = 0;
         if ($intent->period === 'annual') {
-            $amount = (int) ($totals['subtotalAnnual'] ?? 0);
+            if ($hasSuraCoupon) {
+                // Para Sura: usar subtotal SIN descuento 12%, luego aplicar 30% Sura
+                $subtotalWithDiscount = (int) ($totals['subtotalAnnual'] ?? 0);
+                $discountAnnual = (int) ($totals['discountAnnual'] ?? 0);
+                $subtotalBeforeDiscount = $subtotalWithDiscount + $discountAnnual;
+                // Aplicar solo 30% de Sura
+                $suraDiscount = (int) round($subtotalBeforeDiscount * 0.30);
+                $amount = $subtotalBeforeDiscount - $suraDiscount;
+            } else {
+                // Flujo normal: ya incluye descuento 12%
+                $amount = (int) ($totals['subtotalAnnual'] ?? 0);
+            }
         } else {
             $amount = (int) ($totals['subtotalMonthly'] ?? 0);
         }
+        
         $amountInCents = $amount;
         if ($amountInCents <= 0) {
             return response()->json(['success' => false, 'message' => 'El monto es inválido'], 422);

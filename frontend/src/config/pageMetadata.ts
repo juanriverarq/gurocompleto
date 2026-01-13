@@ -101,17 +101,6 @@ export const pageMetadata: Record<string, PageMetadata> = {
     keywords: 'ventas cruzadas, IA, oportunidades, análisis predictivo'
   },
   
-  'ia-predicciones': {
-    title: 'Predicciones de venta',
-    description: 'Predicciones avanzadas de ventas, riesgo y tendencias del mercado con IA.',
-    keywords: 'predicciones de venta, análisis predictivo, riesgo, tendencias'
-  },
-  
-  'ia-modelos': {
-    title: 'Modelos de IA',
-    description: 'Gestión y configuración de modelos de inteligencia artificial para diferentes tipos de análisis.',
-    keywords: 'modelos IA, configuración, análisis, machine learning'
-  },
 
    // Marketing
     'marketing-enlaces': {

@@ -76,7 +76,13 @@ export interface NotificationStats {
   };
   success_rate: number;
   last_execution?: string;
+  last_execution_at?: string;
+  last_execution_formatted?: string;
   next_execution?: string;
+  next_execution_at?: string;
+  next_execution_formatted?: string;
+  send_time?: string;
+  send_days?: number[];
 }
 
 export interface PolicyNotificationLog {
@@ -109,6 +115,19 @@ export interface PendingPolicies {
   expiration: any[];
   renewal: any[];
   payment_due: any[];
+}
+
+export interface ScheduledNotification {
+  policy_id: number;
+  policy_number: string;
+  client_name: string;
+  notification_type: 'expiration' | 'renewal' | 'payment_due';
+  notification_type_label: string;
+  event_date: string | null;
+  days_until_event: number | null;
+  days_before_reminder: number;
+  scheduled_send_at: string;
+  scheduled_send_at_human: string;
 }
 
 class PolicyNotificationService {
@@ -169,6 +188,41 @@ class PolicyNotificationService {
    */
   async getPendingPolicies(): Promise<PendingPolicies> {
     const response = await api.get('/saas/policy-notifications/pending-policies');
+    return response.data.data;
+  }
+
+  /**
+   * Obtener notificaciones programadas con detalle
+   */
+  async getScheduledNotifications(limit?: number): Promise<{
+    data: ScheduledNotification[];
+    total: number;
+    next_execution: string | null;
+    next_execution_formatted: string | null;
+    next_execution_human: string | null;
+    send_time: string;
+    send_days: number[];
+    send_days_labels: string[];
+  }> {
+    const response = await api.get('/saas/policy-notifications/scheduled', {
+      params: { limit: limit || 50 }
+    });
+    return response.data;
+  }
+
+  /**
+   * Omitir una notificación específica
+   */
+  async skipNotification(data: {
+    poliza_id: number;
+    notification_type: 'expiration' | 'renewal' | 'payment_due';
+    reason?: string;
+  }): Promise<{
+    log_id: number;
+    poliza_id: number;
+    notification_type: string;
+  }> {
+    const response = await api.post('/saas/policy-notifications/skip', data);
     return response.data.data;
   }
 

@@ -109,7 +109,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
                 <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
                   <span className="hidden sm:inline">Estás usando la versión de prueba.</span>
                   <strong>{days} días restantes</strong>
-                  <a href="/apps/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
+                  <a href="/apps/billing/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
                     Activar plan
                   </a>
                 </div>
@@ -121,7 +121,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
             <div className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white relative z-[10]">
               <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
                 <span className="hidden sm:inline">Versión de prueba activa.</span>
-                <a href="/apps/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
+                <a href="/apps/billing/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
                   Activar plan
                 </a>
               </div>
