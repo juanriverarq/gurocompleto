@@ -48,20 +48,12 @@ const getAppCategories = (): AppCategory[] => {
 };
 
 const SURA_LOGO_URL =
-  'https://www.sura.co/documents/1771353/0/Logo-SURA-blanco+1.svg/8937a328-d03b-7aa7-79bd-a5308a3931b3?version=1.0&t=1704405886717';
+  'https://www.sura.co/documents/43501/0/Logo-SURA-blanco+1.svg/8937a328-d03b-7aa7-79bd-a5308a3931b3?version=1.0&t=1704405886717';
 
 const SelectAppsFlow = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSuraFlow = location.pathname.startsWith('/sura');
-  const accentTextClass = isSuraFlow ? 'text-[#7de0ff]' : 'text-primary';
-  const accentBgClass = isSuraFlow ? 'bg-[#00A1E4]' : 'bg-primary';
-  const accentSoftBgClass = isSuraFlow ? 'bg-[#00A1E4]/15' : 'bg-primary/5';
-  const accentBorderClass = isSuraFlow ? 'border-[#00A1E4]' : 'border-primary';
-  const accentButtonClass = isSuraFlow
-    ? 'bg-[#00A1E4] hover:bg-[#0088BF]'
-    : 'bg-secondary hover:bg-secondaryemphasis';
-  const accentCheckIconClass = isSuraFlow ? 'text-[#00A1E4]' : 'text-primary';
   const basePath = isSuraFlow ? '/sura' : '/comenzar';
   // Preseleccionar módulos obligatorios
   const mandatoryKeys = useMemo(() => MODULES.filter((m) => m.mandatory).map((m) => m.key), []);
@@ -149,14 +141,26 @@ const SelectAppsFlow = () => {
   const storageAnnualBefore = storageMonthly * 12;
   const storageAnnualAfter = Math.round(storageAnnualBefore * 0.75);
 
-  // Total final
+  // Total anual SIN descuento del 12% (para flujo Sura que solo aplica 30%)
+  const annualBeforeDiscount = useMemo(() => {
+    if (period === 'annual') {
+      return (totals as any).subtotalAnnual + (totals as any).discountAnnual + storageAnnualBefore;
+    }
+    return 0;
+  }, [totals, period, storageAnnualBefore]);
+
+  // Total final (con descuento 12% para flujo normal, sin descuento para Sura)
   const totalFinal = useMemo(() => {
     if (period === 'monthly') {
       return (totals as any).subtotalMonthly + storageMonthly;
     } else {
+      // En flujo Sura, usar precio sin descuento 12% (solo aplicará 30% Sura)
+      if (isSuraFlow) {
+        return annualBeforeDiscount;
+      }
       return (totals as any).subtotalAnnual + storageAnnualAfter;
     }
-  }, [totals, period, storageMonthly, storageAnnualAfter]);
+  }, [totals, period, storageMonthly, storageAnnualAfter, isSuraFlow, annualBeforeDiscount]);
 
   const toggleApp = (key: ModuleKey) => {
     const mod = MODULES.find((m) => m.key === key);
@@ -179,13 +183,32 @@ const SelectAppsFlow = () => {
     return MODULES.filter(m => selectedApps.has(m.key));
   }, [selectedApps]);
 
+  // Descuento Sura (30% adicional solo en plan anual)
+  const suraDiscount = isSuraFlow && period === 'annual' ? 0.30 : 0;
+  const suraDiscountAmount = Math.round(totalFinal * suraDiscount);
+  const totalWithSuraDiscount = totalFinal - suraDiscountAmount;
+
   const handleContinue = () => {
     // Guardar selección en localStorage (igual que /precios)
-    const payload = { users, modules: Array.from(selectedApps), totals, storageGB, period };
+    const payload = { 
+      users, 
+      modules: Array.from(selectedApps), 
+      totals, 
+      storageGB, 
+      period,
+      // Guardar info del cupón Sura si aplica
+      suraCoupon: isSuraFlow ? { code: 'SURA30', discount: 0.30, discountAmount: suraDiscountAmount } : null,
+    };
     localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
     localStorage.setItem('guro_selected_apps', JSON.stringify(Array.from(selectedApps)));
+    // Guardar flag de flujo Sura para mantenerlo en el registro
+    if (isSuraFlow) {
+      localStorage.setItem('guro_sura_flow', '1');
+    } else {
+      localStorage.removeItem('guro_sura_flow');
+    }
     // Navegar al registro
-    navigate('/comenzar/registro');
+    navigate(basePath + '/registro');
   };
 
   return (
@@ -201,6 +224,33 @@ const SelectAppsFlow = () => {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-10">
+        {/* Banner Sura */}
+        {isSuraFlow && (
+          <div className="mb-8 rounded-2xl bg-gradient-to-r from-[#0033A0] to-[#00A1E4] p-6 shadow-lg">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-5">
+                <img
+                  src={SURA_LOGO_URL}
+                  alt="Logo SURA"
+                  className="h-12 md:h-16 w-auto"
+                />
+                <div className="h-12 w-px bg-white/30 hidden md:block" />
+                <div>
+                  <p className="text-white/80 text-sm font-medium">Convenio exclusivo</p>
+                  <h2 className="text-white text-xl md:text-2xl font-bold">SURA + Guro</h2>
+                </div>
+              </div>
+              <div className="text-center md:text-right">
+                <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2">
+                  <span className="text-white text-lg md:text-xl font-bold">30% OFF</span>
+                  <span className="text-white/90 text-sm">en tu compra anual</span>
+                </div>
+                <p className="text-white/70 text-xs mt-2">Cupón aplicado automáticamente</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Título */}
         <div className="text-center mb-6">
           <h1 className="text-3xl sm:text-4xl font-bold text-dark dark:text-white mb-3">
@@ -231,8 +281,12 @@ const SelectAppsFlow = () => {
             <span className={`text-sm ${period === 'annual' ? 'font-semibold text-primary' : 'text-gray-500'}`}>
               Anual
             </span>
-            <span className="ml-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
-              -12%
+            <span className={`ml-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+              isSuraFlow 
+                ? 'text-[#0033A0] bg-[#00A1E4]/10 border border-[#00A1E4]/30' 
+                : 'text-green-700 bg-green-50 border border-green-200'
+            }`}>
+              {isSuraFlow ? '-30%' : '-12%'}
             </span>
           </div>
         </div>
@@ -449,16 +503,29 @@ const SelectAppsFlow = () => {
                     </span>
                   </div>
                 )}
-                {period === 'annual' && (
+                {period === 'annual' && !isSuraFlow && (
                   <div className="flex justify-between text-green-600">
                     <span>Descuento 12%</span>
                     <span>-{numberFormat((totals as any).discountAnnual + (storageAnnualBefore - storageAnnualAfter))}</span>
                   </div>
                 )}
+                {isSuraFlow && period === 'annual' && suraDiscountAmount > 0 && (
+                  <div className="flex justify-between text-[#00A1E4] font-medium">
+                    <span>Cupón SURA30 (-30%)</span>
+                    <span>-{numberFormat(suraDiscountAmount)}</span>
+                  </div>
+                )}
                 <div className="border-t border-gray-200 dark:border-darkborder pt-2 flex justify-between font-bold text-sm">
                   <span>Total {period === 'monthly' ? 'mensual' : 'anual'}</span>
-                  <span className="text-primary">{numberFormat(totalFinal)}</span>
+                  <span className={isSuraFlow && period === 'annual' ? 'text-[#00A1E4]' : 'text-primary'}>
+                    {numberFormat(isSuraFlow && period === 'annual' ? totalWithSuraDiscount : totalFinal)}
+                  </span>
                 </div>
+                {isSuraFlow && period === 'annual' && (
+                  <div className="text-[10px] text-gray-400 line-through text-right">
+                    Antes: {numberFormat(totalFinal)}
+                  </div>
+                )}
               </div>
 
               {/* Info de prueba */}

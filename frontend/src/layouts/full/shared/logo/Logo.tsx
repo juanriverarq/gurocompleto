@@ -5,7 +5,7 @@ import { Link } from "react-router";
 const Logo = () => {
   return (
    <Link to={'/'} className="flex items-center">
-      <img src={LogoIcon} alt="Guro Logo" className="h-10 w-auto" />
+      <img src={LogoIcon} alt="Guro Logo" className="h-10 w-auto" width={120} height={40} />
     </Link>
   )
 }

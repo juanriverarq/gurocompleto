@@ -1284,8 +1284,12 @@ class LiquidacionesVendedoresController extends Controller
                         'creado_por' => $userId,
                     ]);
 
+                    // Usar null para poliza_id en filas adicionales para evitar violación de restricción única
+                    // La restricción unique es liquidacion_id + poliza_id
+                    // Solo la primera fila tendrá poliza_id, las demás serán null
+                    $esPrimeraFila = count($detalles) === 0;
                     $detalles[] = [
-                        'poliza_id' => $poliza->id,
+                        'poliza_id' => $esPrimeraFila ? $poliza->id : null, // Solo primera fila tiene poliza_id
                         'numero_poliza' => $poliza->policy_number . ($com['anexo'] ? ' - Anexo ' . $com['anexo'] : ''),
                         'cliente_nombre' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'N/A',
                         'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company ?? 'N/A',

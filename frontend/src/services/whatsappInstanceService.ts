@@ -9,27 +9,12 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api'
 
 // Helper para obtener el token de autenticación Firebase (IGUAL QUE CAMPAIGN SERVICE)
 const getAuthToken = async (): Promise<string | null> => {
-  try {
-    console.log('🔍 [INSTANCE DEBUG] Getting Firebase auth token...');
-    console.log('🔍 [INSTANCE DEBUG] auth object:', auth);
-    
-    const user = auth.currentUser;
-    console.log('🔍 [INSTANCE DEBUG] Current user:', user);
-    
-    if (!user) {
-      console.log('❌ [INSTANCE DEBUG] No current user found');
-      return null;
-    }
-    
-    console.log('✅ [INSTANCE DEBUG] User found, getting ID token...');
-    const token = await user.getIdToken();
-    console.log('✅ [INSTANCE DEBUG] Token obtained:', token ? 'YES' : 'NO');
-    console.log('🔍 [INSTANCE DEBUG] Token preview:', token ? token.substring(0, 50) + '...' : 'null');
-    
+  try {    
+    const user = auth.currentUser;    
+    if (!user) {      return null;
+    }    const token = await user.getIdToken();    
     return token;
-  } catch (error) {
-    console.error('❌ [INSTANCE DEBUG] Error getting auth token:', error);
-    return null;
+  } catch (error) {    return null;
   }
 };
 
@@ -88,16 +73,8 @@ class WhatsAppInstanceService {
   /**
    * Realizar petición HTTP a Laravel (USANDO EL MISMO PATRÓN QUE CAMPAIGN SERVICE)
    */
-  private async makeRequest(endpoint: string, method: string = 'GET', data?: any): Promise<any> {
-    console.log('🚀 [INSTANCE DEBUG] makeRequest called with:', { endpoint, method, data });
-    
-    const url = `${API_BASE_URL}${endpoint}`;
-    console.log('🚀 [INSTANCE DEBUG] URL:', url);
-    
-    console.log('🚀 [INSTANCE DEBUG] About to call getAuthToken...');
-    const token = await getAuthToken();
-    console.log('🚀 [INSTANCE DEBUG] Token result:', token ? 'GOT TOKEN' : 'NO TOKEN');
-
+  private async makeRequest(endpoint: string, method: string = 'GET', data?: any): Promise<any> {    
+    const url = `${API_BASE_URL}${endpoint}`;    const token = await getAuthToken();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -120,8 +97,6 @@ class WhatsAppInstanceService {
       const response = await fetch(url, options);
       const status = response.status;
       const contentType = response.headers.get('content-type') || '';
-      console.log('📥 [INSTANCE DEBUG] Response meta:', { status, contentType });
-
       if (!response.ok) {
         // Leer como texto primero para evitar fallos en JSON vacío
         const errorText = await response.text().catch(() => '');
@@ -133,16 +108,12 @@ class WhatsAppInstanceService {
       }
 
       // No Content
-      if (status === 204) {
-        console.log('✅ [INSTANCE DEBUG] 204 No Content: devolviendo { success: true }');
-        return { success: true };
+      if (status === 204) {        return { success: true };
       }
 
       // Leer cuerpo como texto de forma segura
       const text = await response.text();
-      if (!text || !text.trim()) {
-        console.log('✅ [INSTANCE DEBUG] Cuerpo vacío: devolviendo { success: true }');
-        return { success: true };
+      if (!text || !text.trim()) {        return { success: true };
       }
 
       // Intentar parsear JSON si corresponde
@@ -151,16 +122,13 @@ class WhatsAppInstanceService {
           const json = JSON.parse(text);
           return json;
         } catch (parseErr) {
-          console.warn('⚠️ [INSTANCE DEBUG] Falló parseo JSON; retornando texto como message');
           return { success: true, message: text };
         }
       }
 
       // Contenido no JSON
       return { success: true, message: text };
-    } catch (error) {
-      console.error('WhatsApp Instance Service Error:', error);
-      throw new Error(`Error de conexión con backend: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } catch (error) {      throw new Error(`Error de conexión con backend: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
   }
 
@@ -168,18 +136,14 @@ class WhatsAppInstanceService {
    * Obtener todas las instancias de WhatsApp (FILTRADAS POR BROKER AUTOMÁTICAMENTE)
    */
   async getInstances(): Promise<{ success: boolean; data: WhatsAppInstance[]; message?: string }> {
-    try {
-      console.log('🔍 [INSTANCE DEBUG] Obteniendo instancias CON autenticación por broker...');
-      
+    try {      
       const response = await this.makeRequest('/saas/whatsapp-instances');
       return {
         success: true,
         data: response.data || response || [],
         message: response.message || 'Instancias obtenidas exitosamente'
       };
-    } catch (error: any) {
-      console.error('❌ Error getting instances:', error);
-      return {
+    } catch (error: any) {      return {
         success: false,
         data: [],
         message: error.message || 'Error al obtener instancias'
@@ -191,18 +155,14 @@ class WhatsAppInstanceService {
    * Crear nueva instancia de WhatsApp
    */
   async createInstance(instanceData: CreateInstanceRequest): Promise<{ success: boolean; data?: WhatsAppInstance; message?: string }> {
-    try {
-      console.log('🔄 [INSTANCE DEBUG] Creando instancia CON autenticación por broker:', instanceData);
-      
+    try {      
       const response = await this.makeRequest('/saas/whatsapp-instances', 'POST', instanceData);
       return {
         success: true,
         data: response.data || response,
         message: response.message || 'Instancia creada exitosamente'
       };
-    } catch (error: any) {
-      console.error('❌ Error creating instance:', error);
-      return {
+    } catch (error: any) {      return {
         success: false,
         message: error.message || 'Error al crear instancia'
       };
@@ -213,9 +173,7 @@ class WhatsAppInstanceService {
    * Obtener estado de una instancia específica
    */
   async getStatus(instanceId: number): Promise<InstanceStatusResponse> {
-    try {
-      console.log('🔍 [INSTANCE DEBUG] Obteniendo estado CON autenticación por broker:', instanceId);
-      
+    try {      
       const response = await this.makeRequest(`/saas/whatsapp-instances/${instanceId}/status`);
       return {
         success: true,
@@ -223,9 +181,7 @@ class WhatsAppInstanceService {
         message: response.message || 'Estado obtenido exitosamente',
         data: response.data
       };
-    } catch (error: any) {
-      console.error('❌ Error getting instance status:', error);
-      return {
+    } catch (error: any) {      return {
         success: false,
         status: 'error',
         message: error.message || 'Error al obtener estado de instancia'
@@ -245,9 +201,7 @@ class WhatsAppInstanceService {
         expires_at: response.expires_at,
         message: response.message || 'QR obtenido exitosamente'
       };
-    } catch (error: any) {
-      console.error('❌ Error getting QR code:', error);
-      return {
+    } catch (error: any) {      return {
         success: false,
         message: error.message || 'Error al obtener código QR'
       };
@@ -264,9 +218,7 @@ class WhatsAppInstanceService {
         success: true,
         message: 'Instancia eliminada exitosamente'
       };
-    } catch (error: any) {
-      console.error('❌ Error deleting instance:', error);
-      return {
+    } catch (error: any) {      return {
         success: false,
         message: error.message || 'Error al eliminar instancia'
       };

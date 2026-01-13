@@ -53,7 +53,9 @@ export default defineConfig({
         rollupOptions: {
             output: {
                 manualChunks: {
-                    pdfjs: ['pdfjs-dist']
+                    'vendor-pdfjs': ['pdfjs-dist'],
+                    'vendor-excel': ['xlsx'],
+                    'vendor-charts': ['apexcharts', 'react-apexcharts'],
                 }
             }
         }

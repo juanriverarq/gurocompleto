@@ -1,5 +1,7 @@
 
-import Banner from "/src/assets/images/landingpage/background/slider-group.png";
+import BannerXs from "/src/assets/images/landingpage/background/slider-group-xs.webp";
+import BannerSm from "/src/assets/images/landingpage/background/slider-group-sm.webp";
+import BannerLg from "/src/assets/images/landingpage/background/slider-group.webp";
 
 const Development = () => {
   return (
@@ -21,10 +23,28 @@ const Development = () => {
 
         <div className="flex flex-row w-full position-relative overflow-hidden pt-8">
           <div className="slider-group">
-            <img src={Banner} alt="Guro Dashboard" className="max-w-max" />
+            <img 
+              src={BannerXs} 
+              srcSet={`${BannerXs} 800w, ${BannerSm} 1500w, ${BannerLg} 3693w`}
+              sizes="(max-width: 480px) 150vw, (max-width: 768px) 200vw, 300vw"
+              alt="Guro Dashboard - Plataforma de gestión de seguros con IA" 
+              className="max-w-max" 
+              width={800} 
+              height={200} 
+              loading="lazy" 
+            />
           </div>
           <div className="slider-group">
-            <img src={Banner} alt="Guro Dashboard" className="max-w-max" />
+            <img 
+              src={BannerXs} 
+              srcSet={`${BannerXs} 800w, ${BannerSm} 1500w, ${BannerLg} 3693w`}
+              sizes="(max-width: 480px) 150vw, (max-width: 768px) 200vw, 300vw"
+              alt="Guro Dashboard - Plataforma de gestión de seguros con IA" 
+              className="max-w-max" 
+              width={800} 
+              height={200} 
+              loading="lazy" 
+            />
           </div>
         </div>
       </div>

@@ -289,13 +289,38 @@ class SendPolicyNotifications extends Command
         
         $this->line("  🔍 Días de anticipación configurados: " . implode(', ', $daysArray));
         
+        // Obtener exclusiones
+        $excludedClientIds = $config->excluded_client_ids ?? [];
+        $excludedPolicyTypes = $config->excluded_policy_types ?? [];
+        $excludedPolicyStatuses = $config->excluded_policy_statuses ?? [];
+        
         $uniquePolicyIds = [];
         $allPolicies = [];
         
+        // Estados activos permitidos (múltiples variantes)
+        $activeStatuses = ['active', 'issued', 'accrued', 'vigente', 'activa', 'emitida', 'devengada', 'pending', 'pendiente'];
+
         foreach ($daysArray as $days) {
             $query = Poliza::forBroker($config->broker_id)
-                ->whereIn('status', ['active', 'issued', 'accrued'])
+                ->where(function($q) use ($activeStatuses) {
+                    $q->whereIn('status', $activeStatuses)
+                      ->orWhereIn(\DB::raw('LOWER(status)'), $activeStatuses);
+                })
                 ->with('client');
+
+            // Aplicar exclusiones directamente en la query
+            if (!empty($excludedClientIds)) {
+                $query->whereNotIn('client_id', $excludedClientIds);
+            }
+            if (!empty($excludedPolicyTypes)) {
+                $query->where(function($q) use ($excludedPolicyTypes) {
+                    $q->whereNull('type')
+                      ->orWhereNotIn('type', $excludedPolicyTypes);
+                });
+            }
+            if (!empty($excludedPolicyStatuses)) {
+                $query->whereNotIn('status', array_map('strtolower', $excludedPolicyStatuses));
+            }
 
             $targetDate = now()->addDays($days)->startOfDay();
 
@@ -528,13 +553,24 @@ class SendPolicyNotifications extends Command
                 ];
             }
 
-            $error = $response->json('error') ?? 'Error desconocido';
-            $log->markAsFailed($error);
+            $error = $response->json('error') ?? $response->json('message') ?? 'Error desconocido';
+            $statusCode = $response->status();
+            $fullError = "[HTTP {$statusCode}] {$error}";
+            
+            Log::warning('WhatsApp send failed', [
+                'url' => $url,
+                'phone' => $phone,
+                'status' => $statusCode,
+                'response' => $response->json(),
+                'error' => $error
+            ]);
+            
+            $log->markAsFailed($fullError);
             $config->incrementFailed();
 
             return [
                 'success' => false,
-                'error' => $error
+                'error' => $fullError
             ];
 
         } catch (\Exception $e) {

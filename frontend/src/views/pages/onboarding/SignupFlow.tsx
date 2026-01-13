@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate, Link, useLocation } from 'react-router';
 import { ModuleKey } from 'src/components/landingpage/pricing-calculator/modules';
 import Logo from 'src/layouts/full/shared/logo/Logo';
+
+const SURA_LOGO_URL =
+  'https://www.sura.co/documents/43501/0/Logo-SURA-blanco+1.svg/8937a328-d03b-7aa7-79bd-a5308a3931b3?version=1.0&t=1704405886717';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import api from 'src/config/api';
 import { auth } from 'src/config/firebase';
@@ -43,10 +46,15 @@ const EyeSlashIcon = () => (
 
 const SignupFlow = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { registerWithEmail } = useUnifiedAuth();
   
+  // Detectar flujo Sura (por URL o localStorage)
+  const isSuraFlow = location.pathname.startsWith('/sura') || localStorage.getItem('guro_sura_flow') === '1';
+  const basePath = isSuraFlow ? '/sura' : '/comenzar';
+  
   // Cargar apps seleccionadas
-  const [selectedApps, setSelectedApps] = useState<ModuleKey[]>([]);
+  const [selectedApps, setSelectedApps] = useState<ModuleKey[]>();
   
   useEffect(() => {
     const saved = localStorage.getItem('guro_selected_apps');
@@ -54,12 +62,12 @@ const SignupFlow = () => {
       try {
         setSelectedApps(JSON.parse(saved));
       } catch {
-        navigate('/comenzar');
+        navigate(basePath);
       }
     } else {
-      navigate('/comenzar');
+      navigate(basePath);
     }
-  }, [navigate]);
+  }, [navigate, basePath]);
 
   // selectedModules se puede usar para mostrar las apps seleccionadas si se necesita
   // const selectedModules = useMemo(() => MODULES.filter(m => selectedApps.includes(m.key)), [selectedApps]);
@@ -149,12 +157,23 @@ const SignupFlow = () => {
 
         // Guardar también en subscription_intents para tracking
         try {
+          // Obtener info del cupón Sura si existe
+          let suraCoupon = null;
+          try {
+            const pricingData = localStorage.getItem('guro_pricing_selection');
+            if (pricingData) {
+              const parsed = JSON.parse(pricingData);
+              suraCoupon = parsed.suraCoupon || null;
+            }
+          } catch {}
+          
           await api.post('/pricing/subscription-intents', {
             modules: selectedApps,
             phone: formData.phone,
             employeeCount: formData.employeeCount,
             businessType: formData.businessType,
-            source: 'onboarding_flow',
+            source: isSuraFlow ? 'sura_onboarding_flow' : 'onboarding_flow',
+            coupon: suraCoupon,
           });
         } catch (e) {
           // Ignorar errores de subscription intent
@@ -163,6 +182,7 @@ const SignupFlow = () => {
 
         // Limpiar localStorage
         localStorage.removeItem('guro_selected_apps');
+        localStorage.removeItem('guro_sura_flow');
         
         // Mostrar pantalla de carga animada
         setLoading(false);
@@ -178,7 +198,7 @@ const SignupFlow = () => {
   };
 
   const handleChangeApps = () => {
-    navigate('/comenzar');
+    navigate(basePath);
   };
 
   const handleLoadingComplete = () => {
@@ -204,6 +224,30 @@ const SignupFlow = () => {
       </header>
 
       <div className="max-w-xl mx-auto px-4 py-10">
+        {/* Banner Sura */}
+        {isSuraFlow && (
+          <div className="mb-8 rounded-2xl bg-gradient-to-r from-[#0033A0] to-[#00A1E4] p-5 shadow-lg">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <img
+                  src={SURA_LOGO_URL}
+                  alt="Logo SURA"
+                  className="h-10 w-auto"
+                />
+                <div className="h-8 w-px bg-white/30 hidden sm:block" />
+                <div>
+                  <p className="text-white/80 text-xs font-medium">Convenio exclusivo</p>
+                  <h2 className="text-white text-lg font-bold">SURA + Guro</h2>
+                </div>
+              </div>
+              <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1.5">
+                <span className="text-white text-sm font-bold">30% OFF</span>
+                <span className="text-white/90 text-xs">aplicado</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Título */}
         <div className="text-center mb-10">
           <h1 className="text-3xl sm:text-4xl font-bold text-dark dark:text-white mb-3">
@@ -217,7 +261,7 @@ const SignupFlow = () => {
         {/* Apps seleccionadas */}
         <div className="bg-gray-50 dark:bg-darkgray rounded-xl p-4 mb-6 flex items-center justify-between">
           <span className="font-semibold text-dark dark:text-white text-sm">
-            {selectedApps.length} aplicaciones seleccionadas
+            {selectedApps?.length || 0} aplicaciones seleccionadas
           </span>
           <button
             onClick={handleChangeApps}

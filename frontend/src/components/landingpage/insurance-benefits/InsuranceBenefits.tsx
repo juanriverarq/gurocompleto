@@ -2,9 +2,9 @@ import CardBox from "src/components/shared/CardBox";
 import { Icon } from "@iconify/react";
 import { Button } from "flowbite-react";
 import { Link } from "react-router";
-import user1 from "/src/assets/images/profile/user-2.jpg";
-import user2 from "/src/assets/images/profile/user-3.jpg";
-import user3 from "/src/assets/images/profile/user-4.jpg";
+import user1 from "/src/assets/images/profile/user-2.webp";
+import user2 from "/src/assets/images/profile/user-3.webp";
+import user3 from "/src/assets/images/profile/user-4.webp";
 
 const InsuranceBenefits = () => {
   const keyFeatures = [
@@ -125,6 +125,9 @@ const InsuranceBenefits = () => {
                       src={user1}
                       className="border-2 border-white dark:border-darkborder rounded-full"
                       alt="usuario"
+                      width={32}
+                      height={32}
+                      loading="lazy"
                     />
                   </div>
                   <div className="-ms-2 h-8 w-8">
@@ -132,6 +135,9 @@ const InsuranceBenefits = () => {
                       src={user2}
                       className="border-2 border-white dark:border-darkborder rounded-full"
                       alt="usuario"
+                      width={32}
+                      height={32}
+                      loading="lazy"
                     />
                   </div>
                   <div className="-ms-2 h-8 w-8">
@@ -139,6 +145,9 @@ const InsuranceBenefits = () => {
                       src={user3}
                       className="border-2 border-white dark:border-darkborder rounded-full"
                       alt="usuario"
+                      width={32}
+                      height={32}
+                      loading="lazy"
                     />
                   </div>
                 </div>

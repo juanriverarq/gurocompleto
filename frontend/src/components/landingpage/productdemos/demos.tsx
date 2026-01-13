@@ -1,6 +1,6 @@
-import user1 from "/src/assets/images/profile/user-2.jpg";
-import user2 from "/src/assets/images/profile/user-3.jpg";
-import user3 from "/src/assets/images/profile/user-4.jpg";
+import user1 from "/src/assets/images/profile/user-2.webp";
+import user2 from "/src/assets/images/profile/user-3.webp";
+import user3 from "/src/assets/images/profile/user-4.webp";
 
 const ProductDemos = () => {
   const userImg = [

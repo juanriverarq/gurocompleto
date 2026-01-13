@@ -1423,16 +1423,7 @@ const Clientes: React.FC = () => {
                 <Icon icon="solar:download-bold-duotone" className="w-4 h-4" />
               </Button>
 
-              {canDeleteClient && estadisticasTotales && estadisticasTotales.total > 0 && (
-                <Button
-                  color="failure"
-                  onClick={() => setShowBulkDeleteAllModal(true)}
-                  className="h-10 w-10 p-0 rounded-[10px] flex items-center justify-center"
-                  title="Eliminar todos los clientes"
-                >
-                  <Icon icon="solar:trash-bin-trash-bold-duotone" className="w-4 h-4" />
-                </Button>
-              )}
+{/* Botón de eliminar todos - solo visible cuando hay selección masiva */}
 
               <Button
                 color="light"
@@ -1514,24 +1505,47 @@ const Clientes: React.FC = () => {
         ) : (
           <>
             {selectedIds.size > 0 && (
-              <div className="p-3 mb-3 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-between">
-                <div className="text-sm text-blue-900">
-                  {selectedIds.size} cliente(s) seleccionados
+              <div className="p-3 mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="text-sm text-blue-900 dark:text-blue-300">
+                  <strong>{selectedIds.size}</strong> cliente(s) seleccionados
+                  {estadisticasTotales && estadisticasTotales.total > selectedIds.size && (
+                    <span className="text-gray-500 dark:text-gray-400 ml-2">
+                      de {estadisticasTotales.total} totales
+                    </span>
+                  )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {deleteEnabled && canDeleteClient && (
-                    <Button
-                      color="failure"
-                      size="sm"
-                      onClick={handleBulkDeleteClientes}
-                      className="rounded-[10px]"
-                    >
-                      <Icon
-                        icon="solar:trash-bin-minimalistic-bold-duotone"
-                        className="w-4 h-4 mr-1"
-                      />
-                      Eliminar seleccionados
-                    </Button>
+                    <>
+                      <Button
+                        color="failure"
+                        size="sm"
+                        onClick={handleBulkDeleteClientes}
+                        className="rounded-[10px]"
+                        title="Eliminar solo los clientes seleccionados"
+                      >
+                        <Icon
+                          icon="solar:trash-bin-minimalistic-bold-duotone"
+                          className="w-4 h-4 mr-1"
+                        />
+                        Eliminar seleccionados ({selectedIds.size})
+                      </Button>
+                      {estadisticasTotales && estadisticasTotales.total > 0 && (
+                        <Button
+                          color="failure"
+                          size="sm"
+                          onClick={() => setShowBulkDeleteAllModal(true)}
+                          className="rounded-[10px]"
+                          title="Eliminar TODOS los clientes del sistema"
+                        >
+                          <Icon
+                            icon="solar:trash-bin-trash-bold-duotone"
+                            className="w-4 h-4 mr-1"
+                          />
+                          Eliminar TODOS ({estadisticasTotales.total})
+                        </Button>
+                      )}
+                    </>
                   )}
                   <Button
                     color="blue"
@@ -1548,7 +1562,7 @@ const Clientes: React.FC = () => {
                     onClick={clearSelection}
                     className="rounded-[10px]"
                   >
-                    Limpiar
+                    Limpiar selección
                   </Button>
                 </div>
               </div>

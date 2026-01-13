@@ -8,6 +8,7 @@ import Header from './vertical/header/Header';
 import PartialTransitioning from 'src/components/headless-ui/Transition/PartialTransitioning';
 import api from 'src/config/api';
 import ScrollToTop from 'src/components/shared/ScrollToTop';
+import FloatingChat from 'src/components/chat/FloatingChat';
 
 const UnifiedProtectedFullLayout: React.FC = () => {
   const { activeLayout, isLayout } = useContext(CustomizerContext);
@@ -230,6 +231,8 @@ const UnifiedProtectedFullLayout: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* Chat flotante global */}
+      <FloatingChat />
     </div>
   );
 };

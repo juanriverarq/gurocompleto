@@ -144,12 +144,13 @@ interface CallRecord {
     debtAmount?: number;
   };
   conversation_id?: string;
+  call_recording_url?: string;  // URL de grabación de VAPI
   // Datos híbridos
   is_enriched?: boolean;
-  elevenlabs_cost?: number;
-  elevenlabs_analysis?: any;
-  elevenlabs_metadata?: any;
-  elevenlabs_raw?: any;
+  vapi_cost?: number;
+  vapi_analysis?: any;
+  vapi_metadata?: any;
+  vapi_raw?: any;
   metadata?: any;
   // Campos adicionales del backend
   voice_campaign_id?: number;
@@ -167,14 +168,13 @@ interface CallRecord {
   costs?: {
     currency?: string;
     cop_rate?: number;
-    elevenlabs_cop?: number;
-    twilio_cop?: number;
+    voice_cop?: number;      // Costo voz IA
+    phone_cop?: number;      // Costo telefonía
     total_cop?: number;
     total_with_markup_cop?: number;
-    // Compatibilidad futura
     total_usd?: number;
-    markup_percent: number;
-    twilio_minutes: number;
+    markup_percent?: number;
+    billed_minutes?: number;  // Minutos facturados
   };
 }
 
@@ -212,6 +212,8 @@ const CallHistory: React.FC = () => {
   const [agents, setAgents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ synced: number; message: string } | null>(null);
   const [selectedCall, setSelectedCall] = useState<CallRecord | null>(null);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [error, setError] = useState<string>('');
@@ -295,10 +297,33 @@ const CallHistory: React.FC = () => {
 
       setAgents(Array.isArray(agentsData) ? agentsData : []);
       await loadConversations(true);
+      
+      // Sincronización automática: detectar llamadas sin costos y sincronizar
+      await autoSyncPendingCalls();
     } catch (error) {
       setError('Error al cargar datos iniciales');
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  // Sincronización automática de llamadas pendientes (el backend detecta cuáles necesitan sync)
+  const autoSyncPendingCalls = async () => {
+    try {
+      setIsSyncing(true);
+      const result = await voiceCampaignService.syncPendingCallsFromVapi();
+      if (result.success && (result.synced || 0) > 0) {
+        setSyncResult({ 
+          synced: result.synced || 0, 
+          message: `Sincronización automática: ${result.synced} llamadas actualizadas` 
+        });
+        // Recargar el historial con los datos actualizados
+        await loadConversations(true, undefined, 1);
+      }
+    } catch (e) {
+      // Silencioso: no bloquear la carga si falla la sincronización automática
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -325,7 +350,7 @@ const CallHistory: React.FC = () => {
       }
 
       if (filtersToUse.search && filtersToUse.search.trim()) {
-        requestFilters.phone = filtersToUse.search.trim();
+        requestFilters.search = filtersToUse.search.trim();
       }
 
       if (filtersToUse.startDate && filtersToUse.endDate) {
@@ -337,9 +362,6 @@ const CallHistory: React.FC = () => {
       if (filtersToUse.agent && filtersToUse.agent !== 'all') {
         requestFilters.agent_id = filtersToUse.agent;
       }
-
-      console.log('🔄 [CALL HISTORY] Loading calls with filters:', requestFilters);
-
       // Lista sin enriquecer (mejor rendimiento). El detalle se enriquece on-demand.
       const result = await voiceCampaignService.getHybridCallHistory({ ...requestFilters, enrich: false } as any);
       
@@ -351,14 +373,9 @@ const CallHistory: React.FC = () => {
           setError(result.message);
         }
         return;
-      }
-
-      console.log('✅ [CALL HISTORY] Hybrid calls loaded successfully:', result);
-      
+      }      
       // Mostrar información sobre el enriquecimiento
-      if (result.metadata) {
-        console.log(`📊 [HYBRID] Enrichment stats: ${result.metadata.enriched_calls}/${result.metadata.total_calls} calls enriched with ElevenLabs data`);
-      }
+      if (result.metadata) {      }
 
       // Transformar datos del backend a nuestro formato
       const transformedCalls: CallRecord[] = result.calls.map((call: any) => {
@@ -377,19 +394,54 @@ const CallHistory: React.FC = () => {
           }
         }
 
-        // Normalizar transcript desde ElevenLabs si está disponible
-        const rawTranscript = call?.elevenlabs_raw?.transcript || call?.elevenlabs?.raw?.transcript;
-        const normalizedTranscript = Array.isArray(rawTranscript)
-          ? rawTranscript.map((m: any) => ({
-              role: (m.role || m.speaker || 'agent') as 'agent' | 'user',
-              time_in_call_secs: Number(m.time_in_call_secs || m.time || 0),
-              message: m.message || m.content || m.text || '',
-              source_medium: m.source_medium,
-              tool_calls: m.tool_calls || [],
-              feedback: m.feedback || undefined,
-              interrupted: m.interrupted || false,
-            }))
-          : undefined;
+        // Normalizar transcript desde ElevenLabs o VAPI
+        const rawTranscript = call?.elevenlabs_raw?.transcript || call?.elevenlabs?.raw?.transcript || call?.call_transcript;
+        let normalizedTranscript: TranscriptMessage[] | undefined = undefined;
+        
+        if (Array.isArray(rawTranscript)) {
+          // Ya es un array (ElevenLabs format)
+          normalizedTranscript = rawTranscript.map((m: any) => ({
+            role: (m.role || m.speaker || 'agent') as 'agent' | 'user',
+            time_in_call_secs: Number(m.time_in_call_secs || m.time || 0),
+            message: m.message || m.content || m.text || '',
+            source_medium: m.source_medium,
+            tool_calls: m.tool_calls || [],
+            feedback: m.feedback || undefined,
+            interrupted: m.interrupted || false,
+          }));
+        } else if (typeof rawTranscript === 'string' && rawTranscript.trim()) {
+          // Es un string (VAPI format: "AI: mensaje\nUser: mensaje\n...")
+          // Parsear el formato de VAPI
+          const lines = rawTranscript.split('\n').filter((line: string) => line.trim());
+          let timeCounter = 0;
+          normalizedTranscript = lines.map((line: string) => {
+            const isAgent = line.startsWith('AI:') || line.startsWith('Agente:') || line.startsWith('Agent:');
+            const isUser = line.startsWith('User:') || line.startsWith('Usuario:') || line.startsWith('Cliente:');
+            
+            let message = line;
+            let role: 'agent' | 'user' = 'agent';
+            
+            if (isAgent) {
+              role = 'agent';
+              message = line.replace(/^(AI|Agente|Agent):\s*/i, '');
+            } else if (isUser) {
+              role = 'user';
+              message = line.replace(/^(User|Usuario|Cliente):\s*/i, '');
+            }
+            
+            timeCounter += 5; // Aproximar 5 segundos por mensaje
+            
+            return {
+              role,
+              time_in_call_secs: timeCounter,
+              message: message.trim(),
+              source_medium: undefined,
+              tool_calls: [],
+              feedback: undefined,
+              interrupted: false,
+            };
+          });
+        }
 
         return {
           id: call.id,
@@ -417,6 +469,7 @@ const CallHistory: React.FC = () => {
           terminationReason: call.error_message || undefined,
           customerData: call.call_metadata || {},
           conversation_id: call.elevenlabs_conversation_id ? String(call.elevenlabs_conversation_id) : undefined,
+          call_recording_url: call.call_recording_url || undefined,
           // Campos adicionales del backend
           voice_campaign_id: call.voice_campaign_id,
           execution_id: call.voice_campaign_execution_id,
@@ -429,12 +482,12 @@ const CallHistory: React.FC = () => {
           call_result: call.call_result,
           error_message: call.error_message,
           retry_count: call.retry_count || 0,
-          // Datos híbridos de ElevenLabs
+          // Datos híbridos de VAPI
           is_enriched: call.is_enriched || false,
-          elevenlabs_cost: call.elevenlabs_cost || 0,
-          elevenlabs_analysis: call.elevenlabs_analysis || null,
-          elevenlabs_metadata: call.elevenlabs_metadata || null,
-          elevenlabs_raw: call.elevenlabs?.raw || null,
+          vapi_cost: call.vapi_cost || call.elevenlabs_cost || 0,
+          vapi_analysis: call.vapi_analysis || call.elevenlabs_analysis || null,
+          vapi_metadata: call.vapi_metadata || call.elevenlabs_metadata || null,
+          vapi_raw: call.vapi_raw || call.elevenlabs?.raw || null,
           // Datos recolectados del tool (NUEVO)
           collected_data: call.collected_data || null,
           call_metadata: call.call_metadata || null,
@@ -442,13 +495,13 @@ const CallHistory: React.FC = () => {
           costs: call.costs ? {
             currency: call.costs.currency,
             cop_rate: call.costs.cop_rate,
-            elevenlabs_cop: call.costs.elevenlabs_cop || 0,
-            twilio_cop: call.costs.twilio_cop || 0,
+            voice_cop: call.costs.voice_cop || 0,      // Costo voz IA
+            phone_cop: call.costs.phone_cop || 0,      // Costo telefonía
             total_cop: call.costs.total_cop || 0,
             total_with_markup_cop: call.costs.total_with_markup_cop || 0,
             total_usd: call.costs.total_usd || 0,
             markup_percent: call.costs.markup_percent || 0,
-            twilio_minutes: call.costs.twilio_minutes || 0,
+            billed_minutes: call.costs.billed_minutes || 0,
           } : undefined
         };
       });
@@ -486,9 +539,7 @@ const CallHistory: React.FC = () => {
         total
       }));
 
-    } catch (error) {
-      console.error('❌ [CALL HISTORY] Error loading calls:', error);
-      setError('Error al cargar el historial de llamadas. Verifique su conexión.');
+    } catch (error) {      setError('Error al cargar el historial de llamadas. Verifique su conexión.');
       
       if (reset) {
         setCalls([]);
@@ -507,6 +558,28 @@ const CallHistory: React.FC = () => {
     loadConversations(true, undefined, 1);
   };
 
+  // Sincronizar llamadas pendientes desde VAPI
+  const handleSyncPendingCalls = async () => {
+    setIsSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await voiceCampaignService.syncPendingCallsFromVapi();
+      if (result.success) {
+        setSyncResult({ synced: result.synced || 0, message: result.message || 'Sincronización completada' });
+        // Recargar el historial si se sincronizaron llamadas
+        if ((result.synced || 0) > 0) {
+          loadConversations(true, undefined, 1);
+        }
+      } else {
+        setSyncResult({ synced: 0, message: result.message || 'Error en sincronización' });
+      }
+    } catch (e) {
+      setSyncResult({ synced: 0, message: 'Error al sincronizar' });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const analyzeSentiment = (_transcript: any): 'positive' | 'negative' | 'neutral' => {
     if (Array.isArray(_transcript) && _transcript.length > 0) {
       return 'positive';
@@ -523,6 +596,57 @@ const CallHistory: React.FC = () => {
     if (_conversation.cost && _conversation.cost > 1) tags.push('alto-costo');
     
     return tags;
+  };
+
+  // Traducir razones de finalización de VAPI al español
+  const translateTerminationReason = (reason: string | null | undefined): string => {
+    if (!reason) return 'No especificada';
+    
+    const translations: Record<string, string> = {
+      'customer-ended-call': 'El cliente finalizó la llamada',
+      'assistant-ended-call': 'El asistente finalizó la llamada',
+      'silence-timed-out': 'Tiempo de espera por silencio agotado',
+      'max-duration-reached': 'Duración máxima alcanzada',
+      'dial-busy': 'Línea ocupada',
+      'dial-failed': 'Fallo al marcar',
+      'dial-no-answer': 'Sin respuesta',
+      'assistant-error': 'Error del asistente',
+      'assistant-not-found': 'Asistente no encontrado',
+      'assistant-request-returned-error': 'Error en solicitud del asistente',
+      'assistant-request-returned-invalid-assistant': 'Asistente inválido',
+      'assistant-request-returned-no-assistant': 'Sin asistente configurado',
+      'assistant-request-returned-forwarding-phone-number': 'Transferencia a otro número',
+      'assistant-said-end-call-phrase': 'El asistente dijo frase de despedida',
+      'call-forwarded': 'Llamada transferida',
+      'customer-busy': 'Cliente ocupado',
+      'customer-did-not-answer': 'Cliente no contestó',
+      'customer-did-not-give-microphone-permission': 'Cliente no dio permiso de micrófono',
+      'exceeded-max-duration': 'Excedió duración máxima',
+      'manually-canceled': 'Cancelada manualmente',
+      'phone-call-provider-closed-websocket': 'Proveedor cerró conexión',
+      'pipeline-error-extra-function-failed': 'Error en función adicional',
+      'pipeline-error-first-message-failed': 'Error en primer mensaje',
+      'pipeline-error-function-filler-failed': 'Error en función de relleno',
+      'pipeline-error-function-failed': 'Error en función',
+      'pipeline-error-openai-llm-failed': 'Error en modelo de lenguaje',
+      'pipeline-error-openai-voice-failed': 'Error en voz',
+      'pipeline-error-stt-failed': 'Error en transcripción',
+      'pipeline-error-tts-failed': 'Error en síntesis de voz',
+      'pipeline-error-unexpected-error': 'Error inesperado',
+      'pipeline-no-available-model': 'Sin modelo disponible',
+      'server-error': 'Error del servidor',
+      'twilio-failed-to-connect-call': 'Fallo al conectar llamada',
+      'unknown-error': 'Error desconocido',
+      'voicemail': 'Buzón de voz',
+      'vonage-disconnected': 'Desconectado',
+      'vonage-failed-to-connect-call': 'Fallo al conectar',
+      'machine-detected': 'Contestadora detectada',
+      'no-answer': 'Sin respuesta',
+      'busy': 'Ocupado',
+      'failed': 'Fallida',
+    };
+    
+    return translations[reason] || reason;
   };
 
   // Función para mapear estados del backend a los del frontend
@@ -584,9 +708,9 @@ const CallHistory: React.FC = () => {
     const columnNames: Record<string, string> = {
       customer: 'Cliente',
       agent: 'Agente',
-      status: 'Estado',
+      status: 'Contactabilidad',
       duration: 'Duración',
-      outcome: 'Resultado',
+      outcome: 'Objetivo',
       cost: 'Costo',
       startTime: 'Fecha',
       phone: 'Teléfono'
@@ -614,8 +738,18 @@ const CallHistory: React.FC = () => {
             <span className="font-medium">{call.agentName}</span>
           </div>
         );
-      case 'status':
-        return <Badge color={getStatusColor(call.status)}>{getStatusLabel(call.status)}</Badge>;
+      case 'status': {
+        // Contactabilidad: si el cliente contestó la llamada
+        const duration = call.duration || 0;
+        const terminationReason = (call as any).call_result?.termination_reason || (call as any).elevenlabs_analysis?.termination_reason;
+        const noContactReasons = ['no-answer', 'busy', 'dial-no-answer', 'dial-busy', 'customer-did-not-answer', 'customer-busy', 'machine-detected', 'voicemail'];
+        const wasContacted = duration >= 10 && !noContactReasons.includes(terminationReason);
+        return (
+          <Badge color={wasContacted ? 'success' : 'failure'}>
+            {wasContacted ? 'Contactado' : 'No contactado'}
+          </Badge>
+        );
+      }
       case 'duration':
         return (
           <div className="flex items-center gap-2">
@@ -624,8 +758,17 @@ const CallHistory: React.FC = () => {
           </div>
         );
       case 'outcome': {
-        const rawResult = (typeof (call as any).call_result === 'string' ? (call as any).call_result : undefined) || call.status;
-        return <Badge color={getStatusColor(rawResult)}>{getStatusLabel(rawResult)}</Badge>;
+        // Objetivo: si se cumplió el objetivo de la llamada
+        const callResult = (call as any).call_result || (call as any).elevenlabs_analysis || (call as any).vapi_analysis || {};
+        const objectiveSuccess = callResult.call_successful;
+        if (objectiveSuccess === undefined || objectiveSuccess === null) {
+          return <Badge color="gray">N/A</Badge>;
+        }
+        return (
+          <Badge color={objectiveSuccess ? 'success' : 'warning'}>
+            {objectiveSuccess ? 'Cumplido' : 'No cumplido'}
+          </Badge>
+        );
       }
       case 'cost': {
         const amount = call.costs
@@ -828,17 +971,21 @@ const CallHistory: React.FC = () => {
         return;
       }
 
-      if (!call.conversation_id) {
-        alert('Esta conversación no tiene audio disponible.');
-        return;
+      // Primero intentar usar la URL de grabación de VAPI (guardada en call_recording_url)
+      let audioUrl: string | null = null;
+      
+      // Prioridad 1: URL de grabación directa de VAPI
+      if (call.call_recording_url) {
+        audioUrl = call.call_recording_url;      }
+      // Prioridad 2: Intentar obtener desde ElevenLabs si hay conversation_id
+      else if (call.conversation_id) {
+        try {
+          const { getConversationAudio } = await import('../../../services/elevenLabsService');
+          audioUrl = await getConversationAudio(call.conversation_id);        } catch (e) {        }
       }
 
-      // Obtener el audio desde ElevenLabs
-      const { getConversationAudio } = await import('../../../services/elevenLabsService');
-      const audioUrl = await getConversationAudio(call.conversation_id);
-
       if (!audioUrl) {
-        alert('No se pudo cargar el audio de la conversación. Puede que no esté disponible.');
+        alert('El audio de esta llamada aún no está disponible. VAPI puede tardar unos minutos en procesarlo.');
         return;
       }
 
@@ -1052,30 +1199,41 @@ const CallHistory: React.FC = () => {
   if (!isLoading && calls.length === 0) {
     return (
       <div className="space-y-6">
-        {/* Header */}
+        {/* Header con búsqueda AJAX */}
         <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
-          <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1">
+          <div className="p-6">
+            <div className="flex flex-col lg:flex-row gap-4 items-center">
+              <div className="flex-1 w-full">
                 <div className="relative">
                   <Icon icon="solar:magnifer-bold-duotone" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Buscar por teléfono, cliente, agente..."
+                    placeholder="Buscar por nombre, teléfono, agente, estado..."
                     value={filters.search}
-                    onChange={(e) => handleFilterChange('search', e.target.value)}
-                    className="pl-10 h-10 text-sm rounded-[10px] w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      handleFilterChange('search', value);
+                      if (searchDebounceRef.current) {
+                        clearTimeout(searchDebounceRef.current);
+                      }
+                      searchDebounceRef.current = window.setTimeout(() => {
+                        loadConversations(true, { ...filters, search: value });
+                      }, 300);
+                    }}
+                    className="pl-10 pr-10 h-10 text-sm rounded-[10px] w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  {filters.search && (
+                    <button
+                      onClick={() => {
+                        handleFilterChange('search', '');
+                        loadConversations(true, { ...filters, search: '' });
+                      }}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <Icon icon="solar:close-circle-bold" className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  onClick={handleSearch}
-                  className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                >
-                  <Icon icon="solar:magnifer-bold-duotone" className="w-4 h-4 mr-2" />
-                  Buscar
-                </Button>
               </div>
             </div>
           </div>
@@ -1089,7 +1247,7 @@ const CallHistory: React.FC = () => {
               Sin conversaciones registradas
             </h3>
             <p className="text-gray-500 mb-6 max-w-lg mx-auto">
-              No hay llamadas en el sistema. Las conversaciones aparecerán aquí cuando se realicen las primeras llamadas con agentes de ElevenLabs.
+              No hay llamadas en el sistema. Las conversaciones aparecerán aquí cuando se realicen las primeras llamadas.
             </p>
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 max-w-md mx-auto">
@@ -1100,12 +1258,6 @@ const CallHistory: React.FC = () => {
                 <p className="text-red-600 text-sm mt-1">{error}</p>
               </div>
             )}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700">
-                <Icon icon="solar:refresh-bold-duotone" className="w-4 h-4 mr-2" />
-                Actualizar
-              </Button>
-            </div>
           </div>
         </Card>
       </div>
@@ -1114,88 +1266,53 @@ const CallHistory: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header con búsqueda y filtros */}
+      {/* Header con búsqueda AJAX */}
       <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
         <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
+          <div className="flex flex-col lg:flex-row gap-4 items-center">
+            <div className="flex-1 w-full">
               <div className="relative">
                 <Icon icon="solar:magnifer-bold-duotone" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Buscar por teléfono, cliente, agente..."
+                  placeholder="Buscar por nombre, teléfono, agente, estado..."
                   value={filters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
-                  className="pl-10 h-10 text-sm rounded-[10px] w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    handleFilterChange('search', value);
+                    // Búsqueda AJAX con debounce
+                    if (searchDebounceRef.current) {
+                      clearTimeout(searchDebounceRef.current);
+                    }
+                    searchDebounceRef.current = window.setTimeout(() => {
+                      loadConversations(true, { ...filters, search: value });
+                    }, 300);
+                  }}
+                  className="pl-10 pr-10 h-10 text-sm rounded-[10px] w-full border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+                {isLoading && filters.search && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <Spinner size="sm" />
+                  </div>
+                )}
+                {!isLoading && filters.search && (
+                  <button
+                    onClick={() => {
+                      handleFilterChange('search', '');
+                      loadConversations(true, { ...filters, search: '' });
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <Icon icon="solar:close-circle-bold" className="w-5 h-5" />
+                  </button>
+                )}
               </div>
             </div>
             
-            <div className="flex gap-2">
-              <select
-                value={filters.agent}
-                onChange={(e) => handleFilterChange('agent', e.target.value)}
-                className="h-10 text-sm rounded-[10px] border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800"
-              >
-                <option value="all">Todos los agentes</option>
-                {agents.map(agent => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
-              
-              <select
-                value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-                className="h-10 text-sm rounded-[10px] border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800"
-              >
-                <option value="all">Todos los estados</option>
-                <option value="done">Completadas</option>
-                <option value="failed">Fallidas</option>
-                <option value="in-progress">En progreso</option>
-              </select>
-
-              <Button 
-                onClick={handleSearch}
-                className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-              >
-                <Icon icon="solar:magnifer-bold-duotone" className="w-4 h-4 mr-2" />
-                Buscar
-              </Button>
-              
-              {getActiveFiltersCount() > 0 && (
-                <Button 
-                  onClick={clearFilters}
-                  color="light"
-                  className="h-10 px-4 rounded-[10px]"
-                >
-                  <Icon icon="solar:refresh-bold-duotone" className="w-4 h-4 mr-2" />
-                  Limpiar
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-center gap-2">
+            <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
               <Icon icon="solar:phone-calling-rounded-bold-duotone" className="w-4 h-4" />
-              <span>
-                Mostrando {(pagination.currentPage - 1) * pagination.pageSize + 1}
-                {' '}a{' '}
-                {Math.min(pagination.currentPage * pagination.pageSize, pagination.total || calls.length)}
-                {' '}de{' '}
-                {pagination.total || calls.length} resultados
-              </span>
+              <span>{pagination.total || calls.length} llamadas</span>
             </div>
-            {getActiveFiltersCount() > 0 && (
-              <div className="flex items-center gap-2">
-                <Icon icon="solar:filter-bold-duotone" className="w-4 h-4" />
-                <span>{getActiveFiltersCount()} filtro{getActiveFiltersCount() > 1 ? 's' : ''} activo{getActiveFiltersCount() > 1 ? 's' : ''}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -1301,15 +1418,21 @@ const CallHistory: React.FC = () => {
                       {(() => {
                         const c = (call as any).costs || {};
                         const amount = Number(c.total_with_markup_cop ?? c.total_cop ?? 0);
+                        if (amount <= 0) {
+                          return <span className="text-orange-500 flex items-center gap-1">
+                            <Icon icon="solar:clock-circle-bold" className="w-3 h-3" />
+                            Pendiente
+                          </span>;
+                        }
                         return `COP ${amount.toFixed(2)}`;
                       })()}
                     </p>
                       <p className="text-xs text-gray-500">
                         {(() => {
                           const c = (call as any).costs || {};
-                          const el = Number(c.elevenlabs_cop ?? 0).toFixed(2);
-                          const tw = Number(c.twilio_cop ?? 0).toFixed(2);
-                          return `ElevenLabs: COP ${el} | Twilio: COP ${tw}`;
+                          const voiceCost = Number(c.voice_cop ?? c.elevenlabs_cop ?? 0).toFixed(2);
+                          const phoneCost = Number(c.phone_cop ?? c.twilio_cop ?? 0).toFixed(2);
+                          return `Voz IA: COP ${voiceCost} | Telefonía: COP ${phoneCost}`;
                         })()}
                       </p>
                 </div>
@@ -1424,10 +1547,10 @@ const CallHistory: React.FC = () => {
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {(() => {
                         const c = (selectedCall as any).costs || {};
-                        const el = Number(c.elevenlabs_cop ?? 0).toFixed(2);
-                        const tw = Number(c.twilio_cop ?? 0).toFixed(2);
-                        const mins = Number(c.twilio_minutes ?? 0);
-                        return `ElevenLabs: COP ${el} | Twilio: COP ${tw} (${mins} min @ $${TWILIO_RATE_PER_MINUTE}/min)`;
+                        const voice = Number(c.voice_cop ?? 0).toFixed(2);
+                        const phone = Number(c.phone_cop ?? 0).toFixed(2);
+                        const mins = Number(c.billed_minutes ?? 0);
+                        return `Voz IA: COP ${voice} | Telefonía: COP ${phone} (${mins} min)`;
                       })()}
                     </p>
                   </div>
@@ -1586,20 +1709,17 @@ const CallHistory: React.FC = () => {
                             <span className="text-gray-900 dark:text-white font-semibold">
                               {(() => { const c = (selectedCall as any).costs || {}; const amount = Number(c.total_with_markup_cop ?? c.total_cop ?? 0); return `COP ${amount.toFixed(2)}`; })()}
                             </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">(ElevenLabs + Twilio + costo operativo)</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">(Voz IA + Telefonía + Operación)</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-gray-600 dark:text-gray-400 font-medium">ElevenLabs:</span>
-                            <span className="text-gray-900 dark:text-white">{(() => { const c = (selectedCall as any).costs || {}; const el = Number(c.elevenlabs_cop ?? 0).toFixed(2); return `COP ${el}`; })()}</span>
-                            {!selectedCall.costs && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">({formatCost(selectedCall.cost || 0).credits} cr)</span>
-                            )}
+                            <span className="text-gray-600 dark:text-gray-400 font-medium">Voz IA:</span>
+                            <span className="text-gray-900 dark:text-white">{(() => { const c = (selectedCall as any).costs || {}; const voice = Number(c.voice_cop ?? 0).toFixed(2); return `COP ${voice}`; })()}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-gray-600 dark:text-gray-400 font-medium">Twilio:</span>
-                            <span className="text-gray-900 dark:text-white">{(() => { const c = (selectedCall as any).costs || {}; const tw = Number(c.twilio_cop ?? 0).toFixed(2); return `COP ${tw}`; })()}</span>
+                            <span className="text-gray-600 dark:text-gray-400 font-medium">Telefonía:</span>
+                            <span className="text-gray-900 dark:text-white">{(() => { const c = (selectedCall as any).costs || {}; const phone = Number(c.phone_cop ?? 0).toFixed(2); return `COP ${phone}`; })()}</span>
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                              ({selectedCall.costs ? selectedCall.costs.twilio_minutes : formatTotalCost(selectedCall.cost || 0, selectedCall.duration || 0).twilioMinutes} min)
+                              ({(() => { const c = (selectedCall as any).costs || {}; return Number(c.billed_minutes ?? 0); })()} min facturados)
                             </span>
                           </div>
                             <div className="flex items-center justify-between">
@@ -1607,7 +1727,7 @@ const CallHistory: React.FC = () => {
                               <span className="text-green-600 dark:text-green-400 font-semibold">
                               {(() => { const c = (selectedCall as any).costs || {}; const baseUsd = Number(c.total_usd ?? 0); const markup = Number(c.markup_percent ?? 0); const trm = Number(c.cop_rate ?? 4500); const profitCop = baseUsd * (markup / 100) * trm; return `COP ${profitCop.toFixed(2)}`; })()}
                               </span>
-                              <span className="text-xs text-green-500 dark:text-green-400">Operación</span>
+                              <span className="text-xs text-green-500 dark:text-green-400">({(() => { const c = (selectedCall as any).costs || {}; return Number(c.markup_percent ?? 40); })()}%)</span>
                             </div>
                             <div className="flex items-center justify-between">
                               <span className="text-gray-600 dark:text-gray-400 font-medium">Duración:</span>
@@ -1894,7 +2014,7 @@ const CallHistory: React.FC = () => {
                             <div>
                               <h5 className="font-medium text-amber-900 dark:text-amber-100 mb-1">Razón de Finalización</h5>
                               <p className="text-sm text-amber-800 dark:text-amber-200">
-                                {(selectedCall as any).call_result?.termination_reason || (selectedCall as any).elevenlabs_analysis?.termination_reason}
+                                {translateTerminationReason((selectedCall as any).call_result?.termination_reason || (selectedCall as any).elevenlabs_analysis?.termination_reason)}
                               </p>
                             </div>
                           </div>
@@ -1902,39 +2022,75 @@ const CallHistory: React.FC = () => {
                       )}
 
                       {/* Análisis de éxito de la llamada */}
-                      {((selectedCall as any).call_result || (selectedCall as any).elevenlabs_analysis) && (
+                      {((selectedCall as any).call_result || (selectedCall as any).elevenlabs_analysis || (selectedCall as any).vapi_analysis) && (
                         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                           <h4 className="font-medium mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
                             <Icon icon="solar:chart-bold-duotone" className="w-5 h-5 text-blue-500 dark:text-blue-400" />
                             Análisis de Resultados
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Llamada Exitosa</span>
-                                <Badge color={(selectedCall as any).elevenlabs_analysis.call_successful ? 'success' : 'failure'} size="sm">
-                                  {(selectedCall as any).elevenlabs_analysis.call_successful ? 'Sí' : 'No'}
-                                </Badge>
-                              </div>
-                            </div>
-                            
-                            {(selectedCall as any).elevenlabs_analysis.user_sentiment && (
-                              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sentimiento del Cliente</span>
-                                  <Badge
-                                    color={
-                                      (selectedCall as any).elevenlabs_analysis.user_sentiment === 'positive' ? 'success' :
-                                      (selectedCall as any).elevenlabs_analysis.user_sentiment === 'negative' ? 'failure' : 'warning'
-                                    }
-                                    size="sm"
-                                  >
-                                    {(selectedCall as any).elevenlabs_analysis.user_sentiment === 'positive' ? 'Positivo' :
-                                     (selectedCall as any).elevenlabs_analysis.user_sentiment === 'negative' ? 'Negativo' : 'Neutral'}
-                                  </Badge>
+                            {/* Contactabilidad - Si la llamada se conectó */}
+                            {(() => {
+                              const duration = (selectedCall as any).duration_seconds || (selectedCall as any).duration || 0;
+                              const terminationReason = (selectedCall as any).call_result?.termination_reason || (selectedCall as any).elevenlabs_analysis?.termination_reason;
+                              const noContactReasons = ['no-answer', 'busy', 'dial-no-answer', 'dial-busy', 'customer-did-not-answer', 'customer-busy', 'machine-detected', 'voicemail'];
+                              const wasContacted = duration >= 5 && !noContactReasons.includes(terminationReason);
+                              return (
+                                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Contactabilidad</span>
+                                    <Badge color={wasContacted ? 'success' : 'failure'} size="sm">
+                                      {wasContacted ? 'Contactado' : 'No Contactado'}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {wasContacted ? 'El cliente contestó la llamada' : 'No se logró contactar al cliente'}
+                                  </p>
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })()}
+                            
+                            {/* Éxito del Objetivo - Si se cumplió el objetivo de la llamada */}
+                            {(() => {
+                              const analysis = (selectedCall as any).elevenlabs_analysis || (selectedCall as any).vapi_analysis || (selectedCall as any).call_result || {};
+                              const objectiveSuccess = analysis.call_successful ?? null;
+                              if (objectiveSuccess === null) return null;
+                              return (
+                                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Objetivo Cumplido</span>
+                                    <Badge color={objectiveSuccess ? 'success' : 'failure'} size="sm">
+                                      {objectiveSuccess ? 'Sí' : 'No'}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {objectiveSuccess ? 'Se logró el objetivo de la llamada' : 'No se cumplió el objetivo'}
+                                  </p>
+                                </div>
+                              );
+                            })()}
+                            
+                            {(() => {
+                              const sentiment = (selectedCall as any).elevenlabs_analysis?.user_sentiment || (selectedCall as any).vapi_analysis?.user_sentiment;
+                              if (!sentiment) return null;
+                              return (
+                                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sentimiento del Cliente</span>
+                                    <Badge
+                                      color={
+                                        sentiment === 'positive' ? 'success' :
+                                        sentiment === 'negative' ? 'failure' : 'warning'
+                                      }
+                                      size="sm"
+                                    >
+                                      {sentiment === 'positive' ? 'Positivo' :
+                                       sentiment === 'negative' ? 'Negativo' : 'Neutral'}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       )}

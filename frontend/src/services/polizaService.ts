@@ -159,6 +159,7 @@ export type CreatePolizaInput = {
 
 export interface PolizaFilters {
   search?: string;
+  numero_poliza?: string;
   aseguradora?: string;
   aseguradora_id?: number | string;
   ramo?: string;
@@ -788,6 +789,42 @@ export const polizaService = {
         description: error instanceof Error ? error.message : "Error desconocido",
       });
       throw error;
+    }
+  },
+
+  /**
+   * Verificar si existe una póliza con el mismo número
+   */
+  async checkPolizaExists(
+    numeroPoliza: string,
+    excludeId?: string
+  ): Promise<{ exists: boolean; poliza?: Poliza }> {
+    try {
+      if (!numeroPoliza || numeroPoliza.trim().length < 3) {
+        return { exists: false };
+      }
+      
+      const response = await this.getPolizas({ 
+        numero_poliza: numeroPoliza.trim(),
+        per_page: 1 
+      });
+      
+      if (response.success && response.data) {
+        const polizas = Array.isArray(response.data) ? response.data : (response.data as any).data || [];
+        if (polizas.length > 0) {
+          const found = polizas[0];
+          // Si estamos editando, excluir la póliza actual
+          if (excludeId && found.id?.toString() === excludeId) {
+            return { exists: false };
+          }
+          return { exists: true, poliza: found };
+        }
+      }
+      
+      return { exists: false };
+    } catch (error) {
+      console.warn('Error verificando póliza duplicada:', error);
+      return { exists: false };
     }
   },
 

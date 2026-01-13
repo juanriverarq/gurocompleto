@@ -36,10 +36,10 @@ interface RealStats {
     name: string;
     conversionRate: number;
   }>;
-  // Datos híbridos de ElevenLabs
-  elevenLabsEnriched?: number;
-  elevenLabsCost?: number;
-  elevenLabsSuccessRate?: number;
+  // Datos híbridos de VAPI
+  vapiEnriched?: number;
+  vapiCost?: number;
+  vapiSuccessRate?: number;
   // Agregados correctos desde backend (COP)
   combined_cost_with_markup_cop?: number;
   avg_cost_with_markup_cop?: number;
@@ -79,22 +79,14 @@ export const useVoiceAIData = () => {
     setError(null);
     
     try {
-      console.log('🔄 [VOICE AI DATA] Loading real data from backend...');
-
       // Cargar datos reales en paralelo desde nuestro backend (usando sistema híbrido)
       const [agentsData, campaignStatsData, callHistoryData] = await Promise.all([
-        getConversationalAgents().catch(err => {
-          console.warn('⚠️ [VOICE AI DATA] Failed to load agents:', err);
-          return [];
+        getConversationalAgents().catch(err => {          return [];
         }),
-        voiceCampaignService.getHybridVoiceCampaignStats().catch(err => {
-          console.warn('⚠️ [VOICE AI DATA] Failed to load hybrid campaign stats:', err);
-          // Fallback a estadísticas normales
+        voiceCampaignService.getHybridVoiceCampaignStats().catch(err => {          // Fallback a estadísticas normales
           return voiceCampaignService.getVoiceCampaignStats().catch(() => ({ success: false, stats: null }));
         }),
-        voiceCampaignService.getHybridCallHistory({ limit: 1000 }).catch(err => {
-          console.warn('⚠️ [VOICE AI DATA] Failed to load hybrid call history:', err);
-          // Fallback a solo BD
+        voiceCampaignService.getHybridCallHistory({ limit: 1000 }).catch(err => {          // Fallback a solo BD
           return voiceCampaignService.getCallHistory({ limit: 1000 }).catch(() => ({ success: false, calls: [] }));
         })
       ]);
@@ -102,17 +94,6 @@ export const useVoiceAIData = () => {
       const agents = Array.isArray(agentsData) ? agentsData : [];
       const campaignStats = campaignStatsData?.success ? campaignStatsData.stats : null;
       const calls = callHistoryData?.success ? callHistoryData.calls || [] : [];
-
-      console.log('✅ [VOICE AI DATA] Hybrid data loaded:', {
-        agents: agents.length,
-        campaignStats: !!campaignStats,
-        campaignStatsData: campaignStats,
-        campaignStatsMetadata: campaignStatsData?.metadata,
-        calls: calls.length,
-        callsData: calls?.slice(0, 2), // Solo primeras 2 llamadas para debug
-        callHistoryMetadata: callHistoryData?.metadata
-      });
-
       // Usar estadísticas del backend si están disponibles, sino calcular desde las llamadas
       let totalCalls, successfulCalls, avgDurationSecs, totalCost, totalTwilioCost;
 
@@ -120,18 +101,7 @@ export const useVoiceAIData = () => {
         // Usar datos del backend cuando hay información útil
         totalCalls = campaignStats.total_calls_made;
         successfulCalls = campaignStats.total_successful_calls || 0;
-        avgDurationSecs = campaignStats.average_duration_seconds || 0;
-        
-        console.log('📊 [VOICE AI DATA] Using hybrid backend stats:', {
-          totalCalls,
-          successfulCalls,
-          avgDurationSecs,
-          debugInfo: campaignStats.debug_info,
-          elevenLabsEnriched: campaignStats.elevenlabs_enriched_calls || 0,
-          elevenLabsCost: campaignStats.elevenlabs_total_cost || 0,
-          elevenLabsSuccessRate: campaignStats.elevenlabs_success_rate || 0
-        });
-      } else {
+        avgDurationSecs = campaignStats.average_duration_seconds || 0;      } else {
         // Calcular desde las llamadas individuales
         totalCalls = calls.length;
         successfulCalls = calls.filter(call => {
@@ -145,20 +115,7 @@ export const useVoiceAIData = () => {
         const totalDurationSecs = calls.reduce((acc, call) => 
           acc + (call.duration_seconds || 0), 0
         );
-        avgDurationSecs = totalCalls > 0 ? totalDurationSecs / totalCalls : 0;
-        
-        console.log('📊 [VOICE AI DATA] Using calculated stats from calls:', {
-          totalCalls,
-          successfulCalls,
-          avgDurationSecs,
-          sampleCalls: calls.slice(0, 3).map(c => ({
-            status: c.status,
-            call_result: c.call_result,
-            duration_seconds: c.duration_seconds,
-            recipient_name: c.recipient_name
-          }))
-        });
-      }
+        avgDurationSecs = totalCalls > 0 ? totalDurationSecs / totalCalls : 0;      }
 
       const avgDuration = `${Math.floor(avgDurationSecs / 60)}:${String(Math.floor(avgDurationSecs % 60)).padStart(2, '0')}`;
       const conversionRate = totalCalls > 0 ? (successfulCalls / totalCalls) * 100 : 0;
@@ -255,21 +212,16 @@ export const useVoiceAIData = () => {
         sentimentData,
         monthlyData,
         agentPerformance,
-        // Datos híbridos de ElevenLabs
-        elevenLabsEnriched: campaignStats?.elevenlabs_enriched_calls || 0,
-        elevenLabsCost: campaignStats?.elevenlabs_total_cost || 0,
-        elevenLabsSuccessRate: campaignStats?.elevenlabs_success_rate || 0,
+        // Datos híbridos de VAPI
+        vapiEnriched: campaignStats?.vapi_enriched_calls || campaignStats?.elevenlabs_enriched_calls || 0,
+        vapiCost: campaignStats?.vapi_total_cost || campaignStats?.elevenlabs_total_cost || 0,
+        vapiSuccessRate: campaignStats?.vapi_success_rate || campaignStats?.elevenlabs_success_rate || 0,
         // Agregados precisos en COP con margen desde backend
         combined_cost_with_markup_cop: Math.round(combinedWithMarkupCopSum * 100) / 100,
         avg_cost_with_markup_cop: Math.round(((totalCalls > 0 ? combinedWithMarkupCopSum / totalCalls : 0) * 100)) / 100,
-      };
+      };      setRealStats(finalStats);
 
-      console.log('📊 [VOICE AI DATA] Final stats calculated:', finalStats);
-      setRealStats(finalStats);
-
-    } catch (error) {
-      console.error('❌ [VOICE AI DATA] Error loading data:', error);
-      setError('Error al cargar datos del sistema');
+    } catch (error) {      setError('Error al cargar datos del sistema');
     } finally {
       setIsLoading(false);
     }

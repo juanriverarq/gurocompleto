@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Chart from "react-apexcharts";
 import { Tabs, Table, Dropdown } from "flowbite-react";
 import {
@@ -26,6 +26,7 @@ import { auth } from "../../../config/firebase";
 import HeroMetricCard from "../../../components/campaigns/HeroMetricCard";
 import SecondaryMetricCard from "../../../components/campaigns/SecondaryMetricCard";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useWhatsAppSocket } from "../../../hooks/useWhatsAppSocket";
 
 // Tipos locales mínimos para TS
 type Contact = { phone: string; name: string; email?: string };
@@ -103,6 +104,7 @@ const ConfiguracionMasiva: React.FC = () => {
   const [qrExpiry, setQrExpiry] = useState<string>('');
   const [refreshingInstances, setRefreshingInstances] = useState<number[]>([]);
   const [qrPollingInterval, setQrPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [showConnectionSuccess, setShowConnectionSuccess] = useState(false);
   
   // Estados para modal de detalles de mensaje
   const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
@@ -125,6 +127,122 @@ const ConfiguracionMasiva: React.FC = () => {
   const [totalCostCOPState, setTotalCostCOP] = useState(0);
   const [avgCostCOPState, setAvgCostCOP] = useState(0);
   
+  // ========== WEBSOCKET PARA DETECCIÓN AUTOMÁTICA DE CONEXIÓN ==========
+  // Refs para acceder a estado actual sin causar re-renders
+  const selectedInstanceRef = useRef(selectedInstance);
+  const isQRModalOpenRef = useRef(isQRModalOpen);
+  
+  // Mantener refs actualizados
+  useEffect(() => {
+    selectedInstanceRef.current = selectedInstance;
+    isQRModalOpenRef.current = isQRModalOpen;
+  }, [selectedInstance, isQRModalOpen]);
+
+  // Inicializar WebSocket - callbacks estables usando refs
+  const { isConnected: socketConnected, subscribeToInstance, unsubscribeFromInstance } = useWhatsAppSocket({
+    autoConnect: true,
+    events: {
+      onConnected: (data) => {
+        console.log('🎉 [WebSocket] Instancia conectada:', data.instanceId);
+        
+        // Actualizar estado local de la instancia
+        setInstances(prev => prev.map(instance => 
+          instance.instance_id === data.instanceId 
+            ? { ...instance, status: 'connected' }
+            : instance
+        ));
+        
+        // Si el modal QR está abierto para esta instancia, mostrar animación de éxito
+        if (selectedInstanceRef.current?.instance_id === data.instanceId && isQRModalOpenRef.current) {
+          console.log('🎉 [WebSocket] Mostrando animación de conexión exitosa');
+          setShowConnectionSuccess(true);
+          setQrCode(null);
+          
+          // Esperar 2 segundos mostrando la animación, luego cerrar
+          setTimeout(() => {
+            setIsQRModalOpen(false);
+            setShowConnectionSuccess(false);
+            
+            // Restaurar z-index del header
+            const header = document.querySelector('header');
+            if (header) {
+              (header as HTMLElement).style.zIndex = '';
+            }
+            
+            // Mostrar toast de éxito
+            toast({
+              title: "🎉 ¡WhatsApp Conectado!",
+              description: `La instancia se ha conectado exitosamente. Ya puedes enviar mensajes.`,
+              duration: 5000,
+            });
+          }, 2000);
+        } else {
+          // Si el modal no está abierto, solo mostrar toast
+          toast({
+            title: "🎉 ¡WhatsApp Conectado!",
+            description: `La instancia ${data.instanceId} se ha conectado exitosamente.`,
+            duration: 5000,
+          });
+        }
+        
+        loadInstances();
+        loadInstanceStats();
+      },
+      onDisconnected: (data) => {
+        console.log('❌ [WebSocket] Instancia desconectada:', data.instanceId);
+        setInstances(prev => prev.map(instance => 
+          instance.instance_id === data.instanceId 
+            ? { ...instance, status: 'disconnected' }
+            : instance
+        ));
+        loadInstanceStats();
+      },
+      onQRCode: (data) => {
+        console.log('📱 [WebSocket] QR recibido para:', data.instanceId);
+        if (selectedInstanceRef.current?.instance_id === data.instanceId && isQRModalOpenRef.current) {
+          setQrCode(data.qrCode);
+        }
+      },
+      onInstanceUpdate: (data) => {
+        console.log('📡 [WebSocket] Actualización de instancia:', data);
+        if (data.event === 'connected') {
+          setInstances(prev => prev.map(instance => 
+            instance.instance_id === data.instanceId 
+              ? { ...instance, status: 'connected' }
+              : instance
+          ));
+          
+          if (selectedInstanceRef.current?.instance_id === data.instanceId && isQRModalOpenRef.current) {
+            setIsQRModalOpen(false);
+            setQrCode(null);
+            toast({
+              title: "🎉 ¡Conectado!",
+              description: "La instancia de WhatsApp se conectó exitosamente.",
+            });
+            loadInstances();
+          }
+        }
+      },
+    }
+  });
+
+  // Suscribirse a instancias cuando cambian (solo cuando hay cambios reales)
+  const instanceIdsRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (!socketConnected) return;
+    
+    const currentIds = instances.map(i => i.instance_id).filter(Boolean);
+    const prevIds = instanceIdsRef.current;
+    
+    // Solo suscribirse a nuevas instancias
+    const newIds = currentIds.filter(id => !prevIds.includes(id));
+    const removedIds = prevIds.filter(id => !currentIds.includes(id));
+    
+    newIds.forEach(id => subscribeToInstance(id));
+    removedIds.forEach(id => unsubscribeFromInstance(id));
+    
+    instanceIdsRef.current = currentIds;
+  }, [socketConnected, instances, subscribeToInstance, unsubscribeFromInstance]);
 
   // Deep-link desde buscador global: abrir detalles de campaña WhatsApp por ID
   const location = useLocation();
@@ -1355,70 +1473,116 @@ const ConfiguracionMasiva: React.FC = () => {
 
   // Función para iniciar el polling de estado mientras el QR está abierto
   const startQRPolling = (instanceId: number) => {
-    console.log('🔄 Iniciando polling para detectar conexión de instancia:', instanceId);
+    console.log('🔄 Iniciando polling MEJORADO para detectar conexión de instancia:', instanceId);
+    
+    // Encontrar el instance_id real para consultar directamente al microservicio
+    const instanceData = instances.find(i => i.id === instanceId);
+    const microserviceInstanceId = instanceData?.instance_id;
+    
+    let pollCount = 0;
+    const maxPolls = 60; // Máximo 2 minutos de polling (60 * 2s)
     
     const interval = setInterval(async () => {
-      if (!isQRModalOpen || !selectedInstance) {
+      pollCount++;
+      
+      // Usar refs para obtener valores actuales (evitar closure stale)
+      if (!isQRModalOpenRef.current || !selectedInstanceRef.current) {
         console.log('🛑 Modal cerrado, deteniendo polling');
         stopQRPolling();
         return;
       }
+      
+      if (pollCount > maxPolls) {
+        console.log('⏰ Tiempo máximo de polling alcanzado');
+        stopQRPolling();
+        toast({
+          title: "Tiempo agotado",
+          description: "El QR ha expirado. Por favor, solicita uno nuevo.",
+          variant: "destructive"
+        });
+        return;
+      }
 
       try {
-        console.log('🔍 Verificando estado de instancia para auto-cerrar modal...');
+        console.log(`🔍 [Poll ${pollCount}/${maxPolls}] Verificando estado de instancia...`);
         
-        // Verificar estado de la instancia
-        const response = await whatsappInstanceService.getStatus(instanceId);
+        // ESTRATEGIA DUAL: Consultar tanto Laravel como microservicio directamente
+        let isConnected = false;
         
-        if (response.success && response.status === 'connected') {
-          console.log('🎉 ¡Instancia conectada! Cerrando modal automáticamente');
+        // 1. Primero intentar consultar directamente al microservicio (más rápido)
+        if (microserviceInstanceId) {
+          try {
+            const microserviceResponse = await fetch(`http://localhost:3000/api/v1/instances/${microserviceInstanceId}/status`);
+            if (microserviceResponse.ok) {
+              const microData = await microserviceResponse.json();
+              console.log(`📡 [Microservicio] Estado:`, microData);
+              
+              if (microData.success && microData.connected === true) {
+                isConnected = true;
+                console.log('🎉 [Microservicio] ¡Detectó conexión exitosa!');
+              }
+            }
+          } catch (microError) {
+            console.warn('⚠️ Error consultando microservicio directamente:', microError);
+          }
+        }
+        
+        // 2. Si no detectamos conexión, verificar via Laravel como fallback
+        if (!isConnected) {
+          const response = await whatsappInstanceService.getStatus(instanceId);
+          console.log(`📡 [Laravel] Estado:`, response);
           
-          // Cerrar modal
-          setIsQRModalOpen(false);
+          if (response.success && (response.status === 'connected' || response.status === 'authenticated' || response.status === 'ready')) {
+            isConnected = true;
+            console.log('🎉 [Laravel] ¡Detectó conexión exitosa!');
+          }
+        }
+        
+        // Si detectamos conexión por cualquier método
+        if (isConnected) {
+          console.log('🎉 ¡Instancia conectada! Mostrando animación de éxito');
+          
+          // Detener polling
           stopQRPolling();
           
-          // Actualizar estado local
+          // Mostrar animación de éxito en el modal
+          setShowConnectionSuccess(true);
+          setQrCode(null);
+          
+          // Actualizar estado local inmediatamente
           setInstances(prev => prev.map(instance => 
             instance.id === instanceId 
               ? { ...instance, status: 'connected' }
               : instance
           ));
           
-          // Mostrar mensaje de éxito
-          toast({
-            title: "🎉 ¡Conectado Exitosamente!",
-            description: "WhatsApp se ha conectado correctamente. El modal se cerró automáticamente.",
-            variant: "default"
-          });
+          // Esperar 2 segundos mostrando la animación de éxito, luego cerrar
+          setTimeout(() => {
+            setIsQRModalOpen(false);
+            setShowConnectionSuccess(false);
+            
+            // Restaurar z-index del header
+            const header = document.querySelector('header');
+            if (header) {
+              header.style.zIndex = '';
+            }
+            
+            // Mostrar toast de éxito
+            toast({
+              title: "🎉 ¡Conectado Exitosamente!",
+              description: "WhatsApp se ha conectado correctamente.",
+              duration: 5000,
+            });
+          }, 2000);
           
           // Recargar instancias para obtener datos actualizados
           await loadInstances();
-        } else if (response.success && (response.status === 'authenticated' || response.status === 'ready')) {
-          // Algunos microservicios usan diferentes estados para "conectado"
-          console.log('🎉 ¡Instancia autenticada! Cerrando modal automáticamente');
-          
-          setIsQRModalOpen(false);
-          stopQRPolling();
-          
-          setInstances(prev => prev.map(instance => 
-            instance.id === instanceId 
-              ? { ...instance, status: 'connected' }
-              : instance
-          ));
-          
-          toast({
-            title: "🎉 ¡Conectado Exitosamente!",
-            description: "WhatsApp se ha autenticado correctamente. El modal se cerró automáticamente.",
-            variant: "default"
-          });
-          
-          await loadInstances();
+          await loadInstanceStats();
         }
       } catch (error) {
         console.warn('⚠️ Error en polling QR (continuando...):', error);
-        // No mostrar error al usuario, solo continuar con el polling
       }
-    }, 3000); // Verificar cada 3 segundos
+    }, 2000); // Verificar cada 2 segundos (más agresivo)
 
     setQrPollingInterval(interval);
   };
@@ -1731,16 +1895,38 @@ const ConfiguracionMasiva: React.FC = () => {
 
   // Funciones auxiliares para las instancias
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      'connected': { text: 'Conectado', color: 'bg-green-100 text-green-800' },
-      'connecting': { text: 'Conectando', color: 'bg-blue-100 text-blue-800' },
-      'disconnected': { text: 'Desconectado', color: 'bg-gray-100 text-gray-800' },
-      'error': { text: 'Error', color: 'bg-red-100 text-red-800' },
-      'qr_pending': { text: 'QR Pendiente', color: 'bg-yellow-100 text-yellow-800' }
+    const statusConfig: Record<string, { text: string; color: string }> = {
+      'connected': { 
+        text: 'Conectado', 
+        color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+      },
+      'authenticated': { 
+        text: 'Autenticado', 
+        color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+      },
+      'connecting': { 
+        text: 'Conectando...', 
+        color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+      },
+      'disconnected': { 
+        text: 'Desconectado', 
+        color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      },
+      'error': { 
+        text: 'Error', 
+        color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+      },
+      'qr_pending': { 
+        text: 'Esperando QR', 
+        color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+      }
     };
-    const config = statusConfig[status as keyof typeof statusConfig] || { text: status, color: 'bg-gray-100 text-gray-800' };
+    const config = statusConfig[status] || { 
+      text: status || 'Desconocido', 
+      color: 'bg-gray-100 text-gray-800'
+    };
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${config.color}`}>
         {config.text}
       </span>
     );
@@ -2428,15 +2614,6 @@ const ConfiguracionMasiva: React.FC = () => {
                       <IconifyIcon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
                       Nueva Instancia
                     </Button>
-                    
-                    <Button
-                      onClick={loadInstances}
-                      disabled={loading}
-                      className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                    >
-                      <IconifyIcon icon="solar:refresh-bold-duotone" className="w-4 h-4 mr-2" />
-                      Actualizar
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -2534,8 +2711,8 @@ const ConfiguracionMasiva: React.FC = () => {
             ) : (
               <Card className="overflow-visible">
                 <CardContent className="p-0 overflow-visible">
-                  <div className="table-container-with-dropdowns overflow-x-auto">
-                    <Table hoverable className="shadow-md dark:shadow-none bg-white dark:bg-darkgray rounded-[10px]">
+                  <div className="table-container-with-dropdowns overflow-visible min-h-[200px]">
+                    <Table hoverable className="shadow-md dark:shadow-none bg-white dark:bg-darkgray rounded-[10px] overflow-visible">
                       <Table.Head>
                         <Table.HeadCell>Instancia</Table.HeadCell>
                         <Table.HeadCell>Estado</Table.HeadCell>
@@ -2586,12 +2763,6 @@ const ConfiguracionMasiva: React.FC = () => {
                                     <Dropdown.Item className="flex gap-3 w-full justify-start text-left whitespace-nowrap" onClick={() => handleShowQR(instance)}>
                                       <IconifyIcon icon="solar:qr-code-bold" height={18} />
                                       <span>Mostrar QR</span>
-                                    </Dropdown.Item>
-                                  )}
-                                  {instance.status === 'disconnected' && (
-                                    <Dropdown.Item className="flex gap-3 w-full justify-start text-left whitespace-nowrap" onClick={() => handleReconnectInstance(instance.id)}>
-                                      <IconifyIcon icon="solar:refresh-bold" height={18} />
-                                      <span>Reconectar</span>
                                     </Dropdown.Item>
                                   )}
                                   {(instance.status === 'connected' || instance.status === 'connecting') && (
@@ -3146,7 +3317,29 @@ const ConfiguracionMasiva: React.FC = () => {
               </div>
             </div>
 
-            {qrCode ? (
+            {showConnectionSuccess ? (
+              <div className="py-8">
+                <div className="mb-6 relative">
+                  {/* Círculo animado de éxito */}
+                  <div className="w-24 h-24 mx-auto rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center animate-pulse">
+                    <div className="w-20 h-20 rounded-full bg-green-200 dark:bg-green-800/50 flex items-center justify-center">
+                      <svg className="w-12 h-12 text-green-600 dark:text-green-400 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <h3 className="text-2xl font-bold text-green-600 dark:text-green-400 mb-2">
+                  ¡Conectado!
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400">
+                  WhatsApp se ha vinculado exitosamente
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                  Cerrando automáticamente...
+                </p>
+              </div>
+            ) : qrCode ? (
               <div>
                 <div className="bg-white p-4 rounded-lg border mb-4">
                   <img
@@ -3180,7 +3373,7 @@ const ConfiguracionMasiva: React.FC = () => {
             )}
           </div>
 
-          <div className="flex justify-between mt-6">
+          <div className="flex justify-center mt-6">
             <Button
               onClick={() => {
                 setIsQRModalOpen(false);
@@ -3190,15 +3383,6 @@ const ConfiguracionMasiva: React.FC = () => {
             >
               Cerrar
             </Button>
-            {selectedInstance?.id && (
-              <Button
-                onClick={() => handleShowQR(selectedInstance)}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <IconifyIcon icon="solar:refresh-bold" className="w-4 h-4 mr-2 z-[20] relative" />
-                Actualizar QR
-              </Button>
-            )}
           </div>
         </DialogContent>
       </Dialog>

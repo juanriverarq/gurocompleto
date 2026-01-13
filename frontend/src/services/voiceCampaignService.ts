@@ -11,30 +11,15 @@ const LARAVEL_API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8
 // Helper para obtener el token de autenticación Firebase
 const getAuthToken = async (): Promise<string | null> => {
   try {
-    console.log('🔍 [VOICE CAMPAIGN DEBUG] Getting Firebase auth token...');
-
     const user = auth.currentUser;
-    console.log('🔍 [VOICE CAMPAIGN DEBUG] Current user:', user);
-
-    if (user) {
-      console.log('✅ [VOICE CAMPAIGN DEBUG] User found, getting ID token...');
-      const token = await user.getIdToken();
-      console.log('✅ [VOICE CAMPAIGN DEBUG] Token obtained:', token ? 'YES' : 'NO');
-      return token;
+    if (user) {      const token = await user.getIdToken();      return token;
     }
 
     // Fallback a token de empleado
     const empleadoToken = localStorage.getItem('empleado_token');
-    if (empleadoToken) {
-      console.log('✅ [VOICE CAMPAIGN DEBUG] Using empleado token as fallback');
-      return empleadoToken;
-    }
-
-    console.log('❌ [VOICE CAMPAIGN DEBUG] No auth token available');
-    return null;
-  } catch (error) {
-    console.error('❌ [VOICE CAMPAIGN DEBUG] Error getting auth token:', error);
-    return null;
+    if (empleadoToken) {      return empleadoToken;
+    }    return null;
+  } catch (error) {    return null;
   }
 };
 
@@ -282,9 +267,7 @@ class VoiceCampaignService {
       expiresIn: customDuration || this.CACHE_DURATION,
     };
 
-    this.conversationCache.set(key, entry);
-    console.log(`💾 [CACHE] Stored key: ${key} (expires in ${entry.expiresIn}ms)`);
-  }
+    this.conversationCache.set(key, entry);  }
 
   private clearExpiredCache(): void {
     const now = Date.now();
@@ -299,14 +282,8 @@ class VoiceCampaignService {
    * Realizar petición HTTP a Laravel
    */
   private async makeRequest(endpoint: string, method: string = 'GET', data?: any): Promise<any> {
-    console.log('🚀 [VOICE CAMPAIGN DEBUG] makeRequest called with:', { endpoint, method, data });
-
     const url = `${this.baseUrl}${endpoint}`;
-    console.log('🚀 [VOICE CAMPAIGN DEBUG] URL:', url);
-
     const token = await getAuthToken();
-    console.log('🚀 [VOICE CAMPAIGN DEBUG] Token result:', token ? 'GOT TOKEN' : 'NO TOKEN');
-
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -339,9 +316,7 @@ class VoiceCampaignService {
 
       const result = await response.json();
       return result;
-    } catch (error) {
-      console.error('Voice Campaign Service Error:', error);
-      throw new Error(
+    } catch (error) {      throw new Error(
         `Error de conexión con backend: ${
           error instanceof Error ? error.message : 'Error desconocido'
         }`,
@@ -382,9 +357,7 @@ class VoiceCampaignService {
         campaigns: response.data || response.campaigns || [],
         total: response.total || response.campaigns?.length || 0,
       };
-    } catch (error) {
-      console.error('Error fetching voice campaigns:', error);
-      return { success: false, campaigns: [], total: 0 };
+    } catch (error) {      return { success: false, campaigns: [], total: 0 };
     }
   }
 
@@ -397,9 +370,7 @@ class VoiceCampaignService {
     try {
       const response = await this.makeRequest(`/saas/voice-campaigns/${id}`);
       return { success: true, campaign: response.data || response };
-    } catch (error) {
-      console.error('Error fetching voice campaign:', error);
-      return { success: false, message: 'Error al obtener campaña de voz' };
+    } catch (error) {      return { success: false, message: 'Error al obtener campaña de voz' };
     }
   }
 
@@ -412,24 +383,17 @@ class VoiceCampaignService {
     campaign?: any;
   }> {
     try {
-      console.log('🎙️ [VOICE CAMPAIGN] Creating immediate campaign:', campaignData);
-
       const response = await this.makeRequest(
         '/saas/voice-campaigns/immediate',
         'POST',
         campaignData,
       );
-
-      console.log('✅ [VOICE CAMPAIGN] Campaign created successfully:', response);
-
       return {
         success: true,
         message: 'Campaña de voz inmediata creada y ejecutada exitosamente',
         campaign: response.data || response.campaign,
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error creating immediate voice campaign:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al crear campaña de voz inmediata: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -447,20 +411,13 @@ class VoiceCampaignService {
     campaign?: VoiceCampaign;
   }> {
     try {
-      console.log('🎙️ [VOICE CAMPAIGN] Creating scheduled campaign:', campaign);
-
       const response = await this.makeRequest('/saas/voice-campaigns/scheduled', 'POST', campaign);
-
-      console.log('✅ [VOICE CAMPAIGN] Scheduled campaign created successfully:', response);
-
       return {
         success: true,
         message: 'Campaña de voz programada creada exitosamente',
         campaign: response.data || response.campaign,
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error creating scheduled voice campaign:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al crear campaña de voz programada: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -476,20 +433,13 @@ class VoiceCampaignService {
     id: number,
   ): Promise<{ success: boolean; message: string; execution_id?: number }> {
     try {
-      console.log('🚀 [VOICE CAMPAIGN] Executing campaign:', id);
-
       const response = await this.makeRequest(`/saas/voice-campaigns/${id}/execute`, 'POST');
-
-      console.log('✅ [VOICE CAMPAIGN] Campaign executed successfully:', response);
-
       return {
         success: true,
         message: 'Campaña ejecutada exitosamente',
         execution_id: response.execution_id || response.data?.execution_id,
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error executing voice campaign:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al ejecutar campaña: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -505,20 +455,13 @@ class VoiceCampaignService {
     id: number,
   ): Promise<{ success: boolean; message: string; is_active?: boolean }> {
     try {
-      console.log('🔄 [VOICE CAMPAIGN] Toggling campaign:', id);
-
       const response = await this.makeRequest(`/saas/voice-campaigns/${id}/toggle`, 'PATCH');
-
-      console.log('✅ [VOICE CAMPAIGN] Campaign toggled successfully:', response);
-
       return {
         success: true,
         message: response.is_active ? 'Campaña activada' : 'Campaña pausada',
         is_active: response.is_active,
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error toggling voice campaign:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al cambiar estado de campaña: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -532,20 +475,14 @@ class VoiceCampaignService {
   async pauseVoiceCampaign(
     id: number,
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      console.log('⏸️ [VOICE CAMPAIGN] Pausing campaign:', id);
-      const response = await this.makeRequest(
+    try {      const response = await this.makeRequest(
         `/saas/voice-campaigns/${id}/pause`,
         'POST',
-      );
-      console.log('✅ [VOICE CAMPAIGN] Campaign paused successfully:', response);
-      return {
+      );      return {
         success: true,
         message: response.message || 'Campaña pausada',
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error pausing campaign:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al pausar campaña: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -560,20 +497,14 @@ class VoiceCampaignService {
   async resumeVoiceCampaign(
     id: number,
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      console.log('▶️ [VOICE CAMPAIGN] Resuming campaign:', id);
-      const response = await this.makeRequest(
+    try {      const response = await this.makeRequest(
         `/saas/voice-campaigns/${id}/resume`,
         'POST',
-      );
-      console.log('✅ [VOICE CAMPAIGN] Campaign resumed successfully:', response);
-      return {
+      );      return {
         success: true,
         message: response.message || 'Campaña reanudada',
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error resuming campaign:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al reanudar campaña: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -588,22 +519,42 @@ class VoiceCampaignService {
   async cancelVoiceCampaign(
     id: number,
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      console.log('🛑 [VOICE CAMPAIGN] Cancelling campaign:', id);
-      const response = await this.makeRequest(
+    try {      const response = await this.makeRequest(
         `/saas/voice-campaigns/${id}/cancel`,
         'POST',
-      );
-      console.log('✅ [VOICE CAMPAIGN] Campaign cancelled successfully:', response);
-      return {
+      );      return {
         success: true,
         message: response.message || 'Campaña cancelada',
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error cancelling campaign:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al cancelar campaña: ${
+          error instanceof Error ? error.message : 'Error desconocido'
+        }`,
+      };
+    }
+  }
+
+  /**
+   * Reiniciar/Repetir campaña de voz (para campañas completadas o canceladas)
+   */
+  async restartVoiceCampaign(
+    id: number,
+  ): Promise<{ success: boolean; message: string; execution_id?: number }> {
+    try {
+      const response = await this.makeRequest(
+        `/saas/voice-campaigns/${id}/restart`,
+        'POST',
+      );
+      return {
+        success: true,
+        message: response.message || 'Campaña reiniciada',
+        execution_id: response.execution_id,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error al reiniciar campaña: ${
           error instanceof Error ? error.message : 'Error desconocido'
         }`,
       };
@@ -623,16 +574,9 @@ class VoiceCampaignService {
     message?: string;
   }> {
     try {
-      console.log('📊 [VOICE CAMPAIGN] Getting stats...');
-
       const response = await this.makeRequest('/saas/voice-campaigns/stats');
-
-      console.log('✅ [VOICE CAMPAIGN] Stats retrieved successfully:', response);
-
       return { success: true, stats: response.data || response };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error fetching voice campaign stats:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al obtener estadísticas: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -667,26 +611,18 @@ class VoiceCampaignService {
           }
         });
       }
-
-      console.log('📞 [VOICE CAMPAIGN] Getting call history...');
-
       // Enriquecimiento opcional: por defecto sin enriquecer para rendimiento
       if ((filters as any)?.enrich) {
         queryParams.set('enrich', '1');
       }
       const endpoint = `/saas/voice-campaigns/call-history${`?${queryParams.toString()}`}`;
       const response = await this.makeRequest(endpoint);
-
-      console.log('✅ [VOICE CAMPAIGN] Call history retrieved successfully:', response);
-
       return {
         success: true,
         calls: response.data || response.calls || [],
         total: response.total || 0,
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error fetching call history:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error al obtener historial de llamadas: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -718,8 +654,6 @@ class VoiceCampaignService {
     };
   }> {
     try {
-      console.log('🔄 [HYBRID] Loading hybrid call history...');
-
       // Limpiar caché expirado antes de comenzar
       this.clearExpiredCache();
 
@@ -729,82 +663,13 @@ class VoiceCampaignService {
       if (!dbResponse.success || !dbResponse.calls) {
         return dbResponse;
       }
+      // Los datos ya vienen completos del backend (VAPI), no necesitamos enriquecer con ElevenLabs
+      const enrichedCalls = dbResponse.calls.map((call) => ({
+        ...call,
+        is_enriched: true,
+      }));
 
-      console.log(`📊 [HYBRID] Found ${dbResponse.calls.length} calls in database`);
-
-      // 2. Enriquecer con datos de ElevenLabs para llamadas que tienen conversation_id
-      const enrichedCalls = await Promise.all(
-        dbResponse.calls.map(async (call) => {
-          try {
-            // Solo intentar enriquecer si tenemos elevenlabs_conversation_id
-            if ((call as any).elevenlabs_conversation_id) {
-              const cacheKey = `conversation_${call.elevenlabs_conversation_id}`;
-
-              // Primero verificar caché
-              let elevenLabsData = this.getCachedData(cacheKey);
-
-              if (!elevenLabsData) {
-                console.log(`🔍 [HYBRID] Enriching call ${call.id} with ElevenLabs data...`);
-
-                const { getConversationDetails } = await import('./elevenLabsService');
-                elevenLabsData = await getConversationDetails(
-                  (call as any).elevenlabs_conversation_id,
-                );
-
-                // Guardar en caché solo si obtuvimos datos válidos
-                if (elevenLabsData) {
-                  this.setCachedData(cacheKey, elevenLabsData);
-                }
-              }
-
-              if (elevenLabsData) {
-                // Combinar datos de BD con datos de ElevenLabs
-                return {
-                  ...call,
-                  // Mantener datos de BD como prioritarios
-                  duration_seconds:
-                    (call as any).duration_seconds ||
-                    elevenLabsData.metadata?.call_duration_secs ||
-                    0,
-                  call_transcript:
-                    (call as any).call_transcript || elevenLabsData.transcript || null,
-                  call_recording_url:
-                    (call as any).call_recording_url ||
-                    (elevenLabsData as any).recording_url ||
-                    null,
-                  call_result:
-                    (call as any).call_result ||
-                    (elevenLabsData.analysis?.call_successful ? 'completed' : 'failed'),
-                  // Datos adicionales de ElevenLabs
-                  elevenlabs_cost: elevenLabsData.metadata?.cost || 0,
-                  elevenlabs_analysis: elevenLabsData.analysis || null,
-                  elevenlabs_metadata: elevenLabsData.metadata || null,
-                  // Marcar como enriquecido
-                  is_enriched: true,
-                };
-              }
-            }
-
-            // Si no se puede enriquecer, devolver datos originales
-            return {
-              ...call,
-              is_enriched: false,
-            };
-          } catch (enrichError) {
-            console.warn(`⚠️ [HYBRID] Failed to enrich call ${call.id}:`, enrichError);
-            return {
-              ...call,
-              is_enriched: false,
-            };
-          }
-        }),
-      );
-
-      const enrichedCount = enrichedCalls.filter((call: any) => call.is_enriched).length;
-      console.log(
-        `✅ [HYBRID] Enriched ${enrichedCount}/${dbResponse.calls.length} calls with ElevenLabs data`,
-      );
-
+      const enrichedCount = enrichedCalls.length;
       return {
         success: true,
         calls: enrichedCalls,
@@ -816,15 +681,13 @@ class VoiceCampaignService {
         },
       };
     } catch (error) {
-      console.error('❌ [HYBRID] Error getting hybrid call history:', error);
-
       // Fallback a solo datos de BD
       return this.getCallHistory(filters);
     }
   }
 
   /**
-   * Obtener estadísticas híbridas (BD + ElevenLabs)
+   * Obtener estadísticas híbridas (BD + VAPI)
    */
   async getHybridVoiceCampaignStats(): Promise<{
     success: boolean;
@@ -832,13 +695,11 @@ class VoiceCampaignService {
     message?: string;
     metadata?: {
       source: 'database' | 'hybrid';
-      elevenlabs_enriched: boolean;
+      vapi_enriched: boolean;
       enrichment_errors: string[];
     };
   }> {
     try {
-      console.log('🔄 [HYBRID STATS] Loading hybrid statistics...');
-
       // 1. Obtener estadísticas base de nuestra BD
       const dbStatsResponse = await this.getVoiceCampaignStats();
 
@@ -847,10 +708,8 @@ class VoiceCampaignService {
       }
 
       const dbStats = dbStatsResponse.stats;
-      console.log('📊 [HYBRID STATS] Base DB stats loaded:', dbStats);
-
-      // 2. Obtener datos enriquecidos de ElevenLabs si es posible
-      let elevenlabsEnriched = false;
+      // 2. Obtener datos enriquecidos de VAPI si es posible
+      let vapiEnriched = false;
       const enrichmentErrors: string[] = [];
       let hybridStats = { ...dbStats };
 
@@ -862,56 +721,49 @@ class VoiceCampaignService {
           const enrichedCalls = hybridCallsResponse.calls.filter((call: any) => call.is_enriched);
 
           if (enrichedCalls.length > 0) {
-            console.log(
-              `📈 [HYBRID STATS] Found ${enrichedCalls.length} enriched calls for enhanced stats`,
-            );
-
-            // Calcular estadísticas mejoradas basadas en datos de ElevenLabs
-            const totalElevenLabsCost = enrichedCalls.reduce(
-              (sum: number, call: any) => sum + (call.elevenlabs_cost || 0),
+            // Calcular estadísticas mejoradas basadas en datos de VAPI
+            const totalVapiCost = enrichedCalls.reduce(
+              (sum: number, call: any) => sum + (call.vapi_cost || call.elevenlabs_cost || 0),
               0,
             );
 
-            const avgElevenLabsCost =
-              enrichedCalls.length > 0 ? totalElevenLabsCost / enrichedCalls.length : 0;
-
-            // Calcular duración total más precisa de ElevenLabs
-            const totalElevenLabsDuration = enrichedCalls.reduce(
+            // Calcular duración total más precisa de VAPI
+            const totalVapiDuration = enrichedCalls.reduce(
               (sum: number, call: any) =>
-                sum + (call.elevenlabs_metadata?.call_duration_secs || call.duration_seconds || 0),
+                sum + (call.vapi_metadata?.call_duration_secs || call.duration_seconds || 0),
               0,
             );
 
-            const avgElevenLabsDuration =
+            const avgVapiDuration =
               enrichedCalls.length > 0
-                ? totalElevenLabsDuration / enrichedCalls.length
+                ? totalVapiDuration / enrichedCalls.length
                 : (dbStats as any).average_duration_seconds || 0;
 
-            // Análisis de éxito basado en ElevenLabs
-            const successfulElevenLabsCalls = enrichedCalls.filter(
-              (call: any) => call.elevenlabs_analysis?.call_successful === true,
+            // Análisis de éxito basado en VAPI
+            const successfulVapiCalls = enrichedCalls.filter(
+              (call: any) => call.vapi_analysis?.call_successful === true || call.elevenlabs_analysis?.call_successful === true,
             ).length;
 
-            // Combinar estadísticas de BD con enriquecimiento de ElevenLabs
+            // Combinar estadísticas de BD con enriquecimiento de VAPI
             hybridStats = {
               ...dbStats,
-              // Mejorar con datos de ElevenLabs donde estén disponibles
+              // Mejorar con datos de VAPI donde estén disponibles
               total_calls: Math.max(
                 (dbStats as any).total_calls_made || (dbStats as any).total_calls || 0,
                 hybridCallsResponse.calls.length,
               ),
               successful_calls: Math.max(
                 (dbStats as any).total_successful_calls || (dbStats as any).successful_calls || 0,
-                successfulElevenLabsCalls,
+                successfulVapiCalls,
               ),
               avg_call_duration:
-                avgElevenLabsDuration > 0
-                  ? avgElevenLabsDuration
+                avgVapiDuration > 0
+                  ? avgVapiDuration
                   : (dbStats as any).average_duration_seconds ||
                     (dbStats as any).avg_call_duration ||
                     0,
               // omit total_duration_seconds (no está en el tipo público)
-              // Datos adicionales de ElevenLabs (no tipados en interfaz pública)
+              // Datos adicionales de VAPI (no tipados en interfaz pública)
               // Se omiten para mantener compatibilidad de tipos
             };
 
@@ -921,32 +773,121 @@ class VoiceCampaignService {
                 ? ((hybridStats as any).successful_calls / (hybridStats as any).total_calls) * 100
                 : 0;
 
-            elevenlabsEnriched = true;
+            vapiEnriched = true;
           }
         }
-      } catch (enrichError: any) {
-        console.warn('⚠️ [HYBRID STATS] ElevenLabs enrichment failed:', enrichError);
-        enrichmentErrors.push(enrichError.message || 'Unknown enrichment error');
+      } catch (enrichError: any) {        enrichmentErrors.push(enrichError.message || 'Unknown enrichment error');
       }
-
-      console.log(
-        `✅ [HYBRID STATS] Stats computed. Enriched: ${elevenlabsEnriched}, Errors: ${enrichmentErrors.length}`,
-      );
-
       return {
         success: true,
         stats: hybridStats,
         metadata: {
-          source: elevenlabsEnriched ? 'hybrid' : 'database',
-          elevenlabs_enriched: elevenlabsEnriched,
+          source: vapiEnriched ? 'hybrid' : 'database',
+          vapi_enriched: vapiEnriched,
           enrichment_errors: enrichmentErrors,
         },
       };
     } catch (error: any) {
-      console.error('❌ [HYBRID STATS] Error getting hybrid stats:', error);
-
       // Fallback a solo estadísticas de BD
       return this.getVoiceCampaignStats();
+    }
+  }
+
+  // ========================
+  // SINCRONIZACIÓN DE LLAMADAS DESDE VAPI
+  // ========================
+
+  /**
+   * Sincronizar llamadas pendientes desde VAPI (para recuperar datos de llamadas donde el webhook falló)
+   */
+  async syncPendingCallsFromVapi(): Promise<{
+    success: boolean;
+    synced?: number;
+    errors?: Array<{ call_id: number; error: string }>;
+    message?: string;
+  }> {
+    try {
+      const response = await this.makeRequest('/saas/voice-campaigns/calls/sync-pending', 'POST');
+      return {
+        success: true,
+        synced: response.synced || 0,
+        errors: response.errors || [],
+        message: response.message || 'Sincronización completada',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error al sincronizar llamadas: ${
+          error instanceof Error ? error.message : 'Error desconocido'
+        }`,
+      };
+    }
+  }
+
+  /**
+   * Sincronizar una llamada específica desde VAPI
+   */
+  async syncCallFromVapi(callId: number): Promise<{
+    success: boolean;
+    message?: string;
+    before?: any;
+    after?: any;
+  }> {
+    try {
+      const response = await this.makeRequest(`/saas/voice-campaigns/calls/${callId}/sync-vapi`, 'POST');
+      return {
+        success: true,
+        message: response.message || 'Llamada sincronizada',
+        before: response.before,
+        after: response.after,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error al sincronizar llamada: ${
+          error instanceof Error ? error.message : 'Error desconocido'
+        }`,
+      };
+    }
+  }
+
+  /**
+   * Sincronizar campaña en tiempo real desde VAPI API
+   * Ideal para polling cada 3-5 segundos durante ejecución de campaña
+   */
+  async syncCampaignRealtime(campaignId: number): Promise<{
+    success: boolean;
+    campaign?: {
+      id: number;
+      status: string;
+      calls_made: number;
+      calls_successful: number;
+      calls_failed: number;
+      progress_percentage: number;
+    };
+    synced?: number;
+    updated?: Array<{ call_id: number; old_status: string; new_status: string }>;
+    campaign_completed?: boolean;
+    remaining_active_calls?: number;
+    message?: string;
+  }> {
+    try {
+      const response = await this.makeRequest(`/saas/voice-campaigns/${campaignId}/sync-realtime`, 'POST');
+      return {
+        success: true,
+        campaign: response.campaign,
+        synced: response.synced || 0,
+        updated: response.updated || [],
+        campaign_completed: response.campaign_completed || false,
+        remaining_active_calls: response.remaining_active_calls || 0,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Error al sincronizar campaña: ${
+          error instanceof Error ? error.message : 'Error desconocido'
+        }`,
+      };
     }
   }
 
@@ -955,7 +896,7 @@ class VoiceCampaignService {
   // ========================
 
   /**
-   * Realizar prueba de llamada con ElevenLabs
+   * Realizar prueba de llamada con VAPI
    */
   async testCall(request: TestCallRequest): Promise<{
     success: boolean;
@@ -964,21 +905,14 @@ class VoiceCampaignService {
     call_data?: any;
   }> {
     try {
-      console.log('🧪 [VOICE CAMPAIGN] Testing call:', request);
-
       const response = await this.makeRequest('/saas/voice-campaigns/test-call', 'POST', request);
-
-      console.log('✅ [VOICE CAMPAIGN] Test call completed:', response);
-
       return {
         success: true,
         message: response.message || 'Llamada de prueba realizada exitosamente',
         call_id: response.call_id || response.data?.call_id,
         call_data: response.data || response,
       };
-    } catch (error) {
-      console.error('❌ [VOICE CAMPAIGN] Error in test call:', error);
-      return {
+    } catch (error) {      return {
         success: false,
         message: `Error en llamada de prueba: ${
           error instanceof Error ? error.message : 'Error desconocido'
@@ -1137,20 +1071,13 @@ class VoiceCampaignService {
     errors?: any;
   }> {
     try {
-      console.log('🔊 [VOICE CAMPAIGN UPDATE] Updating campaign', { id, campaignData });
-
       const response = await this.makeRequest(`/saas/voice-campaigns/${id}`, 'PUT', campaignData);
-
-      console.log('✅ [VOICE CAMPAIGN UPDATE] Campaign updated successfully', response);
-
       return {
         success: true,
         campaign: response.campaign,
         message: response.message || 'Campaña actualizada exitosamente',
       };
     } catch (error: any) {
-      console.error('❌ [VOICE CAMPAIGN UPDATE] Error updating campaign:', error);
-
       return {
         success: false,
         message: error.response?.data?.message || 'Error al actualizar la campaña',
@@ -1167,19 +1094,12 @@ class VoiceCampaignService {
     message?: string;
   }> {
     try {
-      console.log('🔊 [VOICE CAMPAIGN DELETE] Deleting campaign', { id });
-
       const response = await this.makeRequest(`/saas/voice-campaigns/${id}`, 'DELETE');
-
-      console.log('✅ [VOICE CAMPAIGN DELETE] Campaign deleted successfully', response);
-
       return {
         success: true,
         message: response.message || 'Campaña eliminada exitosamente',
       };
     } catch (error: any) {
-      console.error('❌ [VOICE CAMPAIGN DELETE] Error deleting campaign:', error);
-
       return {
         success: false,
         message: error.response?.data?.message || 'Error al eliminar la campaña',

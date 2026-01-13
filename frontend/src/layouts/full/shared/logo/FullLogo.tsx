@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import { Link } from "react-router";
-import { useUnifiedAuth } from "src/context/UnifiedAuthContext";
+import { UnifiedAuthContext } from "src/context/UnifiedAuthContext";
 import { saasApi } from "src/services/saasApi";
 import LogoDefault from "/src/assets/images/logos/Logo.svg";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
 
 const FullLogo = () => {
-  const { tenant } = useUnifiedAuth();
+  // Usar useContext directamente para evitar error si no hay provider (landing page)
+  const authContext = useContext(UnifiedAuthContext);
+  const tenant = authContext ? authContext.tenant : null;
   const [logoSrc, setLogoSrc] = useState<string>(LogoDefault);
   const [hasFetched, setHasFetched] = useState(false);
 
@@ -41,6 +43,8 @@ const FullLogo = () => {
         src={logoSrc}
         alt={(tenant as any)?.name || (tenant as any)?.nombre || "Guro Logo"}
         className="h-12 w-auto max-w-[180px] object-contain"
+        width={180}
+        height={48}
         onError={(e) => {
           console.warn('Error loading logo:', logoSrc);
           (e.target as HTMLImageElement).src = LogoDefault;

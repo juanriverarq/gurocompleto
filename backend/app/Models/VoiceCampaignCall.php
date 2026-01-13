@@ -93,6 +93,7 @@ class VoiceCampaignCall extends Model
     const RESULT_API_ERROR = 'api_error';
     const RESULT_REJECTED = 'rejected';
     const RESULT_VOICEMAIL = 'voicemail';
+    const RESULT_UNKNOWN = 'unknown';
 
     /**
      * Relación con la campaña de voz
@@ -376,14 +377,16 @@ class VoiceCampaignCall extends Model
     }
 
     /**
-     * Actualizar información de ElevenLabs
+     * Actualizar información de ElevenLabs/VAPI
      */
     public function updateElevenLabsInfo(array $info): void
     {
         $updateData = [];
         
-        if (isset($info['conversation_id'])) {
-            $updateData['elevenlabs_conversation_id'] = $info['conversation_id'];
+        // VAPI devuelve 'id' directamente, ElevenLabs usa 'conversation_id'
+        $conversationId = $info['conversation_id'] ?? $info['id'] ?? null;
+        if ($conversationId) {
+            $updateData['elevenlabs_conversation_id'] = $conversationId;
         }
         
         if (isset($info['call_id'])) {

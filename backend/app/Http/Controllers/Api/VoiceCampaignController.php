@@ -560,7 +560,7 @@ class VoiceCampaignController extends Controller
                 // Calcular y persistir costos (ElevenLabs + Twilio) y totales
                 try {
                     $creditRate = (float) env('ELEVENLABS_CREDIT_USD_RATE', 0.000198);
-                    $twilioRatePerMin = (float) env('TWILIO_USD_PER_MIN', 0.0287);
+                    $twilioRatePerMin = (float) env('TWILIO_USD_PER_MIN', 0.0338); // Tarifa Colombia móvil
                     $trm = (float) env('COP_TRM_RATE', 4500);
                     $markupPercent = (float) env('VOICE_MARKUP_PERCENT', 40);
 
@@ -684,6 +684,336 @@ class VoiceCampaignController extends Controller
     }
 
     /**
+     * Webhook para eventos post-llamada de VAPI
+     */
+    public function receiveVapiWebhook(Request $request): JsonResponse
+    {
+        try {
+            $payload = $request->all();
+            $messageType = $payload['message']['type'] ?? $payload['type'] ?? null;
+            
+            Log::info('🔔 [VAPI WEBHOOK] Payload recibido', [
+                'message_type' => $messageType,
+                'payload_keys' => array_keys($payload),
+                'full_payload' => json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            ]);
+
+            // VAPI envía el call ID en diferentes ubicaciones según el tipo de mensaje
+            $callId = data_get($payload, 'message.call.id')
+                ?? data_get($payload, 'call.id')
+                ?? data_get($payload, 'id')
+                ?? null;
+
+            Log::info('🔔 [VAPI WEBHOOK] Call ID extraído', [
+                'call_id' => $callId,
+                'from_message_call_id' => data_get($payload, 'message.call.id'),
+                'from_call_id' => data_get($payload, 'call.id'),
+                'from_id' => data_get($payload, 'id'),
+            ]);
+
+            if (!$callId) {
+                Log::warning('🔔 [VAPI WEBHOOK] call_id faltante en payload');
+                return response()->json(['success' => false, 'message' => 'call_id faltante'], 400);
+            }
+
+            // Buscar la llamada por el ID de VAPI (guardado como elevenlabs_conversation_id)
+            $call = VoiceCampaignCall::where('elevenlabs_conversation_id', $callId)->first();
+            Log::info('🔔 [VAPI WEBHOOK] Búsqueda por elevenlabs_conversation_id', [
+                'call_id' => $callId,
+                'found' => $call ? true : false,
+            ]);
+            
+            if (!$call) {
+                $call = VoiceCampaignCall::where('elevenlabs_call_id', $callId)->first();
+                Log::info('🔔 [VAPI WEBHOOK] Búsqueda por elevenlabs_call_id', [
+                    'call_id' => $callId,
+                    'found' => $call ? true : false,
+                ]);
+            }
+
+            if (!$call) {
+                Log::warning('🔔 [VAPI WEBHOOK] Llamada no encontrada en BD', ['call_id' => $callId]);
+                return response()->json(['success' => true]); // idempotente
+            }
+            
+            Log::info('🔔 [VAPI WEBHOOK] Llamada encontrada, procesando...', [
+                'db_call_id' => $call->id,
+                'message_type' => $messageType,
+            ]);
+
+            // Procesar según tipo de mensaje
+            if ($messageType === 'end-of-call-report') {
+                $this->processVapiEndOfCallReport($call, $payload);
+            } elseif ($messageType === 'status-update') {
+                $this->processVapiStatusUpdate($call, $payload);
+            } elseif ($messageType === 'transcript') {
+                $this->processVapiTranscript($call, $payload);
+            }
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            Log::error('❌ [VAPI WEBHOOK] Error procesando webhook', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error interno'], 500);
+        }
+    }
+
+    /**
+     * Procesar reporte de fin de llamada de VAPI
+     * 
+     * NOTA: Este webhook se usa principalmente para ejecutar ACCIONES post-llamada
+     * como envío de WhatsApp con enlace de pago, etc.
+     * La sincronización de estados y contadores se hace vía polling con syncCampaignRealtime()
+     * para mayor confiabilidad y tiempo real.
+     */
+    private function processVapiEndOfCallReport(VoiceCampaignCall $call, array $payload): void
+    {
+        $message = $payload['message'] ?? $payload;
+        $callData = $message['call'] ?? [];
+        
+        // El status puede venir en diferentes ubicaciones según el tipo de evento
+        $status = $message['status'] ?? $callData['status'] ?? 'unknown';
+        $endedReason = $message['endedReason'] ?? $callData['endedReason'] ?? null;
+        
+        // Si el status es 'unknown' o 'queued' pero tenemos endedReason, la llamada terminó
+        if (in_array($status, ['unknown', 'queued']) && $endedReason) {
+            $status = 'ended';
+        }
+        
+        // Si es un end-of-call-report, la llamada definitivamente terminó
+        $messageType = $message['type'] ?? $payload['type'] ?? null;
+        if ($messageType === 'end-of-call-report') {
+            $status = 'ended';
+        }
+        $transcript = $message['transcript'] ?? null;
+        $summary = $message['summary'] ?? null;
+        $recordingUrl = $message['recordingUrl'] ?? $callData['recordingUrl'] ?? null;
+        $durationSeconds = (int) ($callData['duration'] ?? $message['durationSeconds'] ?? 0);
+        
+        // Obtener análisis de VAPI (incluye successEvaluation)
+        $analysis = $message['analysis'] ?? $callData['analysis'] ?? [];
+        $successEvaluation = $analysis['successEvaluation'] ?? null;
+        
+        Log::info('🔔 [VAPI WEBHOOK] Procesando end-of-call-report', [
+            'call_id' => $call->id,
+            'status' => $status,
+            'ended_reason' => $endedReason,
+            'duration' => $durationSeconds,
+            'has_transcript' => !empty($transcript),
+            'has_summary' => !empty($summary),
+            'success_evaluation' => $successEvaluation,
+        ]);
+
+        // Determinar si la llamada fue exitosa - usar successEvaluation de VAPI si está disponible
+        // Razones que indican que NO hubo contacto real
+        $noContactReasons = ['no-answer', 'busy', 'dial-no-answer', 'dial-busy', 'customer-did-not-answer', 'customer-busy', 'machine-detected', 'voicemail', 'failed'];
+        
+        // Determinar si hubo contacto real (el cliente contestó y hubo conversación)
+        $wasContacted = $durationSeconds >= 10 && !in_array($endedReason, $noContactReasons);
+        
+        if ($successEvaluation !== null) {
+            $callSuccessful = filter_var($successEvaluation, FILTER_VALIDATE_BOOLEAN);
+        } else {
+            // Fallback: si hubo contacto real, considerar exitosa (aunque haya terminado por silencio)
+            // silence-timed-out después de conversación = cliente contactado pero no cerró objetivo
+            $callSuccessful = $wasContacted;
+        }
+
+        // Actualizar estado de la llamada
+        if ($callSuccessful) {
+            $call->markAsCompleted(['result' => VoiceCampaignCall::RESULT_SUCCESS], $durationSeconds);
+        } else {
+            $resultCode = $this->mapVapiEndedReasonToResult($endedReason);
+            $call->markAsFailed($resultCode, $endedReason);
+        }
+
+        // Guardar análisis y transcript
+        $analysisData = [
+            'transcript_summary' => $summary,
+            'call_successful' => $callSuccessful,
+            'termination_reason' => $endedReason,
+            'vapi_status' => $status,
+        ];
+        $call->update([
+            'call_result' => $analysisData,
+            'duration_seconds' => $durationSeconds,
+            'call_recording_url' => $recordingUrl,
+        ]);
+
+        // Guardar transcript completo en metadata
+        if ($transcript) {
+            $meta = is_array($call->call_metadata) ? $call->call_metadata : [];
+            $meta['transcript'] = $transcript;
+            $call->update(['call_metadata' => $meta]);
+        }
+
+        // Calcular costos de VAPI
+        try {
+            $cost = $message['cost'] ?? $callData['cost'] ?? 0;
+            $costBreakdown = $message['costBreakdown'] ?? [];
+            
+            // Obtener TRM y markup del broker
+            $trm = (float) env('COP_TRM_RATE', 4500);
+            $markupPercent = (float) env('VOICE_MARKUP_PERCENT', 40);
+            
+            // Intentar obtener markup personalizado del broker
+            $broker = $call->broker;
+            if ($broker && is_array($broker->settings) && isset($broker->settings['voice_calls_markup_percent'])) {
+                $markupPercent = (float) $broker->settings['voice_calls_markup_percent'];
+            }
+            
+            // Minutos facturados (por minuto adelantado - se redondea hacia arriba)
+            $billedMinutes = (int) ceil($durationSeconds / 60);
+            
+            // Tarifa de telefonía Colombia móvil: $0.0338/min (por minuto anticipado)
+            $phoneRatePerMin = (float) env('TWILIO_USD_PER_MIN', 0.0338);
+            
+            // Costos de VAPI (TTS = voz IA, transport = telefonía)
+            // Si VAPI no proporciona desglose, calculamos telefonía con tarifa Colombia
+            $voiceCostUsd = (float) ($costBreakdown['tts'] ?? 0);
+            $phoneCostUsd = (float) ($costBreakdown['transport'] ?? 0);
+            
+            // Si no hay costo de telefonía de VAPI, calcular con tarifa Colombia
+            if ($phoneCostUsd <= 0 && $billedMinutes > 0) {
+                $phoneCostUsd = round($billedMinutes * $phoneRatePerMin, 6);
+            }
+            
+            // Costo total: usar el de VAPI si existe, sino calcular
+            $totalUsd = is_numeric($cost) && (float)$cost > 0 
+                ? round((float) $cost, 6) 
+                : round($voiceCostUsd + $phoneCostUsd, 6);
+            
+            // Calcular con markup del 40%
+            $totalWithMarkupUsd = round($totalUsd * (1 + ($markupPercent / 100)), 6);
+            
+            // Convertir a COP
+            $voiceCostCop = round($voiceCostUsd * $trm, 2);
+            $phoneCostCop = round($phoneCostUsd * $trm, 2);
+            $totalCop = round($totalUsd * $trm, 2);
+            $totalWithMarkupCop = round($totalWithMarkupUsd * $trm, 2);
+            
+            $call->update([
+                'elevenlabs_cost_usd' => $voiceCostUsd,  // Costo de voz IA
+                'elevenlabs_cost_cop' => $voiceCostCop,
+                'twilio_cost_usd' => $phoneCostUsd,      // Costo de telefonía
+                'twilio_cost_cop' => $phoneCostCop,
+                'twilio_minutes' => $billedMinutes,       // Minutos facturados
+                'total_cost_usd' => $totalUsd,
+                'total_cost_cop' => $totalCop,
+                'total_cost_with_markup_usd' => $totalWithMarkupUsd,
+                'total_cost_with_markup_cop' => $totalWithMarkupCop,
+            ]);
+            
+            Log::info('💰 [VAPI COST] Costos calculados', [
+                'call_id' => $call->id,
+                'total_usd' => $totalUsd,
+                'markup_percent' => $markupPercent,
+                'total_with_markup_usd' => $totalWithMarkupUsd,
+                'total_with_markup_cop' => $totalWithMarkupCop,
+                'billed_minutes' => $billedMinutes,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('⚠️ [VAPI COST] No se pudieron calcular costos', ['error' => $e->getMessage()]);
+        }
+
+        // Enviar WhatsApp si está configurado
+        $this->handlePostCallWhatsApp($call);
+
+        // Actualizar contadores y verificar si la campaña debe marcarse como completada
+        try {
+            $call->execution?->updateCounters();
+            $call->voiceCampaign?->updateCallCounters();
+            
+            // Verificar si la campaña debe marcarse como completada
+            $campaign = $call->voiceCampaign;
+            if ($campaign && !$campaign->isCompleted()) {
+                $activeStatuses = [
+                    VoiceCampaignCall::STATUS_PENDING,
+                    VoiceCampaignCall::STATUS_INITIATED,
+                    VoiceCampaignCall::STATUS_RINGING,
+                    VoiceCampaignCall::STATUS_ANSWERED,
+                    VoiceCampaignCall::STATUS_IN_PROGRESS,
+                ];
+                
+                $remainingCalls = $campaign->calls()->whereIn('status', $activeStatuses)->count();
+                
+                if ($remainingCalls === 0) {
+                    $campaign->markAsCompleted();
+                    Log::info('✅ [VAPI WEBHOOK] Campaña marcada como completada', [
+                        'campaign_id' => $campaign->id,
+                        'campaign_name' => $campaign->name,
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('⚠️ [VAPI] No se pudieron actualizar contadores', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Procesar actualización de estado de VAPI
+     */
+    private function processVapiStatusUpdate(VoiceCampaignCall $call, array $payload): void
+    {
+        $message = $payload['message'] ?? $payload;
+        $status = $message['status'] ?? null;
+        
+        Log::info('🔔 [VAPI WEBHOOK] Status update', [
+            'call_id' => $call->id,
+            'status' => $status,
+        ]);
+
+        // Mapear estados de VAPI a nuestros estados
+        $statusMap = [
+            'queued' => VoiceCampaignCall::STATUS_PENDING,
+            'ringing' => VoiceCampaignCall::STATUS_RINGING,
+            'in-progress' => VoiceCampaignCall::STATUS_IN_PROGRESS,
+            'forwarding' => VoiceCampaignCall::STATUS_IN_PROGRESS,
+            'ended' => VoiceCampaignCall::STATUS_COMPLETED,
+        ];
+
+        if (isset($statusMap[$status])) {
+            $call->update(['status' => $statusMap[$status]]);
+        }
+    }
+
+    /**
+     * Procesar transcript de VAPI
+     */
+    private function processVapiTranscript(VoiceCampaignCall $call, array $payload): void
+    {
+        $message = $payload['message'] ?? $payload;
+        $transcript = $message['transcript'] ?? null;
+        
+        if ($transcript) {
+            $meta = is_array($call->call_metadata) ? $call->call_metadata : [];
+            $meta['transcript'] = $transcript;
+            $call->update(['call_metadata' => $meta]);
+        }
+    }
+
+    /**
+     * Mapear razón de fin de llamada de VAPI a código de resultado
+     */
+    private function mapVapiEndedReasonToResult(?string $endedReason): string
+    {
+        $map = [
+            'customer-ended-call' => VoiceCampaignCall::RESULT_SUCCESS,
+            'assistant-ended-call' => VoiceCampaignCall::RESULT_SUCCESS,
+            'customer-did-not-answer' => VoiceCampaignCall::RESULT_NO_ANSWER,
+            'customer-busy' => VoiceCampaignCall::RESULT_BUSY,
+            'voicemail' => VoiceCampaignCall::RESULT_VOICEMAIL,
+            'silence-timed-out' => VoiceCampaignCall::RESULT_NO_ANSWER,
+            'max-duration-reached' => VoiceCampaignCall::RESULT_SUCCESS,
+            'error' => VoiceCampaignCall::RESULT_API_ERROR,
+        ];
+
+        return $map[$endedReason] ?? VoiceCampaignCall::RESULT_UNKNOWN;
+    }
+
+    /**
      * Detectar si un texto está en inglés (heurística simple)
      */
     private function isEnglish(string $text): bool
@@ -764,11 +1094,107 @@ class VoiceCampaignController extends Controller
 
             return $text;
         } catch (\Throwable $e) {
-            Log::error('❌ [TRANSLATION] Error traduciendo con DeepSeek', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::warning('⚠️ [TRANSLATION] Error en traducción', ['error' => $e->getMessage()]);
             return $text;
+        }
+    }
+
+    /**
+     * Formatear fecha en español para pronunciación natural (sin año)
+     * Ej: "2026-01-15" -> "quince de enero"
+     */
+    private function formatDateInSpanish($date): string
+    {
+        try {
+            if (empty($date) || $date === 'N/A') {
+                return 'próximamente';
+            }
+            
+            $carbon = $date instanceof \Carbon\Carbon ? $date : Carbon::parse($date);
+            
+            $meses = [
+                1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril',
+                5 => 'mayo', 6 => 'junio', 7 => 'julio', 8 => 'agosto',
+                9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre'
+            ];
+            
+            $dia = $carbon->day;
+            $mes = $meses[$carbon->month];
+            
+            return "{$dia} de {$mes}";
+        } catch (\Throwable $e) {
+            return (string) $date;
+        }
+    }
+
+    /**
+     * Convertir número a palabras en español (1-31 para días)
+     */
+    private function numberToSpanishWords(int $num): string
+    {
+        $words = [
+            1 => 'primero', 2 => 'dos', 3 => 'tres', 4 => 'cuatro', 5 => 'cinco',
+            6 => 'seis', 7 => 'siete', 8 => 'ocho', 9 => 'nueve', 10 => 'diez',
+            11 => 'once', 12 => 'doce', 13 => 'trece', 14 => 'catorce', 15 => 'quince',
+            16 => 'dieciséis', 17 => 'diecisiete', 18 => 'dieciocho', 19 => 'diecinueve',
+            20 => 'veinte', 21 => 'veintiuno', 22 => 'veintidós', 23 => 'veintitrés',
+            24 => 'veinticuatro', 25 => 'veinticinco', 26 => 'veintiséis', 27 => 'veintisiete',
+            28 => 'veintiocho', 29 => 'veintinueve', 30 => 'treinta', 31 => 'treinta y uno'
+        ];
+        return $words[$num] ?? (string) $num;
+    }
+
+    /**
+     * Convertir año a palabras en español
+     */
+    private function yearToSpanishWords(int $year): string
+    {
+        $years = [
+            2024 => 'dos mil veinticuatro',
+            2025 => 'dos mil veinticinco',
+            2026 => 'dos mil veintiséis',
+            2027 => 'dos mil veintisiete',
+            2028 => 'dos mil veintiocho',
+            2029 => 'dos mil veintinueve',
+            2030 => 'dos mil treinta',
+        ];
+        return $years[$year] ?? (string) $year;
+    }
+
+    /**
+     * Formatear monto en español para pronunciación natural
+     * Ej: 150000 -> "ciento cincuenta mil pesos"
+     */
+    private function formatAmountInSpanish($amount): string
+    {
+        try {
+            if (!is_numeric($amount) || $amount <= 0) {
+                return 'el monto pendiente';
+            }
+            
+            $amount = (int) $amount;
+            
+            // Para montos grandes, usar formato simplificado
+            if ($amount >= 1000000) {
+                $millones = floor($amount / 1000000);
+                $resto = $amount % 1000000;
+                if ($resto > 0) {
+                    $miles = floor($resto / 1000);
+                    return "{$millones} millón" . ($millones > 1 ? 'es' : '') . " {$miles} mil pesos";
+                }
+                return "{$millones} millón" . ($millones > 1 ? 'es' : '') . " de pesos";
+            } elseif ($amount >= 1000) {
+                $miles = floor($amount / 1000);
+                $resto = $amount % 1000;
+                if ($resto > 0) {
+                    return "{$miles} mil {$resto} pesos";
+                }
+                return "{$miles} mil pesos";
+            } else {
+                return "{$amount} pesos";
+            }
+        } catch (\Throwable $e) {
+            return number_format($amount, 0, ',', '.') . ' pesos';
         }
     }
 
@@ -1169,7 +1595,11 @@ class VoiceCampaignController extends Controller
                     $call->updateElevenLabsInfo($callResult['response_data']);
                 } else {
                     $failedCount++;
-                    $call->markAsFailed(VoiceCampaignCall::RESULT_API_ERROR, $callResult['error']);
+                    $errorMsg = $callResult['error'] ?? 'Unknown error';
+                    if (is_array($errorMsg)) {
+                        $errorMsg = json_encode($errorMsg);
+                    }
+                    $call->markAsFailed(VoiceCampaignCall::RESULT_API_ERROR, (string) $errorMsg);
                 }
 
                 // Pausa entre llamadas
@@ -1202,7 +1632,7 @@ class VoiceCampaignController extends Controller
     }
 
     /**
-     * Realizar llamada usando ElevenLabs ConvoAI
+     * Realizar llamada usando VAPI (con sonido de fondo de oficina)
      */
     private function makeElevenLabsCall(
         string $phone,
@@ -1217,12 +1647,14 @@ class VoiceCampaignController extends Controller
         $campaign = null
     ): array {
         try {
-            $elevenLabsApiKey = env('ELEVENLABS_API_KEY');
-            $agentId = $agentId ?: env('ELEVENLABS_AGENT_ID');
-            $phoneNumberId = $phoneNumberId ?: env('ELEVENLABS_PHONE_NUMBER_ID');
+            $vapiApiKey = env('VAPI_PRIVATE_KEY');
+            // IMPORTANTE: Siempre usar el phoneNumberId de VAPI, no el de ElevenLabs
+            $phoneNumberId = env('VAPI_PHONE_NUMBER_ID');
+            $voiceId = $voiceId ?: 'YPh7OporwNAJ28F5IQrm'; // Angie por defecto
+            $backgroundSound = 'office'; // Sonido de oficina por defecto
 
-            if (!$elevenLabsApiKey || !$agentId || !$phoneNumberId) {
-                throw new \Exception('ElevenLabs configuration missing');
+            if (!$vapiApiKey || !$phoneNumberId) {
+                throw new \Exception('VAPI configuration missing (VAPI_PRIVATE_KEY or VAPI_PHONE_NUMBER_ID)');
             }
 
             // Obtener nombre comercial del broker
@@ -1232,28 +1664,50 @@ class VoiceCampaignController extends Controller
             }
             $brokerCommercialName = $broker?->name ?? env('DEFAULT_COMPANY_NAME', 'GURO Seguros');
             
-            // Preparar variables dinámicas exigidas por el agente de ElevenLabs
-            $companyName   = $contact['company_name'] ?? data_get($contact, 'custom_data.company_name') ?? $brokerCommercialName;
+            // IMPORTANTE: Usar siempre el nombre del broker, no el del contacto
+            // El contacto puede tener company_name de la aseguradora, no de la agencia
+            $companyName = $brokerCommercialName;
+            
+            Log::info('🏢 [VOICE CAMPAIGN] Nombre de empresa para llamada', [
+                'broker_id' => $campaign->broker_id ?? null,
+                'broker_name' => $broker?->name,
+                'brokerCommercialName' => $brokerCommercialName,
+                'companyName_final' => $companyName,
+            ]);
             $policyNumber  = $contact['policy_number'] ?? data_get($contact, 'custom_data.policy_number') ?? 'N/A';
+            $plateNumber   = $contact['plate_number'] ?? data_get($contact, 'custom_data.plate_number') ?? data_get($contact, 'custom_data.placa') ?? '';
+            $policyType    = $contact['policy_type'] ?? data_get($contact, 'custom_data.policy_type') ?? 'auto';
             $debtAmountRaw = $contact['debt_amount'] ?? data_get($contact, 'custom_data.debt_amount') ?? 0;
-            $dueDate       = $contact['payment_due_date'] ?? data_get($contact, 'custom_data.payment_due_date') ?? Carbon::now()->addDays(5)->format('Y-m-d');
+            $dueDateRaw    = $contact['payment_due_date'] ?? data_get($contact, 'custom_data.payment_due_date') ?? Carbon::now()->addDays(5)->format('Y-m-d');
             $customerName  = $contact['name'] ?? data_get($contact, 'custom_data.customer_name') ?? 'Cliente';
+            
+            // Formatear fecha en español (sin año)
+            $dueDate = $this->formatDateInSpanish($dueDateRaw);
+            
+            // Formatear monto en español (ej: "ciento cincuenta mil pesos")
+            $debtAmountFormatted = $this->formatAmountInSpanish($debtAmountRaw);
 
             $dynamicVars = [
                 // snake_case (recomendado)
                 'customer_name'    => $customerName,
                 'company_name'     => $companyName,
+                'agent_name'       => $agentName ?: 'tu asesor',
                 'policy_number'    => (string) $policyNumber,
-                'debt_amount'      => is_numeric($debtAmountRaw) ? (float) $debtAmountRaw : (string) $debtAmountRaw,
+                'plate_number'     => (string) $plateNumber,
+                'policy_type'      => (string) $policyType,
+                'debt_amount'      => $debtAmountFormatted,
                 'payment_due_date' => (string) $dueDate,
                 // aliases más comunes para compatibilidad con distintos agentes (camelCase y variantes)
                 'user_name'        => $customerName,
                 'client_name'      => $customerName,
                 'customerName'     => $customerName,
                 'companyName'      => $companyName,
+                'agentName'        => $agentName ?: 'tu asesor',
                 'policyNumber'     => (string) $policyNumber,
+                'plateNumber'      => (string) $plateNumber,
+                'policyType'       => (string) $policyType,
                 'paymentDueDate'   => (string) $dueDate,
-                'debtAmount'       => is_numeric($debtAmountRaw) ? (float) $debtAmountRaw : (string) $debtAmountRaw,
+                'debtAmount'       => $debtAmountFormatted,
             ];
 
             // Construir instrucción de recolección de datos basada en configuración de campaña
@@ -1292,8 +1746,13 @@ class VoiceCampaignController extends Controller
             // Forzar un primer mensaje personalizado para dirigirse por el nombre del cliente
             $agentDisplayName = $agentName ?: 'tu asesor';
             $safeCompany = $companyName ?: $brokerCommercialName;
-            $personalizedFirstMessage = "Hola {$customerName}, soy {$agentDisplayName} de {$safeCompany}. " .
-                                        "Quería hablar contigo sobre tu póliza {$policyNumber}. ¿Te puedo contar los detalles?";
+            // Hardcodeado: placa INM807
+            $policyIdentifier = "tu póliza de auto placa INM807";
+            $personalizedFirstMessage = "Hola " . $customerName . ", soy " . $agentDisplayName . " de " . $safeCompany . ". " .
+                                        "Quería hablar contigo sobre " . $policyIdentifier . ". ¿Te puedo contar los detalles?";
+            
+            // Obtener system_prompt personalizado de la campaña si existe
+            $customSystemPrompt = $campaignSettings['system_prompt'] ?? null;
 
             // Construir instrucciones condicionales de WhatsApp
             $whatsappInstruccion = $whatsappEnabled
@@ -1308,8 +1767,51 @@ class VoiceCampaignController extends Controller
                 ? "\n- Solo ofrece el envío por WhatsApp si el cliente lo acepta. Si no tiene WhatsApp, simplemente confirma la fecha de pago."
                 : "\n- NO menciones WhatsApp en ningún momento. Solo confirma la fecha en que puede realizar el pago.";
 
-            // Prompt final con políticas conversacionales con estructura tipo ElevenLabs (personalizado a nuestro caso)
-            $finalPrompt = trim("
+            // Construir sección de cierre según si hay recolección de datos o no
+            $hasDataCollection = !empty($collectInstruction);
+            $cierreSection = $hasDataCollection
+                ? "4) Cierre (recolección de datos al final):
+   - Solo si corresponde y el cliente acepta continuar o finalizar, realiza la recolección de datos requerida.
+   - Pide todos los datos en una sola tanda (no interrumpas el flujo con datos administrativos antes).
+   - Anuncia la transición: \"Antes de finalizar, necesito confirmar unos datos cortos\".
+   - Para cada dato activo, usa EXACTAMENTE el formato: \"campo: valor\"
+     (ej.: \"email: usuario@dominio.com\", \"número de documento: 123456789\", \"address: Calle 10 # 20-30\").
+   - Si ya obtuviste un dato durante la conversación, no lo repitas; confírmalo una única vez.{$whatsappCierre}
+   - Al final, pregunta: \"¿Hay algo más en lo que pueda ayudarte?\" y ESPERA la respuesta del cliente.
+   - Solo después de que el cliente responda (\"no\", \"nada más\", \"eso es todo\", etc.), despídete cordialmente."
+                : "4) Cierre y despedida:
+   - Una vez confirmada la acción (fecha de pago, compromiso, etc.), pregunta: \"¿Hay algo más en lo que pueda ayudarte?\"
+   - IMPORTANTE: ESPERA a que el cliente responda antes de despedirte. No te despidas inmediatamente después de preguntar.
+   - Solo cuando el cliente confirme que no necesita nada más, despídete cordialmente: \"Perfecto, {$customerName}. Muchas gracias por tu tiempo. Que tengas un excelente día. ¡Hasta pronto!\"{$whatsappCierre}
+   - NO solicites datos adicionales si no están configurados.";
+
+            $toolsSection = $hasDataCollection
+                ? "# Tools
+Usa estas instrucciones únicamente en el paso 4 (Cierre), no antes.
+{$collectInstruction}"
+                : "# Tools
+No hay datos adicionales que recolectar en esta llamada. Procede directamente al cierre y despedida una vez confirmada la acción del cliente.";
+
+            // Fecha actual para contexto temporal
+            $todayDate = Carbon::now()->locale('es')->isoFormat('dddd D [de] MMMM [de] YYYY');
+            $todayContext = "Hoy es {$todayDate}.";
+            
+            // Usar system_prompt personalizado de la campaña si existe, sino usar el prompt por defecto
+            if (!empty($customSystemPrompt)) {
+                // Reemplazar variables en el system_prompt personalizado
+                $finalPrompt = str_replace(
+                    ['{{customer_name}}', '{{company_name}}', '{{agent_name}}', '{{payment_due_date}}', '{{debt_amount}}'],
+                    [$customerName, $safeCompany, $agentDisplayName, $dueDate, $debtAmountFormatted],
+                    $customSystemPrompt
+                );
+                // Agregar contexto de fecha actual al inicio
+                $finalPrompt = "# Contexto temporal\n{$todayContext}\n\n" . $finalPrompt;
+            } else {
+                // Prompt por defecto para cobranza
+                $finalPrompt = trim("
+# Contexto temporal
+{$todayContext}
+
 # Personality
 Eres {$agentDisplayName}, una asesora de {$safeCompany}. Tienes una personalidad amable, directa y resolutiva. Hablas español de Colombia.
 
@@ -1317,10 +1819,9 @@ Eres {$agentDisplayName}, una asesora de {$safeCompany}. Tienes una personalidad
 Estás realizando una llamada telefónica a un cliente. Mantente profesional y breve.
 Datos de contexto disponibles (si aplican):
 - Cliente: {$customerName}
-- Póliza: {$policyNumber}
+- Seguro: {$policyIdentifier}
 - Fecha límite: {$dueDate}
-- Deuda estimada: {$debtAmountRaw}
-- Contexto de campaña: {$message}
+- Deuda estimada: {$debtAmountFormatted}
 
 # Tone
 Mantén respuestas cortas y directas (máximo 2-3 oraciones). Evita repetir lo que ya se dijo; reformula solo si el cliente no entendió.
@@ -1340,14 +1841,7 @@ Plan de conversación y orden:
 3) Confirmación de decisiones (según políticas):
    - Confirma con el cliente la acción acordada (p. ej., envío del enlace por WhatsApp al mismo número u otro, compromiso de pago inmediato o fecha y recordatorio).
    - NO solicites datos aún. Primero cierra la decisión y recibe la respuesta del cliente.
-4) Cierre (recolección de datos al final):
-   - Solo si corresponde y el cliente acepta continuar o finalizar, realiza la recolección de datos requerida.
-   - Pide todos los datos en una sola tanda (no interrumpas el flujo con datos administrativos antes).
-   - Anuncia la transición: \"Antes de finalizar, necesito confirmar unos datos cortos\".
-   - Para cada dato activo, usa EXACTAMENTE el formato: \"campo: valor\"
-     (ej.: \"email: usuario@dominio.com\", \"número de documento: 123456789\", \"address: Calle 10 # 20-30\").
-   - Si ya obtuviste un dato durante la conversación, no lo repitas; confírmalo una única vez.{$whatsappCierre}
-   - SIEMPRE despídete cordialmente antes de finalizar la llamada
+{$cierreSection}
 5) Si el cliente está ocupado:
    - Ofrece reagendar de forma proactiva y NO recolectes datos en ese momento.
 
@@ -1361,116 +1855,132 @@ Plan de conversación y orden:
 - Mantén el control del flujo y redirige con suavidad si el cliente se desvía.
 - No pidas datos administrativos hasta el cierre, salvo que sean imprescindibles para avanzar.
 - Siempre usa español de Colombia.{$whatsappGuardrail}
-- CRÍTICO: NUNCA termines la llamada sin una despedida cordial. Incluso si el cliente dice \"no\" o \"nada más\", DEBES responder con una despedida apropiada antes de colgar.
+- CRÍTICO: NUNCA termines la llamada sin una despedida cordial.
 - La despedida es OBLIGATORIA en todas las llamadas, sin excepción.
+- IMPORTANTE: Cuando preguntes \"¿Hay algo más en lo que pueda ayudarte?\", ESPERA a que el cliente responda. No hables encima de su respuesta.
+- Solo después de que el cliente confirme que no necesita nada más (\"no\", \"no gracias\", \"eso es todo\", \"nada más\"), despídete cordialmente: \"Perfecto, muchas gracias por tu tiempo. Que tengas un excelente día. ¡Hasta pronto!\"
+- NO te despidas mientras el cliente aún está hablando o antes de que responda a tu pregunta.
 
-# Tools
-Usa estas instrucciones únicamente en el paso 4 (Cierre), no antes.
-{$collectInstruction}
+{$toolsSection}
 ");
+            }
 
-            // Payload para ElevenLabs (Twilio Outbound) con overrides y variables dinámicas
+            // Payload VAPI con agente transient (inline)
             $payload = [
-                'agent_id' => $agentId,
-                'agent_phone_number_id' => $phoneNumberId,
-                'to_number' => $phone,
-                // Suministrar variables para placeholders del agente
-                'dynamic_variables' => $dynamicVars,
-                // Redundancia: enviar overrides a nivel raíz (algunos entornos los requieren)
-                'conversation_config_override' => [
-                    'agent' => [
-                        'prompt' => [
-                            'prompt' => $finalPrompt
-                        ],
-                        // Enviar ambas variantes por compatibilidad
-                        'first_message' => $personalizedFirstMessage,
-                        'firstMessage' => $personalizedFirstMessage,
-                        'language' => 'es'
-                    ],
-                    // Si tenemos voiceId, permitir override de voz
-                    'tts' => array_filter([
-                        'voice_id' => $voiceId ?: null
-                    ])
+                'phoneNumberId' => $phoneNumberId,
+                'customer' => [
+                    'number' => $phone,
+                    'name' => $customerName,
                 ],
-                // Versión oficial usando conversation_initiation_client_data
-                'conversation_initiation_client_data' => [
-                    'conversation_config_override' => [
-                        'agent' => [
-                            // Prompt contextual + instrucciones de recolección
-                            'prompt' => [
-                                'prompt' => $finalPrompt
+                // Agente transient (inline) - no requiere crear agente previamente
+                'assistant' => [
+                    'name' => $agentDisplayName,
+                    'firstMessage' => $personalizedFirstMessage,
+                    'model' => [
+                        'provider' => 'openai',
+                        'model' => 'gpt-4o-mini',
+                        'temperature' => 0.4,
+                        'messages' => [
+                            [
+                                'role' => 'system',
+                                'content' => $finalPrompt,
                             ],
-                            // Forzar saludo inicial personalizado por nombre (ambas variantes)
-                            'first_message' => $personalizedFirstMessage,
-                            'firstMessage' => $personalizedFirstMessage,
-                            'language' => 'es'
                         ],
-                        'tts' => array_filter([
-                            'voice_id' => $voiceId ?: null
-                        ])
                     ],
-                    // Variables redundantes para compatibilidad
-                    'custom_variables' => [
-                        'customer_name' => $customerName,
-                        'phone_number' => $contact['phone'] ?? '',
-                        'email' => $contact['email'] ?? '',
-                        'company_name' => $companyName,
-                        'policy_number' => (string) $policyNumber,
-                        'payment_due_date' => (string) $dueDate,
+                    'voice' => [
+                        'provider' => '11labs',
+                        'voiceId' => $voiceId,
+                        'stability' => 0.5, // Balance entre consistencia y expresividad
+                        'similarityBoost' => 0.75,
+                        'style' => 0.4, // Más expresividad emocional
+                        'useSpeakerBoost' => true, // Mejora claridad
                     ],
-                    'temperature' => 0.4
-                ],
-                // Alias de overrides según documentación del SDK/Widget (algunos entornos requieren esta clave)
-                'overrides' => [
-                    'agent' => [
-                        'prompt' => [
-                            'prompt' => trim("Eres un asistente virtual profesional de una compañía de seguros.
-Contexto de campaña: {$message}
-{$collectInstruction}")
-                        ],
-                        'first_message' => $personalizedFirstMessage,
-                        'firstMessage' => $personalizedFirstMessage,
-                        'language' => 'es'
+                    'language' => 'es',
+                    'transcriber' => [
+                        'provider' => 'deepgram',
+                        'model' => 'nova-2',
+                        'language' => 'es-419', // Español Latinoamérica
                     ],
-                    'tts' => array_filter([
-                        'voice_id' => $voiceId ?: null,
-                        'voiceId' => $voiceId ?: null
-                    ])
+                    'backgroundSound' => $backgroundSound, // 'office' para sonido de fondo
+                    'backchannelingEnabled' => true, // Sonidos de confirmación "mmhm"
+                    'backgroundDenoisingEnabled' => true,
+                    'maxDurationSeconds' => 600, // 10 minutos máximo
+                    'numWordsToInterruptAssistant' => 2,
+                    'endCallPhrases' => ['hasta pronto', 'que tengas buen día', 'adiós'],
+                    'silenceTimeoutSeconds' => 30,
+                    'responseDelaySeconds' => 0.4,
+                    'startSpeakingPlan' => [
+                        'waitSeconds' => 0.4,
+                        'smartEndpointingEnabled' => true,
+                    ],
+                    'stopSpeakingPlan' => [
+                        'numWords' => 2,
+                        'voiceSeconds' => 0.2,
+                    ],
+                    'voicemailDetection' => [
+                        'provider' => 'twilio',
+                        'enabled' => true,
+                        'machineDetectionTimeout' => 15,
+                        'voicemailDetectionTypes' => ['machine_end_beep', 'machine_end_silence', 'machine_start'],
+                    ],
+                    // Configuración de análisis post-llamada en español
+                    'analysisPlan' => [
+                        'summaryPrompt' => 'Genera un resumen conciso en ESPAÑOL de la conversación telefónica. Incluye: el propósito de la llamada, los puntos principales discutidos, el resultado o acuerdo alcanzado, y cualquier seguimiento necesario. Máximo 3-4 oraciones.',
+                        'successEvaluationPrompt' => 'Evalúa si la llamada fue exitosa basándote en: si se logró el objetivo principal, si el cliente mostró interés, si se acordó alguna acción de seguimiento. Responde true si fue exitosa, false si no.',
+                        'successEvaluationRubric' => 'NumericScale',
+                    ],
                 ],
                 'metadata' => [
                     'contact_name' => $customerName,
+                    'campaign_id' => $campaign->id ?? null,
                     'campaign_type' => 'voice_campaign',
-                    'dynamic_variables_sent' => array_keys($dynamicVars),
-                    'collect_instruction' => !empty($collectInstruction),
-                ]
+                    'broker_id' => $campaign->broker_id ?? null,
+                ],
             ];
 
-            Log::info('🔊 [ELEVENLABS API] Enviando llamada con overrides + dynamic_variables', [
+            // Agregar server URL al assistant para recibir webhooks
+            $webhookUrl = env('VAPI_WEBHOOK_URL', env('APP_URL') . '/api/saas/voice-campaigns/webhooks/vapi');
+            $payload['assistant']['server'] = [
+                'url' => $webhookUrl,
+            ];
+
+            Log::info('🔊 [VAPI] Enviando llamada con sonido de fondo de oficina', [
                 'to' => $phone,
-                'agent_id' => $agentId,
-                'vars' => $dynamicVars,
+                'phone_number_id' => $phoneNumberId,
+                'background_sound' => $backgroundSound,
                 'first_message_preview' => mb_substr($personalizedFirstMessage, 0, 160),
-                'voice_override' => (bool) $voiceId,
-                'override_paths' => ['conversation_config_override', 'conversation_initiation_client_data.conversation_config_override']
+                'webhook_url' => $webhookUrl,
             ]);
 
-            // Realizar request a ElevenLabs
+            // Realizar request a VAPI
             $response = Http::withHeaders([
-                'xi-api-key' => $elevenLabsApiKey,
+                'Authorization' => 'Bearer ' . $vapiApiKey,
                 'Content-Type' => 'application/json'
-            ])->timeout(30)->post('https://api.elevenlabs.io/v1/convai/twilio/outbound-call', $payload);
+            ])->timeout(30)->post('https://api.vapi.ai/call/phone', $payload);
 
             if ($response->successful()) {
                 $responseData = $response->json();
                 
+                Log::info('✅ [VAPI] Llamada iniciada exitosamente', [
+                    'vapi_call_id' => $responseData['id'] ?? null,
+                    'status' => $responseData['status'] ?? 'queued',
+                ]);
+                
                 return [
                     'success' => true,
-                    'call_id' => $responseData['conversation_id'] ?? $responseData['id'] ?? null,
-                    'status' => $responseData['status'] ?? 'initiated',
+                    'call_id' => $responseData['id'] ?? null,
+                    'status' => $responseData['status'] ?? 'queued',
                     'response_data' => $responseData
                 ];
             } else {
-                $errorMessage = $response->json()['detail'] ?? 'ElevenLabs API Error';
+                $errorBody = $response->json();
+                $errorMessage = $errorBody['message'] ?? $errorBody['error'] ?? 'VAPI API Error';
+                
+                Log::error('❌ [VAPI] Error en llamada', [
+                    'status' => $response->status(),
+                    'error' => $errorMessage,
+                    'body' => $errorBody,
+                ]);
                 
                 return [
                     'success' => false,
@@ -1480,7 +1990,7 @@ Contexto de campaña: {$message}
             }
 
         } catch (\Exception $e) {
-            Log::error('🔊 [ELEVENLABS API] Exception in call', [
+            Log::error('🔊 [VAPI] Exception in call', [
                 'phone' => $phone,
                 'error' => $e->getMessage()
             ]);
@@ -1523,6 +2033,14 @@ Contexto de campaña: {$message}
      */
     private function processMessageVariables(string $messageTemplate, array $contact): string
     {
+        // Obtener valores raw
+        $dueDateRaw = $contact['payment_due_date'] ?? data_get($contact, 'custom_data.payment_due_date') ?? '';
+        $debtAmountRaw = data_get($contact, 'custom_data.debt_amount') ?? $contact['debt_amount'] ?? '';
+        
+        // Formatear fecha y monto en español para pronunciación natural
+        $dueDateFormatted = $this->formatDateInSpanish($dueDateRaw);
+        $debtAmountFormatted = $this->formatAmountInSpanish($debtAmountRaw);
+        
         // Variables estándar de clientes + variables de negocio usadas por el agente
         $availableVariables = [
             // Identidad
@@ -1538,11 +2056,14 @@ Contexto de campaña: {$message}
             'phone' => $contact['phone'] ?? $contact['celular_principal'] ?? '',
             'ciudad' => $contact['ciudad'] ?? $contact['city'] ?? '',
             'city' => $contact['city'] ?? $contact['ciudad'] ?? '',
-            // Negocio (para plantillas con placeholders)
+            // Negocio (para plantillas con placeholders) - FORMATEADOS EN ESPAÑOL
             'company_name' => $contact['company_name'] ?? data_get($contact, 'custom_data.company_name') ?? '',
             'policy_number' => $contact['policy_number'] ?? data_get($contact, 'custom_data.policy_number') ?? '',
-            'payment_due_date' => $contact['payment_due_date'] ?? data_get($contact, 'custom_data.payment_due_date') ?? '',
-            'debt_amount' => (string) (data_get($contact, 'custom_data.debt_amount') ?? $contact['debt_amount'] ?? ''),
+            'plate_number' => $contact['plate_number'] ?? data_get($contact, 'custom_data.plate_number') ?? data_get($contact, 'custom_data.placa') ?? '',
+            'policy_type' => $contact['policy_type'] ?? data_get($contact, 'custom_data.policy_type') ?? 'auto',
+            'agent_name' => $contact['agent_name'] ?? data_get($contact, 'custom_data.agent_name') ?? '',
+            'payment_due_date' => $dueDateFormatted,
+            'debt_amount' => $debtAmountFormatted,
         ];
 
         $processedMessage = $messageTemplate;
@@ -1613,6 +2134,20 @@ Contexto de campaña: {$message}
                 $query->where('recipient_phone', 'LIKE', '%' . $request->phone . '%');
             }
 
+            // Búsqueda general: busca en teléfono, nombre del cliente, agente y estado
+            if ($request->has('search') && $request->search) {
+                $searchTerm = $request->search;
+                $query->where(function($q) use ($searchTerm) {
+                    $q->where('recipient_phone', 'LIKE', '%' . $searchTerm . '%')
+                      ->orWhere('recipient_name', 'LIKE', '%' . $searchTerm . '%')
+                      ->orWhere('status', 'LIKE', '%' . $searchTerm . '%')
+                      ->orWhereHas('voiceCampaign', function($subQ) use ($searchTerm) {
+                          $subQ->where('agent_name', 'LIKE', '%' . $searchTerm . '%')
+                               ->orWhere('name', 'LIKE', '%' . $searchTerm . '%');
+                      });
+                });
+            }
+
             // Paginación
             $limit = $request->get('limit', 15);
             $offset = $request->get('offset', 0);
@@ -1627,23 +2162,36 @@ Contexto de campaña: {$message}
                               // Agregar bloque normalizado de costos (para consumo del frontend)
                               try {
                                   $trm = (float) (env('COP_TRM_RATE', 4500));
-                                  $elevenUsd = (float) ($call->elevenlabs_cost_usd ?? 0);
-                                  $twilioUsd = (float) ($call->twilio_cost_usd ?? 0);
-                                  $totalUsd = (float) ($call->total_cost_usd ?? ($elevenUsd + $twilioUsd));
+                                  $voiceCostUsd = (float) ($call->elevenlabs_cost_usd ?? 0);  // Costo voz IA
+                                  $phoneCostUsd = (float) ($call->twilio_cost_usd ?? 0);      // Costo telefonía
+                                  $totalUsd = (float) ($call->total_cost_usd ?? ($voiceCostUsd + $phoneCostUsd));
                                   $totalWithMarkupUsd = (float) ($call->total_cost_with_markup_usd ?? $totalUsd);
  
+                                  // Obtener markup del broker
+                                  $markupPercent = (float) env('VOICE_MARKUP_PERCENT', 40);
+                                  $broker = $call->broker;
+                                  if ($broker && is_array($broker->settings) && isset($broker->settings['voice_calls_markup_percent'])) {
+                                      $markupPercent = (float) $broker->settings['voice_calls_markup_percent'];
+                                  }
+                                  
+                                  // Minutos facturados (por minuto adelantado)
+                                  $billedMinutes = (int) ($call->twilio_minutes ?? 0);
+                                  
                                   $data['costs'] = [
-                                      'elevenlabs_usd' => round($elevenUsd, 6),
-                                      'elevenlabs_cop' => round($elevenUsd * $trm, 2),
-                                      'elevenlabs_credits' => (float) ($call->elevenlabs_credits ?? 0),
-                                      'twilio_usd' => round($twilioUsd, 6),
-                                      'twilio_cop' => round($twilioUsd * $trm, 2),
-                                      'twilio_minutes' => (int) ($call->twilio_minutes ?? 0),
+                                      // Costos de voz IA (TTS)
+                                      'voice_usd' => round($voiceCostUsd, 6),
+                                      'voice_cop' => round($voiceCostUsd * $trm, 2),
+                                      // Costos de telefonía (Colombia móvil: $0.0338/min)
+                                      'phone_usd' => round($phoneCostUsd, 6),
+                                      'phone_cop' => round($phoneCostUsd * $trm, 2),
+                                      'billed_minutes' => $billedMinutes,
+                                      // Totales
                                       'total_usd' => round($totalUsd, 6),
                                       'total_cop' => round($totalUsd * $trm, 2),
                                       'total_with_markup_usd' => round($totalWithMarkupUsd, 6),
                                       'total_with_markup_cop' => round($totalWithMarkupUsd * $trm, 2),
                                       'cop_rate' => $trm,
+                                      'markup_percent' => $markupPercent,
                                   ];
                               } catch (\Throwable $e) {
                                   // Silencioso: si algo falla en costos, no bloquea el historial
@@ -1653,10 +2201,22 @@ Contexto de campaña: {$message}
                               if (is_array($call->call_metadata) && isset($call->call_metadata['collected_data'])) {
                                   $data['collected_data'] = $call->call_metadata['collected_data'];
                               }
+                              
+                              // Agregar transcript desde call_metadata
+                              if (is_array($call->call_metadata) && isset($call->call_metadata['transcript'])) {
+                                  $data['call_transcript'] = $call->call_metadata['transcript'];
+                              } elseif ($call->call_transcript) {
+                                  $data['call_transcript'] = $call->call_transcript;
+                              }
 
                               // Agregar análisis de ElevenLabs si existe en call_result
                               if (is_array($call->call_result)) {
                                   $data['elevenlabs_analysis'] = $call->call_result;
+                              }
+                              
+                              // Agregar URL de grabación si existe
+                              if ($call->call_recording_url) {
+                                  $data['call_recording_url'] = $call->call_recording_url;
                               }
  
                               return $data;
@@ -1678,6 +2238,490 @@ Contexto de campaña: {$message}
                 'message' => 'Error al obtener historial de llamadas',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Sincronizar datos de una llamada desde VAPI API
+     * Útil cuando el webhook falló o los datos no llegaron
+     */
+    public function syncCallFromVapi(Request $request, $callId): JsonResponse
+    {
+        try {
+            $call = VoiceCampaignCall::find($callId);
+            if (!$call) {
+                return response()->json(['success' => false, 'message' => 'Llamada no encontrada'], 404);
+            }
+
+            $vapiCallId = $call->elevenlabs_conversation_id;
+            if (!$vapiCallId) {
+                return response()->json(['success' => false, 'message' => 'Esta llamada no tiene ID de VAPI'], 400);
+            }
+
+            $vapiApiKey = env('VAPI_PRIVATE_KEY');
+            if (!$vapiApiKey) {
+                return response()->json(['success' => false, 'message' => 'VAPI API key no configurada'], 500);
+            }
+
+            // Llamar a VAPI API para obtener detalles de la llamada
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $vapiApiKey,
+            ])->timeout(30)->get("https://api.vapi.ai/call/{$vapiCallId}");
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al obtener datos de VAPI',
+                    'vapi_status' => $response->status(),
+                    'vapi_error' => $response->json()
+                ], 400);
+            }
+
+            $vapiData = $response->json();
+            $before = $call->only(['status', 'duration_seconds', 'total_cost_usd', 'call_recording_url']);
+
+            // Extraer datos de VAPI
+            $artifact = $vapiData['artifact'] ?? [];
+            $costBreakdown = $vapiData['costBreakdown'] ?? [];
+            $analysis = $vapiData['analysis'] ?? [];
+            
+            // Duración
+            $startedAt = $vapiData['startedAt'] ?? null;
+            $endedAt = $vapiData['endedAt'] ?? null;
+            $durationSeconds = 0;
+            if ($startedAt && $endedAt) {
+                $durationSeconds = (int) (strtotime($endedAt) - strtotime($startedAt));
+            }
+
+            // Costos
+            $trm = (float) env('COP_TRM_RATE', 4500);
+            $markupPercent = (float) env('VOICE_MARKUP_PERCENT', 40);
+            $broker = $call->broker;
+            if ($broker && is_array($broker->settings) && isset($broker->settings['voice_calls_markup_percent'])) {
+                $markupPercent = (float) $broker->settings['voice_calls_markup_percent'];
+            }
+
+            // Minutos facturados (por minuto adelantado - se redondea hacia arriba)
+            $billedMinutes = (int) ceil($durationSeconds / 60);
+            
+            // Tarifa de telefonía Colombia móvil: $0.0338/min
+            $phoneRatePerMin = (float) env('TWILIO_USD_PER_MIN', 0.0338);
+            
+            // Costos de VAPI
+            $voiceCostUsd = (float) ($costBreakdown['tts'] ?? 0);
+            $phoneCostUsd = (float) ($costBreakdown['transport'] ?? 0);
+            
+            // Si no hay costo de telefonía de VAPI, calcular con tarifa Colombia
+            if ($phoneCostUsd <= 0 && $billedMinutes > 0) {
+                $phoneCostUsd = round($billedMinutes * $phoneRatePerMin, 6);
+            }
+            
+            // Costo total: usar el de VAPI si existe, sino calcular
+            $totalUsd = (float) ($vapiData['cost'] ?? 0);
+            if ($totalUsd <= 0) {
+                $totalUsd = round($voiceCostUsd + $phoneCostUsd, 6);
+            }
+            
+            $totalWithMarkupUsd = round($totalUsd * (1 + ($markupPercent / 100)), 6);
+
+            // Grabación y transcripción
+            $recordingUrl = $artifact['recordingUrl'] ?? $artifact['stereoRecordingUrl'] ?? null;
+            $transcript = $artifact['transcript'] ?? null;
+
+            // Actualizar llamada
+            $updateData = [
+                'duration_seconds' => $durationSeconds,
+                'elevenlabs_cost_usd' => $voiceCostUsd,
+                'elevenlabs_cost_cop' => round($voiceCostUsd * $trm, 2),
+                'twilio_cost_usd' => $phoneCostUsd,
+                'twilio_cost_cop' => round($phoneCostUsd * $trm, 2),
+                'twilio_minutes' => $billedMinutes,
+                'total_cost_usd' => $totalUsd,
+                'total_cost_cop' => round($totalUsd * $trm, 2),
+                'total_cost_with_markup_usd' => $totalWithMarkupUsd,
+                'total_cost_with_markup_cop' => round($totalWithMarkupUsd * $trm, 2),
+            ];
+
+            if ($recordingUrl) {
+                $updateData['call_recording_url'] = $recordingUrl;
+            }
+
+            // Actualizar status si la llamada terminó
+            $vapiStatus = $vapiData['status'] ?? null;
+            if ($vapiStatus === 'ended' && $call->status !== 'completed') {
+                $updateData['status'] = 'completed';
+                $updateData['call_ended_at'] = $endedAt ? now()->parse($endedAt) : now();
+            }
+
+            $call->update($updateData);
+
+            // Guardar transcript en metadata
+            if ($transcript) {
+                $meta = is_array($call->call_metadata) ? $call->call_metadata : [];
+                $meta['transcript'] = $transcript;
+                $meta['vapi_analysis'] = $analysis;
+                $meta['synced_from_vapi_at'] = now()->toIso8601String();
+                $call->update(['call_metadata' => $meta]);
+            }
+
+            $after = $call->fresh()->only(['status', 'duration_seconds', 'total_cost_usd', 'call_recording_url']);
+
+            Log::info('🔄 [VAPI SYNC] Llamada sincronizada desde VAPI', [
+                'call_id' => $call->id,
+                'vapi_call_id' => $vapiCallId,
+                'before' => $before,
+                'after' => $after,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Datos sincronizados desde VAPI',
+                'call_id' => $call->id,
+                'before' => $before,
+                'after' => $after,
+                'has_recording' => !empty($recordingUrl),
+                'has_transcript' => !empty($transcript),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [VAPI SYNC] Error al sincronizar', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al sincronizar desde VAPI',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Sincronizar múltiples llamadas pendientes desde VAPI
+     */
+    public function syncPendingCallsFromVapi(Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            if (!$brokerId) {
+                return response()->json(['success' => false, 'message' => 'Broker no identificado'], 401);
+            }
+
+            // Buscar llamadas que tienen VAPI ID pero no tienen datos completos
+            $pendingCalls = VoiceCampaignCall::forBroker($brokerId)
+                ->whereNotNull('elevenlabs_conversation_id')
+                ->where(function ($q) {
+                    $q->whereNull('total_cost_usd')
+                      ->orWhere('total_cost_usd', 0)
+                      ->orWhereNull('call_recording_url');
+                })
+                ->where('created_at', '>=', now()->subDays(7)) // Solo últimos 7 días
+                ->limit(20) // Máximo 20 por request
+                ->get();
+
+            if ($pendingCalls->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No hay llamadas pendientes de sincronizar',
+                    'synced' => 0
+                ]);
+            }
+
+            $synced = 0;
+            $errors = [];
+
+            foreach ($pendingCalls as $call) {
+                try {
+                    // Simular request para reutilizar syncCallFromVapi
+                    $result = $this->syncCallFromVapi($request, $call->id);
+                    $data = json_decode($result->getContent(), true);
+                    if ($data['success'] ?? false) {
+                        $synced++;
+                    } else {
+                        $errors[] = ['call_id' => $call->id, 'error' => $data['message'] ?? 'Unknown'];
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = ['call_id' => $call->id, 'error' => $e->getMessage()];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Sincronizadas {$synced} de {$pendingCalls->count()} llamadas",
+                'synced' => $synced,
+                'total_pending' => $pendingCalls->count(),
+                'errors' => $errors
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al sincronizar llamadas pendientes',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Sincronizar estado de campaña en tiempo real desde VAPI API
+     * Este endpoint consulta directamente VAPI para obtener el estado actual de las llamadas
+     * Ideal para polling desde el frontend cada 3-5 segundos durante ejecución de campaña
+     */
+    public function syncCampaignRealtime(Request $request, int $campaignId): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            if (!$brokerId) {
+                return response()->json(['success' => false, 'message' => 'Broker no identificado'], 401);
+            }
+
+            $campaign = VoiceCampaign::forBroker($brokerId)->find($campaignId);
+            if (!$campaign) {
+                return response()->json(['success' => false, 'message' => 'Campaña no encontrada'], 404);
+            }
+
+            $vapiApiKey = env('VAPI_PRIVATE_KEY');
+            if (!$vapiApiKey) {
+                return response()->json(['success' => false, 'message' => 'VAPI API key no configurada'], 500);
+            }
+
+            // Solo obtener llamadas que NO están finalizadas (evita re-sincronizar las ya completadas)
+            // Estados finales: completed, failed - no necesitan sincronización
+            $activeStatuses = [
+                VoiceCampaignCall::STATUS_PENDING,
+                VoiceCampaignCall::STATUS_INITIATED,
+                VoiceCampaignCall::STATUS_RINGING,
+                VoiceCampaignCall::STATUS_ANSWERED,
+                VoiceCampaignCall::STATUS_IN_PROGRESS,
+            ];
+            
+            $calls = $campaign->calls()
+                ->whereNotNull('elevenlabs_conversation_id')
+                ->whereIn('status', $activeStatuses)
+                ->where('created_at', '>=', now()->subHours(24))
+                ->get();
+            
+            // Si no hay llamadas activas, verificar si la campaña debe completarse
+            if ($calls->isEmpty()) {
+                $totalCalls = $campaign->calls()->count();
+                if ($totalCalls > 0 && !$campaign->isCompleted()) {
+                    $campaign->markAsCompleted();
+                    $campaign->refresh();
+                }
+                
+                return response()->json([
+                    'success' => true,
+                    'campaign' => [
+                        'id' => $campaign->id,
+                        'status' => $campaign->status,
+                        'calls_made' => $campaign->calls_made,
+                        'calls_successful' => $campaign->calls_successful,
+                        'calls_failed' => $campaign->calls_failed,
+                        'progress_percentage' => $campaign->progress_percentage,
+                    ],
+                    'synced' => 0,
+                    'updated' => [],
+                    'campaign_completed' => $campaign->isCompleted(),
+                    'remaining_active_calls' => 0,
+                    'message' => 'No hay llamadas activas para sincronizar',
+                ]);
+            }
+
+            $synced = 0;
+            $updated = [];
+            $campaignCompleted = false;
+
+            foreach ($calls as $call) {
+                $vapiCallId = $call->elevenlabs_conversation_id;
+                if (!$vapiCallId) continue;
+
+                try {
+                    // Consultar VAPI API
+                    $response = Http::withHeaders([
+                        'Authorization' => 'Bearer ' . $vapiApiKey,
+                    ])->timeout(10)->get("https://api.vapi.ai/call/{$vapiCallId}");
+
+                    if (!$response->successful()) continue;
+
+                    $vapiData = $response->json();
+                    $vapiStatus = $vapiData['status'] ?? 'unknown';
+                    $endedReason = $vapiData['endedReason'] ?? null;
+
+                    // Mapear estado de VAPI a nuestro estado
+                    $newStatus = $this->mapVapiStatusToLocal($vapiStatus);
+                    $oldStatus = $call->status;
+
+                    // Solo actualizar si cambió el estado
+                    if ($newStatus !== $oldStatus) {
+                        // Extraer datos adicionales si la llamada terminó
+                        if ($vapiStatus === 'ended') {
+                            $this->syncCallDataFromVapi($call, $vapiData);
+                        } else {
+                            $call->update(['status' => $newStatus]);
+                        }
+                        
+                        $updated[] = [
+                            'call_id' => $call->id,
+                            'old_status' => $oldStatus,
+                            'new_status' => $newStatus,
+                            'vapi_status' => $vapiStatus,
+                        ];
+                        $synced++;
+                    }
+                } catch (\Exception $e) {
+                    // Ignorar errores individuales, continuar con las demás
+                    continue;
+                }
+            }
+
+            // Actualizar contadores de la campaña
+            $campaign->updateCallCounters();
+
+            // Verificar si la campaña debe marcarse como completada
+            $activeStatuses = [
+                VoiceCampaignCall::STATUS_PENDING,
+                VoiceCampaignCall::STATUS_INITIATED,
+                VoiceCampaignCall::STATUS_RINGING,
+                VoiceCampaignCall::STATUS_ANSWERED,
+                VoiceCampaignCall::STATUS_IN_PROGRESS,
+            ];
+            $remainingCalls = $campaign->calls()->whereIn('status', $activeStatuses)->count();
+            
+            if ($remainingCalls === 0 && !$campaign->isCompleted() && $campaign->calls()->count() > 0) {
+                $campaign->markAsCompleted();
+                $campaignCompleted = true;
+            }
+
+            $campaign->refresh();
+
+            return response()->json([
+                'success' => true,
+                'campaign' => [
+                    'id' => $campaign->id,
+                    'status' => $campaign->status,
+                    'calls_made' => $campaign->calls_made,
+                    'calls_successful' => $campaign->calls_successful,
+                    'calls_failed' => $campaign->calls_failed,
+                    'progress_percentage' => $campaign->progress_percentage,
+                ],
+                'synced' => $synced,
+                'updated' => $updated,
+                'campaign_completed' => $campaignCompleted,
+                'remaining_active_calls' => $remainingCalls,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [VAPI REALTIME SYNC] Error', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al sincronizar campaña',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Mapear estado de VAPI a estado local
+     */
+    private function mapVapiStatusToLocal(string $vapiStatus): string
+    {
+        $map = [
+            'queued' => VoiceCampaignCall::STATUS_PENDING,
+            'ringing' => VoiceCampaignCall::STATUS_RINGING,
+            'in-progress' => VoiceCampaignCall::STATUS_IN_PROGRESS,
+            'forwarding' => VoiceCampaignCall::STATUS_IN_PROGRESS,
+            'ended' => VoiceCampaignCall::STATUS_COMPLETED,
+        ];
+        return $map[$vapiStatus] ?? VoiceCampaignCall::STATUS_FAILED;
+    }
+
+    /**
+     * Sincronizar datos completos de una llamada desde VAPI
+     */
+    private function syncCallDataFromVapi(VoiceCampaignCall $call, array $vapiData): void
+    {
+        $artifact = $vapiData['artifact'] ?? [];
+        $costBreakdown = $vapiData['costBreakdown'] ?? [];
+        $analysis = $vapiData['analysis'] ?? [];
+        
+        // Duración
+        $startedAt = $vapiData['startedAt'] ?? null;
+        $endedAt = $vapiData['endedAt'] ?? null;
+        $durationSeconds = 0;
+        if ($startedAt && $endedAt) {
+            $durationSeconds = (int) (strtotime($endedAt) - strtotime($startedAt));
+        }
+
+        // Costos
+        $trm = (float) env('COP_TRM_RATE', 4500);
+        $markupPercent = (float) env('VOICE_MARKUP_PERCENT', 40);
+        $broker = $call->broker;
+        if ($broker && is_array($broker->settings) && isset($broker->settings['voice_calls_markup_percent'])) {
+            $markupPercent = (float) $broker->settings['voice_calls_markup_percent'];
+        }
+
+        $voiceCostUsd = (float) ($costBreakdown['tts'] ?? 0);
+        $phoneCostUsd = (float) ($costBreakdown['transport'] ?? 0);
+        $billedMinutes = (int) ceil($durationSeconds / 60);
+        
+        if ($phoneCostUsd == 0 && $durationSeconds > 0) {
+            $phoneRatePerMin = (float) env('TWILIO_USD_PER_MIN', 0.0338);
+            $phoneCostUsd = $billedMinutes * $phoneRatePerMin;
+        }
+
+        $totalUsd = $voiceCostUsd + $phoneCostUsd;
+        $totalWithMarkupUsd = $totalUsd * (1 + $markupPercent / 100);
+
+        // Recording URL
+        $recordingUrl = $artifact['stereoRecordingUrl'] 
+            ?? $artifact['recordingUrl'] 
+            ?? $vapiData['recordingUrl'] 
+            ?? null;
+
+        // Transcript
+        $transcript = $artifact['transcript'] ?? $vapiData['transcript'] ?? null;
+
+        // Determinar si fue exitosa - usar successEvaluation de VAPI si está disponible
+        $endedReason = $vapiData['endedReason'] ?? null;
+        $successEvaluation = $analysis['successEvaluation'] ?? null;
+        
+        // Razones que indican que NO hubo contacto real
+        $noContactReasons = ['no-answer', 'busy', 'dial-no-answer', 'dial-busy', 'customer-did-not-answer', 'customer-busy', 'machine-detected', 'voicemail', 'failed'];
+        
+        // Determinar si hubo contacto real (el cliente contestó y hubo conversación)
+        $wasContacted = $durationSeconds >= 10 && !in_array($endedReason, $noContactReasons);
+        
+        // Si VAPI proporciona successEvaluation, usarlo para determinar éxito del objetivo
+        if ($successEvaluation !== null) {
+            // successEvaluation puede ser boolean o string "true"/"false"
+            $callSuccessful = filter_var($successEvaluation, FILTER_VALIDATE_BOOLEAN);
+        } else {
+            // Fallback: si hubo contacto real, considerar exitosa (aunque haya terminado por silencio)
+            // silence-timed-out después de conversación = cliente contactado pero no cerró objetivo
+            $callSuccessful = $wasContacted;
+        }
+
+        // Actualizar llamada
+        $call->update([
+            'status' => $callSuccessful ? VoiceCampaignCall::STATUS_COMPLETED : VoiceCampaignCall::STATUS_FAILED,
+            'duration_seconds' => $durationSeconds,
+            'call_recording_url' => $recordingUrl,
+            'elevenlabs_cost_usd' => $voiceCostUsd,
+            'twilio_cost_usd' => $phoneCostUsd,
+            'twilio_minutes' => $billedMinutes,
+            'total_cost_usd' => $totalUsd,
+            'total_cost_with_markup_usd' => $totalWithMarkupUsd,
+            'call_result' => [
+                'transcript_summary' => $analysis['summary'] ?? null,
+                'call_successful' => $callSuccessful,
+                'termination_reason' => $endedReason,
+                'vapi_status' => 'ended',
+            ],
+        ]);
+
+        // Guardar transcript en metadata
+        if ($transcript) {
+            $meta = is_array($call->call_metadata) ? $call->call_metadata : [];
+            $meta['transcript'] = $transcript;
+            $meta['synced_from_vapi_at'] = now()->toIso8601String();
+            $call->update(['call_metadata' => $meta]);
         }
     }
 
@@ -1889,6 +2933,113 @@ Contexto de campaña: {$message}
             ]);
         } catch (\Throwable $e) {
             return response()->json(['success' => false, 'message' => 'Error al cancelar campaña'], 500);
+        }
+    }
+
+    /**
+     * Ejecutar campaña manualmente
+     * POST /saas/voice-campaigns/{id}/execute
+     */
+    public function execute(Request $request, int $id): JsonResponse
+    {
+        try {
+            $brokerId = (int) $this->getBrokerId($request);
+            $campaign = VoiceCampaign::forBroker($brokerId)->where('id', $id)->first();
+
+            if (!$campaign) {
+                return response()->json(['success' => false, 'message' => 'Campaña no encontrada'], 404);
+            }
+
+            // Verificar que la campaña tenga contactos
+            if (empty($campaign->contacts) || count($campaign->contacts) === 0) {
+                return response()->json([
+                    'success' => false, 
+                    'message' => 'La campaña no tiene contactos configurados'
+                ], 400);
+            }
+
+            // Solo permitir ejecutar campañas en draft, scheduled o paused
+            $allowedStatuses = [VoiceCampaign::STATUS_DRAFT, VoiceCampaign::STATUS_SCHEDULED, VoiceCampaign::STATUS_PAUSED];
+            if (!in_array($campaign->status, $allowedStatuses)) {
+                return response()->json([
+                    'success' => false, 
+                    'message' => 'Solo se pueden ejecutar campañas en estado borrador, programadas o pausadas. Estado actual: ' . $campaign->status
+                ], 400);
+            }
+
+            Log::info('🔊 [VOICE CAMPAIGN] Executing campaign manually', [
+                'campaign_id' => $campaign->id,
+                'campaign_name' => $campaign->name,
+                'contacts_count' => count($campaign->contacts)
+            ]);
+
+            // Ejecutar la campaña
+            $execution = $this->executeVoiceCampaign($campaign);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña ejecutada exitosamente',
+                'execution_id' => $execution->id,
+                'data' => $campaign->fresh()
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al ejecutar campaña', [
+                'campaign_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'success' => false, 
+                'message' => 'Error al ejecutar campaña: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Reiniciar/Repetir campaña (para campañas completadas o canceladas)
+     * POST /saas/voice-campaigns/{id}/restart
+     */
+    public function restart(Request $request, int $id): JsonResponse
+    {
+        try {
+            $brokerId = (int) $this->getBrokerId($request);
+            $campaign = VoiceCampaign::forBroker($brokerId)->where('id', $id)->first();
+
+            if (!$campaign) {
+                return response()->json(['success' => false, 'message' => 'Campaña no encontrada'], 404);
+            }
+
+            // Solo permitir reiniciar campañas completadas o canceladas
+            if (!in_array($campaign->status, [VoiceCampaign::STATUS_COMPLETED, VoiceCampaign::STATUS_CANCELLED])) {
+                return response()->json([
+                    'success' => false, 
+                    'message' => 'Solo se pueden reiniciar campañas completadas o canceladas'
+                ], 400);
+            }
+
+            // Resetear el estado de la campaña
+            $campaign->update([
+                'is_active' => true,
+                'status' => VoiceCampaign::STATUS_RUNNING,
+                'last_execution' => now(),
+            ]);
+
+            // Habilitar triggers
+            $this->setTriggersEnabled((int)$campaign->id, true);
+
+            // Ejecutar la campaña
+            $result = $this->execute($request, $id);
+            $resultData = json_decode($result->getContent(), true);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campaña reiniciada y ejecutándose',
+                'data' => $campaign->fresh(),
+                'execution_id' => $resultData['execution_id'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al reiniciar campaña', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al reiniciar campaña: ' . $e->getMessage()], 500);
         }
     }
 

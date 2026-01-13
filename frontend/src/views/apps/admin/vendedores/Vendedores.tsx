@@ -5,6 +5,7 @@ import { Icon } from '@iconify/react';
 import { useVendedores } from 'src/hooks/useAdminCrudApi';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import { useTerminologia } from 'src/context/TerminologiaContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import saasApi from 'src/services/saasApi';
 import type { Vendedor as VendedorType, VendedorCreate } from 'src/types/admin';
@@ -52,10 +53,51 @@ const Vendedores = () => {
   const { vendedores, loading, error, createVendedor, updateVendedor, deleteVendedor } = useVendedores();
   const { tenant, usuarioSaas } = useUnifiedAuth();
   const { terminologia } = useTerminologia();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<VendedorType | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'lista' | 'reportes' | 'liquidaciones'>('lista');
+  
+  // Abrir vendedor desde query param (búsqueda global)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openVendedorId = params.get('open_vendedor_id');
+    
+    if (openVendedorId && vendedores.length > 0) {
+      const vendedor = vendedores.find(v => String(v.id) === openVendedorId);
+      if (vendedor) {
+        setSelectedItem(vendedor);
+        setIsEditing(true);
+        // Inicializar formData con los datos del vendedor
+        setFormData({ 
+          nombres: vendedor.nombres || '',
+          tipo_documento: vendedor.tipo_documento || 'CC',
+          numero_documento: vendedor.numero_documento || '',
+          telefono: vendedor.telefono || '',
+          celular: vendedor.celular || '',
+          email: vendedor.email || '',
+          cuenta_bancaria: vendedor.cuenta_bancaria || '',
+          tipo_persona: vendedor.tipo_persona || 'natural',
+          tipo_retencion: vendedor.tipo_retencion || undefined,
+          es_agencia: vendedor.es_agencia ?? false,
+          porcentaje_comision: parseFloat(String(vendedor.porcentaje_comision)) || 0,
+          calcular_comision_sobre: vendedor.calcular_comision_sobre || 'agencia',
+          porcentaje_retencion: parseFloat(String(vendedor.porcentaje_retencion)) || 0,
+          porcentaje_retencion_ica: parseFloat(String(vendedor.porcentaje_retencion_ica)) || 0,
+          porcentaje_iva: parseFloat(String(vendedor.porcentaje_iva)) || 0,
+          porcentaje_retencion_iva: parseFloat(String(vendedor.porcentaje_retencion_iva)) || 0,
+          comisiones_diferentes_por_ano: vendedor.comisiones_diferentes_por_ano ?? false,
+          fecha_vinculacion: vendedor.fecha_vinculacion || undefined
+        });
+        setShowModal(true);
+        // Limpiar el query param
+        params.delete('open_vendedor_id');
+        navigate(`${location.pathname}${params.toString() ? `?${params.toString()}` : ''}`, { replace: true });
+      }
+    }
+  }, [location.search, vendedores, navigate, location.pathname]);
   
   // Estados para búsqueda y paginación
   const [searchTerm, setSearchTerm] = useState('');

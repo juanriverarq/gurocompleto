@@ -7,6 +7,7 @@ use App\Models\Poliza;
 use App\Models\Cliente;
 use App\Models\VentasCruzadasAnalisis;
 use App\Services\VentasCruzadasIAService;
+use App\Services\ScoringVentasCruzadasService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -14,10 +15,12 @@ use Illuminate\Support\Facades\Log;
 class VentasCruzadasController extends Controller
 {
     protected $iaService;
+    protected $scoringService;
 
-    public function __construct(VentasCruzadasIAService $iaService)
+    public function __construct(VentasCruzadasIAService $iaService, ScoringVentasCruzadasService $scoringService)
     {
         $this->iaService = $iaService;
+        $this->scoringService = $scoringService;
     }
 
     /**
@@ -153,11 +156,14 @@ class VentasCruzadasController extends Controller
 
     /**
      * Convertir recomendación de IA a formato de oportunidad
+     * Usa el nuevo sistema de scoring profesional multidimensional
      */
     private function convertirRecomendacionAOportunidad(array $recomendacion, Poliza $poliza, int $index): array
     {
         $cliente = $poliza->client;
-        $probabilidad = ($recomendacion['probabilidad_conversion'] ?? 0.5) * 100;
+        
+        // Usar el nuevo sistema de scoring profesional
+        $scoring = $this->scoringService->calcularScore($poliza, $cliente, $recomendacion);
 
         $nombreCliente = $poliza->client_name;
         if ($cliente) {
@@ -175,20 +181,26 @@ class VentasCruzadasController extends Controller
             'tipoActual' => $poliza->ramo ? $poliza->ramo->nombre : ($poliza->type ?? 'Desconocido'),
             'oportunidad' => $recomendacion['producto'] ?? 'Producto recomendado',
             'tipoOportunidad' => $this->determinarTipoOportunidad($recomendacion['producto'] ?? ''),
-            'scoring' => round($probabilidad),
-            'probabilidad' => round($probabilidad),
-            'valorEstimado' => $this->estimarValor($recomendacion),
+            'scoring' => $scoring['score_total'],
+            'probabilidad' => $scoring['score_total'],
+            'valorEstimado' => 'Cotizar',
             'razonamiento' => $recomendacion['motivo'] ?? '',
             'estado' => $this->mapearNivelUrgencia($recomendacion['nivel_urgencia'] ?? 'Media'),
             'estadoColor' => $this->getEstadoColor($this->mapearNivelUrgencia($recomendacion['nivel_urgencia'] ?? 'Media')),
             'fechaDeteccion' => now()->format('d/m/Y'),
-            'accionRecomendada' => $recomendacion['canal_recomendado'] ?? 'WhatsApp',
+            'accionRecomendada' => $scoring['recomendacion_accion'],
             'vendedor_id' => $poliza->assigned_user_id,
             'vendedor_nombre' => $poliza->assignedUser ? $poliza->assignedUser->name : $poliza->seller_name,
             'mensaje_ia' => $recomendacion['mensaje'] ?? '',
             'cta' => $recomendacion['cta'] ?? 'Más información',
             'proteccion_complementaria' => $recomendacion['proteccion_complementaria'] ?? '',
-            'aseguradora_recomendada' => $recomendacion['aseguradora'] ?? ''
+            'aseguradora_recomendada' => $recomendacion['aseguradora'] ?? '',
+            // Nuevo: Información detallada del scoring
+            'scoring_detalle' => [
+                'confianza' => $scoring['confianza'],
+                'factores' => $scoring['factores_principales'],
+                'dimensiones' => $scoring['dimensiones']
+            ]
         ];
     }
 
@@ -209,28 +221,11 @@ class VentasCruzadasController extends Controller
     }
 
     /**
-     * Estimar valor del producto recomendado
+     * Ya no estimamos valores - se debe cotizar para conocer el precio real
      */
     private function estimarValor(array $recomendacion): string
     {
-        $producto = strtolower($recomendacion['producto'] ?? '');
-        
-        // Estimaciones basadas en promedios del mercado colombiano
-        $valor = 2000000; // Valor por defecto
-        
-        if (str_contains($producto, 'vida')) {
-            $valor = rand(1500000, 4000000);
-        } elseif (str_contains($producto, 'hogar')) {
-            $valor = rand(1000000, 3000000);
-        } elseif (str_contains($producto, 'salud')) {
-            $valor = rand(2000000, 5000000);
-        } elseif (str_contains($producto, 'soat')) {
-            $valor = rand(400000, 800000);
-        } elseif (str_contains($producto, 'empresarial')) {
-            $valor = rand(5000000, 15000000);
-        }
-
-        return '$' . number_format($valor, 0, ',', '.');
+        return 'Cotizar'; // No inventamos valores, se debe cotizar
     }
 
     /**

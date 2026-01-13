@@ -35,14 +35,6 @@ const appsLink: appsLinkType[] = [
   },
   {
     href: "#",
-    title: "Análisis Predictivo",
-    subtext: "Predicciones de riesgo y renovación",
-    icon: "solar:graph-up-bold-duotone",
-    iconbg: "bg-lighterror",
-    iconcolor: "text-error",
-  },
-  {
-    href: "#",
     title: "Automatización Siniestros",
     subtext: "Procesamiento inteligente de reclamaciones",
     icon: "solar:shield-check-bold-duotone",

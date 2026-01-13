@@ -1,5 +1,5 @@
-import Banner1 from "/src/assets/images/landingpage/background/bannerimg1.png";
-import Banner2 from "/src/assets/images/landingpage/background/bannerimg2.png";
+import Banner1 from "/src/assets/images/landingpage/background/bannerimg1.webp";
+import Banner2 from "/src/assets/images/landingpage/background/bannerimg2.webp";
 import { Button } from "flowbite-react";
 import { IconShield } from "@tabler/icons-react";
 import { Link } from "react-router";
@@ -66,18 +66,42 @@ const banner = () => {
                 <div className="flex flex-row">
                   <div>
                     <div className="animateUp">
-                      <img src={Banner1} alt="Software de seguros Guro - Dashboard de gestión de pólizas con inteligencia artificial" />
+                      <img 
+                        src={Banner1} 
+                        alt="Software de seguros Guro - Dashboard de gestión de pólizas con inteligencia artificial" 
+                        width={368} 
+                        height={836} 
+                        fetchPriority="high"
+                      />
                     </div>
                     <div className="animateUp">
-                      <img src={Banner1} alt="Agencia de seguros digital - Plataforma Guro con IA para automatización" />
+                      <img 
+                        src={Banner1} 
+                        alt="Agencia de seguros digital - Plataforma Guro con IA para automatización" 
+                        width={368} 
+                        height={836} 
+                        loading="lazy"
+                      />
                     </div>
                   </div>
                   <div>
                     <div className="animateDown">
-                      <img src={Banner2} alt="Guro IA - Software de seguros para gestión de siniestros y análisis predictivo" />
+                      <img 
+                        src={Banner2} 
+                        alt="Guro IA - Software de seguros para gestión de siniestros y análisis predictivo" 
+                        width={368} 
+                        height={836} 
+                        fetchPriority="high"
+                      />
                     </div>
                     <div className="animateDown">
-                      <img src={Banner2} alt="Inteligencia artificial en seguros - CRM y cotizaciones automáticas con Guro" />
+                      <img 
+                        src={Banner2} 
+                        alt="Inteligencia artificial en seguros - CRM y cotizaciones automáticas con Guro" 
+                        width={368} 
+                        height={836} 
+                        loading="lazy"
+                      />
                     </div>
                   </div>
                 </div>

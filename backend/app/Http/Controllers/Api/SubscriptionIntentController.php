@@ -23,14 +23,15 @@ class SubscriptionIntentController extends Controller
             $source = $request->input('source', 'pricing_calculator');
 
             // Validación diferente según el source
-            if ($source === 'onboarding_flow') {
-                // Flujo de onboarding simplificado
+            if ($source === 'onboarding_flow' || $source === 'sura_onboarding_flow') {
+                // Flujo de onboarding simplificado (normal o Sura)
                 $validator = Validator::make($request->all(), [
                     'modules' => 'required|array',
                     'phone' => 'nullable|string|max:32',
                     'employeeCount' => 'nullable|string|max:16',
                     'businessType' => 'nullable|string|max:64',
                     'source' => 'nullable|string|max:64',
+                    'coupon' => 'nullable|array',
                 ]);
             } else {
                 // Flujo de pricing calculator
@@ -60,16 +61,23 @@ class SubscriptionIntentController extends Controller
                 'source' => $source,
             ];
 
-            if ($source === 'onboarding_flow') {
-                // Datos del flujo de onboarding
+            if ($source === 'onboarding_flow' || $source === 'sura_onboarding_flow') {
+                // Datos del flujo de onboarding (normal o Sura)
                 $intentData['users_count'] = 1; // Por defecto 1 usuario en trial
-                $intentData['period'] = 'monthly'; // Por defecto mensual
-                $intentData['storage_gb'] = 5; // Por defecto 5GB
+                $intentData['period'] = 'annual'; // Por defecto anual para aprovechar descuentos
+                $intentData['storage_gb'] = 10; // Por defecto 10GB
+                
+                // Guardar cupón si existe
+                $coupon = $request->input('coupon');
+                
                 $intentData['totals'] = [
                     'phone' => $request->input('phone'),
                     'employee_count' => $request->input('employeeCount'),
                     'business_type' => $request->input('businessType'),
                 ];
+                
+                // Guardar cupón en el intent
+                $intentData['coupon'] = $coupon;
 
                 // Actualizar teléfono del usuario si se proporcionó
                 if ($request->filled('phone')) {

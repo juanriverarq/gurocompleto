@@ -131,7 +131,7 @@
                 @foreach($detalles as $detalle)
                 <tr>
                     <td>{{ $detalle->numero_poliza }}</td>
-                    <td>{{ $detalle->cliente }}</td>
+                    <td>{{ $detalle->cliente_nombre }}</td>
                     <td>{{ $detalle->aseguradora }}</td>
                     <td>{{ $detalle->ramo }}</td>
                     <td class="right">${{ number_format($detalle->prima_neta, 0, ',', '.') }}</td>

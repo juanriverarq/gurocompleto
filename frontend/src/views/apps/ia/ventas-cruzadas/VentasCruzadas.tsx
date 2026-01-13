@@ -1,15 +1,14 @@
 import { useState, useContext, useEffect } from 'react';
 import { useReactTable, createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, SortingState } from '@tanstack/react-table';
-import { Badge, Button, Card, Progress, Spinner, Modal, Alert } from 'flowbite-react';
+import { Button, Card, Progress, Spinner, Modal, Label, TextInput, Textarea, Select } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { CustomizerContext } from 'src/context/CustomizerContext';
 import ventasCruzadasService, { OportunidadVentasCruzadas, EstadisticasVentasCruzadas } from 'src/services/ventasCruzadasService';
+import { seguimientoService, CreateSeguimientoData } from 'src/services/seguimientoService';
 import { useToast } from 'src/hooks/use-toast';
 
 
 export interface OportunidadType extends OportunidadVentasCruzadas {}
-
-const oportunidadesData: OportunidadType[] = [];
 
 const getTipoIcon = (tipo: string) => {
   switch (tipo) {
@@ -60,6 +59,25 @@ const VentasCruzadas = () => {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [selectedOp, setSelectedOp] = useState<OportunidadType | null>(null);
   const [showDetalle, setShowDetalle] = useState(false);
+  
+  // Estado para modal de crear tarea de seguimiento
+  const [showModalSeguimiento, setShowModalSeguimiento] = useState(false);
+  const [seguimientoLoading, setSeguimientoLoading] = useState(false);
+  const [seguimientoForm, setSeguimientoForm] = useState<{
+    title: string;
+    description: string;
+    type: string;
+    priority: string;
+    due_date: string;
+    contact_method: string;
+  }>({
+    title: '',
+    description: '',
+    type: 'seguimiento_cliente',
+    priority: 'media',
+    due_date: '',
+    contact_method: 'whatsapp'
+  });
 
   // Paginación estilo Pólizas
   const [pagination, setPagination] = useState<{ current_page: number; last_page: number; per_page: number; total: number; from: number; to: number } | null>(null);
@@ -122,80 +140,80 @@ const VentasCruzadas = () => {
     setShowDetalle(true);
   };
 
-  const handleIniciarContacto = async (op: OportunidadType) => {
-    try {
-      setActionLoadingId(op.id);
-      const mensaje = op.mensaje_ia && op.mensaje_ia.trim().length > 0
-        ? op.mensaje_ia
-        : `Hola ${op.cliente}, te escribimos respecto a ${op.oportunidad}. ¿Deseas que te compartamos una propuesta?`;
-      const res = await ventasCruzadasService.crearCampanaWhatsApp(op.id, { mensaje });
-      if (res.success) {
-        toast({ title: 'Contacto iniciado', description: `Se creó campaña de WhatsApp para ${op.cliente}` });
-      } else {
-        toast({ title: 'Error', description: res.message || 'No se pudo iniciar el contacto', variant: 'destructive' });
-      }
-    } catch (e) {
-      toast({ title: 'Error', description: 'No se pudo iniciar el contacto', variant: 'destructive' });
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleGenerarPropuesta = async (op: OportunidadType) => {
-    try {
-      setActionLoadingId(op.id);
-      const tipo = op.tipoOportunidad || 'general';
-      const valor = Number(String(op.valorEstimado || '0').replace(/[^\d]/g, '')) || 0;
-      const res = await ventasCruzadasService.generarCotizacion(op.id, { tipo_seguro: tipo, valor_asegurado: valor, observaciones: `Propuesta generada desde oportunidades para ${op.cliente}` });
-      if (res.success) {
-        toast({ title: 'Propuesta generada', description: `Se generó la cotización para ${op.cliente}` });
-      } else {
-        toast({ title: 'Error', description: res.message || 'No se pudo generar la propuesta', variant: 'destructive' });
-      }
-    } catch (e) {
-      toast({ title: 'Error', description: 'No se pudo generar la propuesta', variant: 'destructive' });
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleDescartar = async (op: OportunidadType) => {
+  const handleEliminar = async (op: OportunidadType) => {
     try {
       setActionLoadingId(op.id);
       const res = await ventasCruzadasService.ejecutarAccion(op.id, 'descartar_oportunidad', {});
       if (res.success) {
         setData(prev => prev.filter(x => x.id !== op.id));
-        toast({ title: 'Oportunidad descartada', description: `${op.cliente} - ${op.oportunidad}` });
+        toast({ title: 'Oportunidad eliminada', description: `${op.cliente} - ${op.oportunidad}` });
       } else {
-        toast({ title: 'Error', description: res.message || 'No se pudo descartar la oportunidad', variant: 'destructive' });
+        toast({ title: 'Error', description: res.message || 'No se pudo eliminar la oportunidad', variant: 'destructive' });
       }
     } catch (e) {
-      toast({ title: 'Error', description: 'No se pudo descartar la oportunidad', variant: 'destructive' });
+      toast({ title: 'Error', description: 'No se pudo eliminar la oportunidad', variant: 'destructive' });
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const handleCampanaMasiva = async () => {
+  const handleAbrirModalSeguimiento = (op: OportunidadType) => {
+    setSelectedOp(op);
+    // Pre-llenar el formulario con datos de la oportunidad
+    const prioridad = op.estado.includes('Alta') ? 'alta' : op.estado.includes('Media') ? 'media' : 'baja';
+    const fechaVencimiento = new Date();
+    fechaVencimiento.setDate(fechaVencimiento.getDate() + 7); // Por defecto 7 días
+    
+    setSeguimientoForm({
+      title: `Venta cruzada: ${op.oportunidad}`,
+      description: `Cliente: ${op.cliente}\nProducto actual: ${op.tipoActual} - ${op.polizaActual}\nOportunidad: ${op.oportunidad}\n\nRazonamiento: ${op.razonamiento}`,
+      type: 'seguimiento_cliente',
+      priority: prioridad,
+      due_date: fechaVencimiento.toISOString().split('T')[0],
+      contact_method: 'whatsapp'
+    });
+    setShowModalSeguimiento(true);
+  };
+
+  const handleCrearTareaSeguimiento = async () => {
+    if (!selectedOp) return;
+    
     try {
-      setLoading(true);
-      let ok = 0, fail = 0;
-      for (const op of data) {
-        const mensaje = op.mensaje_ia && op.mensaje_ia.trim().length > 0
-          ? op.mensaje_ia
-          : `Hola ${op.cliente}, te compartimos información sobre ${op.oportunidad}. ¿Deseas recibir una propuesta?`;
-        try {
-          const res = await ventasCruzadasService.crearCampanaWhatsApp(op.id, { mensaje });
-          if (res.success) ok++; else fail++;
-        } catch {
-          fail++;
-        }
+      setSeguimientoLoading(true);
+      
+      const data: CreateSeguimientoData = {
+        title: seguimientoForm.title,
+        description: seguimientoForm.description,
+        type: seguimientoForm.type as CreateSeguimientoData['type'],
+        priority: seguimientoForm.priority as CreateSeguimientoData['priority'],
+        client_id: selectedOp.cliente_id,
+        due_date: seguimientoForm.due_date,
+        contact_method: seguimientoForm.contact_method as CreateSeguimientoData['contact_method'],
+        has_reminder: true,
+        reminder_at: seguimientoForm.due_date
+      };
+
+      const result = await seguimientoService.createSeguimiento(data);
+      
+      if (result) {
+        toast({
+          title: 'Tarea creada',
+          description: `Se creó la tarea de seguimiento para ${selectedOp.cliente}`
+        });
+        setShowModalSeguimiento(false);
+        setSelectedOp(null);
       }
-      toast({ title: 'Campaña masiva', description: `Enviadas: ${ok}. Fallidas: ${fail}.` });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'No se pudo crear la tarea de seguimiento',
+        variant: 'destructive'
+      });
     } finally {
-      setLoading(false);
+      setSeguimientoLoading(false);
     }
   };
+
 
   // Columnas (definidas aquí para acceder a handlers)
   const columns = [
@@ -255,15 +273,6 @@ const VentasCruzadas = () => {
       header: () => <span>Scoring IA</span>,
       meta: { sortType: 'numeric' }
     }),
-    columnHelper.accessor('estado', {
-      cell: info => (
-        <Badge color={info.row.original.estadoColor} className="capitalize">
-          {info.getValue()}
-        </Badge>
-      ),
-      header: () => <span>Prioridad</span>,
-      meta: { sortType: 'alphanumeric' }
-    }),
     columnHelper.accessor('fechaDeteccion', {
       cell: info => (
         <div>
@@ -287,14 +296,11 @@ const VentasCruzadas = () => {
             <Button size="xs" color="primary" title="Ver análisis completo" onClick={() => handleVerAnalisis(op)} disabled={disabled}>
               <Icon icon="solar:eye-bold" width={16} />
             </Button>
-            <Button size="xs" color="success" title="Iniciar contacto" onClick={() => handleIniciarContacto(op)} disabled={disabled}>
-              <Icon icon="solar:phone-bold" width={16} />
+            <Button size="xs" color="success" title="Crear tarea de seguimiento" onClick={() => handleAbrirModalSeguimiento(op)} disabled={disabled}>
+              <Icon icon="solar:clipboard-check-bold" width={16} />
             </Button>
-            <Button size="xs" color="info" title="Generar propuesta" onClick={() => handleGenerarPropuesta(op)} disabled={disabled}>
-              <Icon icon="solar:document-text-bold" width={16} />
-            </Button>
-            <Button size="xs" color="light" className="!text-gray-500" title="Descartar" onClick={() => handleDescartar(op)} disabled={disabled}>
-              <Icon icon="solar:close-circle-bold" width={16} />
+            <Button size="xs" color="failure" title="Eliminar" onClick={() => handleEliminar(op)} disabled={disabled}>
+              <Icon icon="solar:trash-bin-trash-bold" width={16} />
             </Button>
           </div>
         );
@@ -374,15 +380,13 @@ const VentasCruzadas = () => {
 
   // Estadísticas
   const totalOportunidades = estadisticas?.total_oportunidades || pagination?.total || data.length;
-  const altaPrioridad = estadisticas?.alta_prioridad || data.filter(o => o.estado === 'Alta Prioridad' || o.estado === 'Crítica').length;
-  const valorTotal = estadisticas?.valor_total_estimado || data.reduce((acc, o) => acc + parseFloat(o.valorEstimado.replace(/[$,.]/g, '')), 0);
   const scoringPromedio = estadisticas?.scoring_promedio || (data.length > 0 ? data.reduce((acc, o) => acc + o.scoring, 0) / data.length : 0);
 
   return (
     <>
       
       {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <Card className="p-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-primary/10 rounded-lg">
@@ -393,34 +397,6 @@ const VentasCruzadas = () => {
                 {loading ? <Spinner size="sm" /> : totalOportunidades}
               </h3>
               <p className="text-sm text-gray-500">Oportunidades Detectadas</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-failure/10 rounded-lg">
-              <Icon icon="solar:fire-bold" className="text-failure" width={24} />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-dark dark:text-white">
-                {loading ? <Spinner size="sm" /> : altaPrioridad}
-              </h3>
-              <p className="text-sm text-gray-500">Alta Prioridad</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-success/10 rounded-lg">
-              <Icon icon="solar:dollar-bold" className="text-success" width={24} />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-dark dark:text-white">
-                {loading ? <Spinner size="sm" /> : `$${(valorTotal / 1000000).toFixed(1)}M`}
-              </h3>
-              <p className="text-sm text-gray-500">Valor Potencial</p>
             </div>
           </div>
         </Card>
@@ -461,15 +437,6 @@ const VentasCruzadas = () => {
             <Icon icon="solar:refresh-bold" className="mr-2" width={16} />
             {loading ? 'Analizando...' : 'Actualizar IA'}
           </Button>
-          <Button
-            color="success"
-            size="sm"
-            onClick={handleCampanaMasiva}
-            disabled={loading || (data.length === 0)}
-          >
-            <Icon icon="solar:phone-calling-bold" className="mr-2" width={16} />
-            Campaña Masiva
-          </Button>
         </div>
       </div>
 
@@ -505,22 +472,12 @@ const VentasCruzadas = () => {
                 <span>Datos reales del cliente</span>
               </div>
             </div>
-            {estadisticas?.estadisticas_ia && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500">
-                  <div>
-                    <span className="font-semibold">Análisis vigentes:</span> {estadisticas.estadisticas_ia.analisis_vigentes}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Total consultas:</span> {estadisticas.estadisticas_ia.total_consultas}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Recomendaciones:</span> {estadisticas.estadisticas_ia.recomendaciones_generadas}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Último análisis:</span> {estadisticas.estadisticas_ia.ultimo_analisis ? new Date(estadisticas.estadisticas_ia.ultimo_analisis).toLocaleDateString() : 'N/A'}
-                  </div>
-                </div>
+            {estadisticas?.estadisticas_ia?.ultimo_analisis && (
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <span className="text-xs text-gray-500">
+                  <Icon icon="solar:calendar-bold" className="inline mr-1" width={14} />
+                  Último análisis: {new Date(estadisticas.estadisticas_ia.ultimo_analisis).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
             )}
           </div>
@@ -549,10 +506,12 @@ const VentasCruzadas = () => {
             <p className="text-gray-500 mb-4">
               No hay oportunidades de ventas cruzadas detectadas en este momento.
             </p>
-            <Button onClick={() => window.location.reload()}>
-              <Icon icon="solar:refresh-bold" className="mr-2" width={16} />
-              Actualizar Análisis
-            </Button>
+            <div className="flex justify-center">
+              <Button onClick={() => window.location.reload()}>
+                <Icon icon="solar:refresh-bold" className="mr-2" width={16} />
+                Actualizar Análisis
+              </Button>
+            </div>
           </div>
         </Card>
       ) : (
@@ -658,64 +617,286 @@ const VentasCruzadas = () => {
         </Card>
       )}
 
-      {/* Modal Detalle de Oportunidad */}
-      <Modal show={showDetalle} onClose={() => setShowDetalle(false)}>
-        <Modal.Header>Detalle de Oportunidad</Modal.Header>
+      {/* Modal Crear Tarea de Seguimiento */}
+      <Modal show={showModalSeguimiento} onClose={() => setShowModalSeguimiento(false)} size="lg">
+        <Modal.Header>
+          <div className="flex items-center gap-2">
+            <Icon icon="solar:clipboard-check-bold-duotone" className="text-green-500" width={24} />
+            Crear Tarea de Seguimiento Comercial
+          </div>
+        </Modal.Header>
         <Modal.Body>
-          {selectedOp ? (
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-gray-500">Cliente</div>
-                  <div className="font-medium">{selectedOp.cliente}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Póliza</div>
-                  <div className="font-medium">{selectedOp.polizaActual}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Tipo Actual</div>
-                  <div className="font-medium uppercase">{selectedOp.tipoActual}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Oportunidad</div>
-                  <div className="font-medium">{selectedOp.oportunidad}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Prioridad</div>
-                  <Badge color={selectedOp.estadoColor}>{selectedOp.estado}</Badge>
-                </div>
-                <div>
-                  <div className="text-gray-500">Scoring / Prob</div>
-                  <div className="font-medium">{selectedOp.scoring}% / {selectedOp.probabilidad}%</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Aseguradora Recomendada</div>
-                  <div className="font-medium">{selectedOp.aseguradora_recomendada || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Vendedor</div>
-                  <div className="font-medium">{selectedOp.vendedor_nombre || '-'}</div>
+          <div className="space-y-4">
+            {selectedOp && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Cliente:</strong> {selectedOp.cliente} | <strong>Oportunidad:</strong> {selectedOp.oportunidad}
                 </div>
               </div>
-              {selectedOp.mensaje_ia && (
-                <div>
-                  <div className="text-gray-500">Mensaje sugerido</div>
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded">{selectedOp.mensaje_ia}</div>
-                </div>
+            )}
+            
+            <div>
+              <Label htmlFor="seg-title" value="Título de la tarea" className="mb-2 block" />
+              <TextInput
+                id="seg-title"
+                value={seguimientoForm.title}
+                onChange={(e) => setSeguimientoForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="Título de la tarea"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="seg-description" value="Descripción" className="mb-2 block" />
+              <Textarea
+                id="seg-description"
+                value={seguimientoForm.description}
+                onChange={(e) => setSeguimientoForm(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
+                placeholder="Descripción detallada..."
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="seg-type" value="Tipo de tarea" className="mb-2 block" />
+                <Select
+                  id="seg-type"
+                  value={seguimientoForm.type}
+                  onChange={(e) => setSeguimientoForm(prev => ({ ...prev, type: e.target.value }))}
+                >
+                  <option value="seguimiento_cliente">Seguimiento Cliente</option>
+                  <option value="llamada">Llamada</option>
+                  <option value="reunion">Reunión</option>
+                  <option value="cotizacion">Cotización</option>
+                  <option value="email">Email</option>
+                  <option value="visita">Visita</option>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="seg-priority" value="Prioridad" className="mb-2 block" />
+                <Select
+                  id="seg-priority"
+                  value={seguimientoForm.priority}
+                  onChange={(e) => setSeguimientoForm(prev => ({ ...prev, priority: e.target.value }))}
+                >
+                  <option value="baja">Baja</option>
+                  <option value="media">Media</option>
+                  <option value="alta">Alta</option>
+                  <option value="critica">Crítica</option>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="seg-due-date" value="Fecha límite" className="mb-2 block" />
+                <TextInput
+                  id="seg-due-date"
+                  type="date"
+                  value={seguimientoForm.due_date}
+                  onChange={(e) => setSeguimientoForm(prev => ({ ...prev, due_date: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="seg-contact" value="Método de contacto" className="mb-2 block" />
+                <Select
+                  id="seg-contact"
+                  value={seguimientoForm.contact_method}
+                  onChange={(e) => setSeguimientoForm(prev => ({ ...prev, contact_method: e.target.value }))}
+                >
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="phone">Teléfono</option>
+                  <option value="email">Email</option>
+                  <option value="in_person">Presencial</option>
+                  <option value="video_call">Videollamada</option>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <div className="flex justify-end gap-3 w-full">
+            <Button color="gray" onClick={() => setShowModalSeguimiento(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              color="success" 
+              onClick={handleCrearTareaSeguimiento}
+              disabled={seguimientoLoading || !seguimientoForm.title}
+            >
+              {seguimientoLoading ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  Creando...
+                </>
+              ) : (
+                <>
+                  <Icon icon="solar:clipboard-check-bold" className="mr-2" width={16} />
+                  Crear Tarea
+                </>
               )}
+            </Button>
+          </div>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal Detalle de Oportunidad - Mejorado */}
+      <Modal show={showDetalle} onClose={() => setShowDetalle(false)} size="xl">
+        <Modal.Header>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Icon icon={getTipoIcon(selectedOp?.tipoOportunidad || 'otro')} className="text-primary" width={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Oportunidad de Venta Cruzada</h3>
+              <p className="text-sm text-gray-500">{selectedOp?.oportunidad}</p>
+            </div>
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedOp ? (
+            <div className="space-y-6">
+              {/* Información del Cliente */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon icon="solar:user-bold" className="text-blue-600" width={20} />
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-200">Información del Cliente</h4>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500 dark:text-gray-400">Nombre</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">{selectedOp.cliente}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 dark:text-gray-400">Póliza Actual</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">{selectedOp.polizaActual}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 dark:text-gray-400">Producto Actual</div>
+                    <div className="font-semibold text-gray-900 dark:text-white uppercase">{selectedOp.tipoActual}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 dark:text-gray-400">Vendedor Asignado</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">{selectedOp.vendedor_nombre || 'Sin asignar'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 dark:text-gray-400">Scoring de Conversión</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-lg text-primary">{selectedOp.scoring}%</span>
+                      <Progress progress={selectedOp.scoring} color={selectedOp.scoring >= 80 ? "green" : selectedOp.scoring >= 60 ? "yellow" : "blue"} size="sm" className="w-20" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Producto Recomendado */}
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon icon="solar:gift-bold" className="text-green-600" width={20} />
+                  <h4 className="font-semibold text-green-800 dark:text-green-200">Producto Recomendado</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-500 dark:text-gray-400">Producto a Ofrecer</div>
+                    <div className="font-bold text-lg text-green-700 dark:text-green-300">{selectedOp.oportunidad}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 dark:text-gray-400">Aseguradora Sugerida</div>
+                    <div className="font-semibold text-gray-900 dark:text-white">{selectedOp.aseguradora_recomendada || 'Cualquiera disponible'}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Por qué este producto - Argumentos de venta */}
               {selectedOp.razonamiento && (
-                <div>
-                  <div className="text-gray-500">Motivo</div>
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded">{selectedOp.razonamiento}</div>
+                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon icon="solar:lightbulb-bolt-bold" className="text-amber-600" width={20} />
+                    <h4 className="font-semibold text-amber-800 dark:text-amber-200">¿Por qué este producto? - Argumentos de Venta</h4>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{selectedOp.razonamiento}</p>
                 </div>
               )}
+
+              {/* Protección Complementaria */}
               {selectedOp.proteccion_complementaria && (
-                <div>
-                  <div className="text-gray-500">Protección complementaria</div>
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded">{selectedOp.proteccion_complementaria}</div>
+                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon icon="solar:shield-check-bold" className="text-purple-600" width={20} />
+                    <h4 className="font-semibold text-purple-800 dark:text-purple-200">Beneficios para el Cliente</h4>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{selectedOp.proteccion_complementaria}</p>
                 </div>
               )}
+
+              {/* Mensaje Sugerido para Contacto */}
+              {selectedOp.mensaje_ia && (
+                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Icon icon="solar:chat-round-dots-bold" className="text-gray-600 dark:text-gray-400" width={20} />
+                      <h4 className="font-semibold text-gray-800 dark:text-gray-200">Mensaje Sugerido para WhatsApp</h4>
+                    </div>
+                    <Button 
+                      size="xs" 
+                      color="light"
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedOp.mensaje_ia || '');
+                        toast({ title: 'Copiado', description: 'Mensaje copiado al portapapeles' });
+                      }}
+                    >
+                      <Icon icon="solar:copy-bold" width={14} className="mr-1" />
+                      Copiar
+                    </Button>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <p className="text-gray-700 dark:text-gray-300 italic">"{selectedOp.mensaje_ia}"</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tips de Venta */}
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon icon="solar:star-bold" className="text-indigo-600" width={20} />
+                  <h4 className="font-semibold text-indigo-800 dark:text-indigo-200">Tips para el Contacto</h4>
+                </div>
+                <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                  <li className="flex items-start gap-2">
+                    <Icon icon="solar:check-circle-bold" className="text-indigo-500 mt-0.5" width={16} />
+                    <span>Menciona que ya es cliente y que valoras su confianza</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon icon="solar:check-circle-bold" className="text-indigo-500 mt-0.5" width={16} />
+                    <span>Explica cómo el nuevo producto complementa su cobertura actual</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon icon="solar:check-circle-bold" className="text-indigo-500 mt-0.5" width={16} />
+                    <span>Ofrece una cotización sin compromiso para que compare</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon icon="solar:check-circle-bold" className="text-indigo-500 mt-0.5" width={16} />
+                    <span>Pregunta si tiene alguna necesidad específica de protección</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Acción Recomendada */}
+              <div className="flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Icon icon="solar:phone-calling-bold" className="text-success" width={24} />
+                  <div>
+                    <div className="font-semibold text-gray-900 dark:text-white">Acción Recomendada</div>
+                    <div className="text-sm text-gray-500">{selectedOp.accionRecomendada || 'Contactar por WhatsApp'}</div>
+                  </div>
+                </div>
+                <Button color="success" size="sm" onClick={() => { setShowDetalle(false); handleAbrirModalSeguimiento(selectedOp); }}>
+                  <Icon icon="solar:clipboard-check-bold" className="mr-2" width={16} />
+                  Crear Tarea
+                </Button>
+              </div>
             </div>
           ) : null}
         </Modal.Body>

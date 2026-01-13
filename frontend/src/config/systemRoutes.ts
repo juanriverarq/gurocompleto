@@ -139,22 +139,6 @@ export const SYSTEM_ROUTES: RouteInfo[] = [
     category: 'ia',
     synonyms: ['ventas cruzadas', 'recomendaciones', 'cross-selling', 'productos adicionales']
   },
-  {
-    path: '/apps/ia/analisis-predictivo/predicciones',
-    title: 'Predicciones de venta',
-    description: 'Análisis predictivo y pronósticos de ventas',
-    keywords: ['predicciones', 'ventas', 'pronósticos', 'análisis', 'predictivo'],
-    category: 'ia',
-    synonyms: ['predicciones de venta', 'pronósticos de ventas', 'análisis predictivo', 'forecasting']
-  },
-  {
-    path: '/apps/ia/analisis-predictivo/modelos',
-    title: 'Modelos IA',
-    description: 'Gestión de modelos de inteligencia artificial',
-    keywords: ['modelos', 'ia', 'machine learning', 'algoritmos'],
-    category: 'ia',
-    synonyms: ['modelos ia', 'machine learning', 'algoritmos', 'modelos predictivos']
-  },
 
    // Marketing
     {

@@ -33,8 +33,8 @@ type Agent = ConversationalAgent;
 
 const AgentsManagement: React.FC = () => {
   const { usuarioSaas, tenant } = useUnifiedAuth();
-  const currentUserName = usuarioSaas?.nombre ? `${usuarioSaas.nombre.split(' ')[0]}` : 'Cliente';
-  const currentBrokerName = tenant?.nombre || 'Seguros Andina';
+  const currentUserName = usuarioSaas?.nombre ? `${usuarioSaas.nombre.split(' ')[0]}` : 'Juan';
+  const currentBrokerName = (tenant as any)?.branding?.nombre_comercial || (tenant as any)?.name || tenant?.nombre || 'Tu Agencia de Seguros';
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -264,26 +264,28 @@ const AgentsManagement: React.FC = () => {
                   const findByName = (search: string) => voices.find(v => norm(v.name).includes(norm(search)));
                   const curated: ModalVoiceItem[] = [
                     {
+                      code: 'AG',
+                      name: 'Angie',
+                      displayName: 'Angie',
+                      description: 'Español colombiano, femenina joven, voz ultrarealista y natural. ⭐ Recomendada',
+                      meta: { language: 'es', accent: 'colombian', age: 'young', gender: 'female' },
+                      isDefault: true,
+                      voice_id: 'YPh7OporwNAJ28F5IQrm' // ID fijo de Angie
+                    },
+                    {
                       code: 'CR',
                       name: 'Cristian sanchez',
                       displayName: 'Cristián Sánchez',
                       description: 'Español colombiano, masculino mediana edad, serio y confiable.',
-                      meta: { language: 'es', accent: 'colombian', age: 'middle_aged', gender: 'male' }
+                      meta: { language: 'es', accent: 'colombian', age: 'middle_aged', gender: 'male' },
+                      voice_id: 'sdxJtmxpzgSLekrYUGIu' // ID fijo de Cristián
                     },
                     {
                       code: 'MA',
                       name: 'Marcela - Colombian Girl',
                       displayName: 'Marcela',
                       description: 'Español colombiano, femenina joven, cálida y cercana.',
-                      meta: { language: 'es', accent: 'colombian', age: 'young', gender: 'female' },
-                      isDefault: true
-                    },
-                    {
-                      code: 'CL',
-                      name: 'Clau Bogotá - Natural & Neutral',
-                      displayName: 'Claudia',
-                      description: 'Español colombiano, femenina mediana edad, timbre neutro y profesional.',
-                      meta: { language: 'es', accent: 'colombian', age: 'middle_aged', gender: 'female' }
+                      meta: { language: 'es', accent: 'colombian', age: 'young', gender: 'female' }
                     },
                     {
                       code: 'SO',
@@ -314,6 +316,13 @@ const AgentsManagement: React.FC = () => {
                       meta: { language: 'es', accent: 'latin american', age: 'young', gender: 'female' }
                     }
                   ].map(item => {
+                    // Si ya tiene voice_id (como Angie), usarlo directamente
+                    if (item.voice_id) {
+                      return {
+                        ...item,
+                        disabled: false,
+                      } as ModalVoiceItem;
+                    }
                     const match = findByName(item.name) || (item.code === 'MA' ? findByName('Marcela') : undefined);
                     return {
                       ...item,
@@ -379,15 +388,15 @@ const AgentsManagement: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {availableVoices.map((v, idx) => {
-                let photoSrc = [real1, real2, real3, real4][idx % 4] as string;
-                if (v.displayName === 'Andrea') {
-                  photoSrc = real5;
-                } else if (v.displayName === 'Juan Restrepo') {
-                  photoSrc = real6;
-                } else if (v.displayName === 'Mariana') {
-                  photoSrc = real7;
-                }
+              {availableVoices.map((v) => {
+                let photoSrc = real1;
+                if (v.displayName === 'Angie') photoSrc = real1;
+                else if (v.displayName === 'Cristián Sánchez') photoSrc = real2;
+                else if (v.displayName === 'Marcela') photoSrc = real3;
+                else if (v.displayName === 'Sofía') photoSrc = real4;
+                else if (v.displayName === 'Andrea') photoSrc = real5;
+                else if (v.displayName === 'Juan Restrepo') photoSrc = real6;
+                else if (v.displayName === 'Mariana') photoSrc = real7;
   return (
                 <Card key={v.code} className="rounded-xl border border-gray-200 hover:border-gray-300 transition-colors">
                   <CardContent className="p-5">

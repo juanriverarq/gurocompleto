@@ -126,7 +126,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
       (clienteToEdit as any)?.departamento ||
       '',
     branch_name: (clienteToEdit as any)?.branch_name || (clienteToEdit as any)?.sede || '',
-    estado: normalizeEstadoToUi(clienteToEdit?.estado || 'prospecto'),
+    estado: normalizeEstadoToUi(clienteToEdit?.estado || 'activo'),
     observaciones: clienteToEdit?.observaciones || '',
     razon_social: '',
     representante_legal: '',
@@ -139,6 +139,89 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
   const { errors, validateStepAndSetErrors, clearError } = useClienteValidation();
   const formRef = useRef<HTMLFormElement>(null);
   const navigate = useNavigate();
+  
+  // Estado para validación de documento duplicado
+  const [documentoError, setDocumentoError] = useState<string | null>(null);
+  const [checkingDocumento, setCheckingDocumento] = useState(false);
+  const documentoCheckRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Verificar si todos los campos obligatorios están completos (sin mostrar errores)
+  const canSave = useCallback((): boolean => {
+    const isEmpresa = formData.client_type === 'empresa';
+    
+    // Campos obligatorios del paso 1
+    if (!formData.client_type) return false;
+    if (!isEmpresa) {
+      if (!formData.nombre?.trim()) return false;
+      if (!formData.apellidos?.trim()) return false;
+      if (!formData.genero) return false;
+    } else {
+      if (!formData.razon_social?.trim()) return false;
+    }
+    if (!formData.cuit?.trim() || formData.cuit.trim().length < 6) return false;
+    if (!formData.tipo_documento) return false;
+    if (!formData.email_principal?.trim()) return false;
+    if (!formData.celular_principal?.trim()) return false;
+    
+    // Campos obligatorios del paso 2
+    if (!formData.domicilio_principal?.trim() || formData.domicilio_principal.trim().length < 5) return false;
+    if (!formData.ciudad?.trim()) return false;
+    if (!formData.department?.trim()) return false;
+    if (!formData.estado) return false;
+    
+    // No permitir guardar si hay error de documento duplicado (solo en modo crear, no en editar)
+    if (documentoError && !isEditMode) return false;
+    
+    return true;
+  }, [formData, documentoError, isEditMode]);
+  
+  // Verificar documento duplicado con debounce
+  useEffect(() => {
+    if (documentoCheckRef.current) {
+      clearTimeout(documentoCheckRef.current);
+    }
+    
+    const documento = formData.cuit?.trim();
+    if (!documento || documento.length < 5) {
+      setDocumentoError(null);
+      setCheckingDocumento(false);
+      return;
+    }
+    
+    setCheckingDocumento(true);
+    documentoCheckRef.current = setTimeout(async () => {
+      try {
+        console.log('🔍 Iniciando verificación de documento:', documento);
+        const result = await clienteService.checkDocumentExists(
+          documento,
+          isEditMode ? clienteToEdit?.id : undefined
+        );
+        console.log('🔍 Resultado de verificación:', result);
+        if (result.exists && result.cliente) {
+          // El backend devuelve first_name/last_name, no nombre/apellidos
+          const cliente = result.cliente as any;
+          const nombreCliente = cliente.nombre || cliente.first_name || '';
+          const apellidosCliente = cliente.apellidos || cliente.last_name || '';
+          const razonSocial = cliente.razon_social || cliente.company || cliente.company_legal_name || '';
+          const displayName = razonSocial || `${nombreCliente} ${apellidosCliente}`.trim() || 'Cliente existente';
+          setDocumentoError(`Ya existe un cliente con este documento: ${displayName}`);
+        } else {
+          setDocumentoError(null);
+        }
+      } catch (e) {
+        console.error('Error verificando documento:', e);
+        setDocumentoError(null);
+      } finally {
+        setCheckingDocumento(false);
+      }
+    }, 500);
+    
+    return () => {
+      if (documentoCheckRef.current) {
+        clearTimeout(documentoCheckRef.current);
+      }
+    };
+  }, [formData.cuit, isEditMode, clienteToEdit?.id]);
 
   // Sincronizar cuando se abre en modo edición desde la modal
   useEffect(() => {
@@ -256,15 +339,17 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, forceSubmit: boolean = false) => {
     e.preventDefault();
 
-    if (currentStep < steps.length - 1) {
+    // Si no es forzado (botón Siguiente) y no está en el último paso, avanzar
+    if (!forceSubmit && currentStep < steps.length - 1) {
       nextStep();
       return;
     }
 
-    if (validateStep(currentStep)) {
+    // Validar todos los pasos antes de guardar
+    if (canSave()) {
       setIsLoading(true);
       try {
         const clienteData: Omit<Cliente, 'id' | 'created_at' | 'updated_at'> = {
@@ -381,6 +466,57 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                         ]}
                       />
 
+                      {/* Tipo de documento y número PRIMERO */}
+                      <FormField
+                        id="tipo_documento"
+                        name="tipo_documento"
+                        label="Tipo de Documento"
+                        value={formData.tipo_documento}
+                        onChange={handleInputChange}
+                        error={errors.tipo_documento}
+                        required
+                        type="select"
+                        options={
+                          formData.client_type === 'empresa'
+                            ? [{ value: 'NIT', label: 'NIT' }]
+                            : [
+                                { value: '', label: 'Seleccionar tipo' },
+                                { value: 'CC', label: 'Cédula de Ciudadanía' },
+                                { value: 'CE', label: 'Cédula de Extranjería' },
+                                { value: 'TI', label: 'Tarjeta de Identidad' },
+                                { value: 'PP', label: 'Pasaporte' },
+                              ]
+                        }
+                      />
+
+                      <div className="relative">
+                        <FormField
+                          id="cuit"
+                          name="cuit"
+                          label={formData.client_type === 'empresa' ? 'NIT' : 'Número de documento'}
+                          value={formData.cuit}
+                          onChange={handleInputChange}
+                          error={errors.cuit}
+                          required
+                          placeholder={
+                            formData.client_type === 'empresa' ? 'NIT' : 'Número de documento'
+                          }
+                          helperText={checkingDocumento ? 'Verificando...' : 'Solo números, 6-15 dígitos'}
+                        />
+                        {checkingDocumento && (
+                          <div className="absolute right-3 top-9">
+                            <Spinner size="sm" />
+                          </div>
+                        )}
+                        {!checkingDocumento && documentoError && !isEditMode && (
+                          <div className="flex items-center gap-1 mt-1 text-amber-600 text-xs">
+                            <Icon icon="solar:danger-triangle-bold" className="w-4 h-4" />
+                            <span>{documentoError}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Luego nombres/apellidos o razón social */}
                       {formData.client_type !== 'empresa' && (
                         <>
                           <FormField
@@ -454,43 +590,6 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                           />
                         </>
                       )}
-
-                      {/* Tipo de documento primero, luego número */}
-                      <FormField
-                        id="tipo_documento"
-                        name="tipo_documento"
-                        label="Tipo de Documento"
-                        value={formData.tipo_documento}
-                        onChange={handleInputChange}
-                        error={errors.tipo_documento}
-                        required
-                        type="select"
-                        options={
-                          formData.client_type === 'empresa'
-                            ? [{ value: 'NIT', label: 'NIT' }]
-                            : [
-                                { value: '', label: 'Seleccionar tipo' },
-                                { value: 'CC', label: 'Cédula de Ciudadanía' },
-                                { value: 'CE', label: 'Cédula de Extranjería' },
-                                { value: 'TI', label: 'Tarjeta de Identidad' },
-                                { value: 'PP', label: 'Pasaporte' },
-                              ]
-                        }
-                      />
-
-                      <FormField
-                        id="cuit"
-                        name="cuit"
-                        label={formData.client_type === 'empresa' ? 'NIT' : 'Número de documento'}
-                        value={formData.cuit}
-                        onChange={handleInputChange}
-                        error={errors.cuit}
-                        required
-                        placeholder={
-                          formData.client_type === 'empresa' ? 'NIT' : 'Número de documento'
-                        }
-                        helperText="Solo números, 6-15 dígitos"
-                      />
 
                       <div>
                         <Label
@@ -705,7 +804,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                   <Icon icon="solar:arrow-left-linear" className="w-4 h-4" />
                   <span>Anterior</span>
                 </Button>
-                {currentStep < steps.length - 1 ? (
+                {currentStep < steps.length - 1 && (
                   <Button
                     type="button"
                     color="primary"
@@ -714,25 +813,6 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                   >
                     <span>Siguiente</span>
                     <Icon icon="solar:arrow-right-linear" className="w-4 h-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    color="primary"
-                    disabled={isLoading}
-                    className="flex items-center gap-2 px-4 py-2 rounded-[10px]"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Spinner size="sm" />
-                        <span>Guardando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Icon icon="solar:diskette-bold" className="w-4 h-4" />
-                        <span>{isEditMode ? 'Actualizar' : 'Crear'} Cliente</span>
-                      </>
-                    )}
                   </Button>
                 )}
               </div>
@@ -748,6 +828,30 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
                     style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
                   />
                 </div>
+              </div>
+
+              {/* Botón Guardar siempre visible */}
+              <div className="order-3">
+                <Button
+                  type="button"
+                  color="success"
+                  disabled={isLoading || !canSave()}
+                  onClick={(e) => handleSubmit(e as any, true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-[10px]"
+                  title={!canSave() ? 'Complete todos los campos obligatorios para guardar' : ''}
+                >
+                  {isLoading ? (
+                    <>
+                      <Spinner size="sm" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon="solar:diskette-bold" className="w-4 h-4" />
+                      <span>{isEditMode ? 'Actualizar' : 'Crear'} Cliente</span>
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </form>

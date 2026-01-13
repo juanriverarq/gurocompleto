@@ -1,45 +1,40 @@
-# Vite SPA fallback and security
+# Vite SPA fallback for guro.co
 Options -Indexes
+
+# Force JavaScript MIME type FIRST
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+  AddType text/javascript .mjs
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  # CRITICAL: Serve static files directly (NO fallback)
+  RewriteRule ^robots\.txt$ - [L]
+  RewriteRule ^sitemap\.xml$ - [L]
+  RewriteRule ^favicon\.png$ - [L]
+  RewriteRule ^env\.js$ - [L]
+  
+  # Serve ALL files in /assets/ directly - NO SPA fallback
+  RewriteRule ^assets/ - [L]
+
   # Allow existing files/directories
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
-  # Exclude assets directory
-  RewriteCond %{REQUEST_URI} !^/assets/
-  # Fallback to index.html
+
+  # Fallback to index.html ONLY for non-existing files
   RewriteRule . /index.html [L]
 </IfModule>
 
 # Security headers
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
-  Header always set X-Frame-Options "SAMEORIGIN"
-  Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set X-XSS-Protection "1; mode=block"
 </IfModule>
 
-# Caching para assets estáticos
-<IfModule mod_expires.c>
-  ExpiresActive On
-  ExpiresByType text/javascript "access plus 30 days"
-  ExpiresByType text/css "access plus 30 days"
-  ExpiresByType image/svg+xml "access plus 30 days"
-  ExpiresByType image/png "access plus 30 days"
-  ExpiresByType image/jpeg "access plus 30 days"
-  ExpiresByType font/woff2 "access plus 30 days"
+# GZIP compression
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript
 </IfModule>
-<IfModule mod_headers.c>
-  <FilesMatch "\.(js|css|png|jpg|jpeg|svg|woff2?)$">
-    Header set Cache-Control "public, max-age=2592000, immutable"
-  </FilesMatch>
-</IfModule>
-
-# Force HTTPS (descomenta si ya tienes SSL configurado)
-# <IfModule mod_rewrite.c>
-#   RewriteEngine On
-#   RewriteCond %{HTTPS} !=on
-#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-# </IfModule>

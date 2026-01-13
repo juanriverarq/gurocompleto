@@ -34,7 +34,7 @@ const TrialExpired: React.FC = () => {
             className="w-full inline-flex justify-center items-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl transition"
           >
             <Icon icon="solar:card-bold" className="text-lg" />
-            Ver planes y activar mi cuenta
+            Activar mi plan
           </Link>
           <button
             onClick={() => logout()}
@@ -47,7 +47,7 @@ const TrialExpired: React.FC = () => {
 
         <div className="mt-6 pt-4 border-t border-gray-100 dark:border-darkborder">
           <p className="text-xs text-center text-gray-500 dark:text-gray-500">
-            ¿Tienes preguntas? <a href="mailto:soporte@guro.com" className="text-primary hover:underline">Contáctanos</a>
+            ¿Tienes preguntas? <a href="mailto:soporte@guro.co" className="text-primary hover:underline">Contáctanos</a>
           </p>
         </div>
       </div>

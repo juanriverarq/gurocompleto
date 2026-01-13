@@ -294,13 +294,25 @@ class GuromensajesServer {
                 
                 const connectionInfo = instance.getConnectionInfo();
                 
+                // Obtener información adicional de la sesión si está conectada
+                let phoneNumber = null;
+                let sessionId = null;
+                
+                if (connectionInfo.connected && instance.sock?.user) {
+                    const user = instance.sock.user;
+                    phoneNumber = user.id?.split(':')[0] || user.id?.split('@')[0] || null;
+                    sessionId = instanceId; // Usar instanceId como sessionId
+                }
+                
                 res.json({
                     success: true,
                     instanceId,
-                    status: connectionInfo.connected ? 'connected' : 'disconnected',
+                    sessionId: sessionId,
+                    status: connectionInfo.connected ? 'connected' : (connectionInfo.connecting ? 'connecting' : 'disconnected'),
                     connected: connectionInfo.connected,
                     connecting: connectionInfo.connecting,
                     hasQR: connectionInfo.hasQR,
+                    phoneNumber: phoneNumber,
                     lastActivity: connectionInfo.lastActivity,
                     lastUpdate: new Date().toISOString()
                 });

@@ -1,91 +1,72 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/shadcn-ui/Default-Ui/card';
 import { Button } from '../../../components/shadcn-ui/Default-Ui/button';
 import { Input } from '../../../components/shadcn-ui/Default-Ui/input';
+import { TextInput, Dropdown, Spinner, Tabs } from 'flowbite-react';
 import { Badge } from '../../../components/shadcn-ui/Default-Ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/shadcn-ui/Default-Ui/select';
 import { Textarea } from '../../../components/shadcn-ui/Default-Ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../../components/shadcn-ui/Default-Ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/shadcn-ui/Default-Ui/tabs';
-import { Alert, AlertDescription } from '../../../components/shadcn-ui/Default-Ui/alert';
-import { Switch } from '../../../components/shadcn-ui/Default-Ui/switch';
-import { Progress } from '../../../components/shadcn-ui/Default-Ui/progress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../components/shadcn-ui/Default-Ui/dialog';
 import { Label } from '../../../components/shadcn-ui/Default-Ui/label';
 import { Icon } from '@iconify/react';
+import { IconDots } from '@tabler/icons-react';
 import CampaignWizard from '../../../components/campaign/CampaignWizard';
-import { personalizeTemplateContent } from '../../../data/campaignAgentTemplates';
-import { 
-  getConversationalAgents, 
-  createPhoneCall, 
-  getConversationsList,
-  CreatePhoneCallRequest 
+import DynamicFieldsConfig from '../../../components/voice-ai/DynamicFieldsConfig';
+import DecisionPoliciesConfig from '../../../components/voice-ai/DecisionPoliciesConfig';
+import CollectedDataDisplay from '../../../components/voice-ai/CollectedDataDisplay';
+import {
+  getConversationalAgents
 } from '../../../services/elevenLabsService';
+import { getConversationAudio } from '../../../services/elevenLabsService';
 import { Cliente, clienteService } from '../../../services/clienteService';
-import TestCallButton from '../../../components/TestCallButton';
+import voiceCampaignService, {
+  VoiceCampaign,
+  VoiceCampaignStats,
+  CreateVoiceCampaignRequest
+} from '../../../services/voiceCampaignService';
+import whatsappInstanceService from '../../../services/whatsappInstanceService';
 
-// Interfaces para campaÃ±as de voz
-interface VoiceCampaign {
+// Interfaces para configuración dinámica
+interface CustomField {
+  id: string;
+  name: string;
+  type: string;
+  enabled: boolean;
+  required: boolean;
+  instruction?: string;
+  pattern?: string;
+  validation?: {
+    min_digits?: number;
+    max_digits?: number;
+    min_age?: number;
+    max_age?: number;
+  };
+}
+
+interface CollectConfig {
+  email?: { enabled: boolean; type: string; required: boolean };
+  document_id?: { enabled: boolean; type: string; required: boolean };
+  address?: { enabled: boolean; type: string; required: boolean };
+}
+
+interface DecisionCondition {
+  field: string;
+  operator: string;
+  value: string | number | boolean;
+}
+
+interface DecisionAction {
+  action: string;
+  parameters: Record<string, any>;
+}
+
+interface DecisionPolicy {
   id: string;
   name: string;
   description: string;
-  agentId: string;
-  agentName: string;
-  status: 'draft' | 'scheduled' | 'running' | 'paused' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high';
-  type: 'immediate' | 'scheduled' | 'follow_up' | 'reminder';
-  targets: CampaignTarget[];
-  scheduledAt?: Date;
-  startedAt?: Date;
-  completedAt?: Date;
-  settings: CampaignSettings;
-  statistics: CampaignStatistics;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface CampaignTarget {
-  id: string;
-  name: string;
-  phoneNumber: string;
-  customData?: Record<string, any>;
-  status: 'pending' | 'calling' | 'completed' | 'failed' | 'no_answer' | 'busy';
-  callId?: string;
-  callStartTime?: Date;
-  callDuration?: number;
-  callCost?: number;
-  notes?: string;
-}
-
-interface CampaignSettings {
-  maxRetries: number;
-  retryDelay: number;
-  callTimeout: number;
-  simultaneousCalls: number;
-  workingHours: {
-    start: string;
-    end: string;
-    days: string[];
-  };
-  voiceSettings: {
-    stability: number;
-    similarityBoost: number;
-    style: number;
-    speakerBoost: boolean;
-  };
-  customPrompt?: string;
-  useCustomGreeting: boolean;
-  customGreeting?: string;
-}
-
-interface CampaignStatistics {
-  totalTargets: number;
-  completedCalls: number;
-  failedCalls: number;
-  pendingCalls: number;
-  successRate: number;
-  avgDuration: number;
-  totalCost: number;
-  avgCostPerCall: number;
+  enabled: boolean;
+  conditions: DecisionCondition[];
+  actions: DecisionAction[];
 }
 
 interface ElevenLabsAgent {
@@ -102,18 +83,29 @@ interface ElevenLabsAgent {
 }
 
 const CampaignsManagementWidget: React.FC = () => {
-  // Estados principales
+// Estados principales
   const [campaigns, setCampaigns] = useState<VoiceCampaign[]>([]);
   const [agents, setAgents] = useState<ElevenLabsAgent[]>([]);
   const [clients, setClients] = useState<Cliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<VoiceCampaignStats | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<VoiceCampaign | null>(null);
+  const [actionLoading, setActionLoading] = useState<Record<number, string>>({});
+  // Mapa con costo total por campaña (calculado desde conversaciones reales cuando no viene en estadísticas)
+  const [campaignCostTotals, setCampaignCostTotals] = useState<Record<number, number>>({});
+  const [loadingCampaignCosts, setLoadingCampaignCosts] = useState<Record<number, boolean>>({});
   
   // Estados de modales
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  
+  // Estados para edición y eliminación
+  const [campaignToEdit, setCampaignToEdit] = useState<VoiceCampaign | null>(null);
+  const [campaignToDelete, setCampaignToDelete] = useState<VoiceCampaign | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Estados de filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -134,18 +126,69 @@ const CampaignsManagementWidget: React.FC = () => {
     callTimeout: 300,
     customPrompt: '',
     useCustomGreeting: false,
-    customGreeting: ''
+    customGreeting: '',
+    postCallTools: {
+      collect: {
+        email: { enabled: false, type: 'email', required: false },
+        document_id: { enabled: false, type: 'document_id', required: false },
+        address: { enabled: false, type: 'address', required: false },
+      },
+      customFields: [],
+      whatsapp: {
+        enabled: false,
+        instance_id: '',
+        template: 'Hola {customer_name}, te compartimos tu enlace de pago: {payment_link}',
+      },
+      decisionPolicies: []
+    }
   });
+  const [waInstances, setWaInstances] = useState<Array<{ id?: number; instance_id: string; status?: string }>>([]);
 
-  // FunciÃ³n para manejar la creaciÃ³n desde el wizard
-  const handleWizardCampaignCreate = (campaignData: any) => {
-    console.log('ð¯ [WIZARD] Creando campaÃ±a desde wizard:', campaignData);
+  // Función para manejar la creación desde el wizard
+  const handleWizardCampaignCreate = async (campaignData: any) => {
+    console.log('🎯 [WIZARD] Creando campaña desde wizard:', campaignData);
+    console.log('🔍 [WIZARD] Campaign type detected:', campaignData?.type);
+
+    // Si el propio Wizard ya hizo el POST exitosamente, evitamos doble envío
+    if (campaignData?.created_by_wizard) {
+      console.log('✅ [WIZARD] Campaign already created by wizard, skipping duplicate POST');
+      alert('Campaña creada exitosamente');
+      setShowWizard(false);
+      await loadCampaigns();
+      await loadStats();
+      return;
+    }
     
-    // AquÃ­ procesar los datos del wizard y crear la campaÃ±a
-    // Por ahora, simulamos la creaciÃ³n
-    setShowWizard(false);
-    
-    // TODO: Implementar creaciÃ³n real con los datos del wizard
+    try {
+      let response;
+
+      // Normalizar bandera de inmediatez
+      const isImmediate = campaignData?.type === 'immediate' || (!campaignData?.scheduled_date && !campaignData?.scheduledDate);
+
+      // Siempre usar campaña inmediata desde el CampaignWizard (por diseño actual)
+      if (isImmediate) {
+        console.log('🚀 [WIZARD] Creating immediate campaign...');
+        response = await voiceCampaignService.createImmediateVoiceCampaign(campaignData);
+      } else {
+        console.log('📅 [WIZARD] Creating scheduled campaign...');
+        response = await voiceCampaignService.createScheduledVoiceCampaign(campaignData);
+      }
+
+      if (response.success) {
+        console.log('✅ [WIZARD] Campaign created successfully');
+        alert(response.message);
+        setShowWizard(false);
+        // Recargar la lista de campañas
+        await loadCampaigns();
+        await loadStats();
+      } else {
+        console.error('❌ [WIZARD] Failed to create campaign:', response.message);
+        alert(response.message);
+      }
+    } catch (error) {
+      console.error('❌ [WIZARD] Error creating campaign from wizard:', error);
+      alert('Error al crear la campaña desde el wizard: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+    }
   };
 
   // Cargar datos iniciales
@@ -159,12 +202,27 @@ const CampaignsManagementWidget: React.FC = () => {
       await Promise.all([
         loadAgents(),
         loadClients(),
-        loadCampaigns()
+        loadCampaigns(),
+        loadStats(),
+        loadWhatsAppInstances()
       ]);
     } catch (error) {
       console.error('Error loading initial data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadWhatsAppInstances = async () => {
+    try {
+      const resp = await whatsappInstanceService.getInstances();
+      if (resp.success && Array.isArray(resp.data)) {
+        setWaInstances(resp.data.map((i: any) => ({ id: i.id, instance_id: i.instance_id, status: i.status })));
+      } else {
+        setWaInstances([]);
+      }
+    } catch (e) {
+      setWaInstances([]);
     }
   };
 
@@ -186,7 +244,7 @@ const CampaignsManagementWidget: React.FC = () => {
       if (response.success && response.data) {
         const activeClients = response.data.filter(client => 
           client.celular_principal && 
-          (client.estado === 'active' || client.estado === 'activo' || client.estado === 'prospect')
+          (client.estado === 'activo' || client.estado === 'prospecto')
         );
         setClients(activeClients);
       }
@@ -197,9 +255,91 @@ const CampaignsManagementWidget: React.FC = () => {
   };
 
   const loadCampaigns = async () => {
-    // TODO: Implementar carga de campaÃ±as desde la API
-    // Por ahora, lista vacÃ­a para mostrar solo datos reales
-    setCampaigns([]);
+    try {
+      console.log('🔄 [CAMPAIGNS] Loading voice campaigns...');
+      const response = await voiceCampaignService.getVoiceCampaigns();
+      
+      if (response.success) {
+        console.log('✅ [CAMPAIGNS] Voice campaigns loaded:', response.campaigns);
+        setCampaigns(response.campaigns);
+      } else {
+        console.error('❌ [CAMPAIGNS] Failed to load campaigns');
+        setCampaigns([]);
+      }
+    } catch (error) {
+      console.error('❌ [CAMPAIGNS] Error loading campaigns:', error);
+      setCampaigns([]);
+    }
+  };
+
+  // Cargar costos por campaña desde el historial híbrido cuando no venga en estadísticas
+  useEffect(() => {
+    const loadCostsForCampaigns = async () => {
+      const idsToLoad = campaigns
+        .filter(c => typeof (c as any).statistics?.total_cost !== 'number' && campaignCostTotals[c.id] === undefined)
+        .map(c => c.id);
+
+      if (idsToLoad.length === 0) return;
+
+      // Procesar en serie para evitar saturar
+      for (const id of idsToLoad) {
+        try {
+          setLoadingCampaignCosts(prev => ({ ...prev, [id]: true }));
+          const result = await voiceCampaignService.getHybridCallHistory({ campaign_id: id, limit: 1000 });
+          if (result.success && Array.isArray(result.calls)) {
+            const total = result.calls.reduce((sum: number, call: any) => {
+              const costs = call?.costs;
+              if (costs && (typeof costs.total_with_markup_cop === 'number' || typeof costs.total_cop === 'number')) {
+                return sum + (Number(costs.total_with_markup_cop ?? costs.total_cop) || 0);
+              }
+              return sum;
+            }, 0);
+            setCampaignCostTotals(prev => ({ ...prev, [id]: total }));
+          } else {
+            setCampaignCostTotals(prev => ({ ...prev, [id]: 0 }));
+          }
+        } catch {
+          setCampaignCostTotals(prev => ({ ...prev, [id]: 0 }));
+        } finally {
+          setLoadingCampaignCosts(prev => ({ ...prev, [id]: false }));
+        }
+      }
+    };
+
+    if (campaigns.length > 0) {
+      loadCostsForCampaigns();
+    }
+  }, [campaigns]);
+
+  const loadStats = async () => {
+    try {
+      console.log('📊 [CAMPAIGNS] Loading voice campaign stats...');
+      const response = await voiceCampaignService.getVoiceCampaignStats();
+      
+      if (response.success && response.stats) {
+        console.log('✅ [CAMPAIGNS] Stats loaded:', response.stats);
+        setStats(response.stats);
+      } else {
+        console.error('❌ [CAMPAIGNS] Failed to load stats');
+        setStats(null);
+      }
+    } catch (error) {
+      console.error('❌ [CAMPAIGNS] Error loading stats:', error);
+      setStats(null);
+    }
+  };
+
+  const runWithLoading = async (id: number, type: string, fn: () => Promise<void>) => {
+    setActionLoading(prev => ({ ...prev, [id]: type }));
+    try {
+      await fn();
+    } finally {
+      setActionLoading(prev => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
+    }
   };
 
   const handleCreateCampaign = async () => {
@@ -209,376 +349,113 @@ const CampaignsManagementWidget: React.FC = () => {
         throw new Error('Agent not found');
       }
 
-      const selectedTargets = clients
-        .filter(client => formData.selectedTargets.includes(client.id!))
-        .map(client => ({
-          id: client.id!,
-          name: `${client.nombre} ${client.apellidos}`,
-          phoneNumber: client.celular_principal,
-          status: 'pending' as const,
-          customData: {
-            clientId: client.id,
-            email: client.email_principal || client.correo,
-            city: client.ciudad,
-            occupation: client.ocupacion,
-            
-            // Variables adicionales para personalizaciÃ³n
-            firstName: client.nombre,
-            lastName: client.apellidos,
-            fullName: `${client.nombre} ${client.apellidos}`,
-            
-            // Variables de contacto
-            phoneNumber: client.celular_principal,
-            alternativePhone: client.telefono_fijo,
-            
-            // Variables de ubicaciÃ³n
-            address: client.direccion,
-            neighborhood: client.barrio,
-            
-            // Variables de seguros (si las tienes en tu base de datos)
-            companyName: 'Tu Empresa de Seguros', // Puedes hacer esto dinÃ¡mico
-            
-            // Variables de fechas (puedes agregar estas columnas a tu base de datos)
-            registrationDate: client.created_at,
-            
-            // Variables que puedes agregar a tu base de datos si no existen:
-            // Si tienes estos campos en tu base de datos, descomÃ©ntalos:
-            // policyNumber: client.numero_poliza,
-            // policyExpirationDate: client.fecha_vencimiento_poliza,
-            // monthlyPayment: client.pago_mensual,
-            // coverageAmount: client.monto_cobertura,
-            // debt_amount: client.monto_deuda,
-            // payment_due_date: client.fecha_vencimiento_pago,
-            
-            // O puedes agregar datos especÃ­ficos directamente:
-            policyNumber: `POL-${client.id}-2024`,
-            policyExpirationDate: '2024-12-31',
-            monthlyPayment: 85000,
-            coverageAmount: 50000000,
-            debt_amount: 255000,
-            payment_due_date: '2024-08-15',
-            
-            // Variables de estado
-            clientStatus: client.estado,
-            
-            // Variables para personalizaciÃ³n del mensaje
-            preferredTimeToCall: 'maÃ±ana', // Puedes hacer esto dinÃ¡mico
-            communicationLanguage: 'espaÃ±ol',
-            
-            // Meta informaciÃ³n
-            leadSource: client.fuente || 'unknown',
-            lastContactDate: client.updated_at
-          }
-        }));
+      const selectedClients = clients.filter(client => formData.selectedTargets.includes(client.id!));
+      
+      if (selectedClients.length === 0) {
+        // Silenciar alert: simplemente no crear si no hay clientes
+        return;
+      }
 
-      const newCampaign: VoiceCampaign = {
-        id: `campaign-${Date.now()}`,
+      const contacts = selectedClients.map(client => ({
+        name: `${client.nombre} ${client.apellidos}`,
+        phone_number: client.celular_principal,
+        custom_data: {
+          client_id: client.id,
+          email: client.email_principal,
+          city: client.ciudad,
+          occupation: 'No especificado',
+          first_name: client.nombre,
+          last_name: client.apellidos,
+          full_name: `${client.nombre} ${client.apellidos}`,
+          phone_number: client.celular_principal,
+          alternative_phone: '',
+          address: 'No especificado',
+          neighborhood: 'No especificado',
+          company_name: 'Tu Empresa de Seguros',
+          registration_date: client.created_at,
+          policy_number: `POL-${client.id}-2024`,
+          policy_expiration_date: '2024-12-31',
+          monthly_payment: 85000,
+          coverage_amount: 50000000,
+          debt_amount: 255000,
+          payment_due_date: '2024-08-15',
+          client_status: client.estado,
+          preferred_time_to_call: 'mañana',
+          communication_language: 'español',
+          lead_source: 'unknown',
+          last_contact_date: client.updated_at
+        }
+      }));
+
+      const campaignRequest: CreateVoiceCampaignRequest = {
         name: formData.name,
         description: formData.description,
-        agentId: formData.agentId,
-        agentName: selectedAgent.name,
-        status: 'draft',
-        priority: formData.priority,
+        agent_id: formData.agentId,
         type: formData.type,
-        targets: selectedTargets,
-        scheduledAt: formData.scheduledAt ? new Date(formData.scheduledAt) : undefined,
+        priority: formData.priority,
+        scheduled_at: formData.scheduledAt || undefined,
+        contacts: contacts,
         settings: {
-          maxRetries: formData.maxRetries,
-          retryDelay: 300,
-          callTimeout: formData.callTimeout,
-          simultaneousCalls: formData.simultaneousCalls,
-          workingHours: {
+          max_retries: formData.maxRetries,
+          retry_delay: 300,
+          call_timeout: formData.callTimeout,
+          simultaneous_calls: formData.simultaneousCalls,
+          working_hours: {
             start: '09:00',
             end: '18:00',
             days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
           },
-          voiceSettings: {
-            stability: 0.7,
-            similarityBoost: 0.8,
-            style: 0.2,
-            speakerBoost: true
-          },
-          customPrompt: formData.customPrompt,
-          useCustomGreeting: formData.useCustomGreeting,
-          customGreeting: formData.customGreeting
-        },
-        statistics: {
-          totalTargets: selectedTargets.length,
-          completedCalls: 0,
-          failedCalls: 0,
-          pendingCalls: selectedTargets.length,
-          successRate: 0,
-          avgDuration: 0,
-          totalCost: 0,
-          avgCostPerCall: 0
-        },
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      setCampaigns(prev => [...prev, newCampaign]);
-      setIsCreateModalOpen(false);
-      resetForm();
-      
-      // TODO: Enviar a la API para persistir
-      
-    } catch (error) {
-      console.error('Error creating campaign:', error);
-      alert('Error al crear la campaÃ±a');
-    }
-  };
-
-  const handleStartCampaign = async (campaignId: string) => {
-    const campaign = campaigns.find(c => c.id === campaignId);
-    if (!campaign) return;
-
-    try {
-      // Actualizar estado de la campaÃ±a
-      setCampaigns(prev => prev.map(c => 
-        c.id === campaignId 
-          ? { ...c, status: 'running' as const, startedAt: new Date() }
-          : c
-      ));
-
-      // Iniciar llamadas para cada target
-      for (const target of campaign.targets) {
-        if (target.status === 'pending') {
-          await initiateCall(campaign, target);
-        }
-      }
-
-    } catch (error) {
-      console.error('Error starting campaign:', error);
-      alert('Error al iniciar la campaÃ±a');
-    }
-  };
-
-  // ð¥ FUNCIÃN AUXILIAR: Personalizar contenido con datos del cliente
-  const personalizeContent = (template: string, targetData: CampaignTarget): string => {
-    if (!template) return template;
-    
-    let personalizedContent = template;
-    
-    // Preparar datos del cliente con valores por defecto
-    const clientData = {
-      customer_name: targetData.name || 'Cliente',
-      user_name: targetData.name || 'Cliente',
-      client_name: targetData.name || 'Cliente',
-      policy_number: targetData.customData?.policyNumber || targetData.customData?.numeroPoliza || `POL-${targetData.id}-2024`,
-      policy_expiration_date: targetData.customData?.policyExpirationDate || targetData.customData?.fechaVencimiento || '2024-12-31',
-      debt_amount: targetData.customData?.debt_amount ? `$${Number(targetData.customData.debt_amount).toLocaleString()}` : '$255.000',
-      payment_due_date: targetData.customData?.payment_due_date || targetData.customData?.fechaVencimientoPago || '2024-08-15',
-      company_name: targetData.customData?.companyName || targetData.customData?.empresa || 'Tu Empresa de Seguros',
-      agent_name: 'Sofia',
-      city: targetData.customData?.city || targetData.customData?.ciudad || 'su ciudad',
-      phone: targetData.phoneNumber || '',
-      email: targetData.customData?.email || targetData.customData?.correo || '',
-      monthly_payment: targetData.customData?.monthlyPayment ? `$${Number(targetData.customData.monthlyPayment).toLocaleString()}` : '$85.000',
-      coverage_amount: targetData.customData?.coverageAmount ? `$${Number(targetData.customData.coverageAmount).toLocaleString()}` : '$50.000.000'
-    };
-    
-    // Definir todos los reemplazos posibles
-    const replacements = {
-      '{{customer_name}}': clientData.customer_name,
-      '{{user_name}}': clientData.user_name,
-      '{{client_name}}': clientData.client_name,
-      '{{policy_number}}': clientData.policy_number,
-      '{{policy_expiration_date}}': clientData.policy_expiration_date,
-      '{{debt_amount}}': clientData.debt_amount,
-      '{{payment_due_date}}': clientData.payment_due_date,
-      '{{company_name}}': clientData.company_name,
-      '{{agent_name}}': clientData.agent_name,
-      '{{city}}': clientData.city,
-      '{{phone}}': clientData.phone,
-      '{{email}}': clientData.email,
-      '{{monthly_payment}}': clientData.monthly_payment,
-      '{{coverage_amount}}': clientData.coverage_amount
-    };
-    
-    // Aplicar todos los reemplazos
-    Object.entries(replacements).forEach(([placeholder, value]) => {
-      const regex = new RegExp(placeholder.replace(/[{}]/g, '\$&'), 'g');
-      personalizedContent = personalizedContent.replace(regex, value || '');
-    });
-    
-    return personalizedContent;
-  };
-
-  const initiateCall = async (campaign: VoiceCampaign, target: CampaignTarget) => {
-    console.log('ð [CAMPAIGN] Iniciando llamada:', {
-      campaignId: campaign.id,
-      targetId: target.id,
-      targetName: target.name,
-      phoneNumber: target.phoneNumber
-    });
-
-    // Marcar como "calling" inmediatamente
-    setCampaigns(prev => prev.map(c => 
-      c.id === campaign.id 
-        ? {
-            ...c,
-            targets: c.targets.map(t => 
-              t.id === target.id 
-                ? { ...t, status: 'calling' as const, callStartTime: new Date() }
-                : t
-            )
+          post_call_tools: {
+            collect: {
+              // Convertir el formato nuevo al formato esperado por el backend
+              ...Object.fromEntries(
+                Object.entries(formData.postCallTools.collect).map(([key, config]) => [
+                  key,
+                  typeof config === 'object' ? config : { enabled: config, type: key, required: false }
+                ])
+              ),
+              // Agregar campos personalizados
+              ...Object.fromEntries(
+                (formData.postCallTools.customFields as CustomField[])
+                  .filter(field => field.enabled && field.name)
+                  .map(field => [
+                    field.name.toLowerCase().replace(/\s+/g, '_'),
+                    {
+                      enabled: field.enabled,
+                      type: field.type,
+                      required: field.required,
+                      instruction: field.instruction,
+                      pattern: field.pattern
+                    }
+                  ])
+              )
+            },
+            whatsapp: formData.postCallTools.whatsapp,
+            decision_policies: formData.postCallTools.decisionPolicies
           }
-        : c
-    ));
-
-    try {
-      // ð¥ NUEVO ENFOQUE: Personalizar mensajes antes de enviar a ElevenLabs
-      console.log('ð¯ [CAMPAIGN] Iniciando personalizaciÃ³n de contenido para:', target.name);
-      
-      // Obtener plantillas por defecto si no hay configuraciÃ³n personalizada
-      const defaultSystemPrompt = `Eres Sofia, agente especializada en seguros de {{company_name}}. 
-EstÃ¡s contactando a {{customer_name}} para seguimiento de su pÃ³liza {{policy_number}}. 
-Debes ser profesional, amable y ayudar con renovaciones o pagos pendientes. 
-El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date}}.`;
-      
-      const defaultFirstMessage = `Hola {{customer_name}}, soy {{agent_name}} de {{company_name}}. Te llamo porque tenemos registrado un pago pendiente de tu pÃ³liza {{policy_number}} por valor de {{debt_amount}} pesos. Â¿PodrÃ­as confirmarme si ya realizaste este pago?`;
-      
-      // Usar configuraciÃ³n personalizada o plantillas por defecto
-      const systemPromptTemplate = campaign.settings.customPrompt || defaultSystemPrompt;
-      const firstMessageTemplate = campaign.settings.useCustomGreeting && campaign.settings.customGreeting 
-        ? campaign.settings.customGreeting 
-        : defaultFirstMessage;
-      
-      // Personalizar contenido con datos reales del cliente
-      const personalizedSystemPrompt = personalizeContent(systemPromptTemplate, target);
-      const personalizedFirstMessage = personalizeContent(firstMessageTemplate, target);
-      
-      console.log('â [CAMPAIGN] System prompt personalizado:', personalizedSystemPrompt.substring(0, 150) + '...');
-      console.log('â [CAMPAIGN] First message personalizado:', personalizedFirstMessage.substring(0, 150) + '...');
-      
-      // â YA NO USAMOS DYNAMIC VARIABLES - Solo overrides con contenido personalizado
-      console.log('ð¯ [CAMPAIGN] Usando OVERRIDES - contenido ya personalizado sin variables dinÃ¡micas');
-
-      const callData: CreatePhoneCallRequest = {
-        agent_id: campaign.agentId,
-        phone_number: target.phoneNumber,
-        customer_name: target.name,
-        
-        // ð¥ NUEVA LÃGICA: Enviar contenido ya personalizado
-        system_prompt: personalizedSystemPrompt,  // â YA PERSONALIZADO, sin variables
-        first_message: personalizedFirstMessage,  // â YA PERSONALIZADO, sin variables
-        
-        max_duration: campaign.settings.callTimeout,
-        voice_settings: {
-          stability: campaign.settings.voiceSettings.stability,
-          similarity_boost: campaign.settings.voiceSettings.similarityBoost,
-          style: campaign.settings.voiceSettings.style,
-          use_speaker_boost: campaign.settings.voiceSettings.speakerBoost
-        },
-        customer_data: {
-          ...target.customData,
-          // Agregar datos adicionales para personalizaciÃ³n avanzada
-          customer_name: target.name,
-          agent_name: 'Sofia',
-          company_name: target.customData?.companyName || target.customData?.empresa || 'Tu Empresa de Seguros',
-          policy_number: target.customData?.policyNumber || target.customData?.numeroPoliza || `POL-${target.id}-2024`,
-          debt_amount: target.customData?.debt_amount || target.customData?.montoDeuda || 255000,
-          city: target.customData?.city || target.customData?.ciudad || 'su ciudad'
-        },
-        campaign_id: campaign.id
+        }
       };
 
-      console.log('ð [CAMPAIGN] Datos de llamada preparados (NUEVA VERSIÃN CON PERSONALIZACIÃN):');
-      console.log('   - Agent ID:', callData.agent_id);
-      console.log('   - Phone:', callData.phone_number);
-      console.log('   - Customer:', callData.customer_name);
-      console.log('   - System Prompt Length:', callData.system_prompt?.length);
-      console.log('   - First Message Length:', callData.first_message?.length);
+      console.log('🚀 [CREATE CAMPAIGN] Creating voice campaign:', campaignRequest);
 
-      const phoneCall = await createPhoneCall(callData);
-      
-      console.log('â [CAMPAIGN] Llamada creada exitosamente:', {
-        callId: phoneCall.id,
-        status: phoneCall.status,
-        customerName: phoneCall.customerName
-      });
-      
-      // Actualizar el target con la informaciÃ³n de la llamada exitosa
-      setCampaigns(prev => prev.map(c => 
-        c.id === campaign.id 
-          ? {
-              ...c,
-              targets: c.targets.map(t => 
-                t.id === target.id 
-                  ? { 
-                      ...t, 
-                      status: phoneCall.status === 'completed' ? 'completed' as const : 'calling' as const,
-                      callId: phoneCall.id,
-                      callStartTime: phoneCall.startTime,
-                      callDuration: phoneCall.duration,
-                      callCost: phoneCall.cost,
-                      notes: phoneCall.notes || 'Llamada procesada exitosamente'
-                    }
-                  : t
-              )
-            }
-          : c
-      ));
+      const response = formData.type === 'immediate'
+        ? await voiceCampaignService.createImmediateVoiceCampaign(campaignRequest)
+        : await voiceCampaignService.createScheduledVoiceCampaign(campaignRequest);
 
-      // Simular finalizaciÃ³n despuÃ©s de unos segundos si es simulaciÃ³n
-      if (phoneCall.id.startsWith('sim_call_')) {
-        setTimeout(() => {
-          setCampaigns(prev => prev.map(c => 
-            c.id === campaign.id 
-              ? {
-                  ...c,
-                  targets: c.targets.map(t => 
-                    t.id === target.id 
-                      ? { ...t, status: 'completed' as const }
-                      : t
-                  )
-                }
-              : c
-          ));
-        }, 3000);
+      if (response.success) {
+        console.log('✅ [CREATE CAMPAIGN] Campaign created successfully');
+        setIsCreateModalOpen(false);
+        resetForm();
+        // Recargar la lista de campañas
+        await loadCampaigns();
+        await loadStats();
+      } else {
+        console.error('❌ [CREATE CAMPAIGN] Failed to create campaign:', response.message);
       }
-
-    } catch (error) {
-      console.error('â [CAMPAIGN] Error iniciando llamada:', {
-        error: error.message,
-        campaignId: campaign.id,
-        targetId: target.id
-      });
       
-      // Marcar el target como fallido con informaciÃ³n detallada
-      setCampaigns(prev => prev.map(c => 
-        c.id === campaign.id 
-          ? {
-              ...c,
-              targets: c.targets.map(t => 
-                t.id === target.id 
-                  ? { 
-                      ...t, 
-                      status: 'failed' as const, 
-                      notes: `Error: ${error.message || 'Error desconocido al iniciar llamada'}` 
-                    }
-                  : t
-              )
-            }
-          : c
-      ));
+    } catch (error) {
+      console.error('❌ [CREATE CAMPAIGN] Error creating campaign:', error);
     }
-  };
-
-  const handlePauseCampaign = (campaignId: string) => {
-    setCampaigns(prev => prev.map(campaign => 
-      campaign.id === campaignId 
-        ? { ...campaign, status: 'paused' as const }
-        : campaign
-    ));
-  };
-
-  const handleStopCampaign = (campaignId: string) => {
-    setCampaigns(prev => prev.map(campaign => 
-      campaign.id === campaignId 
-        ? { ...campaign, status: 'cancelled' as const, completedAt: new Date() }
-        : campaign
-    ));
   };
 
   const resetForm = () => {
@@ -595,19 +472,90 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
       callTimeout: 300,
       customPrompt: '',
       useCustomGreeting: false,
-      customGreeting: ''
+      customGreeting: '',
+      postCallTools: {
+        collect: {
+          email: { enabled: false, type: 'email', required: false },
+          document_id: { enabled: false, type: 'document_id', required: false },
+          address: { enabled: false, type: 'address', required: false }
+        },
+        customFields: [],
+        whatsapp: { enabled: false, instance_id: '', template: 'Hola {customer_name}, te compartimos tu enlace de pago: {payment_link}' },
+        decisionPolicies: []
+      }
     });
   };
 
   const filteredCampaigns = campaigns.filter(campaign => {
     const matchesSearch = campaign.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          campaign.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         campaign.agentName.toLowerCase().includes(searchTerm.toLowerCase());
+                         (campaign.agent_name && campaign.agent_name.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || campaign.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || campaign.priority === priorityFilter;
     
     return matchesSearch && matchesStatus && matchesPriority;
   });
+
+  // (handleEditCampaign ya no se usa; se mantiene lógica de edición en inline handlers)
+
+  // Función para actualizar una campaña
+  const handleUpdateCampaign = async (updatedData: Partial<any>) => {
+    if (!campaignToEdit) return;
+
+    try {
+      console.log('🔊 [UPDATE CAMPAIGN] Updating campaign:', campaignToEdit.id, updatedData);
+
+      const response = await voiceCampaignService.updateVoiceCampaign(campaignToEdit.id, updatedData);
+
+      if (response.success) {
+        console.log('✅ [UPDATE CAMPAIGN] Campaign updated successfully');
+        setIsEditModalOpen(false);
+        setCampaignToEdit(null);
+        
+        // Recargar la lista de campañas
+        await loadCampaigns();
+        await loadStats();
+      } else {
+        console.error('❌ [UPDATE CAMPAIGN] Failed to update campaign:', response.message);
+        alert(response.message || 'Error al actualizar la campaña');
+      }
+    } catch (error) {
+      console.error('❌ [UPDATE CAMPAIGN] Error updating campaign:', error);
+      alert('Error al actualizar la campaña: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+    }
+  };
+
+  // (handleDeleteCampaign ya no se usa; se invoca setCampaignToDelete en handlers de UI)
+
+  // Función para confirmar la eliminación
+  const handleConfirmDelete = async () => {
+    if (!campaignToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      console.log('🔊 [DELETE CAMPAIGN] Deleting campaign:', campaignToDelete.id);
+
+      const response = await voiceCampaignService.deleteVoiceCampaign(campaignToDelete.id);
+
+      if (response.success) {
+        console.log('✅ [DELETE CAMPAIGN] Campaign deleted successfully');
+        setIsDeleteModalOpen(false);
+        setCampaignToDelete(null);
+        
+        // Recargar la lista de campañas
+        await loadCampaigns();
+        await loadStats();
+      } else {
+        console.error('❌ [DELETE CAMPAIGN] Failed to delete campaign:', response.message);
+        alert(response.message || 'Error al eliminar la campaña');
+      }
+    } catch (error) {
+      console.error('❌ [DELETE CAMPAIGN] Error deleting campaign:', error);
+      alert('Error al eliminar la campaña: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -636,7 +584,7 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
         <CardContent className="flex items-center justify-center h-96">
           <div className="flex flex-col items-center gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="text-gray-600">Cargando campaÃ±as...</p>
+            <p className="text-gray-600">Cargando campañas...</p>
           </div>
         </CardContent>
       </Card>
@@ -648,63 +596,31 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
       {/* Header con acciones */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">GestiÃ³n de CampaÃ±as</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gestión de Campañas</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Crea y gestiona campaÃ±as de llamadas automÃ¡ticas usando agentes de IA
+            Crea y gestiona campañas de llamadas automáticas usando agentes de IA
           </p>
         </div>
         
         <div className="flex gap-2">
-          {/* BotÃ³n principal para wizard */}
+          {/* Botón principal para wizard */}
           <Button 
             onClick={() => setShowWizard(true)}
             className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
           >
             <Icon icon="solar:magic-stick-3-bold" className="w-4 h-4 mr-2" />
-            Nueva CampaÃ±a con Asistente
+            Nueva Campaña
           </Button>
-          
-          {/* BotÃ³n secundario para formulario tradicional */}
-          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50">
-                <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                Formulario RÃ¡pido
-              </Button>
-            </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Crear Nueva CampaÃ±a de Llamadas</DialogTitle>
-            </DialogHeader>
-            <CreateCampaignForm
-              formData={formData}
-              setFormData={setFormData}
-              agents={agents}
-              clients={clients}
-              onSubmit={handleCreateCampaign}
-              onCancel={() => setIsCreateModalOpen(false)}
-            />
-          </DialogContent>
-        </Dialog>
+        </div>
       </div>
 
       {/* Modal del CampaignWizard */}
-      <Dialog open={showWizard} onOpenChange={setShowWizard}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0">
-          <DialogHeader className="px-6 pt-6">
-            <DialogTitle className="flex items-center gap-2">
-              <Icon icon="solar:magic-stick-3-bold" className="w-5 h-5 text-purple-600" />
-              Asistente para Crear CampaÃ±a
-            </DialogTitle>
-          </DialogHeader>
-          <div className="px-6 pb-6">
-            <CampaignWizard
-              onComplete={handleWizardCampaignCreate}
-              onCancel={() => setShowWizard(false)}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      {showWizard && (
+        <CampaignWizard
+          onComplete={handleWizardCampaignCreate}
+          onCancel={() => setShowWizard(false)}
+        />
+      )}
 
       {/* Filtros */}
       <Card>
@@ -712,7 +628,7 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <Input
-                placeholder="Buscar campaÃ±as..."
+                placeholder="Buscar campañas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full"
@@ -727,7 +643,7 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="draft">Borrador</SelectItem>
                   <SelectItem value="scheduled">Programada</SelectItem>
-                  <SelectItem value="running">En ejecuciÃ³n</SelectItem>
+                  <SelectItem value="running">En ejecución</SelectItem>
                   <SelectItem value="paused">Pausada</SelectItem>
                   <SelectItem value="completed">Completada</SelectItem>
                   <SelectItem value="cancelled">Cancelada</SelectItem>
@@ -750,14 +666,14 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
         </CardContent>
       </Card>
 
-      {/* EstadÃ­sticas generales */}
+      {/* Estadísticas generales */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total CampaÃ±as</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{campaigns.length}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Campañas</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.total_campaigns || campaigns.length}</p>
               </div>
               <Icon icon="solar:target-bold-duotone" className="w-8 h-8 text-blue-600" />
             </div>
@@ -770,7 +686,7 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Activas</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {campaigns.filter(c => c.status === 'running').length}
+                  {stats?.active_campaigns || campaigns.filter(c => c.status === 'running').length}
                 </p>
               </div>
               <Icon icon="solar:play-circle-bold-duotone" className="w-8 h-8 text-green-600" />
@@ -784,7 +700,7 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Programadas</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {campaigns.filter(c => c.status === 'scheduled').length}
+                  {stats?.scheduled_campaigns || campaigns.filter(c => c.status === 'scheduled').length}
                 </p>
               </div>
               <Icon icon="solar:calendar-bold-duotone" className="w-8 h-8 text-blue-600" />
@@ -798,7 +714,7 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Completadas</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {campaigns.filter(c => c.status === 'completed').length}
+                  {stats?.completed_campaigns || campaigns.filter(c => c.status === 'completed').length}
                 </p>
               </div>
               <Icon icon="solar:check-circle-bold-duotone" className="w-8 h-8 text-purple-600" />
@@ -807,66 +723,278 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
         </Card>
       </div>
 
-      {/* BotÃ³n de prueba temporal */}
-      <TestCallButton />
 
-      {/* Lista de campaÃ±as */}
+      {/* Lista de campañas unificada en tabla */}
       {filteredCampaigns.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <Icon icon="solar:target-outline" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              No hay campaÃ±as
-            </h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No hay campañas</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' 
-                ? 'No se encontraron campaÃ±as que coincidan con los filtros'
-                : 'Comienza creando tu primera campaÃ±a de llamadas automÃ¡ticas'
-              }
+                ? 'No se encontraron campañas que coincidan con los filtros'
+                : 'Comienza creando tu primera campaña de llamadas automáticas'}
             </p>
             {!searchTerm && statusFilter === 'all' && priorityFilter === 'all' && (
-              <Button onClick={() => setIsCreateModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-                <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                Crear Primera CampaÃ±a
+              <Button onClick={() => setShowWizard(true)} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg">
+                <Icon icon="solar:magic-stick-3-bold" className="w-4 h-4 mr-2" />
+                Crear Primera Campaña
               </Button>
             )}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredCampaigns.map((campaign) => (
-            <CampaignCard
-              key={campaign.id}
-              campaign={campaign}
-              onStart={() => handleStartCampaign(campaign.id)}
-              onPause={() => handlePauseCampaign(campaign.id)}
-              onStop={() => handleStopCampaign(campaign.id)}
-              onView={() => {
-                setSelectedCampaign(campaign);
-                setIsViewModalOpen(true);
-              }}
-              onEdit={() => {
-                setSelectedCampaign(campaign);
-                setIsEditModalOpen(true);
-              }}
-              getStatusColor={getStatusColor}
-              getPriorityColor={getPriorityColor}
-            />
-          ))}
-        </div>
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800/50">
+                  <tr className="text-left text-gray-600 dark:text-gray-300">
+                    <th className="px-4 py-3">Campaña</th>
+                    <th className="px-4 py-3">Estado</th>
+                    <th className="px-4 py-3">Agente</th>
+                    <th className="px-4 py-3">Contactos</th>
+                    <th className="px-4 py-3">Programada</th>
+                    <th className="px-4 py-3">Costo total</th>
+                    <th className="px-4 py-3">Avance</th>
+                    <th className="px-4 py-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {filteredCampaigns.map((c) => {
+                    const s: any = (c as any).stats || (c as any).statistics || {};
+                    const totalContacts = Number(s.total_targets ?? s.total_contacts ?? (c as any).contacts?.length ?? 0);
+                    const completed = Number(s.calls_successful ?? s.completed_calls ?? 0);
+                    const failed = Number(s.calls_failed ?? 0);
+                    // Contadores adicionales si existen; si no, 0
+                    const noAnswer = Number(s.no_answer_calls ?? 0);
+                    const busy = Number(s.busy_calls ?? 0);
+                    const cancelled = Number(s.cancelled_calls ?? 0);
+                    const processed = completed + failed + noAnswer + busy + cancelled;
+                    const percent = totalContacts > 0
+                      ? Math.round((processed / totalContacts) * 100)
+                      : ((c as any).status === 'completed' ? 100 : 0);
+                    return (
+                      <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-gray-900 dark:text-white">{c.name}</div>
+                          <div className="text-gray-500 dark:text-gray-400 truncate max-w-xs">{c.description}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${getStatusColor(c.status)}`}>
+                            {/* Icono de estado simplificado (colores en badge) */}
+                            {(c.status === 'running') && <Icon icon="solar:play-bold" className="w-3.5 h-3.5" />}
+                            {(c.status === 'scheduled') && <Icon icon="solar:calendar-bold" className="w-3.5 h-3.5" />}
+                            {(c.status === 'paused') && <Icon icon="solar:pause-bold" className="w-3.5 h-3.5" />}
+                            {(c.status === 'completed') && <Icon icon="solar:check-circle-bold" className="w-3.5 h-3.5" />}
+                            {(c.status === 'cancelled') && <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />}
+                            {c.status === 'completed' ? 'FINALIZADA' : (c.status || '').toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">{(c as any).agent_name || '-'}</td>
+                        <td className="px-4 py-3">{s.total_contacts || s.total_targets || (c as any).contacts?.length || 0}</td>
+                        <td className="px-4 py-3">{c.scheduled_at ? new Date(c.scheduled_at).toLocaleString() : (c as any).scheduledAt ? new Date((c as any).scheduledAt).toLocaleString() : '-'}</td>
+                        <td className="px-4 py-3">{
+                          (() => {
+                            const statsObj: any = (c as any).statistics || (c as any).stats || {};
+                            const rawStatCop = statsObj?.total_cost_cop;
+                            const rawStatUsd = statsObj?.total_cost;
+                            const statFromStats =
+                              (typeof rawStatCop === 'number' && isFinite(rawStatCop))
+                                ? rawStatCop
+                                : ((typeof rawStatUsd === 'number' && isFinite(rawStatUsd)) ? rawStatUsd * 4500 : undefined);
+                            const fallbackCost = campaignCostTotals[c.id];
+                            const loading = loadingCampaignCosts[c.id];
+                            const value = (typeof statFromStats === 'number' && isFinite(statFromStats))
+                              ? statFromStats
+                              : (typeof fallbackCost === 'number' && isFinite(fallbackCost) ? fallbackCost : 0);
+                            return (
+                              <div className="flex items-center gap-2">
+                                <Icon icon="solar:dollar-minimalistic-bold" className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                {loading ? (
+                                  <span className="text-gray-500 dark:text-gray-400">Calculando…</span>
+                                ) : (
+                                  <span className="tabular-nums font-medium text-gray-900 dark:text-white">
+                                    {`COP ${Number(value).toFixed(2)}`}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()
+                        }</td>
+                        <td className="px-4 py-3 w-56">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-600 rounded-full" style={{ width: `${percent}%` }}></div>
+                            </div>
+                            <span className="text-gray-700 dark:text-gray-300 tabular-nums w-10 text-right">{percent}%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end">
+                            <Dropdown
+                              label=""
+                              dismissOnClick={false}
+                              renderTrigger={() => (
+                                <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
+                                  <IconDots size={22} />
+                                </span>
+                              )}
+                            >
+                              <Dropdown.Item className="flex gap-3" onClick={() => { setSelectedCampaign(c); setIsViewModalOpen(true); }}>
+                                <Icon icon="solar:eye-bold-duotone" height={18} /> Ver detalles
+                              </Dropdown.Item>
+                              {(c.status === 'draft' || c.status === 'scheduled') && (
+                                <Dropdown.Item className="flex gap-3" onClick={async () => {
+                                  await runWithLoading(c.id, 'start', async () => {
+                                    const r = await voiceCampaignService.executeVoiceCampaign(c.id);
+                                    if (r.success) await loadCampaigns();
+                                  });
+                                }}>
+                                  {actionLoading[c.id] === 'start' ? <Spinner size="sm" /> : <Icon icon="solar:play-bold-duotone" height={18} />} Iniciar
+                                </Dropdown.Item>
+                              )}
+                              {c.status === 'running' && (
+                                <Dropdown.Item className="flex gap-3" onClick={async () => {
+                                  await runWithLoading(c.id, 'pause', async () => {
+                                    const r = await voiceCampaignService.pauseVoiceCampaign(c.id);
+                                    if (r.success) await loadCampaigns();
+                                  });
+                                }}>
+                                  {actionLoading[c.id] === 'pause' ? <Spinner size="sm" /> : <Icon icon="solar:pause-bold-duotone" height={18} />} Pausar
+                                </Dropdown.Item>
+                              )}
+                              {c.status === 'paused' && (
+                                <Dropdown.Item className="flex gap-3" onClick={async () => {
+                                  await runWithLoading(c.id, 'resume', async () => {
+                                    const r = await voiceCampaignService.resumeVoiceCampaign(c.id);
+                                    if (r.success) await loadCampaigns();
+                                  });
+                                }}>
+                                  {actionLoading[c.id] === 'resume' ? <Spinner size="sm" /> : <Icon icon="solar:play-bold-duotone" height={18} />} Reanudar
+                                </Dropdown.Item>
+                              )}
+                              {(c.status === 'running' || c.status === 'paused') && (
+                                <Dropdown.Item className="flex gap-3" onClick={async () => {
+                                  await runWithLoading(c.id, 'cancel', async () => {
+                                    const r = await voiceCampaignService.cancelVoiceCampaign(c.id);
+                                    if (r.success) await loadCampaigns();
+                                  });
+                                }}>
+                                  {actionLoading[c.id] === 'cancel' ? <Spinner size="sm" /> : <Icon icon="solar:stop-bold-duotone" height={18} />} Cancelar
+                                </Dropdown.Item>
+                              )}
+                              <Dropdown.Item className="flex gap-3" onClick={() => { setCampaignToEdit(c); setIsEditModalOpen(true); }}>
+                                <Icon icon="solar:pen-bold-duotone" height={18} /> Editar
+                              </Dropdown.Item>
+                              <Dropdown.Item className="flex gap-3" onClick={() => { setCampaignToDelete(c); setIsDeleteModalOpen(true); }}>
+                                <Icon icon="solar:trash-bin-trash-bold" height={18} /> Eliminar
+                              </Dropdown.Item>
+                            </Dropdown>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Modal de vista detallada */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalles de CampaÃ±a: {selectedCampaign?.name}</DialogTitle>
+            <DialogTitle>Detalles de Campaña: {selectedCampaign?.name}</DialogTitle>
           </DialogHeader>
           {selectedCampaign && (
-            <CampaignDetailView 
-              campaign={selectedCampaign} 
-              agents={agents}
+            <CampaignDetailView campaign={selectedCampaign} />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de edición de campaña */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Campaña: {campaignToEdit?.name}</DialogTitle>
+          </DialogHeader>
+          {campaignToEdit && (
+            <CampaignEditForm 
+              campaign={campaignToEdit}
+              onSave={handleUpdateCampaign}
+              onCancel={() => {
+                setIsEditModalOpen(false);
+                setCampaignToEdit(null);
+              }}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación de eliminación */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon icon="solar:danger-triangle-bold" className="w-6 h-6 text-red-600" />
+              Confirmar Eliminación
+            </DialogTitle>
+          </DialogHeader>
+          {campaignToDelete && (
+            <div className="space-y-4">
+              <p className="text-gray-600 dark:text-gray-400">
+                ¿Estás seguro de que deseas eliminar la campaña{' '}
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  "{campaignToDelete.name}"
+                </span>?
+              </p>
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <Icon icon="solar:info-circle-bold" className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                    <p className="font-medium mb-1">Esta acción no se puede deshacer</p>
+                    <p>Se eliminarán todos los datos asociados incluyendo:</p>
+                    <ul className="list-disc list-inside mt-1 space-y-0.5">
+                      <li>Historial de llamadas</li>
+                      <li>Estadísticas de ejecución</li>
+                      <li>Configuración de la campaña</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setCampaignToDelete(null);
+                  }}
+                  disabled={isDeleting}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Icon icon="solar:refresh-circle-outline" className="w-4 h-4 mr-2 animate-spin" />
+                      Eliminando...
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" />
+                      Eliminar Campaña
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -874,691 +1002,693 @@ El cliente tiene una deuda de {{debt_amount}} con vencimiento {{payment_due_date
   );
 };
 
-// Interfaz para las props del componente CampaignCard
-interface CampaignCardProps {
-  campaign: VoiceCampaign;
-  onStart: () => void;
-  onPause: () => void;
-  onStop: () => void;
-  onView: () => void;
-  onEdit: () => void;
-  getStatusColor: (status: string) => string;
-  getPriorityColor: (priority: string) => string;
-}
+// (Formulario eliminado - funcionalidad movida al CampaignWizard)
 
-// Componente para la tarjeta de campaÃ±a
-const CampaignCard: React.FC<CampaignCardProps> = ({ campaign, onStart, onPause, onStop, onView, onEdit, getStatusColor, getPriorityColor }) => {
-  const canStart = campaign.status === 'draft' || campaign.status === 'scheduled';
-  const canPause = campaign.status === 'running';
-  const canStop = campaign.status === 'running' || campaign.status === 'paused';
-
-  return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
-              {campaign.name}
-            </CardTitle>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
-              {campaign.description}
-            </p>
-          </div>
-          <div className="flex gap-2 ml-2">
-            <Badge className={`${getStatusColor(campaign.status)} text-xs`}>
-              {campaign.status === 'draft' && 'Borrador'}
-              {campaign.status === 'scheduled' && 'Programada'}
-              {campaign.status === 'running' && 'Activa'}
-              {campaign.status === 'paused' && 'Pausada'}
-              {campaign.status === 'completed' && 'Completada'}
-              {campaign.status === 'cancelled' && 'Cancelada'}
-            </Badge>
-            <Badge className={`${getPriorityColor(campaign.priority)} text-xs`}>
-              {campaign.priority === 'high' && 'Alta'}
-              {campaign.priority === 'medium' && 'Media'}
-              {campaign.priority === 'low' && 'Baja'}
-            </Badge>
-          </div>
-        </div>
-      </CardHeader>
-      
-      <CardContent className="space-y-4">
-        {/* InformaciÃ³n bÃ¡sica */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm">
-            <Icon icon="solar:user-speak-rounded-bold-duotone" className="w-4 h-4 text-blue-600" />
-            <span className="text-gray-600 dark:text-gray-400">Agente:</span>
-            <span className="font-medium text-gray-900 dark:text-white">{campaign.agentName}</span>
-          </div>
-          
-          <div className="flex items-center gap-2 text-sm">
-            <Icon icon="solar:users-group-rounded-bold-duotone" className="w-4 h-4 text-green-600" />
-            <span className="text-gray-600 dark:text-gray-400">Objetivos:</span>
-            <span className="font-medium text-gray-900 dark:text-white">{campaign.statistics.totalTargets}</span>
-          </div>
-          
-          {campaign.scheduledAt && (
-            <div className="flex items-center gap-2 text-sm">
-              <Icon icon="solar:calendar-bold-duotone" className="w-4 h-4 text-purple-600" />
-              <span className="text-gray-600 dark:text-gray-400">Programada:</span>
-              <span className="font-medium text-gray-900 dark:text-white">
-                {campaign.scheduledAt.toLocaleDateString()}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Progreso */}
-        {campaign.status === 'running' && (
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">Progreso</span>
-              <span className="font-medium text-gray-900 dark:text-white">
-                {campaign.statistics.completedCalls} / {campaign.statistics.totalTargets}
-              </span>
-            </div>
-            <Progress 
-              value={(campaign.statistics.completedCalls / campaign.statistics.totalTargets) * 100} 
-              className="h-2"
-            />
-          </div>
-        )}
-
-        {/* EstadÃ­sticas rÃ¡pidas */}
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-            <p className="font-semibold text-green-700 dark:text-green-300">
-              {campaign.statistics.completedCalls}
-            </p>
-            <p className="text-green-600 dark:text-green-400 text-xs">Completadas</p>
-          </div>
-          <div className="text-center p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-            <p className="font-semibold text-red-700 dark:text-red-300">
-              {campaign.statistics.failedCalls}
-            </p>
-            <p className="text-red-600 dark:text-red-400 text-xs">Fallidas</p>
-          </div>
-        </div>
-
-        {/* Acciones */}
-        <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-          <Button onClick={onView} variant="outline" size="sm" className="flex-1">
-            <Icon icon="solar:eye-bold" className="w-4 h-4 mr-1" />
-            Ver
-          </Button>
-          
-          <Button onClick={onEdit} variant="outline" size="sm" className="flex-1">
-            <Icon icon="solar:pen-bold" className="w-4 h-4 mr-1" />
-            Editar
-          </Button>
-          
-          {canStart && (
-            <Button onClick={onStart} size="sm" className="bg-green-600 hover:bg-green-700">
-              <Icon icon="solar:play-bold" className="w-4 h-4" />
-            </Button>
-          )}
-          
-          {canPause && (
-            <Button onClick={onPause} size="sm" className="bg-yellow-600 hover:bg-yellow-700">
-              <Icon icon="solar:pause-bold" className="w-4 h-4" />
-            </Button>
-          )}
-          
-          {canStop && (
-            <Button onClick={onStop} size="sm" className="bg-red-600 hover:bg-red-700">
-              <Icon icon="solar:stop-bold" className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+// Componente para vista detallada de campaña
+const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign }) => {
+  // Normalizar origen de estadísticas
+  const statsRaw: any = (campaign as any).statistics || (campaign as any).stats || {};
+  const totalContacts = Number(statsRaw.total_contacts ?? statsRaw.total_targets ?? campaign.contacts?.length ?? 0);
+  const completed = Number(statsRaw.completed_calls ?? statsRaw.calls_successful ?? 0);
+  const failed = Number(statsRaw.failed_calls ?? statsRaw.calls_failed ?? 0);
+  const noAnswer = Number(statsRaw.no_answer_calls ?? 0);
+  const busy = Number(statsRaw.busy_calls ?? 0);
+  const cancelled = Number(statsRaw.cancelled_calls ?? 0);
+  const processedTerm = completed + failed + noAnswer + busy + cancelled;
+  const successRate = Number(
+    typeof statsRaw.success_rate === 'number'
+      ? Math.round(statsRaw.success_rate)
+      : (totalContacts > 0 ? Math.round((completed / totalContacts) * 100) : 0)
   );
-};
+  const avgDurationSeconds = Number(statsRaw.avg_duration ?? statsRaw.average_duration_seconds ?? 0);
+  const [contactCalls, setContactCalls] = useState<Array<any>>([]);
+  const [isLoadingContacts, setIsLoadingContacts] = useState<boolean>(false);
+  const [isCallModalOpen, setIsCallModalOpen] = useState<boolean>(false);
+  const [selectedContactCall, setSelectedContactCall] = useState<any>(null);
 
-// Formulario de creaciÃ³n de campaÃ±a
-const CreateCampaignForm: React.FC<{
-  formData: any;
-  setFormData: (data: any) => void;
-  agents: ElevenLabsAgent[];
-  clients: Cliente[];
-  onSubmit: () => void;
-  onCancel: () => void;
-}> = ({ formData, setFormData, agents, clients, onSubmit, onCancel }) => {
-  const [currentStep, setCurrentStep] = useState(1);
+  // Audio state for contact call details
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState<boolean>(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const progressBarRef = useRef<HTMLDivElement | null>(null);
+  const isSeekingRef = useRef<boolean>(false);
 
+  useEffect(() => {
+    const loadContactCalls = async () => {
+      setIsLoadingContacts(true);
+      try {
+        const result = await voiceCampaignService.getHybridCallHistory({ campaign_id: campaign.id, limit: 100 });
+        if (result.success && Array.isArray(result.calls)) {
+          const mapStatus = (backendStatus: string): string => {
+            const s = (backendStatus || '').toLowerCase();
+            if (['completed', 'done', 'success'].includes(s)) return 'completed';
+            if (['in_progress', 'in-progress', 'processing', 'running', 'answered'].includes(s)) return 'in_progress';
+            if (['pending', 'queued', 'initiated', 'ringing'].includes(s)) return 'pending';
+            if (['failed', 'error'].includes(s)) return 'failed';
+            if (s === 'no_answer') return 'no_answer';
+            if (s === 'busy') return 'busy';
+            if (s === 'cancelled') return 'cancelled';
+            return 'failed';
+          };
+
+          const calls = result.calls.map((call: any) => {
+            const elStatus = call?.elevenlabs?.raw?.status || call?.elevenlabs_status || call?.elevenlabs_metadata?.status || call.status;
+            const status = mapStatus(elStatus);
+            const duration = call?.duration_seconds || call?.elevenlabs_metadata?.call_duration_secs || 0;
+            const costs = call?.costs || {};
+                    const costTotal = typeof costs.total_with_markup_cop === 'number'
+              ? costs.total_with_markup_cop
+              : (typeof costs.total_cop === 'number' ? costs.total_cop : 0);
+            return {
+              id: call.id,
+              name: call.recipient_name || 'Sin nombre',
+              phone: call.recipient_phone || call.phone || 'N/A',
+              status,
+              duration,
+              cost_total: costTotal,
+              conversation_id: call.elevenlabs_conversation_id ? String(call.elevenlabs_conversation_id) : undefined,
+              raw: call
+            };
+          });
+          setContactCalls(calls);
+        } else {
+          setContactCalls([]);
+        }
+      } catch (e) {
+        setContactCalls([]);
+      } finally {
+        setIsLoadingContacts(false);
+      }
+    };
+    loadContactCalls();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign.id]);
+
+  const getContactStatusBadgeClasses = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300';
+      case 'failed':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300';
+      case 'in_progress':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300';
+      case 'pending':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300';
+      case 'no_answer':
+      case 'busy':
+      case 'cancelled':
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      completed: 'Completada',
+      failed: 'Fallida',
+      in_progress: 'En progreso',
+      pending: 'Pendiente',
+      no_answer: 'Sin respuesta',
+      busy: 'Ocupado',
+      cancelled: 'Cancelada'
+    };
+    return labels[status] || status;
+  };
+
+  const formatDuration = (seconds: number): string => {
+    if (!seconds || seconds <= 0) return 'N/A';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  const cleanupAudio = () => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    } catch {}
+    setIsPlayingAudio(false);
+    setIsLoadingAudio(false);
+    setAudioDuration(0);
+    setCurrentTime(0);
+    setAudioUrl(null);
+    audioRef.current = null;
+  };
+
+  const openCallDetail = async (call: any) => {
+    setSelectedContactCall(call);
+    setIsCallModalOpen(true);
+    cleanupAudio();
+    if (call?.conversation_id) {
+      try {
+        setIsLoadingAudio(true);
+        const url = await getConversationAudio(call.conversation_id);
+        if (url) {
+          const audio = new Audio(url);
+          audio.preload = 'metadata';
+          audio.addEventListener('loadedmetadata', () => setAudioDuration(audio.duration));
+          audio.addEventListener('timeupdate', () => {
+            if (!isSeekingRef.current) setCurrentTime(audio.currentTime);
+          });
+          audio.addEventListener('ended', () => setIsPlayingAudio(false));
+          audioRef.current = audio;
+          setAudioUrl(url);
+        }
+      } catch {}
+      finally {
+        setIsLoadingAudio(false);
+      }
+    }
+  };
+
+  const togglePlayPause = async () => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      await audioRef.current.play();
+      setIsPlayingAudio(true);
+    }
+  };
+
+  const setSeekByClientX = (clientX: number) => {
+    if (!audioRef.current || !progressBarRef.current) return;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const target = ratio * (audioDuration || audioRef.current.duration || 0);
+    audioRef.current.currentTime = target;
+    setCurrentTime(target);
+  };
+
+  const handleProgressBarMouseDown = (e: React.MouseEvent) => {
+    isSeekingRef.current = true;
+    setSeekByClientX(e.clientX);
+    const onMove = (ev: MouseEvent) => setSeekByClientX(ev.clientX);
+    const onUp = () => {
+      isSeekingRef.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // Limpieza al desmontar el componente de detalle para evitar audio colgante
+  useEffect(() => {
+    return () => {
+      cleanupAudio();
+    };
+  }, []);
+
+  
   return (
     <div className="space-y-6">
-      <Tabs value={currentStep.toString()} onValueChange={(value) => setCurrentStep(parseInt(value))}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="1">InformaciÃ³n</TabsTrigger>
-          <TabsTrigger value="2">Agente</TabsTrigger>
-          <TabsTrigger value="3">Objetivos</TabsTrigger>
-          <TabsTrigger value="4">ConfiguraciÃ³n</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="1" className="space-y-4">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="name">Nombre de la CampaÃ±a</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                placeholder="Ej: Recordatorio de PÃ³lizas Enero"
-              />
+      {/* Header con información básica */}
+      <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              {totalContacts}
             </div>
-            
-            <div>
-              <Label htmlFor="description">DescripciÃ³n</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                placeholder="Describe el objetivo de esta campaÃ±a..."
-                rows={3}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="type">Tipo de CampaÃ±a</Label>
-                <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="immediate">Inmediata</SelectItem>
-                    <SelectItem value="scheduled">Programada</SelectItem>
-                    <SelectItem value="follow_up">Seguimiento</SelectItem>
-                    <SelectItem value="reminder">Recordatorio</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="priority">Prioridad</Label>
-                <Select value={formData.priority} onValueChange={(value) => setFormData({...formData, priority: value})}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Baja</SelectItem>
-                    <SelectItem value="medium">Media</SelectItem>
-                    <SelectItem value="high">Alta</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            {formData.type === 'scheduled' && (
-              <div>
-                <Label htmlFor="scheduledAt">Fecha y Hora Programada</Label>
-                <Input
-                  id="scheduledAt"
-                  type="datetime-local"
-                  value={formData.scheduledAt}
-                  onChange={(e) => setFormData({...formData, scheduledAt: e.target.value})}
-                />
-              </div>
-            )}
+            <div className="text-sm text-gray-600 dark:text-gray-400">Total Contactos</div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="2" className="space-y-4">
-          <div>
-            <Label>Seleccionar Agente (Plantilla)</Label>
-            <div className="grid gap-3 mt-2 max-h-96 overflow-y-auto">
-              {agents.map((agent) => (
-                <Card 
-                  key={agent.id} 
-                  className={`cursor-pointer transition-colors ${
-                    formData.agentId === agent.id 
-                      ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-800'
-                  }`}
-                  onClick={() => setFormData({...formData, agentId: agent.id})}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0">
-                        <div className={`w-3 h-3 rounded-full ${agent.isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 dark:text-white">{agent.name}</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                          {agent.description}
-                        </p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                          <span>Voz: {agent.voiceName}</span>
-                          <span>Idioma: {agent.language}</span>
-                          <Badge variant="outline" size="sm">{agent.type}</Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+              {completed}
             </div>
-            
-            {formData.agentId && (
-              <div className="mt-4 space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Switch 
-                    checked={formData.useCustomGreeting} 
-                    onCheckedChange={(checked) => setFormData({...formData, useCustomGreeting: checked})}
-                  />
-                  <Label>Usar saludo personalizado</Label>
-                </div>
-                
-                {formData.useCustomGreeting && (
-                  <div>
-                    <Label htmlFor="customGreeting">Saludo personalizado</Label>
-                    <Textarea
-                      id="customGreeting"
-                      value={formData.customGreeting}
-                      onChange={(e) => setFormData({...formData, customGreeting: e.target.value})}
-                      placeholder="Hola {{customer_name}}, soy tu agente especializado de {{company_name}}. Â¿CÃ³mo puedo ayudarte hoy?"
-                      rows={2}
-                    />
-                    <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                      <p className="text-xs text-amber-800 dark:text-amber-200">
-                        <Icon icon="solar:info-circle-bold" className="w-3 h-3 inline mr-1" />
-                        <strong>Variables disponibles:</strong> {{customer_name}}, {{company_name}}, {{policy_number}}, {{monthly_payment}}, {{debt_amount}}, {{client_email}}, {{client_city}}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                <div>
-                  <Label htmlFor="customPrompt">Prompt personalizado (opcional)</Label>
-                  <Textarea
-                    id="customPrompt"
-                    value={formData.customPrompt}
-                    onChange={(e) => setFormData({...formData, customPrompt: e.target.value})}
-                    placeholder="Instrucciones adicionales para el agente..."
-                    rows={3}
-                  />
-                </div>
-              </div>
-            )}
+            <div className="text-sm text-gray-600 dark:text-gray-400">Completadas</div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="3" className="space-y-4">
-          <div>
-            <Label>Seleccionar Clientes Objetivo</Label>
-            <div className="mt-2 space-y-2 max-h-96 overflow-y-auto border rounded-lg p-3">
-              <div className="flex items-center space-x-2 p-2 border-b">
-                <input
-                  type="checkbox"
-                  checked={formData.selectedTargets.length === clients.length}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setFormData({...formData, selectedTargets: clients.map(c => c.id!)});
-                    } else {
-                      setFormData({...formData, selectedTargets: []});
-                    }
-                  }}
-                />
-                <Label>Seleccionar todos ({clients.length} clientes)</Label>
-              </div>
-              
-              {clients.map((client) => (
-                <div key={client.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-                  <input
-                    type="checkbox"
-                    checked={formData.selectedTargets.includes(client.id!)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setFormData({
-                          ...formData, 
-                          selectedTargets: [...formData.selectedTargets, client.id!]
-                        });
-                      } else {
-                        setFormData({
-                          ...formData, 
-                          selectedTargets: formData.selectedTargets.filter(id => id !== client.id)
-                        });
-                      }
-                    }}
-                  />
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {client.nombre} {client.apellidos}
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {client.celular_principal} â¢ {client.ciudad}
-                    </p>
-                  </div>
-                </div>
-              ))}
+          <div className="text-center">
+            <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+              {failed}
             </div>
-            
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                Seleccionados: {formData.selectedTargets.length} de {clients.length} clientes
-              </p>
-            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Fallidas</div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="4" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="maxRetries">MÃ¡ximo reintentos</Label>
-              <Input
-                id="maxRetries"
-                type="number"
-                min="0"
-                max="10"
-                value={formData.maxRetries}
-                onChange={(e) => setFormData({...formData, maxRetries: parseInt(e.target.value) || 0})}
-              />
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+              {successRate}%
             </div>
-            
-            <div>
-              <Label htmlFor="simultaneousCalls">Llamadas simultÃ¡neas</Label>
-              <Input
-                id="simultaneousCalls"
-                type="number"
-                min="1"
-                max="20"
-                value={formData.simultaneousCalls}
-                onChange={(e) => setFormData({...formData, simultaneousCalls: parseInt(e.target.value) || 1})}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="callTimeout">Timeout por llamada (segundos)</Label>
-              <Input
-                id="callTimeout"
-                type="number"
-                min="30"
-                max="1800"
-                value={formData.callTimeout}
-                onChange={(e) => setFormData({...formData, callTimeout: parseInt(e.target.value) || 300})}
-              />
-            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Tasa de Éxito</div>
           </div>
-          
-          <Alert>
-            <Icon icon="solar:info-circle-bold" className="h-4 w-4" />
-            <AlertDescription>
-              Estas configuraciones afectarÃ¡n el rendimiento y los costos de la campaÃ±a. 
-              MÃ¡s llamadas simultÃ¡neas = mayor velocidad pero mÃ¡s costos iniciales.
-            </AlertDescription>
-          </Alert>
-        </TabsContent>
-      </Tabs>
-
-      {/* NavegaciÃ³n */}
-      <div className="flex justify-between pt-4 border-t">
-        <Button variant="outline" onClick={onCancel}>
-          Cancelar
-        </Button>
-        
-        <div className="flex gap-2">
-          {currentStep > 1 && (
-            <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)}>
-              Anterior
-            </Button>
-          )}
-          
-          {currentStep < 4 ? (
-            <Button 
-              onClick={() => setCurrentStep(currentStep + 1)}
-              disabled={
-                (currentStep === 1 && !formData.name) ||
-                (currentStep === 2 && !formData.agentId) ||
-                (currentStep === 3 && formData.selectedTargets.length === 0)
-              }
-            >
-              Siguiente
-            </Button>
-          ) : (
-            <Button 
-              onClick={onSubmit}
-              className="bg-blue-600 hover:bg-blue-700"
-              disabled={!formData.name || !formData.agentId || formData.selectedTargets.length === 0}
-            >
-              Crear CampaÃ±a
-            </Button>
-          )}
         </div>
       </div>
+
+      {/* Información de la campaña */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Detalles generales */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon icon="solar:document-text-bold" className="w-5 h-5 text-blue-600" />
+              Información General
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Estado</Label>
+                <div className="mt-1">
+                  <Badge className={`${campaign.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' : 
+                    campaign.status === 'running' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300' :
+                    campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' :
+                    'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300'}`}>
+                    {campaign.status === 'draft' && 'Borrador'}
+                    {campaign.status === 'scheduled' && 'Programada'}
+                    {campaign.status === 'running' && 'Activa'}
+                    {campaign.status === 'paused' && 'Pausada'}
+                    {campaign.status === 'completed' && 'Completada'}
+                    {campaign.status === 'cancelled' && 'Cancelada'}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Prioridad</Label>
+                <div className="mt-1">
+                  <Badge className={`${campaign.priority === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300' :
+                    campaign.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' :
+                    'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'}`}>
+                    {campaign.priority === 'high' && 'Alta'}
+                    {campaign.priority === 'medium' && 'Media'}
+                    {campaign.priority === 'low' && 'Baja'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Descripción</Label>
+              <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                {campaign.description || 'Sin descripción'}
+              </p>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Agente Asignado</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <Icon icon="solar:user-speak-rounded-bold" className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {campaign.agent_name || 'Sin asignar'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Creada</Label>
+                <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                  {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString('es-ES', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) : 'N/A'}
+                </p>
+              </div>
+              {campaign.completed_at && (
+                <div>
+                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Completada</Label>
+                  <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                    {new Date(campaign.completed_at).toLocaleDateString('es-ES', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Estadísticas detalladas */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon icon="solar:chart-square-bold" className="w-5 h-5 text-green-600" />
+              Estadísticas Detalladas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Llamadas pendientes</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {Math.max(0, totalContacts - processedTerm)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Duración promedio</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {(() => {
+                    const avgFromCalls = contactCalls.length > 0
+                      ? Math.round(contactCalls.reduce((s, c) => s + (Number(c.duration) || 0), 0) / contactCalls.length)
+                      : 0;
+                    const val = avgDurationSeconds > 0 ? Math.round(avgDurationSeconds) : avgFromCalls;
+                    return val > 0 ? `${val}s` : 'N/A';
+                  })()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Costo total</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {(() => {
+                    const sumCalls = contactCalls.reduce((s, c) => s + (Number(c.cost_total) || 0), 0);
+                    const total = typeof (statsRaw as any).total_cost_cop === 'number' ? Number((statsRaw as any).total_cost_cop) : sumCalls;
+                    return `COP ${total.toFixed(2)}`;
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            {/* Barra de progreso */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Progreso</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {totalContacts > 0 ? Math.round((processedTerm / totalContacts) * 100) : 0}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full transition-all duration-500"
+                  style={{ 
+                    width: `${totalContacts > 0 ? (processedTerm / totalContacts) * 100 : 0}%` 
+                  }}
+                ></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Resultados por contacto - basado en conversaciones reales */}
+              {campaign.status === 'completed' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon icon="solar:users-group-two-rounded-bold" className="w-5 h-5 text-purple-600" />
+              Resultados por Contacto
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              {isLoadingContacts ? (
+                <div className="py-6 text-center text-sm text-gray-600 dark:text-gray-400">Cargando conversaciones reales...</div>
+              ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Contacto</th>
+                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Teléfono</th>
+                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Estado</th>
+                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Duración</th>
+                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Costo total</th>
+                    <th className="text-left py-2 font-medium text-gray-600 dark:text-gray-400">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contactCalls.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-gray-500 dark:text-gray-400">Sin conversaciones registradas para esta campaña</td>
+                    </tr>
+                  ) : (
+                    contactCalls.slice(0, 10).map((c) => (
+                      <tr key={c.id} className="border-b border-gray-100 dark:border-gray-800">
+                        <td className="py-2 text-gray-900 dark:text-white">{c.name}</td>
+                        <td className="py-2 text-gray-600 dark:text-gray-400">{c.phone}</td>
+                        <td className="py-2">
+                          <Badge className={`text-xs ${getContactStatusBadgeClasses(c.status)}`}>{getStatusLabel(c.status)}</Badge>
+                      </td>
+                      <td className="py-2 text-gray-600 dark:text-gray-400">{formatDuration(c.duration)}</td>
+                      <td className="py-2 text-gray-900 dark:text-white">{`COP ${(Number(c.cost_total) || 0).toFixed(2)}`}</td>
+                      <td className="py-2">
+                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => openCallDetail(c)}>
+                            Ver detalles
+                          </Button>
+                      </td>
+                    </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+              )}
+              {contactCalls.length > 10 && (
+                <div className="mt-4 text-center">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Mostrando 10 de {contactCalls.length} contactos
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modal de detalle de llamada por contacto */}
+      <Dialog open={isCallModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          cleanupAudio();
+          setIsCallModalOpen(false);
+          setSelectedContactCall(null);
+        } else {
+          setIsCallModalOpen(true);
+        }
+      }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              Detalle de Conversación {selectedContactCall ? `— ${selectedContactCall.name}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedContactCall && (
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-gray-900 dark:text-white font-medium">{selectedContactCall.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{selectedContactCall.phone}</div>
+                  </div>
+                  <Badge className={`${getContactStatusBadgeClasses(selectedContactCall.status)} text-xs`}>{getStatusLabel(selectedContactCall.status)}</Badge>
+                </div>
+                <div className="mt-3 text-sm text-gray-700 dark:text-gray-300">Duración: {formatDuration(selectedContactCall.duration)}</div>
+              </div>
+            )}
+
+            {/* Datos recolectados (si existen) - Componente mejorado */}
+            {selectedContactCall?.raw?.call_metadata?.collected_data && (
+              <CollectedDataDisplay
+                collectedData={selectedContactCall.raw.call_metadata.collected_data}
+                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+              />
+            )}
+
+            {(selectedContactCall?.conversation_id) && (
+              <div className="rounded-lg p-4 border bg-white border-gray-200 text-gray-900 dark:bg-gray-900 dark:border-gray-700 dark:text-white">
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={togglePlayPause}
+                    disabled={isLoadingAudio || !audioRef.current}
+                    className="rounded-full w-10 h-10 flex items-center justify-center p-0 transition-all duration-200 shadow-md bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
+                  >
+                    {isLoadingAudio ? (
+                      <span className="animate-pulse text-xs">···</span>
+                    ) : isPlayingAudio ? (
+                      <Icon icon="solar:pause-bold" className="w-5 h-5" />
+                    ) : (
+                      <Icon icon="solar:play-bold" className="w-5 h-5 ml-0.5" />
+                    )}
+                  </Button>
+
+                  <div className="flex-1 flex flex-col">
+                    <div
+                      ref={progressBarRef}
+                      onMouseDown={handleProgressBarMouseDown}
+                      className={`w-full h-2 rounded-full relative ${!audioRef.current ? 'opacity-50' : 'cursor-pointer'} bg-gray-200 dark:bg-gray-700`}
+                    >
+                      <div
+                        className="absolute top-0 left-0 h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
+                        style={{ width: `${Math.min(100, Math.max(0, (currentTime / Math.max(1, audioDuration || 1)) * 100))}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs mt-1 text-gray-600 dark:text-gray-300">
+                      <span>{formatDuration(Math.floor(currentTime))}</span>
+                      <span>{formatDuration(Math.floor(audioDuration))}</span>
+                    </div>
+                  </div>
+                </div>
+                {!audioRef.current && !isLoadingAudio && (
+                  <div className="text-xs text-gray-500 mt-2">Pulsa reproducir para cargar el audio</div>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-// Vista detallada de campaÃ±a
-const CampaignDetailView: React.FC<{
+// Componente para edición de campaña
+const CampaignEditForm: React.FC<{
   campaign: VoiceCampaign;
-  agents: ElevenLabsAgent[];
-}> = ({ campaign, agents }) => {
-  const agent = agents.find(a => a.id === campaign.agentId);
+  onSave: (data: any) => void;
+  onCancel: () => void;
+}> = ({ campaign, onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    name: campaign.name || '',
+    description: campaign.description || '',
+    agent_name: campaign.agent_name || '',
+    priority: campaign.priority || 'medium',
+    voice_message_template: (campaign as any).voice_message_template || '',
+  });
+
+  const handleSubmit = () => {
+    // Validar campos requeridos
+    if (!formData.name.trim()) {
+      alert('El nombre de la campaña es requerido');
+      return;
+    }
+
+    if (!formData.voice_message_template.trim()) {
+      alert('El mensaje de voz es requerido');
+      return;
+    }
+
+    onSave(formData);
+  };
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Resumen</TabsTrigger>
-          <TabsTrigger value="targets">Objetivos</TabsTrigger>
-          <TabsTrigger value="settings">ConfiguraciÃ³n</TabsTrigger>
-          <TabsTrigger value="analytics">AnalÃ­ticas</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 gap-4">
+        {/* Nombre de la campaña */}
+        <div>
+          <Label htmlFor="edit-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Nombre de la Campaña *
+          </Label>
+          <TextInput
+            id="edit-name"
+            value={formData.name}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, name: e.target.value })}
+            placeholder="Ej: Campaña de Renovaciones Q4"
+            className="mt-1"
+          />
+        </div>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">InformaciÃ³n General</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Estado:</span>
-                    <Badge className={`text-xs`}>
-                      {campaign.status}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Prioridad:</span>
-                    <span className="font-medium">{campaign.priority}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Tipo:</span>
-                    <span className="font-medium">{campaign.type}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Creada:</span>
-                    <span className="font-medium">{campaign.createdAt.toLocaleDateString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-4">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Agente Asignado</h4>
-                {agent && (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Nombre:</span>
-                      <span className="font-medium">{agent.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Voz:</span>
-                      <span className="font-medium">{agent.voiceName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Idioma:</span>
-                      <span className="font-medium">{agent.language}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Tipo:</span>
-                      <Badge variant="outline" size="sm">{agent.type}</Badge>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        {/* Descripción */}
+        <div>
+          <Label htmlFor="edit-description" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Descripción
+          </Label>
+          <Textarea
+            id="edit-description"
+            value={formData.description}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, description: e.target.value })}
+            placeholder="Describe el propósito de esta campaña..."
+            rows={3}
+            className="mt-1"
+          />
+        </div>
+
+        {/* Nombre del agente */}
+        <div>
+          <Label htmlFor="edit-agent-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Nombre del Agente
+          </Label>
+          <TextInput
+            id="edit-agent-name"
+            value={formData.agent_name}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, agent_name: e.target.value })}
+            placeholder="Ej: María González"
+            className="mt-1"
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Este es el nombre con el que se presentará el agente en las llamadas
+          </p>
+        </div>
+
+        {/* Prioridad */}
+        <div>
+          <Label htmlFor="edit-priority" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Prioridad
+          </Label>
+          <Select
+            value={formData.priority}
+            onValueChange={(value: 'low' | 'medium' | 'high') => setFormData({ ...formData, priority: value })}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Seleccionar prioridad" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Baja</SelectItem>
+              <SelectItem value="medium">Media</SelectItem>
+              <SelectItem value="high">Alta</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Mensaje de voz */}
+        <div>
+          <Label htmlFor="edit-message" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Mensaje de Voz *
+          </Label>
+          <Textarea
+            id="edit-message"
+            value={formData.voice_message_template}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, voice_message_template: e.target.value })}
+            placeholder="Escriba el mensaje que el agente dirá en las llamadas..."
+            rows={6}
+            className="mt-1"
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Puede usar variables como {'{customer_name}'}, {'{policy_number}'}, etc.
+          </p>
+        </div>
+      </div>
+
+      {/* Estado de la campaña */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="flex items-center gap-2">
+          <Icon icon="solar:info-circle-bold" className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <div>
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+              Estado actual: {campaign.status === 'draft' ? 'Borrador' : 
+                            campaign.status === 'scheduled' ? 'Programada' :
+                            campaign.status === 'running' ? 'Activa' :
+                            campaign.status === 'paused' ? 'Pausada' :
+                            campaign.status === 'completed' ? 'Completada' : 'Cancelada'}
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+              {campaign.status === 'running' ? 'La campaña se está ejecutando actualmente' :
+               campaign.status === 'completed' ? 'Esta campaña ya ha sido completada' :
+               'Puedes modificar la configuración de esta campaña'}
+            </p>
           </div>
-          
-          <Card>
-            <CardContent className="p-4">
-              <h4 className="font-medium text-gray-900 dark:text-white mb-2">EstadÃ­sticas</h4>
-              <div className="grid grid-cols-4 gap-4 text-center">
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{campaign.statistics.totalTargets}</p>
-                  <p className="text-sm text-blue-600">Total</p>
-                </div>
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{campaign.statistics.completedCalls}</p>
-                  <p className="text-sm text-green-600">Completadas</p>
-                </div>
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{campaign.statistics.failedCalls}</p>
-                  <p className="text-sm text-red-600">Fallidas</p>
-                </div>
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                  <p className="text-2xl font-bold text-yellow-600">{campaign.statistics.pendingCalls}</p>
-                  <p className="text-sm text-yellow-600">Pendientes</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        </div>
+      </div>
 
-        <TabsContent value="targets" className="space-y-4">
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {campaign.targets.map((target) => (
-              <Card key={target.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{target.name}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{target.phoneNumber}</p>
-                    </div>
-                    <div className="text-right">
-                      <Badge className={`text-xs ${
-                        target.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        target.status === 'failed' ? 'bg-red-100 text-red-800' :
-                        target.status === 'calling' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {target.status}
-                      </Badge>
-                      {target.callDuration && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          DuraciÃ³n: {Math.floor(target.callDuration / 60)}:{(target.callDuration % 60).toString().padStart(2, '0')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {target.notes && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{target.notes}</p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardContent className="p-4">
-              <h4 className="font-medium text-gray-900 dark:text-white mb-4">ConfiguraciÃ³n de Llamadas</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">MÃ¡ximo reintentos:</span>
-                  <span className="font-medium">{campaign.settings.maxRetries}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Llamadas simultÃ¡neas:</span>
-                  <span className="font-medium">{campaign.settings.simultaneousCalls}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Timeout por llamada:</span>
-                  <span className="font-medium">{campaign.settings.callTimeout}s</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Retraso entre reintentos:</span>
-                  <span className="font-medium">{campaign.settings.retryDelay}s</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <h4 className="font-medium text-gray-900 dark:text-white mb-4">ConfiguraciÃ³n de Voz</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Estabilidad:</span>
-                  <span className="font-medium">{campaign.settings.voiceSettings.stability}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Similitud:</span>
-                  <span className="font-medium">{campaign.settings.voiceSettings.similarityBoost}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Estilo:</span>
-                  <span className="font-medium">{campaign.settings.voiceSettings.style}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Speaker Boost:</span>
-                  <span className="font-medium">{campaign.settings.voiceSettings.speakerBoost ? 'SÃ­' : 'No'}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {campaign.settings.customPrompt && (
-            <Card>
-              <CardContent className="p-4">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Prompt Personalizado</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded">
-                  {campaign.settings.customPrompt}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Rendimiento</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Tasa de Ã©xito:</span>
-                    <span className="font-medium text-green-600">{campaign.statistics.successRate.toFixed(1)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">DuraciÃ³n promedio:</span>
-                    <span className="font-medium">{Math.floor(campaign.statistics.avgDuration / 60)}:{(campaign.statistics.avgDuration % 60).toString().padStart(2, '0')}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardContent className="p-4">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-2">Costos</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Costo total:</span>
-                    <span className="font-medium">${campaign.statistics.totalCost.toFixed(4)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Costo promedio:</span>
-                    <span className="font-medium">${campaign.statistics.avgCostPerCall.toFixed(4)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+      {/* Botones de acción */}
+      <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <Button variant="outline" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button 
+          onClick={handleSubmit}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          <Icon icon="solar:floppy-disk-bold" className="w-4 h-4 mr-2" />
+          Guardar Cambios
+        </Button>
+      </div>
     </div>
   );
 };

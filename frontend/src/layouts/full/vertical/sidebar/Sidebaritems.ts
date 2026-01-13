@@ -217,6 +217,14 @@ const BaseMenuitems: MenuitemsType[] = [
     icon: 'solar:smartphone-2-bold-duotone',
     href: '/apps/marketing/mini-web',
   },
+  {
+    id: uniqueId(),
+    title: 'Comparador Autos',
+    icon: 'solar:shield-check-bold-duotone',
+    href: '#',
+    chip: 'Próximamente',
+    chipColor: 'bg-gray-200 text-gray-600',
+  },
 
   // 🤖 INTELIGENCIA ARTIFICIAL
   {
@@ -237,15 +245,17 @@ const BaseMenuitems: MenuitemsType[] = [
   },
   {
     id: uniqueId(),
-    title: 'Predicciones de venta',
-    icon: 'solar:chart-square-bold-duotone',
-    href: '/apps/ia/analisis-predictivo/predicciones',
-  },
-  {
-    id: uniqueId(),
     title: 'Ventas cruzadas',
     icon: 'solar:graph-up-bold-duotone',
     href: '/apps/ia/ventas-cruzadas',
+  },
+  {
+    id: uniqueId(),
+    title: 'Robots',
+    icon: 'solar:bolt-circle-bold-duotone',
+    href: '#',
+    chip: 'Próximamente',
+    chipColor: 'bg-gray-200 text-gray-600',
   },
 
   // 📚 GESTIÓN DOCUMENTAL

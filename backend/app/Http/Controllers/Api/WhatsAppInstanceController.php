@@ -311,20 +311,51 @@ class WhatsAppInstanceController extends Controller
                 
                 // Verificar que la respuesta corresponde a esta instancia específica
                 if (isset($data['instanceId']) && $data['instanceId'] === $whatsAppInstance->instance_id) {
-                    // Solo actualizar si el estado ha cambiado
-                    if (isset($data['status']) && $data['status'] !== $whatsAppInstance->status) {
-                        Log::info('Actualizando estado de instancia', [
+                    // Determinar el estado real basado en connected/connecting
+                    $realStatus = 'disconnected';
+                    if ($data['connected'] ?? false) {
+                        $realStatus = 'connected';
+                    } elseif ($data['connecting'] ?? false) {
+                        $realStatus = 'connecting';
+                    }
+                    
+                    // Preparar datos de actualización
+                    $updateData = [
+                        'last_activity_at' => now(),
+                    ];
+                    
+                    // Actualizar estado si cambió
+                    if ($realStatus !== $whatsAppInstance->status) {
+                        Log::info('📊 [STATUS SYNC] Actualizando estado de instancia', [
                             'instance_id' => $whatsAppInstance->instance_id,
                             'old_status' => $whatsAppInstance->status,
-                            'new_status' => $data['status']
+                            'new_status' => $realStatus,
+                            'microservice_data' => $data
                         ]);
                         
-                        $whatsAppInstance->update([
-                            'status' => $data['status'],
-                            'last_activity_at' => now(),
-                            'phone_number' => $data['phoneNumber'] ?? $whatsAppInstance->phone_number,
-                        ]);
+                        $updateData['status'] = $realStatus;
+                        
+                        // Si se conectó, limpiar QR y actualizar timestamp
+                        if ($realStatus === 'connected') {
+                            $updateData['qr_code'] = null;
+                            $updateData['qr_expires_at'] = null;
+                            $updateData['last_connected_at'] = now();
+                            $updateData['error_message'] = null;
+                            $updateData['reconnect_attempts'] = 0;
+                        }
                     }
+                    
+                    // Actualizar phone_number si viene
+                    if (!empty($data['phoneNumber'])) {
+                        $updateData['phone_number'] = $data['phoneNumber'];
+                    }
+                    
+                    // Guardar session_id si viene en la respuesta
+                    if (!empty($data['sessionId'])) {
+                        $updateData['session_id'] = $data['sessionId'];
+                    }
+                    
+                    $whatsAppInstance->update($updateData);
                 } else {
                     // Si no hay instanceId en la respuesta o no coincide, marcar como desconectado
                     Log::warning('Respuesta de estado no coincide con instancia', [
@@ -343,6 +374,45 @@ class WhatsAppInstanceController extends Controller
                 
                 return response($data, 200);
             } else {
+                // Si la instancia no existe en el microservicio (404), intentar recrearla
+                if ($response->status() === 404) {
+                    Log::info('🔄 [STATUS SYNC] Instancia no existe en microservicio, intentando recrear', [
+                        'instance_id' => $whatsAppInstance->instance_id
+                    ]);
+                    
+                    try {
+                        $createResponse = Http::post($this->whatsappMicroserviceUrl . '/instances', [
+                            'instanceId' => $whatsAppInstance->instance_id,
+                            'settings' => $whatsAppInstance->settings ?? []
+                        ]);
+                        
+                        if ($createResponse->successful()) {
+                            Log::info('✅ [STATUS SYNC] Instancia recreada en microservicio', [
+                                'instance_id' => $whatsAppInstance->instance_id
+                            ]);
+                            
+                            $whatsAppInstance->update([
+                                'status' => 'disconnected',
+                                'last_activity_at' => now(),
+                            ]);
+                            
+                            return response([
+                                'success' => true,
+                                'instanceId' => $whatsAppInstance->instance_id,
+                                'status' => 'disconnected',
+                                'connected' => false,
+                                'connecting' => false,
+                                'message' => 'Instancia recreada. Escanea el QR para conectar.'
+                            ], 200);
+                        }
+                    } catch (\Exception $recreateError) {
+                        Log::warning('⚠️ [STATUS SYNC] No se pudo recrear instancia', [
+                            'instance_id' => $whatsAppInstance->instance_id,
+                            'error' => $recreateError->getMessage()
+                        ]);
+                    }
+                }
+                
                 // Si el microservicio no responde exitosamente, marcar como desconectado
                 Log::warning('Microservicio no respondió exitosamente para instancia', [
                     'instance_id' => $whatsAppInstance->instance_id,
@@ -357,7 +427,13 @@ class WhatsAppInstanceController extends Controller
                     ]);
                 }
                 
-                return response(['error' => 'Failed to get status', 'status' => 'disconnected'], 500);
+                return response([
+                    'success' => true,
+                    'instanceId' => $whatsAppInstance->instance_id,
+                    'status' => 'disconnected',
+                    'connected' => false,
+                    'connecting' => false
+                ], 200);
             }
         } catch (\Exception $e) {
             Log::error('Error al obtener estado de instancia', [

@@ -90,7 +90,7 @@ interface UnifiedAuthContextType {
   saasChecked: boolean;
 }
 
-const UnifiedAuthContext = createContext<UnifiedAuthContextType | undefined>(undefined);
+export const UnifiedAuthContext = createContext<UnifiedAuthContextType | undefined>(undefined);
 
 export const useUnifiedAuth = (): UnifiedAuthContextType => {
   const context = useContext(UnifiedAuthContext);
