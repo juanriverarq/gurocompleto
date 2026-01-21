@@ -40,9 +40,6 @@ const VerificationPrompt = Loadable(lazy(() => import('../pages/VerificationProm
 // Wallet Return
 const WalletReturn = Loadable(lazy(() => import('../pages/WalletReturn')));
 
-// SaaS Onboarding
-const CreateBroker = Loadable(lazy(() => import('../views/saas/onboarding/CreateBroker')));
-
 // SaaS Transitional/Building screen
 const DashboardBuilding = Loadable(lazy(() => import('../views/saas/dashboard/DashboardBuilding')));
 
@@ -438,9 +435,6 @@ const Router = [
 
       // Mobile Auth
       { path: '/auth/mobile', element: <MobileAuthPage /> },
-
-      // SaaS Onboarding (opcional)
-      { path: '/onboarding/create-broker', element: <CreateBroker /> },
 
       { path: '/auth/auth1/login', element: <Login /> },
       { path: '/auth/auth1/register', element: <Register /> },

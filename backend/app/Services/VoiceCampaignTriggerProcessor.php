@@ -333,7 +333,10 @@ class VoiceCampaignTriggerProcessor
     }
 
     /**
-     * Para policy_expiry: valida si hoy es uno de los días configurados antes/después del vencimiento.
+     * Para policy_expiry: valida si la póliza está dentro del rango de días configurado.
+     * 
+     * Ahora usa rangos: before_days = X significa "pólizas que venzan en los próximos 0 a X días"
+     *                   after_days = Y significa "pólizas vencidas hace 0 a Y días"
      */
     protected function matchPolicyExpiryOffsets(VoiceCampaignTrigger $trigger, array $entity, \DateTimeInterface $now): bool
     {
@@ -346,21 +349,23 @@ class VoiceCampaignTriggerProcessor
 
             $diffDays = $today->diffInDays($endDate, false); // negativo si ya venció
 
-            $beforeDays = $trigger->getExpiryBeforeDays(); // e.g., [7,3,1]
-            $afterDays  = $trigger->getExpiryAfterDays();  // e.g., [1]
+            // Obtener rangos (ahora son números simples, no arrays)
+            $beforeDaysRange = $trigger->getExpiryBeforeDaysRange(); // e.g., 30 (significa 0-30 días antes)
+            $afterDaysRange  = $trigger->getExpiryAfterDaysRange();  // e.g., 7 (significa 0-7 días después)
 
             if ($diffDays > 0) {
-                // Falta(n) X día(s) para vencer
-                return in_array($diffDays, $beforeDays, true);
+                // Falta(n) X día(s) para vencer - verificar si está dentro del rango
+                return $diffDays <= $beforeDaysRange;
             } elseif ($diffDays < 0) {
-                // Ya venció hace X días
+                // Ya venció hace X días - verificar si está dentro del rango
                 $ago = abs($diffDays);
-                return in_array($ago, $afterDays, true);
+                return $ago <= $afterDaysRange;
             } else {
-                // Hoy vence
-                return in_array(0, $beforeDays, true) || in_array(0, $afterDays, true);
+                // Hoy vence - siempre incluido si hay algún rango configurado
+                return $beforeDaysRange >= 0 || $afterDaysRange >= 0;
             }
         } catch (\Throwable $e) {
+            Log::warning('⚠️ [TRIGGER] Error en matchPolicyExpiryOffsets', ['error' => $e->getMessage()]);
             return false;
         }
     }

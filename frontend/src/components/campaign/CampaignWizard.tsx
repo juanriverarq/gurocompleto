@@ -7,6 +7,7 @@ import DynamicFieldsConfig from '../voice-ai/DynamicFieldsConfig';
 import DecisionPoliciesConfig from '../voice-ai/DecisionPoliciesConfig';
 import {
   AgentTemplate,
+  AGENT_TEMPLATES,
   getAgentTemplatesByCategory
 } from '../../data/campaignAgentTemplates';
 import { clienteService, Cliente } from '../../services/clienteService';
@@ -122,8 +123,18 @@ interface CampaignData {
   postCallTools: {
     collect: CollectConfig;
     customFields: CustomField[];
-    whatsapp: { enabled: boolean; instance_id: string; template: string };
+    whatsapp: { enabled: boolean; instance_id: string; template: string; noAnswerEnabled: boolean; noAnswerTemplate: string };
     decisionPolicies: DecisionPolicy[];
+    followUpEnabled?: boolean;
+    followUpCondition?: string;
+    followUpDays?: number;
+    followUpDescription?: string;
+    // Disparador para crear negocio en embudo de ventas
+    createDealEnabled?: boolean;
+    createDealContactability?: string;
+    createDealObjective?: string;
+    createDealStage?: string;
+    createDealDescription?: string;
   };
   // Reglas de decisión (IF-THEN) - Mantenido para compatibilidad
   decisionPolicies: Array<any>;
@@ -157,8 +168,17 @@ const INITIAL_CAMPAIGN_DATA: CampaignData = {
       address: { enabled: false, type: 'address', required: false }
     },
     customFields: [],
-    whatsapp: { enabled: false, instance_id: '', template: 'Hola {customer_name}, te compartimos tu enlace de pago: {payment_link}' },
-    decisionPolicies: []
+    whatsapp: { enabled: false, instance_id: '', template: 'Hola {customer_name}, te compartimos tu enlace de pago: {payment_link}', noAnswerEnabled: false, noAnswerTemplate: 'Hola {customer_name}, intentamos comunicarnos contigo sin éxito. Por favor contáctanos para información sobre tu póliza.' },
+    decisionPolicies: [],
+    followUpEnabled: false,
+    followUpCondition: 'call_successful',
+    followUpDays: 3,
+    followUpDescription: '',
+    createDealEnabled: false,
+    createDealContactability: 'any',
+    createDealObjective: 'any',
+    createDealStage: 'lead',
+    createDealDescription: ''
   },
   decisionPolicies: []
 };
@@ -223,7 +243,7 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onComplete, onCa
     },
     selectedType: 'none' as string, // Tipo seleccionado: 'none' o uno de los tipos
     window: { start: '08:00', end: '18:00', tz: 'America/Bogota', days: 'mon,tue,wed,thu,fri' },
-    limits: { daily_quota: 100, dedup_days: 7 },
+    limits: { daily_quota: 100, dedup_days: 0 },
     expiry: { before_days: '7,3,1', after_days: '1' }, // solo aplica para policy_expiry
     mapping: { phone_field: 'client.mobile_phone' }
   });
@@ -356,39 +376,71 @@ const brokerClientsFiltered = React.useMemo(() => {
     loadWhatsAppInstances();
   }, []);
 
-  // Prefijar reglas y campos recolectados por defecto para Recordatorio de Pago
+  // Aplicar enabledOptions del template seleccionado automáticamente
   useEffect(() => {
     const tpl = campaignData.selectedTemplate;
-    if (!tpl) return;
-    const isPaymentReminder = tpl.id?.includes('payment_reminder') || /recordatorio/i.test(tpl.name || '');
-
-    if (isPaymentReminder) {
-      // Si no hay reglas definidas aún, crear una por defecto
-      if (!campaignData.decisionPolicies || campaignData.decisionPolicies.length === 0) {
-        setCampaignData(prev => ({
-          ...prev,
-          decisionPolicies: [
-            { if: { "collected_data.document_id": { exists: true } }, then: [{ action: 'send_payment_link' }] }
-          ]
-        }));
-      }
-
-      // Asegurar que se recolecten email y documento por defecto
-      if (!campaignData.postCallTools.collect.email?.enabled || !campaignData.postCallTools.collect.document_id?.enabled) {
-        setCampaignData(prev => ({
-          ...prev,
-          postCallTools: {
-            ...prev.postCallTools,
-            collect: {
-              ...prev.postCallTools.collect,
-              email: { enabled: true, type: 'email', required: false },
-              document_id: { enabled: true, type: 'document_id', required: false }
-            }
-          }
-        }));
-      }
+    if (!tpl || !tpl.enabledOptions) return;
+    
+    const opts = tpl.enabledOptions;
+    
+    // Aplicar configuración de recolección de datos según el objetivo
+    const newCollect: CollectConfig = {
+      email: { enabled: opts.collectData.email, type: 'email', required: false },
+      document_id: { enabled: opts.collectData.document_id, type: 'document_id', required: false },
+      address: { enabled: opts.collectData.address, type: 'address', required: false }
+    };
+    
+    // Aplicar configuración de WhatsApp según el objetivo
+    const newWhatsapp = {
+      enabled: opts.whatsapp.enabled,
+      instance_id: campaignData.postCallTools.whatsapp.instance_id || '',
+      template: opts.whatsapp.defaultTemplate || campaignData.postCallTools.whatsapp.template,
+      noAnswerEnabled: campaignData.postCallTools.whatsapp.noAnswerEnabled || false,
+      noAnswerTemplate: campaignData.postCallTools.whatsapp.noAnswerTemplate || 'Hola {customer_name}, intentamos comunicarnos contigo sin éxito. Por favor contáctanos para información sobre tu póliza.'
+    };
+    
+    // Aplicar trigger recomendado según el objetivo
+    const recommendedTrigger = Object.entries(opts.triggers).find(([_, enabled]) => enabled)?.[0] || 'none';
+    const newTriggerTypes = {
+      new_client: opts.triggers.new_client,
+      new_policy: opts.triggers.new_policy,
+      policy_expiry: opts.triggers.policy_expiry,
+      new_lead: opts.triggers.new_lead,
+      new_siniestro: opts.triggers.new_siniestro
+    };
+    
+    // Actualizar triggers config
+    setTriggersConfig(prev => ({
+      ...prev,
+      selectedType: recommendedTrigger,
+      types: newTriggerTypes
+    }));
+    
+    // Crear políticas de decisión por defecto según el objetivo
+    const defaultPolicies: any[] = [];
+    if (opts.decisionPolicies.send_payment_link) {
+      defaultPolicies.push({ 
+        if: { "collected_data.document_id": { exists: true } }, 
+        then: [{ action: 'send_payment_link' }] 
+      });
     }
-  }, [campaignData.selectedTemplate]);
+    if (opts.decisionPolicies.schedule_callback) {
+      defaultPolicies.push({ 
+        if: { "call_outcome": { equals: "callback_requested" } }, 
+        then: [{ action: 'schedule_callback' }] 
+      });
+    }
+    
+    setCampaignData(prev => ({
+      ...prev,
+      postCallTools: {
+        ...prev.postCallTools,
+        collect: newCollect,
+        whatsapp: newWhatsapp
+      },
+      decisionPolicies: defaultPolicies.length > 0 ? defaultPolicies : prev.decisionPolicies
+    }));
+  }, [campaignData.selectedTemplate?.id]);
 
   const loadWhatsAppInstances = async () => {
     try {
@@ -746,20 +798,26 @@ const brokerClientsFiltered = React.useMemo(() => {
 
     return (
       <div className="flex flex-col gap-6">
-        {/* Grid compacto de agentes */}
+        {/* Grid compacto de agentes - ordenados: disponibles primero */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Object.entries(categorizedTemplates).flatMap(([_, templates]) => 
-            templates.map((tpl) => (
+          {AGENT_TEMPLATES
+            .slice()
+            .sort((a, b) => (b.available ? 1 : 0) - (a.available ? 1 : 0))
+            .map((tpl) => (
               <Card
                 key={tpl.id}
-                className={`rounded-xl border border-gray-200 hover:border-gray-300 transition-colors ${
-                  campaignData.selectedTemplate?.id === tpl.id ? 'ring-2 ring-blue-500' : ''
+                className={`rounded-xl border transition-colors ${
+                  !tpl.available 
+                    ? 'border-gray-200 opacity-60 cursor-not-allowed' 
+                    : campaignData.selectedTemplate?.id === tpl.id 
+                      ? 'ring-2 ring-blue-500 border-blue-300' 
+                      : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
                 <div className="p-4">
                   {/* Fila 1: icono + botón */}
                   <div className="flex items-center justify-between">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gray-100">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${!tpl.available ? 'bg-gray-50' : 'bg-gray-100'}`}>
                       <Icon
                         icon={
                           tpl.id.includes('claim')
@@ -776,26 +834,34 @@ const brokerClientsFiltered = React.useMemo(() => {
                                       ? 'solar:headphones-round-sound-bold-duotone'
                                       : 'solar:refresh-bold-duotone'
                         }
-                        className="w-6 h-6 text-gray-700"
+                        className={`w-6 h-6 ${!tpl.available ? 'text-gray-400' : 'text-gray-700'}`}
                       />
                   </div>
-                    <Button
-                      size="sm"
-                      color={campaignData.selectedTemplate?.id === tpl.id ? 'primary' : 'gray'}
-                      onClick={() => handleTemplateSelect(tpl)}
-                    >
-                      {campaignData.selectedTemplate?.id === tpl.id ? 'Seleccionado' : 'Seleccionar'}
-                    </Button>
+                    {tpl.available ? (
+                      <Button
+                        size="sm"
+                        color={campaignData.selectedTemplate?.id === tpl.id ? 'primary' : 'gray'}
+                        onClick={() => handleTemplateSelect(tpl)}
+                      >
+                        {campaignData.selectedTemplate?.id === tpl.id ? 'Seleccionado' : 'Seleccionar'}
+                      </Button>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-500 bg-gray-100 rounded-md">
+                        <Icon icon="solar:lock-bold" className="w-3 h-3 mr-1" />
+                        Bloqueado
+                      </span>
+                    )}
                   </div>
                   {/* Fila 2: título + descripción */}
                   <div className="mt-3">
-                    <h4 className="font-medium text-gray-900">{tpl.name}</h4>
-                    <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{tpl.description}</p>
+                    <h4 className={`font-medium ${!tpl.available ? 'text-gray-500' : 'text-gray-900'}`}>{tpl.name}</h4>
+                    <p className={`text-sm mt-1 whitespace-pre-wrap ${!tpl.available ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {!tpl.available ? tpl.unavailableMessage : tpl.description}
+                    </p>
                     </div>
                 </div>
               </Card>
-            ))
-          )}
+            ))}
         </div>
 
         {/* Campo de nombre del agente movido al Paso 2 (diseño compacto) */}
@@ -1488,6 +1554,11 @@ const brokerClientsFiltered = React.useMemo(() => {
     if (triggersConfig.selectedType === 'none' || triggersConfig.selectedType === '') {
       return [];
     }
+    
+    // Venta Cruzada no usa triggers automáticos - requiere selección manual de clientes
+    if (campaignData.selectedTemplate?.id === 'cross_sell') {
+      return [];
+    }
 
     const parseCsvNums = (s: string): number[] =>
       (s || '')
@@ -1725,9 +1796,21 @@ const brokerClientsFiltered = React.useMemo(() => {
           elevenlabs_voice_id: voiceId,
           // voice_settings omitido para evitar errores de override en ElevenLabs (stability/similarity/style)
           settings: {
+            template_id: campaignData.selectedTemplate?.id,
             call_timeout: campaignData.callTimeout,
             simultaneous_calls: campaignData.maxConcurrentCalls,
             system_prompt: campaignData.customPrompt || campaignData.selectedTemplate.systemPrompt,
+            triggers: {
+              selectedType: triggersConfig.selectedType,
+              types: triggersConfig.types,
+              expiry: {
+                before_days: Number(triggersConfig.expiry.before_days) || 0,
+                after_days: Number(triggersConfig.expiry.after_days) || 0,
+              },
+              window: triggersConfig.window,
+              limits: triggersConfig.limits,
+              mapping: triggersConfig.mapping,
+            },
             post_call_tools: {
               collect: {
                 // Convertir el formato nuevo al formato esperado por el backend
@@ -1754,7 +1837,16 @@ const brokerClientsFiltered = React.useMemo(() => {
                 )
               },
               whatsapp: campaignData.postCallTools.whatsapp,
-              decision_policies: campaignData.postCallTools.decisionPolicies
+              decision_policies: campaignData.postCallTools.decisionPolicies,
+              followUpEnabled: campaignData.postCallTools.followUpEnabled,
+              followUpCondition: campaignData.postCallTools.followUpCondition,
+              followUpDays: campaignData.postCallTools.followUpDays,
+              followUpDescription: campaignData.postCallTools.followUpDescription,
+              createDealEnabled: campaignData.postCallTools.createDealEnabled,
+              createDealContactability: campaignData.postCallTools.createDealContactability,
+              createDealObjective: campaignData.postCallTools.createDealObjective,
+              createDealStage: campaignData.postCallTools.createDealStage,
+              createDealDescription: campaignData.postCallTools.createDealDescription
             },
             decision_policies: campaignData.decisionPolicies
           }
@@ -2122,14 +2214,32 @@ const brokerClientsFiltered = React.useMemo(() => {
                           
                           <Tabs aria-label="Herramientas avanzadas" variant="underline">
                             <Tabs.Item
-                              title="Disparadores"
+                              title="Inicializador"
                               icon={() => <Icon icon="solar:alarm-bell-bold-duotone" className="w-4 h-4" />}
                             >
                               <div className="mt-4 space-y-6">
-                                {/* Tipo de disparador - Select único */}
+                                {/* Para Venta Cruzada: No hay inicializador automático */}
+                                {campaignData.selectedTemplate?.id === 'cross_sell' ? (
+                                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                                    <div className="flex items-start gap-3">
+                                      <Icon icon="solar:users-group-rounded-bold-duotone" className="w-6 h-6 text-purple-600 flex-shrink-0 mt-0.5" />
+                                      <div>
+                                        <h5 className="font-medium text-purple-900 dark:text-purple-100">Campaña de Venta Cruzada</h5>
+                                        <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+                                          Esta campaña no utiliza inicialización automática. Debes seleccionar manualmente los clientes a los que deseas llamar en el paso de <strong>Contactos</strong>.
+                                        </p>
+                                        <p className="text-sm text-purple-600 dark:text-purple-400 mt-2">
+                                          La campaña finalizará automáticamente cuando se completen todas las llamadas programadas.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                {/* Tipo de inicialización - Select único */}
                                 <div>
                                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 block">
-                                    Tipo de Disparador
+                                    Tipo de inicialización
                                   </label>
                                   <ShadSelect
                                     value={triggersConfig.selectedType}
@@ -2153,25 +2263,35 @@ const brokerClientsFiltered = React.useMemo(() => {
                                     }}
                                   >
                                     <ShadSelectTrigger className="w-full">
-                                      <ShadSelectValue placeholder="Selecciona un tipo de disparador" />
+                                      <ShadSelectValue placeholder="Selecciona tipo de inicialización" />
                                     </ShadSelectTrigger>
                                     <ShadSelectContent>
-                                      <ShadSelectItem value="none">Sin disparador</ShadSelectItem>
-                                      <ShadSelectItem value="new_client">Nuevo Cliente</ShadSelectItem>
-                                      <ShadSelectItem value="new_policy">Nueva Póliza</ShadSelectItem>
-                                      <ShadSelectItem value="policy_expiry">Vencimiento de Póliza</ShadSelectItem>
-                                      <ShadSelectItem value="new_lead">Nuevo Lead</ShadSelectItem>
-                                      <ShadSelectItem value="new_siniestro">Nuevo Siniestro</ShadSelectItem>
+                                      <ShadSelectItem value="none">Sin inicialización automática</ShadSelectItem>
+                                      {campaignData.selectedTemplate?.id === 'policy_renewal' ? (
+                                        <ShadSelectItem value="policy_expiry">Renovación de póliza (por vencimiento)</ShadSelectItem>
+                                      ) : (
+                                        <ShadSelectItem value="policy_expiry">Recordatorio de pago</ShadSelectItem>
+                                      )}
                                     </ShadSelectContent>
                                   </ShadSelect>
                                 </div>
 
-                                {/* Días de la semana - Checkboxes visuales */}
-                                <div>
-                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 block">
-                                    Días de la Semana
-                                  </label>
-                                  <div className="grid grid-cols-7 gap-2">
+                                {/* Horario de trabajo de la IA */}
+                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
+                                  <div>
+                                    <h5 className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                      <Icon icon="solar:clock-circle-bold-duotone" className="w-4 h-4 text-primary" />
+                                      Horario de trabajo
+                                    </h5>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Define los días y horarios en los que la IA realizará las llamadas automáticas
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-600 dark:text-gray-400 mb-2 block">
+                                      Días activos
+                                    </label>
+                                    <div className="grid grid-cols-7 gap-2">
                                     {[
                                       { key: 'mon', label: 'Lun' },
                                       { key: 'tue', label: 'Mar' },
@@ -2209,69 +2329,60 @@ const brokerClientsFiltered = React.useMemo(() => {
                                         </div>
                                       </label>
                                     ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Horarios */}
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                                        Hora Inicio
+                                      </label>
+                                      <input
+                                        type="time"
+                                        className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                        value={triggersConfig.window.start}
+                                        onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, start: e.target.value } }))}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                                        Hora Fin
+                                      </label>
+                                      <input
+                                        type="time"
+                                        className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                        value={triggersConfig.window.end}
+                                        onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, end: e.target.value } }))}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                                        Zona Horaria
+                                      </label>
+                                      <ShadSelect
+                                        value={triggersConfig.window.tz}
+                                        onValueChange={(value) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, tz: value } }))}
+                                      >
+                                        <ShadSelectTrigger className="w-full">
+                                          <ShadSelectValue />
+                                        </ShadSelectTrigger>
+                                        <ShadSelectContent>
+                                          <ShadSelectItem value="America/Bogota">Colombia (GMT-5)</ShadSelectItem>
+                                          <ShadSelectItem value="America/Mexico_City">México (GMT-6)</ShadSelectItem>
+                                          <ShadSelectItem value="America/Lima">Perú (GMT-5)</ShadSelectItem>
+                                          <ShadSelectItem value="America/Santiago">Chile (GMT-4)</ShadSelectItem>
+                                          <ShadSelectItem value="America/Argentina/Buenos_Aires">Argentina (GMT-3)</ShadSelectItem>
+                                          <ShadSelectItem value="America/New_York">Nueva York (GMT-5)</ShadSelectItem>
+                                          <ShadSelectItem value="Europe/Madrid">Madrid (GMT+1)</ShadSelectItem>
+                                          <ShadSelectItem value="Europe/London">Londres (GMT+0)</ShadSelectItem>
+                                        </ShadSelectContent>
+                                      </ShadSelect>
+                                    </div>
                                   </div>
                                 </div>
 
-                                {/* Horarios y zona horaria */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                                      Hora Inicio
-                                    </label>
-                                    <input
-                                      type="time"
-                                      className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-                                      value={triggersConfig.window.start}
-                                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, start: e.target.value } }))}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                                      Hora Fin
-                                    </label>
-                                    <input
-                                      type="time"
-                                      className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-                                      value={triggersConfig.window.end}
-                                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, end: e.target.value } }))}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                                      Zona Horaria
-                                    </label>
-                                    <ShadSelect
-                                      value={triggersConfig.window.tz}
-                                      onValueChange={(value) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, tz: value } }))}
-                                    >
-                                      <ShadSelectTrigger className="w-full">
-                                        <ShadSelectValue />
-                                      </ShadSelectTrigger>
-                                      <ShadSelectContent>
-                                        <ShadSelectItem value="America/Bogota">Colombia (GMT-5)</ShadSelectItem>
-                                        <ShadSelectItem value="America/Mexico_City">México (GMT-6)</ShadSelectItem>
-                                        <ShadSelectItem value="America/Lima">Perú (GMT-5)</ShadSelectItem>
-                                        <ShadSelectItem value="America/Santiago">Chile (GMT-4)</ShadSelectItem>
-                                        <ShadSelectItem value="America/Argentina/Buenos_Aires">Argentina (GMT-3)</ShadSelectItem>
-                                        <ShadSelectItem value="America/New_York">Nueva York (GMT-5)</ShadSelectItem>
-                                        <ShadSelectItem value="Europe/Madrid">Madrid (GMT+1)</ShadSelectItem>
-                                        <ShadSelectItem value="Europe/London">Londres (GMT+0)</ShadSelectItem>
-                                      </ShadSelectContent>
-                                    </ShadSelect>
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                  <div>
-                                    <label className="text-xs text-gray-600 dark:text-gray-400">Días activos (CSV mon,tue,...)</label>
-                                    <input
-                                      type="text"
-                                      className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-                                      value={triggersConfig.window.days}
-                                      onChange={(e) => setTriggersConfig(prev => ({ ...prev, window: { ...prev.window, days: e.target.value } }))}
-                                      placeholder="mon,tue,wed,thu,fri"
-                                    />
-                                  </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div>
                                     <label className="text-xs text-gray-600 dark:text-gray-400">Cupo diario</label>
                                     <input
@@ -2283,13 +2394,15 @@ const brokerClientsFiltered = React.useMemo(() => {
                                     />
                                   </div>
                                   <div>
-                                    <label className="text-xs text-gray-600 dark:text-gray-400">Deduplicación (días)</label>
+                                    <label className="text-xs text-gray-600 dark:text-gray-400">Intentos máximos (en caso de no contestar)</label>
                                     <input
                                       type="number"
+                                      min="0"
+                                      max="5"
                                       className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-                                      value={Number(triggersConfig.limits.dedup_days)}
+                                      value={triggersConfig.limits.dedup_days}
                                       onChange={(e) => setTriggersConfig(prev => ({ ...prev, limits: { ...prev.limits, dedup_days: Number(e.target.value) } }))}
-                                      placeholder="7"
+                                      placeholder="0"
                                     />
                                   </div>
                                 </div>
@@ -2297,24 +2410,38 @@ const brokerClientsFiltered = React.useMemo(() => {
                                 {triggersConfig.types.policy_expiry && (
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                      <label className="text-xs text-gray-600 dark:text-gray-400">Antes de vencer (días CSV)</label>
+                                      <label className="text-xs text-gray-600 dark:text-gray-400">
+                                        {campaignData.selectedTemplate?.id === 'policy_renewal' 
+                                          ? 'Días antes del vencimiento' 
+                                          : 'Días antes de vencer'}
+                                      </label>
                                       <input
-                                        type="text"
+                                        type="number"
+                                        min="0"
+                                        max="90"
                                         className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-                                        value={triggersConfig.expiry.before_days}
+                                        value={Number(triggersConfig.expiry.before_days) || 0}
                                         onChange={(e) => setTriggersConfig(prev => ({ ...prev, expiry: { ...prev.expiry, before_days: e.target.value } }))}
-                                        placeholder="7,3,1,0"
+                                        placeholder={campaignData.selectedTemplate?.id === 'policy_renewal' ? '30' : '7'}
                                       />
+                                      <p className="text-xs text-gray-400 mt-1">Pólizas que venzan en los próximos X días</p>
                                     </div>
                                     <div>
-                                      <label className="text-xs text-gray-600 dark:text-gray-400">Después de vencer (días CSV)</label>
+                                      <label className="text-xs text-gray-600 dark:text-gray-400">
+                                        {campaignData.selectedTemplate?.id === 'policy_renewal' 
+                                          ? 'Días después del vencimiento' 
+                                          : 'Días después de vencer'}
+                                      </label>
                                       <input
-                                        type="text"
+                                        type="number"
+                                        min="0"
+                                        max="90"
                                         className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-                                        value={triggersConfig.expiry.after_days}
+                                        value={Number(triggersConfig.expiry.after_days) || 0}
                                         onChange={(e) => setTriggersConfig(prev => ({ ...prev, expiry: { ...prev.expiry, after_days: e.target.value } }))}
-                                        placeholder="1"
+                                        placeholder={campaignData.selectedTemplate?.id === 'policy_renewal' ? '7' : '1'}
                                       />
+                                      <p className="text-xs text-gray-400 mt-1">Pólizas vencidas hace X días o menos</p>
                                     </div>
                                   </div>
                                 )}
@@ -2336,21 +2463,213 @@ const brokerClientsFiltered = React.useMemo(() => {
                                     </ShadSelectContent>
                                   </ShadSelect>
                                 </div>
+                                  </>
+                                )}
                               </div>
                             </Tabs.Item>
 
                             <Tabs.Item
-                              title="Reglas de Decisión"
-                              icon={() => <Icon icon="solar:settings-bold-duotone" className="w-4 h-4" />}
+                              title="Disparadores"
+                              icon={() => <Icon icon="solar:bolt-bold-duotone" className="w-4 h-4" />}
                             >
-                              <div className="mt-4">
-                                <DecisionPoliciesConfig
-                                  policies={campaignData.postCallTools.decisionPolicies}
-                                  onPoliciesChange={(policies) => setCampaignData(prev => ({
-                                    ...prev,
-                                    postCallTools: { ...prev.postCallTools, decisionPolicies: policies }
-                                  }))}
-                                />
+                              <div className="mt-4 space-y-4">
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  Configura acciones automáticas que se ejecutan según el resultado de la llamada.
+                                </p>
+                                
+                                {/* Disparador: Seguimiento Comercial */}
+                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                        <Icon icon="solar:phone-calling-bold-duotone" className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                      </div>
+                                      <div>
+                                        <h5 className="font-medium text-gray-900 dark:text-white">Seguimiento Comercial</h5>
+                                        <p className="text-xs text-gray-500">Programa seguimiento según resultado de la llamada</p>
+                                      </div>
+                                    </div>
+                                    <ToggleSwitch
+                                      checked={campaignData.postCallTools.followUpEnabled || false}
+                                      onChange={(checked: boolean) => setCampaignData(prev => ({
+                                        ...prev,
+                                        postCallTools: { ...prev.postCallTools, followUpEnabled: checked }
+                                      }))}
+                                    />
+                                  </div>
+                                  
+                                  {campaignData.postCallTools.followUpEnabled && (
+                                    <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                      <div>
+                                        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Crear tarea cuando</label>
+                                        <ShadSelect
+                                          value={campaignData.postCallTools.followUpCondition || 'call_successful'}
+                                          onValueChange={(value) => setCampaignData(prev => ({
+                                            ...prev,
+                                            postCallTools: { ...prev.postCallTools, followUpCondition: value }
+                                          }))}
+                                        >
+                                          <ShadSelectTrigger className="w-full">
+                                            <ShadSelectValue placeholder="Selecciona condición" />
+                                          </ShadSelectTrigger>
+                                          <ShadSelectContent>
+                                            <ShadSelectItem value="call_successful">Llamada exitosa (objetivo cumplido)</ShadSelectItem>
+                                            <ShadSelectItem value="call_failed">Llamada fallida (objetivo no cumplido)</ShadSelectItem>
+                                            <ShadSelectItem value="no_answer">No contestó</ShadSelectItem>
+                                            <ShadSelectItem value="always">Siempre (cualquier resultado)</ShadSelectItem>
+                                          </ShadSelectContent>
+                                        </ShadSelect>
+                                      </div>
+                                      <div>
+                                        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Descripción de la tarea (opcional)</label>
+                                        <textarea
+                                          rows={2}
+                                          className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                          value={campaignData.postCallTools.followUpDescription || ''}
+                                          onChange={(e) => setCampaignData(prev => ({
+                                            ...prev,
+                                            postCallTools: { ...prev.postCallTools, followUpDescription: e.target.value }
+                                          }))}
+                                          placeholder="Ej: Contactar cliente para confirmar pago..."
+                                        />
+                                      </div>
+                                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 space-y-2">
+                                        <p className="text-xs font-medium text-blue-800 dark:text-blue-200">
+                                          <Icon icon="solar:info-circle-bold" className="w-4 h-4 inline mr-1" />
+                                          ¿Qué hace este disparador?
+                                        </p>
+                                        <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1 ml-5 list-disc">
+                                          <li>Crea automáticamente una tarea de seguimiento comercial cuando se cumple la condición seleccionada</li>
+                                          <li>La tarea incluirá el nombre del cliente, resumen de la llamada y la descripción que agregues</li>
+                                          <li>Podrás ver y gestionar las tareas en <span className="font-medium">Seguros → Seguimiento</span></li>
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Disparador: Crear Negocio en Embudo de Ventas (para Renovación y Venta Cruzada) */}
+                                {(campaignData.selectedTemplate?.id === 'policy_renewal' || campaignData.selectedTemplate?.id === 'cross_sell') && (
+                                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                                          <Icon icon="solar:chart-bold-duotone" className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                                        </div>
+                                        <div>
+                                          <h5 className="font-medium text-gray-900 dark:text-white">Crear Negocio</h5>
+                                          <p className="text-xs text-gray-500">Crea un negocio en el embudo de ventas</p>
+                                        </div>
+                                      </div>
+                                      <ToggleSwitch
+                                        checked={campaignData.postCallTools.createDealEnabled || false}
+                                        onChange={(checked: boolean) => setCampaignData(prev => ({
+                                          ...prev,
+                                          postCallTools: { ...prev.postCallTools, createDealEnabled: checked }
+                                        }))}
+                                      />
+                                    </div>
+                                    
+                                    {campaignData.postCallTools.createDealEnabled && (
+                                      <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                          <div>
+                                            <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Contactabilidad</label>
+                                            <ShadSelect
+                                              value={campaignData.postCallTools.createDealContactability || 'any'}
+                                              onValueChange={(value) => setCampaignData(prev => ({
+                                                ...prev,
+                                                postCallTools: { ...prev.postCallTools, createDealContactability: value }
+                                              }))}
+                                            >
+                                              <ShadSelectTrigger className="w-full">
+                                                <ShadSelectValue placeholder="Selecciona" />
+                                              </ShadSelectTrigger>
+                                              <ShadSelectContent>
+                                                <ShadSelectItem value="any">Cualquiera</ShadSelectItem>
+                                                <ShadSelectItem value="contacted">Contestó</ShadSelectItem>
+                                                <ShadSelectItem value="not_contacted">No contestó</ShadSelectItem>
+                                              </ShadSelectContent>
+                                            </ShadSelect>
+                                          </div>
+                                          <div>
+                                            <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Cumplimiento del objetivo</label>
+                                            <ShadSelect
+                                              value={campaignData.postCallTools.createDealObjective || 'any'}
+                                              onValueChange={(value) => setCampaignData(prev => ({
+                                                ...prev,
+                                                postCallTools: { ...prev.postCallTools, createDealObjective: value }
+                                              }))}
+                                            >
+                                              <ShadSelectTrigger className="w-full">
+                                                <ShadSelectValue placeholder="Selecciona" />
+                                              </ShadSelectTrigger>
+                                              <ShadSelectContent>
+                                                <ShadSelectItem value="any">Cualquiera</ShadSelectItem>
+                                                <ShadSelectItem value="achieved">Objetivo cumplido</ShadSelectItem>
+                                                <ShadSelectItem value="not_achieved">Objetivo no cumplido</ShadSelectItem>
+                                              </ShadSelectContent>
+                                            </ShadSelect>
+                                          </div>
+                                          <div>
+                                            <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Estado inicial del negocio</label>
+                                            <ShadSelect
+                                              value={campaignData.postCallTools.createDealStage || 'lead'}
+                                              onValueChange={(value) => setCampaignData(prev => ({
+                                                ...prev,
+                                                postCallTools: { ...prev.postCallTools, createDealStage: value }
+                                              }))}
+                                            >
+                                              <ShadSelectTrigger className="w-full">
+                                                <ShadSelectValue placeholder="Selecciona estado" />
+                                              </ShadSelectTrigger>
+                                              <ShadSelectContent>
+                                                <ShadSelectItem value="lead">Lead</ShadSelectItem>
+                                                <ShadSelectItem value="contacted">Contactado</ShadSelectItem>
+                                                <ShadSelectItem value="qualified">Calificado</ShadSelectItem>
+                                                <ShadSelectItem value="proposal">Propuesta</ShadSelectItem>
+                                                <ShadSelectItem value="negotiation">Negociación</ShadSelectItem>
+                                              </ShadSelectContent>
+                                            </ShadSelect>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Descripción del negocio (opcional)</label>
+                                          <textarea
+                                            rows={2}
+                                            className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                            value={campaignData.postCallTools.createDealDescription || ''}
+                                            onChange={(e) => setCampaignData(prev => ({
+                                              ...prev,
+                                              postCallTools: { ...prev.postCallTools, createDealDescription: e.target.value }
+                                            }))}
+                                            placeholder="Ej: Renovación de póliza de auto..."
+                                          />
+                                        </div>
+                                        <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 space-y-2">
+                                          <p className="text-xs font-medium text-orange-800 dark:text-orange-200">
+                                            <Icon icon="solar:info-circle-bold" className="w-4 h-4 inline mr-1" />
+                                            ¿Qué hace este disparador?
+                                          </p>
+                                          <ul className="text-xs text-orange-700 dark:text-orange-300 space-y-1 ml-5 list-disc">
+                                            <li>Crea automáticamente un negocio en el embudo de ventas cuando se cumple la condición</li>
+                                            <li>El negocio incluirá los datos del cliente, póliza y ramo correspondiente</li>
+                                            <li>Podrás ver y gestionar los negocios en <span className="font-medium">Comercial → Embudo de Ventas</span></li>
+                                          </ul>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Mensaje informativo si no hay disparadores activos */}
+                                {!campaignData.postCallTools.followUpEnabled && !campaignData.postCallTools.createDealEnabled && (
+                                  <div className="text-center py-6 text-gray-500">
+                                    <Icon icon="solar:bolt-circle-bold-duotone" className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                                    <p className="text-sm">No hay disparadores activos</p>
+                                    <p className="text-xs">Activa un disparador para automatizar acciones post-llamada</p>
+                                  </div>
+                                )}
                               </div>
                             </Tabs.Item>
 
@@ -2398,7 +2717,7 @@ const brokerClientsFiltered = React.useMemo(() => {
                                       </ShadSelect>
                                     </div>
                                     <div>
-                                      <label className="text-xs text-gray-600 dark:text-gray-400">Plantilla de mensaje</label>
+                                      <label className="text-xs text-gray-600 dark:text-gray-400">Plantilla de mensaje (llamada exitosa)</label>
                                       <textarea
                                         rows={3}
                                         className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
@@ -2410,6 +2729,39 @@ const brokerClientsFiltered = React.useMemo(() => {
                                         placeholder="Hola {customer_name}, te compartimos tu enlace de pago: {payment_link}"
                                       />
                                       <p className="text-xs text-gray-500 mt-1">Variables: {'{customer_name}'}, {'{payment_link}'}, {'{amount_cop}'}, {'{reference}'}</p>
+                                    </div>
+                                    
+                                    {/* Opción para no contestados */}
+                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div>
+                                          <span className="text-sm font-medium">Enviar mensaje si no contesta</span>
+                                          <p className="text-xs text-gray-500">Se enviará automáticamente cuando el cliente no conteste la llamada</p>
+                                        </div>
+                                        <ToggleSwitch
+                                          checked={campaignData.postCallTools.whatsapp.noAnswerEnabled}
+                                          onChange={(checked: boolean) => setCampaignData(prev => ({
+                                            ...prev,
+                                            postCallTools: { ...prev.postCallTools, whatsapp: { ...prev.postCallTools.whatsapp, noAnswerEnabled: checked } }
+                                          }))}
+                                        />
+                                      </div>
+                                      {campaignData.postCallTools.whatsapp.noAnswerEnabled && (
+                                        <div>
+                                          <label className="text-xs text-gray-600 dark:text-gray-400">Mensaje para no contestados</label>
+                                          <textarea
+                                            rows={3}
+                                            className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                            value={campaignData.postCallTools.whatsapp.noAnswerTemplate}
+                                            onChange={(e) => setCampaignData(prev => ({
+                                              ...prev,
+                                              postCallTools: { ...prev.postCallTools, whatsapp: { ...prev.postCallTools.whatsapp, noAnswerTemplate: e.target.value } }
+                                            }))}
+                                            placeholder="Hola {customer_name}, intentamos comunicarnos contigo..."
+                                          />
+                                          <p className="text-xs text-gray-500 mt-1">Variables: {'{customer_name}'}, {'{company_name}'}, {'{phone}'}</p>
+                                        </div>
+                                      )}
                                     </div>
                                   </>
                                 )}

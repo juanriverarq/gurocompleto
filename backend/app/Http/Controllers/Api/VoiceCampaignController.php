@@ -248,6 +248,22 @@ class VoiceCampaignController extends Controller
                     ]);
                 }
                 
+                // Programar llamadas automáticamente según el objetivo de la campaña
+                $schedulerResult = null;
+                try {
+                    $scheduler = new \App\Services\VoiceCampaignSchedulerService();
+                    $schedulerResult = $scheduler->scheduleCallsForCampaign($campaign);
+                    Log::info('📅 [VOICE CAMPAIGN] Llamadas programadas automáticamente', [
+                        'campaign_id' => $campaign->id,
+                        'scheduled' => $schedulerResult['scheduled'] ?? 0,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('📅 [VOICE CAMPAIGN] Error programando llamadas', [
+                        'campaign_id' => $campaign->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+                
                 DB::commit();
                 return response()->json([
                     'success' => true,
@@ -257,7 +273,8 @@ class VoiceCampaignController extends Controller
                     'data' => [
                         'campaign' => $campaign->fresh(),
                         'triggers' => $createdTriggers,
-                        'stats' => $campaign->getStats()
+                        'stats' => $campaign->getStats(),
+                        'scheduled_calls' => $schedulerResult['scheduled'] ?? 0,
                     ]
                 ], 201);
             }
@@ -624,46 +641,69 @@ class VoiceCampaignController extends Controller
                 // IMPORTANTE: Solo para campañas sin triggers (immediate/scheduled finitas)
                 try {
                     $activeStatuses = [
-                        \App\Models\VoiceCampaignCall::STATUS_PENDING,
-                        \App\Models\VoiceCampaignCall::STATUS_INITIATED,
-                        \App\Models\VoiceCampaignCall::STATUS_RINGING,
-                        \App\Models\VoiceCampaignCall::STATUS_ANSWERED,
-                        \App\Models\VoiceCampaignCall::STATUS_IN_PROGRESS,
+                        VoiceCampaignCall::STATUS_PENDING,
+                        VoiceCampaignCall::STATUS_INITIATED,
+                        VoiceCampaignCall::STATUS_RINGING,
+                        VoiceCampaignCall::STATUS_ANSWERED,
+                        VoiceCampaignCall::STATUS_IN_PROGRESS,
                     ];
 
-                    $remainingInExec = $call->execution
-                        ? $call->execution->calls()->whereIn('status', $activeStatuses)->count()
-                        : 0;
-
-                    if ($remainingInExec === 0) {
-                        // Terminar ejecución
-                        if ($call->execution && !$call->execution->isCompleted()) {
+                    // Terminar ejecución si no quedan llamadas activas
+                    if ($call->execution) {
+                        $remainingInExec = $call->execution->calls()->whereIn('status', $activeStatuses)->count();
+                        if ($remainingInExec === 0 && !$call->execution->isCompleted()) {
                             $call->execution->markAsCompleted();
                         }
+                    }
+                    
+                    // Verificar si la campaña debe marcarse como completada
+                    $campaign = $call->voiceCampaign;
+                    if ($campaign && $campaign->status === VoiceCampaign::STATUS_RUNNING) {
+                        // Contar llamadas activas de TODA la campaña (no solo de la ejecución)
+                        $remainingInCampaign = VoiceCampaignCall::where('voice_campaign_id', $campaign->id)
+                            ->whereIn('status', $activeStatuses)
+                            ->count();
                         
-                        // Solo terminar campaña si NO tiene triggers activos (campañas finitas)
-                        $campaign = $call->voiceCampaign;
-                        if ($campaign && !$campaign->isCompleted()) {
+                        Log::info('🔍 [VOICE CAMPAIGN] Verificando estado de campaña', [
+                            'campaign_id' => $campaign->id,
+                            'remaining_active_calls' => $remainingInCampaign,
+                        ]);
+                        
+                        if ($remainingInCampaign === 0) {
+                            // Verificar si tiene llamadas programadas pendientes o triggers activos
+                            $hasPendingScheduledCalls = \App\Models\VoiceCampaignScheduledCall::where('voice_campaign_id', $campaign->id)
+                                ->where('status', \App\Models\VoiceCampaignScheduledCall::STATUS_PENDING)
+                                ->exists();
+                            
                             $hasTriggers = \App\Models\VoiceCampaignTrigger::where('voice_campaign_id', $campaign->id)
                                 ->where('enabled', true)
                                 ->exists();
                             
-                            if (!$hasTriggers) {
-                                // Campaña sin triggers: verificar si no quedan llamadas activas y marcar como completada
-                                $remainingInCampaign = $campaign->calls()->whereIn('status', $activeStatuses)->count();
-                                if ($remainingInCampaign === 0) {
-                                    $campaign->markAsCompleted();
-                                    Log::info('✅ [VOICE CAMPAIGN] Campaña sin triggers completada', [
-                                        'campaign_id' => $campaign->id,
-                                        'campaign_name' => $campaign->name
-                                    ]);
-                                }
-                            } else {
-                                // Campaña con triggers: mantener activa (running) para futuros eventos
-                                Log::info('ℹ️ [VOICE CAMPAIGN] Campaña con triggers permanece activa', [
+                            if ($hasPendingScheduledCalls || $hasTriggers) {
+                                Log::info('📅 [VOICE CAMPAIGN] Campaña permanece activa (tiene llamadas programadas o triggers)', [
                                     'campaign_id' => $campaign->id,
                                     'campaign_name' => $campaign->name,
-                                    'active_triggers' => $hasTriggers
+                                    'has_scheduled_calls' => $hasPendingScheduledCalls,
+                                    'has_triggers' => $hasTriggers
+                                ]);
+                            } else {
+                                // Campaña inmediata sin triggers ni llamadas pendientes: marcar como completada
+                                $totalCalls = VoiceCampaignCall::where('voice_campaign_id', $campaign->id)->count();
+                                $completedCalls = VoiceCampaignCall::where('voice_campaign_id', $campaign->id)->where('status', VoiceCampaignCall::STATUS_COMPLETED)->count();
+                                $failedCalls = VoiceCampaignCall::where('voice_campaign_id', $campaign->id)->where('status', VoiceCampaignCall::STATUS_FAILED)->count();
+                                
+                                $campaign->status = VoiceCampaign::STATUS_COMPLETED;
+                                $campaign->calls_made = $totalCalls;
+                                $campaign->calls_successful = $completedCalls;
+                                $campaign->calls_failed = $failedCalls;
+                                $campaign->save();
+                                
+                                Log::info('✅ [VOICE CAMPAIGN] Campaña inmediata completada automáticamente', [
+                                    'campaign_id' => $campaign->id,
+                                    'campaign_name' => $campaign->name,
+                                    'calls_made' => $totalCalls,
+                                    'calls_successful' => $completedCalls,
+                                    'calls_failed' => $failedCalls,
                                 ]);
                             }
                         }
@@ -806,23 +846,51 @@ class VoiceCampaignController extends Controller
             'success_evaluation' => $successEvaluation,
         ]);
 
-        // Determinar si la llamada fue exitosa - usar successEvaluation de VAPI si está disponible
+        // Determinar si la llamada fue exitosa
         // Razones que indican que NO hubo contacto real
         $noContactReasons = ['no-answer', 'busy', 'dial-no-answer', 'dial-busy', 'customer-did-not-answer', 'customer-busy', 'machine-detected', 'voicemail', 'failed'];
         
-        // Determinar si hubo contacto real (el cliente contestó y hubo conversación)
-        $wasContacted = $durationSeconds >= 10 && !in_array($endedReason, $noContactReasons);
+        // Razones que indican que el cliente contestó (contactabilidad)
+        $contactedReasons = ['customer-ended-call', 'assistant-ended-call', 'max-duration-reached', 'assistant-said-end-call-phrase'];
+        
+        // CONTACTABILIDAD: Determinar si hubo contacto real (para estado de llamada: completed/failed)
+        // Si el cliente contestó y hubo conversación = CONTACTADO (llamada completed)
+        $wasContacted = in_array($endedReason, $contactedReasons) || 
+                        ($durationSeconds >= 3 && !in_array($endedReason, $noContactReasons));
+        
+        // OBJETIVO: Evaluar si se cumplió el objetivo de la llamada (para successEvaluation)
+        // Esto es independiente de la contactabilidad
+        $objectiveAchieved = false;
         
         if ($successEvaluation !== null) {
-            $callSuccessful = filter_var($successEvaluation, FILTER_VALIDATE_BOOLEAN);
+            // Si es numérico, >= 5 es éxito (escala 1-10)
+            if (is_numeric($successEvaluation)) {
+                $objectiveAchieved = (float) $successEvaluation >= 5;
+            }
+            // Si es booleano
+            elseif (is_bool($successEvaluation)) {
+                $objectiveAchieved = $successEvaluation;
+            }
+            // Si es string: 'pass', 'true', 'yes', 'success' = éxito
+            elseif (is_string($successEvaluation)) {
+                $objectiveAchieved = in_array(strtolower($successEvaluation), ['true', 'yes', 'success', '1', 'pass'], true);
+            }
         } else {
-            // Fallback: si hubo contacto real, considerar exitosa (aunque haya terminado por silencio)
-            // silence-timed-out después de conversación = cliente contactado pero no cerró objetivo
-            $callSuccessful = $wasContacted;
+            // Si no hay successEvaluation, usar contactabilidad como fallback para el objetivo
+            $objectiveAchieved = $wasContacted;
         }
+        
+        Log::info('📊 [VAPI WEBHOOK] Evaluación de llamada', [
+            'call_id' => $call->id,
+            'success_evaluation_raw' => $successEvaluation,
+            'ended_reason' => $endedReason,
+            'duration' => $durationSeconds,
+            'was_contacted' => $wasContacted,
+            'objective_achieved' => $objectiveAchieved,
+        ]);
 
-        // Actualizar estado de la llamada
-        if ($callSuccessful) {
+        // ESTADO DE LLAMADA: Basado en CONTACTABILIDAD (si contestó = completed)
+        if ($wasContacted) {
             $call->markAsCompleted(['result' => VoiceCampaignCall::RESULT_SUCCESS], $durationSeconds);
         } else {
             $resultCode = $this->mapVapiEndedReasonToResult($endedReason);
@@ -830,9 +898,11 @@ class VoiceCampaignController extends Controller
         }
 
         // Guardar análisis y transcript
+        // call_successful = objetivo cumplido (para mostrar en UI)
         $analysisData = [
             'transcript_summary' => $summary,
-            'call_successful' => $callSuccessful,
+            'call_successful' => $objectiveAchieved,
+            'was_contacted' => $wasContacted,
             'termination_reason' => $endedReason,
             'vapi_status' => $status,
         ];
@@ -921,14 +991,55 @@ class VoiceCampaignController extends Controller
         // Enviar WhatsApp si está configurado
         $this->handlePostCallWhatsApp($call);
 
-        // Actualizar contadores y verificar si la campaña debe marcarse como completada
+        // Crear tarea de seguimiento comercial si está configurado
+        $this->handleFollowUpTask($call, $objectiveAchieved, $endedReason);
+
+        // Crear negocio en embudo de ventas si está configurado
+        $this->handleCreateDeal($call, $objectiveAchieved, $endedReason);
+
+        // Sincronizar estado de llamada programada (si existe)
+        // IMPORTANTE: Usar wasContacted (contactabilidad) para el estado, no objectiveAchieved
+        try {
+            $scheduledCall = \App\Models\VoiceCampaignScheduledCall::where('voice_campaign_call_id', $call->id)->first();
+            if ($scheduledCall) {
+                if ($wasContacted) {
+                    $scheduledCall->update([
+                        'status' => \App\Models\VoiceCampaignScheduledCall::STATUS_COMPLETED,
+                        'status_reason' => 'Llamada completada exitosamente',
+                    ]);
+                } else {
+                    $scheduledCall->update([
+                        'status' => \App\Models\VoiceCampaignScheduledCall::STATUS_FAILED,
+                        'status_reason' => $endedReason ?: 'No contestó',
+                    ]);
+                }
+                Log::info('📅 [VAPI WEBHOOK] Estado de llamada programada sincronizado', [
+                    'scheduled_call_id' => $scheduledCall->id,
+                    'new_status' => $scheduledCall->status,
+                    'was_contacted' => $wasContacted,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('⚠️ [VAPI WEBHOOK] No se pudo sincronizar llamada programada', ['error' => $e->getMessage()]);
+        }
+
+        // Actualizar contadores y verificar si la campaña debe completarse
         try {
             $call->execution?->updateCounters();
             $call->voiceCampaign?->updateCallCounters();
             
-            // Verificar si la campaña debe marcarse como completada
             $campaign = $call->voiceCampaign;
-            if ($campaign && !$campaign->isCompleted()) {
+            if ($campaign && $campaign->status === VoiceCampaign::STATUS_RUNNING) {
+                // Verificar si tiene llamadas programadas pendientes o triggers activos
+                $hasPendingScheduledCalls = \App\Models\VoiceCampaignScheduledCall::where('voice_campaign_id', $campaign->id)
+                    ->where('status', \App\Models\VoiceCampaignScheduledCall::STATUS_PENDING)
+                    ->exists();
+                
+                $hasTriggers = \App\Models\VoiceCampaignTrigger::where('voice_campaign_id', $campaign->id)
+                    ->where('enabled', true)
+                    ->exists();
+                
+                // Contar llamadas activas de la campaña
                 $activeStatuses = [
                     VoiceCampaignCall::STATUS_PENDING,
                     VoiceCampaignCall::STATUS_INITIATED,
@@ -936,14 +1047,46 @@ class VoiceCampaignController extends Controller
                     VoiceCampaignCall::STATUS_ANSWERED,
                     VoiceCampaignCall::STATUS_IN_PROGRESS,
                 ];
+                $remainingActiveCalls = VoiceCampaignCall::where('voice_campaign_id', $campaign->id)
+                    ->whereIn('status', $activeStatuses)
+                    ->count();
                 
-                $remainingCalls = $campaign->calls()->whereIn('status', $activeStatuses)->count();
+                Log::info('🔍 [VAPI WEBHOOK] Verificando estado de campaña', [
+                    'campaign_id' => $campaign->id,
+                    'remaining_active_calls' => $remainingActiveCalls,
+                    'has_pending_scheduled' => $hasPendingScheduledCalls,
+                    'has_triggers' => $hasTriggers,
+                ]);
                 
-                if ($remainingCalls === 0) {
-                    $campaign->markAsCompleted();
-                    Log::info('✅ [VAPI WEBHOOK] Campaña marcada como completada', [
+                // Verificar si es una campaña con llamadas programadas (scheduled) - estas NUNCA se completan automáticamente
+                $isScheduledCampaign = \App\Models\VoiceCampaignScheduledCall::where('voice_campaign_id', $campaign->id)->exists();
+                
+                if ($isScheduledCampaign || $hasPendingScheduledCalls || $hasTriggers) {
+                    Log::info('📅 [VAPI WEBHOOK] Campaña permanece activa (es programada, tiene triggers o llamadas pendientes)', [
                         'campaign_id' => $campaign->id,
                         'campaign_name' => $campaign->name,
+                        'is_scheduled_campaign' => $isScheduledCampaign,
+                        'has_pending_scheduled' => $hasPendingScheduledCalls,
+                        'has_triggers' => $hasTriggers,
+                    ]);
+                } elseif ($remainingActiveCalls === 0) {
+                    // Solo campañas INMEDIATAS (sin scheduled calls ni triggers) se marcan como completadas
+                    $totalCalls = VoiceCampaignCall::where('voice_campaign_id', $campaign->id)->count();
+                    $completedCalls = VoiceCampaignCall::where('voice_campaign_id', $campaign->id)->where('status', VoiceCampaignCall::STATUS_COMPLETED)->count();
+                    $failedCalls = VoiceCampaignCall::where('voice_campaign_id', $campaign->id)->where('status', VoiceCampaignCall::STATUS_FAILED)->count();
+                    
+                    $campaign->status = VoiceCampaign::STATUS_COMPLETED;
+                    $campaign->calls_made = $totalCalls;
+                    $campaign->calls_successful = $completedCalls;
+                    $campaign->calls_failed = $failedCalls;
+                    $campaign->save();
+                    
+                    Log::info('✅ [VAPI WEBHOOK] Campaña inmediata completada automáticamente', [
+                        'campaign_id' => $campaign->id,
+                        'campaign_name' => $campaign->name,
+                        'calls_made' => $totalCalls,
+                        'calls_successful' => $completedCalls,
+                        'calls_failed' => $failedCalls,
                     ]);
                 }
             }
@@ -1206,7 +1349,30 @@ class VoiceCampaignController extends Controller
         try {
             $meta = is_array($call->call_metadata) ? $call->call_metadata : [];
             $alreadySent = $meta['payment_link_sent_at'] ?? null;
+            $noAnswerSent = $meta['no_answer_whatsapp_sent_at'] ?? null;
             $scheduled = data_get($meta, 'payment_on_completion'); // Programado durante la llamada/tool
+
+            $campaign = $call->voiceCampaign;
+            $toolsCfg = is_array($campaign?->settings) ? ($campaign->settings['post_call_tools'] ?? null) : null;
+            $whatsappCfg = is_array($toolsCfg) ? ($toolsCfg['whatsapp'] ?? null) : null;
+            
+            // Verificar si la llamada fue no contestada
+            $callResult = is_array($call->call_result) ? $call->call_result : [];
+            $terminationReason = $callResult['termination_reason'] ?? null;
+            $noAnswerReasons = ['customer-did-not-answer', 'no-answer', 'busy', 'customer-busy', 'dial-no-answer', 'dial-busy', 'voicemail'];
+            $wasNoAnswer = in_array($terminationReason, $noAnswerReasons);
+            
+            // Si fue no contestada y está habilitado el WhatsApp para no contestados
+            if ($wasNoAnswer && !$noAnswerSent) {
+                $noAnswerEnabled = is_array($whatsappCfg) && ($whatsappCfg['noAnswerEnabled'] ?? false);
+                
+                if ($noAnswerEnabled) {
+                    $noAnswerTemplate = $whatsappCfg['noAnswerTemplate'] ?? 'Hola {customer_name}, intentamos comunicarnos contigo sin éxito. Por favor contáctanos.';
+                    
+                    $this->sendNoAnswerWhatsApp($call, $whatsappCfg, $noAnswerTemplate);
+                    return;
+                }
+            }
 
             if ($alreadySent) {
                 Log::info('ℹ️ [WHATSAPP PAYMENT] Enlace ya enviado anteriormente', [
@@ -1216,16 +1382,17 @@ class VoiceCampaignController extends Controller
                 return;
             }
 
-            $campaign = $call->voiceCampaign;
-            $toolsCfg = is_array($campaign?->settings) ? ($campaign->settings['post_call_tools'] ?? null) : null;
-            $whatsappCfg = is_array($toolsCfg) ? ($toolsCfg['whatsapp'] ?? null) : null;
-
             // Debemos enviar si:
             // - WhatsApp está habilitado en la campaña, o
             // - Existe un schedule explícito de envío programado (aunque la campaña no tenga WhatsApp habilitado)
             $shouldSend = (is_array($whatsappCfg) && ($whatsappCfg['enabled'] ?? false)) || is_array($scheduled);
 
             if (!$shouldSend) {
+                return;
+            }
+            
+            // No enviar enlace de pago si fue no contestada
+            if ($wasNoAnswer) {
                 return;
             }
 
@@ -1336,6 +1503,393 @@ class VoiceCampaignController extends Controller
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Enviar WhatsApp cuando el cliente no contesta
+     */
+    private function sendNoAnswerWhatsApp(VoiceCampaignCall $call, ?array $whatsappCfg, string $template): void
+    {
+        try {
+            $waPhone = $this->formatPhoneNumber((string) $call->recipient_phone);
+            $customerName = $call->recipient_name ?: 'Cliente';
+            $companyName = $call->voiceCampaign?->broker?->name ?? 'Tu agencia de seguros';
+            
+            // Reemplazar variables en el template
+            $message = str_replace(
+                ['{customer_name}', '{company_name}', '{phone}'],
+                [$customerName, $companyName, $waPhone],
+                $template
+            );
+            
+            // Resolver instancia
+            $instanceId = is_array($whatsappCfg) ? ($whatsappCfg['instance_id'] ?? null) : null;
+            if (empty($instanceId)) {
+                try {
+                    $waBase = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3000/api/v1'), '/');
+                    $resp = \Illuminate\Support\Facades\Http::retry(2, 500)->get($waBase . '/instances');
+                    if ($resp->ok() && ($resp->json('success'))) {
+                        $instances = $resp->json('instances') ?? [];
+                        $connected = collect($instances)->firstWhere('connected', true);
+                        if ($connected && !empty($connected['instanceId'])) {
+                            $instanceId = $connected['instanceId'];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // No bloquear
+                }
+            }
+            
+            if (empty($instanceId)) {
+                Log::warning('⚠️ [WHATSAPP NO-ANSWER] No hay instancia disponible', ['call_id' => $call->id]);
+                return;
+            }
+            
+            Log::info('📱 [WHATSAPP NO-ANSWER] Enviando mensaje por no contestar', [
+                'call_id' => $call->id,
+                'phone' => $waPhone,
+                'customer_name' => $customerName,
+                'instance_id' => $instanceId,
+            ]);
+            
+            // Enviar mensaje
+            $waBase = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3000/api/v1'), '/');
+            $resp = \Illuminate\Support\Facades\Http::retry(2, 500)
+                ->post($waBase . '/messages/send', [
+                    'phone' => $waPhone,
+                    'message' => $message,
+                ]);
+            
+            if ($resp->ok()) {
+                $meta = is_array($call->call_metadata) ? $call->call_metadata : [];
+                $meta['no_answer_whatsapp_sent_at'] = now()->toDateTimeString();
+                $meta['no_answer_whatsapp_message'] = $message;
+                $call->update(['call_metadata' => $meta]);
+                
+                Log::info('✅ [WHATSAPP NO-ANSWER] Mensaje enviado exitosamente', [
+                    'call_id' => $call->id,
+                    'phone' => $waPhone
+                ]);
+            } else {
+                Log::warning('❌ [WHATSAPP NO-ANSWER] Falló envío', [
+                    'call_id' => $call->id,
+                    'response' => $resp->body()
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('❌ [WHATSAPP NO-ANSWER] Error', [
+                'call_id' => $call->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Crear tarea de seguimiento comercial si está configurado en la campaña
+     */
+    private function handleFollowUpTask(VoiceCampaignCall $call, bool $callSuccessful, ?string $endedReason): void
+    {
+        try {
+            $campaign = $call->voiceCampaign;
+            if (!$campaign) {
+                return;
+            }
+
+            $settings = is_array($campaign->settings) ? $campaign->settings : [];
+            $postCallTools = $settings['post_call_tools'] ?? [];
+            
+            // Verificar si el seguimiento está habilitado
+            $followUpEnabled = $postCallTools['followUpEnabled'] ?? false;
+            if (!$followUpEnabled) {
+                return;
+            }
+
+            $followUpCondition = $postCallTools['followUpCondition'] ?? 'call_successful';
+            $followUpDays = (int) ($postCallTools['followUpDays'] ?? 3);
+            $followUpDescription = $postCallTools['followUpDescription'] ?? '';
+
+            // Determinar si se cumple la condición
+            $shouldCreateTask = false;
+            $isNoAnswer = in_array($endedReason, ['customer-did-not-answer', 'no-answer', 'busy', 'machine-detected']);
+            
+            switch ($followUpCondition) {
+                case 'call_successful':
+                    $shouldCreateTask = $callSuccessful;
+                    break;
+                case 'call_failed':
+                    $shouldCreateTask = !$callSuccessful && !$isNoAnswer;
+                    break;
+                case 'no_answer':
+                    $shouldCreateTask = $isNoAnswer;
+                    break;
+                case 'always':
+                    $shouldCreateTask = true;
+                    break;
+            }
+
+            if (!$shouldCreateTask) {
+                Log::info('📋 [FOLLOW-UP] Condición no cumplida, no se crea tarea', [
+                    'call_id' => $call->id,
+                    'condition' => $followUpCondition,
+                    'call_successful' => $callSuccessful,
+                    'ended_reason' => $endedReason,
+                ]);
+                return;
+            }
+
+            // Obtener datos del cliente
+            $scheduledCall = \App\Models\VoiceCampaignScheduledCall::where('voice_campaign_call_id', $call->id)->first();
+            $clientId = $scheduledCall?->client_id;
+            $polizaId = $scheduledCall?->poliza_id;
+            $contactData = is_array($scheduledCall?->contact_data) ? $scheduledCall->contact_data : [];
+            $customerName = $contactData['customer_name'] ?? $contactData['name'] ?? 'Cliente';
+
+            // Crear la tarea de seguimiento
+            $dueDate = now()->addDays($followUpDays)->format('Y-m-d');
+            
+            $taskData = [
+                'broker_id' => $campaign->broker_id,
+                'client_id' => $clientId,
+                'poliza_id' => $polizaId,
+                'created_by' => $campaign->created_by ?? 1,
+                'title' => "Seguimiento: {$customerName}",
+                'description' => $this->buildFollowUpDescription($call, $callSuccessful, $endedReason, $customerName, $followUpDescription),
+                'type' => 'seguimiento_cliente',
+                'status' => 'pendiente',
+                'priority' => $callSuccessful ? 'media' : 'alta',
+                'due_date' => $dueDate,
+                'contact_method' => 'phone',
+                'contact_phone' => $contactData['phone'] ?? null,
+                'has_reminder' => true,
+                'reminder_at' => now()->addDays($followUpDays)->subHours(2)->format('Y-m-d H:i:s'),
+                'external_reference' => "voice_call:{$call->id}",
+            ];
+
+            $task = \App\Models\CommercialTask::create($taskData);
+
+            Log::info('✅ [FOLLOW-UP] Tarea de seguimiento creada', [
+                'call_id' => $call->id,
+                'task_id' => $task->id,
+                'client_id' => $clientId,
+                'due_date' => $dueDate,
+                'condition' => $followUpCondition,
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('❌ [FOLLOW-UP] Error creando tarea de seguimiento', [
+                'call_id' => $call->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Construir descripción para la tarea de seguimiento
+     */
+    private function buildFollowUpDescription(VoiceCampaignCall $call, bool $callSuccessful, ?string $endedReason, string $customerName, string $customDescription = ''): string
+    {
+        $campaign = $call->voiceCampaign;
+        $campaignName = $campaign?->name ?? 'Campaña de voz';
+        
+        $resultText = $callSuccessful ? 'exitosa' : 'no exitosa';
+        if ($endedReason === 'customer-did-not-answer') {
+            $resultText = 'no contestada';
+        } elseif ($endedReason === 'busy') {
+            $resultText = 'ocupado';
+        }
+
+        $description = "";
+        
+        // Agregar descripción personalizada si existe
+        if (!empty($customDescription)) {
+            $description .= "{$customDescription}\n\n---\n\n";
+        }
+        
+        $description .= "📞 Campaña: {$campaignName}\n";
+        $description .= "👤 Cliente: {$customerName}\n";
+        $description .= "📊 Resultado: Llamada {$resultText}\n";
+        $description .= "📅 Fecha llamada: " . $call->created_at->format('d/m/Y H:i') . "\n";
+        
+        if ($call->call_result && isset($call->call_result['transcript_summary'])) {
+            $description .= "\n📝 Resumen:\n" . $call->call_result['transcript_summary'];
+        }
+
+        return $description;
+    }
+
+    /**
+     * Crear negocio en embudo de ventas si está configurado
+     */
+    private function handleCreateDeal(VoiceCampaignCall $call, bool $callSuccessful, ?string $endedReason): void
+    {
+        try {
+            $campaign = $call->voiceCampaign;
+            if (!$campaign) {
+                return;
+            }
+
+            $settings = is_array($campaign->settings) ? $campaign->settings : [];
+            $postCallTools = $settings['post_call_tools'] ?? [];
+            
+            // Verificar si crear negocio está habilitado
+            $createDealEnabled = $postCallTools['createDealEnabled'] ?? false;
+            if (!$createDealEnabled) {
+                return;
+            }
+
+            $createDealContactability = $postCallTools['createDealContactability'] ?? 'any';
+            $createDealObjective = $postCallTools['createDealObjective'] ?? 'any';
+            $createDealStage = $postCallTools['createDealStage'] ?? 'lead';
+            $createDealDescription = $postCallTools['createDealDescription'] ?? '';
+
+            // Determinar contactabilidad
+            $isNoAnswer = in_array($endedReason, ['customer-did-not-answer', 'no-answer', 'busy', 'machine-detected']);
+            $wasContacted = !$isNoAnswer;
+            
+            // Evaluar condición de contactabilidad
+            $contactabilityMet = true;
+            if ($createDealContactability === 'contacted' && !$wasContacted) {
+                $contactabilityMet = false;
+            } elseif ($createDealContactability === 'not_contacted' && $wasContacted) {
+                $contactabilityMet = false;
+            }
+            
+            // Evaluar condición de cumplimiento del objetivo
+            $objectiveMet = true;
+            if ($createDealObjective === 'achieved' && !$callSuccessful) {
+                $objectiveMet = false;
+            } elseif ($createDealObjective === 'not_achieved' && $callSuccessful) {
+                $objectiveMet = false;
+            }
+
+            // Ambas condiciones deben cumplirse
+            $shouldCreateDeal = $contactabilityMet && $objectiveMet;
+
+            if (!$shouldCreateDeal) {
+                Log::info('📊 [CREATE-DEAL] Condición no cumplida, no se crea negocio', [
+                    'call_id' => $call->id,
+                    'contactability' => $createDealContactability,
+                    'objective' => $createDealObjective,
+                    'was_contacted' => $wasContacted,
+                    'call_successful' => $callSuccessful,
+                    'contactability_met' => $contactabilityMet,
+                    'objective_met' => $objectiveMet,
+                ]);
+                return;
+            }
+
+            // Obtener datos del contacto
+            $contactData = is_array($call->contact_data) ? $call->contact_data : [];
+            $customerName = $contactData['customer_name'] ?? $contactData['name'] ?? 'Cliente';
+            $clientId = $contactData['client_id'] ?? null;
+            $polizaId = $contactData['poliza_id'] ?? null;
+
+            // Obtener ramo de la póliza si existe
+            $ramoId = null;
+            $insuranceType = 'auto';
+            if ($polizaId) {
+                $poliza = \App\Models\Poliza::find($polizaId);
+                if ($poliza) {
+                    $ramoId = $poliza->ramo_id;
+                    // Mapear ramo a insurance_type
+                    if ($poliza->ramo) {
+                        $ramoNombre = strtolower($poliza->ramo->nombre ?? '');
+                        if (str_contains($ramoNombre, 'auto') || str_contains($ramoNombre, 'veh')) {
+                            $insuranceType = 'auto';
+                        } elseif (str_contains($ramoNombre, 'vida')) {
+                            $insuranceType = 'life';
+                        } elseif (str_contains($ramoNombre, 'salud')) {
+                            $insuranceType = 'health';
+                        } elseif (str_contains($ramoNombre, 'hogar')) {
+                            $insuranceType = 'home';
+                        } else {
+                            $insuranceType = 'multiple';
+                        }
+                    }
+                }
+            }
+
+            // Separar nombre y apellido
+            $nameParts = explode(' ', $customerName, 2);
+            $firstName = $nameParts[0] ?? 'Cliente';
+            $lastName = $nameParts[1] ?? '';
+
+            // Crear el negocio en el embudo de ventas
+            $dealData = [
+                'broker_id' => $campaign->broker_id,
+                'created_by' => $campaign->created_by ?? 1,
+                'client_id' => $clientId,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'email' => $contactData['email'] ?? null,
+                'phone' => $contactData['phone'] ?? null,
+                'stage' => $createDealStage,
+                'lead_source' => 'cold_call',
+                'insurance_type' => $insuranceType,
+                'ramo_id' => $ramoId,
+                'poliza_id' => $polizaId,
+                'potential_value' => $contactData['policy_value'] ?? 0,
+                'close_probability' => $callSuccessful ? 50 : 20,
+                'quality_rating' => $callSuccessful ? 'warm' : 'cold',
+                'description' => $this->buildDealDescription($call, $callSuccessful, $endedReason, $customerName, $createDealDescription),
+                'notes' => !empty($createDealDescription) 
+                    ? "{$createDealDescription}\n\n---\nNegocio creado automáticamente desde campaña de voz: {$campaign->name}"
+                    : "Negocio creado automáticamente desde campaña de voz: {$campaign->name}",
+                'external_reference' => "voice_call:{$call->id}",
+                'first_contact_at' => now(),
+                'last_contact_at' => now(),
+            ];
+
+            $deal = \App\Models\SalesFunnel::create($dealData);
+
+            Log::info('✅ [CREATE-DEAL] Negocio creado en embudo de ventas', [
+                'call_id' => $call->id,
+                'deal_id' => $deal->id,
+                'client_id' => $clientId,
+                'stage' => $createDealStage,
+                'condition' => $createDealCondition,
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('❌ [CREATE-DEAL] Error creando negocio', [
+                'call_id' => $call->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Construir descripción para el negocio
+     */
+    private function buildDealDescription(VoiceCampaignCall $call, bool $callSuccessful, ?string $endedReason, string $customerName, string $customDescription = ''): string
+    {
+        $campaign = $call->voiceCampaign;
+        $campaignName = $campaign?->name ?? 'Campaña de voz';
+        
+        $resultText = $callSuccessful ? 'exitosa - cliente interesado' : 'no exitosa';
+        if ($endedReason === 'customer-did-not-answer') {
+            $resultText = 'no contestada';
+        } elseif ($endedReason === 'busy') {
+            $resultText = 'ocupado';
+        }
+
+        $description = "";
+        
+        if (!empty($customDescription)) {
+            $description .= "{$customDescription}\n\n---\n\n";
+        }
+        
+        $description .= "🔄 Origen: Campaña de renovación\n";
+        $description .= "📞 Campaña: {$campaignName}\n";
+        $description .= "👤 Cliente: {$customerName}\n";
+        $description .= "📊 Resultado llamada: {$resultText}\n";
+        $description .= "📅 Fecha contacto: " . $call->created_at->format('d/m/Y H:i') . "\n";
+        
+        if ($call->call_result && isset($call->call_result['transcript_summary'])) {
+            $description .= "\n📝 Resumen de la conversación:\n" . $call->call_result['transcript_summary'];
+        }
+
+        return $description;
     }
 
     /**
@@ -1479,7 +2033,7 @@ class VoiceCampaignController extends Controller
     {
         try {
             $waBase = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3000/api/v1'), '/');
-            $basePayUrl = env('PAYMENT_BASE_URL', 'https://pay.guro.app/pay');
+            $basePayUrl = env('PAYMENT_BASE_URL', 'https://pagos.segurossura.com.co/pagos');
             $paymentUrl = $basePayUrl . '?' . http_build_query([
                 'ref' => $reference,
                 'amount' => $amountCop,
@@ -1572,7 +2126,8 @@ class VoiceCampaignController extends Controller
                     'voice_message_content' => $personalizedMessage,
                     'status' => VoiceCampaignCall::STATUS_PENDING,
                     'elevenlabs_agent_id' => $campaign->elevenlabs_agent_id,
-                    'elevenlabs_phone_number_id' => $campaign->elevenlabs_phone_number_id
+                    'elevenlabs_phone_number_id' => $campaign->elevenlabs_phone_number_id,
+                    'contact_data' => $contact, // Guardar datos del contacto para uso en disparadores
                 ]);
 
                 // Realizar llamada con ElevenLabs
@@ -1743,24 +2298,35 @@ class VoiceCampaignController extends Controller
                 $whatsappEnabled = true;
             }
 
-            // Forzar un primer mensaje personalizado para dirigirse por el nombre del cliente
+            // Construir primer mensaje según tipo de campaña
             $agentDisplayName = $agentName ?: 'tu asesor';
             $safeCompany = $companyName ?: $brokerCommercialName;
-            // Hardcodeado: placa INM807
-            $policyIdentifier = "tu póliza de auto placa INM807";
-            $personalizedFirstMessage = "Hola " . $customerName . ", soy " . $agentDisplayName . " de " . $safeCompany . ". " .
-                                        "Quería hablar contigo sobre " . $policyIdentifier . ". ¿Te puedo contar los detalles?";
+            
+            // Detectar si es campaña de venta cruzada
+            $templateId = $campaignSettings['template_id'] ?? null;
+            $isCrossSell = $templateId === 'cross_sell';
+            
+            if ($isCrossSell) {
+                // Venta cruzada: saludo con empresa pero sin mencionar pólizas
+                $personalizedFirstMessage = "¡Hola " . $customerName . "! Soy " . $agentDisplayName . " de " . $safeCompany . ", tu asesor de seguros ¿cómo estás?";
+            } else {
+                // Otras campañas: mencionar póliza/placa si aplica
+                $policyTypeLabel = !empty($policyType) ? "tu seguro de {$policyType}" : "tu póliza";
+                $plateInfo = (!empty($plateNumber)) ? " del vehículo placa {$plateNumber}" : "";
+                $personalizedFirstMessage = "Hola " . $customerName . ", soy " . $agentDisplayName . " de " . $safeCompany . ". " .
+                                            "Quería hablar contigo sobre " . $policyTypeLabel . $plateInfo . ". ¿Tienes un momento?";
+            }
             
             // Obtener system_prompt personalizado de la campaña si existe
             $customSystemPrompt = $campaignSettings['system_prompt'] ?? null;
 
             // Construir instrucciones condicionales de WhatsApp
             $whatsappInstruccion = $whatsappEnabled
-                ? " y pregunta si desea recibir el enlace de pago por WhatsApp. Si acepta, confirma el número de WhatsApp (puede ser el mismo de la llamada u otro)"
+                ? " y pregunta si desea recibir el enlace de pago por WhatsApp. Si acepta, confirma el número de WhatsApp sea el mismo donde se está llamando"
                 : "";
             
             $whatsappCierre = $whatsappEnabled
-                ? "\n   - Si el cliente aceptó recibir el enlace por WhatsApp, confirma el número"
+                ? "\n   - Si el cliente aceptó recibir el enlace por WhatsApp, confirma el número de WhatsApp sea el mismo donde se está llamando"
                 : "";
             
             $whatsappGuardrail = $whatsappEnabled
@@ -1796,9 +2362,88 @@ No hay datos adicionales que recolectar en esta llamada. Procede directamente al
             $todayDate = Carbon::now()->locale('es')->isoFormat('dddd D [de] MMMM [de] YYYY');
             $todayContext = "Hoy es {$todayDate}.";
             
-            // Usar system_prompt personalizado de la campaña si existe, sino usar el prompt por defecto
-            if (!empty($customSystemPrompt)) {
-                // Reemplazar variables en el system_prompt personalizado
+            // Determinar el prompt según el tipo de campaña
+            if ($isCrossSell) {
+                // PROMPT ESPECÍFICO PARA VENTA CRUZADA - PLAN VIDA DEUDOR
+                $finalPrompt = trim("
+# Personalidad  
+Eres {$agentDisplayName}, asesor de {$safeCompany}. Tu estilo es amable, natural y directo. Hablas español de Colombia.
+
+# REGLAS DE CONVERSACIÓN
+- SIEMPRE espera la respuesta del cliente antes de continuar.
+- Mantén respuestas cortas (máximo 2-3 oraciones).
+- Usa \"cincuenta por ciento\" en lugar de \"50%\".
+- NO pidas el número de teléfono, ya lo tienes.
+
+# QUÉ ES EL PLAN VIDA DEUDOR (para responder preguntas)
+Es un seguro que protege tus deudas. Si falleces o pierdes más del cincuenta por ciento de tu capacidad laboral, el seguro paga el saldo pendiente de tus créditos. Así evitas dejarle deudas a tu familia.
+
+Coberturas:
+- Vida: Si falleces, SURA paga tu deuda pendiente.
+- Invalidez (opcional): Si pierdes capacidad laboral, cubre la deuda.
+- Auxilio funerario (opcional): Suma adicional para gastos funerarios.
+
+Requisitos: Tener entre 18 y 70 años.
+
+IMPORTANTE: No profundices mucho. Si preguntan detalles, di: \"Un especialista te explicará todo por WhatsApp, sin compromiso.\"
+
+# OBJETIVO
+Ofrecer el Plan Vida Deudor y lograr que el cliente acepte que un especialista lo contacte por WhatsApp para revisar si puede ahorrar en el seguro de sus créditos.
+
+# FLUJO DE CONVERSACIÓN
+
+1. SALUDO (ya enviado como primer mensaje, continúa desde aquí)
+   ESPERA la respuesta del cliente al saludo.
+
+2. INTRODUCIR EL TEMA (usa este enfoque):
+   \"Oye, te cuento rápido. ¿Sabías que si tienes algún crédito, tarjeta o préstamo, es muy probable que ya estés pagando un seguro de vida deudor sin saberlo? Los bancos lo incluyen en las cuotas. ¿Tienes algún crédito actualmente?\"
+   ESPERA respuesta.
+
+3. SEGÚN LA RESPUESTA:
+
+   **SI TIENE CRÉDITOS:**
+   - \"Perfecto. El Plan Vida Deudor cubre tus deudas si algo te llegara a pasar, y podemos revisar si estás pagando de más. ¿Te gustaría que un especialista te contacte por WhatsApp para darte una cotización sin compromiso?\"
+   - Si acepta: \"Excelente, te va a llegar un mensaje por WhatsApp. El especialista revisará tus créditos y te dirá exactamente cuánto puedes ahorrar.\"
+   - Pregunta su edad: \"Solo para confirmar, ¿cuántos años tienes? El plan es para personas entre 18 y 70 años.\"
+   - Luego ve al CIERRE.
+   
+   **SI NO TIENE CRÉDITOS:**
+   - \"Entiendo. Si en algún momento adquieres un crédito, este seguro te puede ayudar a proteger a tu familia y ahorrar. ¿Hay algo más en lo que pueda ayudarte?\"
+   - ESPERA respuesta y ve al CIERRE.
+
+   **SI NO ESTÁ INTERESADO:**
+   - \"Entiendo perfectamente. ¿Hay algo más en lo que pueda ayudarte?\"
+   - ESPERA respuesta y ve al CIERRE.
+
+4. SI PREGUNTA DETALLES DEL PLAN:
+   - \"El Plan Vida Deudor cubre el saldo de tus créditos si falleces o pierdes capacidad laboral. También puede incluir auxilio funerario. Un especialista te puede explicar todo mejor por WhatsApp, ¿te parece?\"
+
+# CIERRE DE LA LLAMADA (MUY IMPORTANTE)
+
+## REGLA: SIEMPRE pregunta \"¿Hay algo más en lo que pueda ayudarte?\" ANTES de despedirte.
+
+Después de que el cliente responda (\"no\", \"nada más\", \"igualmente\", etc.), despídete:
+\"Perfecto, muchas gracias por tu tiempo. ¡Que tengas un excelente día! ¡Hasta pronto!\"
+
+## Casos especiales:
+- **No lo llamen más**: \"Entendido, disculpa la molestia. ¡Que tengas buen día!\"
+- **Está ocupado**: \"Entiendo, ¿te puedo llamar en otro momento?\"
+
+# GUARDRAILS
+- No des asesoría financiera detallada.
+- Solo pide la edad (18-70 años).
+- Si preguntan mucho, deriva al especialista por WhatsApp.
+- NUNCA termines sin despedirte cordialmente.
+- ESPERA la respuesta del cliente antes de despedirte.
+
+# FINALIZAR LA LLAMADA (MUY IMPORTANTE)
+Después de despedirte cordialmente, USA la función endCall para terminar la llamada inmediatamente.
+NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará.
+
+{$toolsSection}
+");
+            } elseif (!empty($customSystemPrompt)) {
+                // Usar system_prompt personalizado de la campaña si existe
                 $finalPrompt = str_replace(
                     ['{{customer_name}}', '{{company_name}}', '{{agent_name}}', '{{payment_due_date}}', '{{debt_amount}}'],
                     [$customerName, $safeCompany, $agentDisplayName, $dueDate, $debtAmountFormatted],
@@ -1861,6 +2506,10 @@ Plan de conversación y orden:
 - Solo después de que el cliente confirme que no necesita nada más (\"no\", \"no gracias\", \"eso es todo\", \"nada más\"), despídete cordialmente: \"Perfecto, muchas gracias por tu tiempo. Que tengas un excelente día. ¡Hasta pronto!\"
 - NO te despidas mientras el cliente aún está hablando o antes de que responda a tu pregunta.
 
+# FINALIZAR LA LLAMADA
+Después de despedirte cordialmente, USA la función endCall para terminar la llamada inmediatamente.
+NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará.
+
 {$toolsSection}
 ");
             }
@@ -1886,6 +2535,11 @@ Plan de conversación y orden:
                                 'content' => $finalPrompt,
                             ],
                         ],
+                        'tools' => [
+                            [
+                                'type' => 'endCall',
+                            ],
+                        ],
                     ],
                     'voice' => [
                         'provider' => '11labs',
@@ -1906,7 +2560,7 @@ Plan de conversación y orden:
                     'backgroundDenoisingEnabled' => true,
                     'maxDurationSeconds' => 600, // 10 minutos máximo
                     'numWordsToInterruptAssistant' => 2,
-                    'endCallPhrases' => ['hasta pronto', 'que tengas buen día', 'adiós'],
+                    'endCallPhrases' => ['hasta pronto', 'que tengas buen día', 'que tengas un excelente día', 'adiós', 'chao', 'hasta luego', 'que estés bien', 'cuídate mucho', 'buen día'],
                     'silenceTimeoutSeconds' => 30,
                     'responseDelaySeconds' => 0.4,
                     'startSpeakingPlan' => [
@@ -2498,12 +3152,34 @@ Plan de conversación y orden:
                 ->where('created_at', '>=', now()->subHours(24))
                 ->get();
             
-            // Si no hay llamadas activas, verificar si la campaña debe completarse
+            // Si no hay llamadas activas, verificar si la campaña debe marcarse como completada
             if ($calls->isEmpty()) {
-                $totalCalls = $campaign->calls()->count();
-                if ($totalCalls > 0 && !$campaign->isCompleted()) {
-                    $campaign->markAsCompleted();
-                    $campaign->refresh();
+                $campaignCompleted = false;
+                
+                // Solo marcar como completada si es campaña INMEDIATA y está en running
+                // Las campañas programadas/recurrentes NO se marcan automáticamente
+                $isImmediateCampaign = $campaign->campaign_type === VoiceCampaign::TYPE_IMMEDIATE;
+                
+                if ($isImmediateCampaign && $campaign->status === VoiceCampaign::STATUS_RUNNING) {
+                    $hasPendingScheduledCalls = \App\Models\VoiceCampaignScheduledCall::where('voice_campaign_id', $campaign->id)
+                        ->where('status', \App\Models\VoiceCampaignScheduledCall::STATUS_PENDING)
+                        ->exists();
+                    
+                    $hasTriggers = \App\Models\VoiceCampaignTrigger::where('voice_campaign_id', $campaign->id)
+                        ->where('enabled', true)
+                        ->exists();
+                    
+                    if (!$hasPendingScheduledCalls && !$hasTriggers) {
+                        $campaign->status = VoiceCampaign::STATUS_COMPLETED;
+                        $campaign->save();
+                        $campaignCompleted = true;
+                        
+                        Log::info('✅ [VAPI REALTIME SYNC] Campaña INMEDIATA marcada como completada', [
+                            'campaign_id' => $campaign->id,
+                            'campaign_name' => $campaign->name,
+                            'campaign_type' => $campaign->campaign_type,
+                        ]);
+                    }
                 }
                 
                 return response()->json([
@@ -2518,7 +3194,7 @@ Plan de conversación y orden:
                     ],
                     'synced' => 0,
                     'updated' => [],
-                    'campaign_completed' => $campaign->isCompleted(),
+                    'campaign_completed' => $campaignCompleted || $campaign->isCompleted(),
                     'remaining_active_calls' => 0,
                     'message' => 'No hay llamadas activas para sincronizar',
                 ]);
@@ -2583,10 +3259,33 @@ Plan de conversación y orden:
                 VoiceCampaignCall::STATUS_IN_PROGRESS,
             ];
             $remainingCalls = $campaign->calls()->whereIn('status', $activeStatuses)->count();
+
+            // Si no quedan llamadas activas y la campaña es INMEDIATA en running, marcarla como completada
+            // Las campañas programadas/recurrentes NO se marcan automáticamente
+            $isImmediateCampaign = $campaign->campaign_type === VoiceCampaign::TYPE_IMMEDIATE;
             
-            if ($remainingCalls === 0 && !$campaign->isCompleted() && $campaign->calls()->count() > 0) {
-                $campaign->markAsCompleted();
-                $campaignCompleted = true;
+            if ($remainingCalls === 0 && $isImmediateCampaign && $campaign->status === VoiceCampaign::STATUS_RUNNING) {
+                // Verificar si tiene llamadas programadas pendientes o triggers activos
+                $hasPendingScheduledCalls = \App\Models\VoiceCampaignScheduledCall::where('voice_campaign_id', $campaign->id)
+                    ->where('status', \App\Models\VoiceCampaignScheduledCall::STATUS_PENDING)
+                    ->exists();
+                
+                $hasTriggers = \App\Models\VoiceCampaignTrigger::where('voice_campaign_id', $campaign->id)
+                    ->where('enabled', true)
+                    ->exists();
+                
+                if (!$hasPendingScheduledCalls && !$hasTriggers) {
+                    // Campaña INMEDIATA sin triggers ni llamadas pendientes: marcar como completada
+                    $campaign->status = VoiceCampaign::STATUS_COMPLETED;
+                    $campaign->save();
+                    $campaignCompleted = true;
+                    
+                    Log::info('✅ [VAPI REALTIME SYNC] Campaña INMEDIATA marcada como completada', [
+                        'campaign_id' => $campaign->id,
+                        'campaign_name' => $campaign->name,
+                        'campaign_type' => $campaign->campaign_type,
+                    ]);
+                }
             }
 
             $campaign->refresh();
@@ -2722,6 +3421,24 @@ Plan de conversación y orden:
             $meta['transcript'] = $transcript;
             $meta['synced_from_vapi_at'] = now()->toIso8601String();
             $call->update(['call_metadata' => $meta]);
+        }
+
+        // Sincronizar estado de llamada programada (si existe)
+        try {
+            $scheduledCall = \App\Models\VoiceCampaignScheduledCall::where('voice_campaign_call_id', $call->id)->first();
+            if ($scheduledCall && $scheduledCall->status === 'called') {
+                if ($callSuccessful) {
+                    $scheduledCall->markAsCompleted();
+                } else {
+                    $scheduledCall->markAsFailed($endedReason ?? 'Llamada no exitosa');
+                }
+                Log::info('📅 [SCHEDULED CALL] Estado sincronizado', [
+                    'scheduled_call_id' => $scheduledCall->id,
+                    'new_status' => $scheduledCall->status,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('⚠️ [SCHEDULED CALL] Error sincronizando estado', ['error' => $e->getMessage()]);
         }
     }
 
@@ -3099,6 +3816,201 @@ Plan de conversación y orden:
                 'campaign_id' => $campaignId,
                 'error' => $e->getMessage()
             ]);
+        }
+    }
+
+    /**
+     * Obtener llamadas programadas de una campaña
+     */
+    public function getScheduledCalls(Request $request, int $campaignId): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $campaign = VoiceCampaign::forBroker($brokerId)->findOrFail($campaignId);
+            
+            $scheduler = new \App\Services\VoiceCampaignSchedulerService();
+            $result = $scheduler->getScheduledCalls($campaign, [
+                'status' => $request->get('status'),
+                'date' => $request->get('date'),
+                'from_date' => $request->get('from_date'),
+                'to_date' => $request->get('to_date'),
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $result
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener llamadas programadas',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Programar llamadas para una campaña basándose en su objetivo
+     */
+    public function scheduleCallsForCampaign(Request $request, int $campaignId): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $campaign = VoiceCampaign::forBroker($brokerId)->findOrFail($campaignId);
+            
+            $scheduler = new \App\Services\VoiceCampaignSchedulerService();
+            $result = $scheduler->scheduleCallsForCampaign($campaign, [
+                'days_before' => $request->get('days_before', [7, 3, 1, 0]),
+                'days_after' => $request->get('days_after', [1, 3, 5]),
+                'limit' => $request->get('limit', 500),
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $result
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al programar llamadas',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Refrescar llamadas programadas de una campaña
+     * Agrega nuevas pólizas/clientes que ahora aplican para la campaña
+     */
+    public function refreshScheduledCalls(Request $request, int $campaignId): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $campaign = VoiceCampaign::forBroker($brokerId)->findOrFail($campaignId);
+            
+            $scheduler = new \App\Services\VoiceCampaignSchedulerService();
+            $result = $scheduler->refreshScheduledCalls($campaign);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $result,
+                'message' => "Se agregaron {$result['scheduled']} nuevas llamadas programadas"
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al refrescar llamadas',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Ejecutar una llamada programada específica
+     */
+    public function executeScheduledCall(Request $request, int $scheduledCallId): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $scheduledCall = \App\Models\VoiceCampaignScheduledCall::query()
+                ->where('broker_id', $brokerId)
+                ->findOrFail($scheduledCallId);
+            
+            if ($scheduledCall->status !== \App\Models\VoiceCampaignScheduledCall::STATUS_PENDING) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta llamada ya fue procesada'
+                ], 400);
+            }
+            
+            $campaign = $scheduledCall->campaign;
+            $contact = $scheduledCall->contact_data;
+            
+            // Marcar como en cola
+            $scheduledCall->markAsQueued();
+            
+            // Ejecutar la llamada
+            $callService = new \App\Services\VoiceCampaignCallService();
+            $result = $callService->startSingleCall($campaign, $contact);
+            
+            if ($result['success']) {
+                $scheduledCall->markAsCalled($result['voice_campaign_call_id']);
+            } else {
+                $scheduledCall->markAsFailed($result['error'] ?? 'Error desconocido');
+            }
+            
+            return response()->json([
+                'success' => $result['success'],
+                'data' => $result
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al ejecutar llamada programada',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Reintentar una llamada programada fallida (no contestada, ocupado, etc.)
+     */
+    public function retryScheduledCall(Request $request, int $scheduledCallId): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $scheduledCall = \App\Models\VoiceCampaignScheduledCall::query()
+                ->where('broker_id', $brokerId)
+                ->findOrFail($scheduledCallId);
+            
+            // Solo permitir reintentar llamadas fallidas por razones de no contacto
+            $retryableReasons = [
+                'customer-did-not-answer', 'no-answer', 'busy', 'customer-busy', 
+                'dial-no-answer', 'dial-busy', 'silence-timed-out', 'voicemail'
+            ];
+            
+            if ($scheduledCall->status !== \App\Models\VoiceCampaignScheduledCall::STATUS_FAILED) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se pueden reintentar llamadas fallidas'
+                ], 400);
+            }
+            
+            if (!in_array($scheduledCall->status_reason, $retryableReasons)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta llamada no puede reintentarse por el tipo de error'
+                ], 400);
+            }
+            
+            // Resetear el estado a pendiente
+            $scheduledCall->update([
+                'status' => \App\Models\VoiceCampaignScheduledCall::STATUS_PENDING,
+                'status_reason' => null,
+                'voice_campaign_call_id' => null,
+                'retry_count' => $scheduledCall->retry_count + 1,
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Llamada programada para reintento',
+                'data' => [
+                    'id' => $scheduledCall->id,
+                    'status' => 'pending',
+                    'retry_count' => $scheduledCall->retry_count,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al reintentar llamada',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 

@@ -109,7 +109,7 @@ class UnifiedAuthMiddleware
     private function authenticateFirebase(string $token, Request $request): ?User
     {
         try {
-            Log::info('🔥 Firebase Auth - Iniciando');
+            // Log removido para mejorar rendimiento
             
             // Verificar si es un JWT válido
             $parts = explode('.', $token);
@@ -135,11 +135,7 @@ class UnifiedAuthMiddleware
                 return null;
             }
             
-            Log::info('🔥 Firebase Auth - Payload decodificado', [
-                'sub' => $payload->sub,
-                'email' => $payload->email ?? 'NO_EMAIL',
-                'name' => $payload->name ?? 'NO_NAME'
-            ]);
+            // Log removido para mejorar rendimiento
 
             // Detectar si es un Custom Token de empleado (claims personalizados)
             $empleadoId = null;
@@ -205,10 +201,6 @@ class UnifiedAuthMiddleware
             $user = User::where('firebase_uid', $payload->sub)->first();
             
             if ($user) {
-                Log::info('🔥 Firebase Auth - Usuario encontrado por UID', [
-                    'user_id' => $user->id,
-                    'user_email' => $user->email
-                ]);
                 return $user;
             }
             
@@ -217,16 +209,10 @@ class UnifiedAuthMiddleware
                 $user = User::where('email', $payload->email)->first();
                 
                 if ($user) {
-                    Log::info('🔥 Firebase Auth - Usuario encontrado por email', [
-                        'user_id' => $user->id,
-                        'user_email' => $user->email
-                    ]);
-                    
                     // Actualizar el firebase_uid si no estaba establecido
                     if (!$user->firebase_uid) {
                         $user->firebase_uid = $payload->sub;
                         $user->save();
-                        Log::info('🔥 Firebase Auth - UID actualizado en BD');
                     }
                     
                     return $user;

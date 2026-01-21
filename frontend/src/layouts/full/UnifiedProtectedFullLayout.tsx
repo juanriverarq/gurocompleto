@@ -83,46 +83,33 @@ const UnifiedProtectedFullLayout: React.FC = () => {
     }
   }, [isAuthenticated, loading, location, navigate]);
 
-  // Redirigir: si hay intención pendiente sin plan activo, ir a checkout primero; de lo contrario onboarding
+  // Estado para mostrar error de conexión
+  const [connectionError, setConnectionError] = React.useState(false);
+
+  // Verificar si hay problemas de conexión con el backend
   useEffect(() => {
-    const maybeRedirect = async () => {
-      if (
-        !loading &&
-        isAuthenticated &&
-        !isEmpleado &&
-        saasChecked &&
-        (needsOnboarding || (!tenant && user && user.emailVerified))
-      ) {
-        try {
-          // Consultar estado de billing
-          const resp = await api.get('/billing/status', { validateStatus: () => true });
-          if (resp.status === 200 && resp.data?.success) {
-            const hasActive = !!resp.data.data?.has_active_subscription;
-            const pending = resp.data.data?.pending_intent;
-            if (!hasActive && pending) {
-              window.location.replace('/checkout');
-              return;
-            }
-          }
-        } catch {}
-        // Fallback: onboarding de broker
-        const currentPath = location.pathname + location.search;
-        window.location.replace(
-          `/onboarding/create-broker?returnTo=${encodeURIComponent(currentPath)}`,
-        );
-      }
-    };
-    maybeRedirect();
+    if (
+      !loading &&
+      isAuthenticated &&
+      !isEmpleado &&
+      saasChecked &&
+      !tenant &&
+      user &&
+      user.emailVerified
+    ) {
+      // Si no tiene tenant después de verificar, mostrar error de conexión
+      console.warn('[UnifiedProtectedFullLayout] No se detectó broker - posible problema de conexión');
+      setConnectionError(true);
+    } else {
+      setConnectionError(false);
+    }
   }, [
-    needsOnboarding,
     loading,
     isAuthenticated,
     isEmpleado,
     tenant,
     user,
     saasChecked,
-    location.pathname,
-    location.search,
   ]);
 
   // Verificar acceso completo (Firebase users necesitan tenant + usuarioSaas)
@@ -168,13 +155,42 @@ const UnifiedProtectedFullLayout: React.FC = () => {
     return null;
   }
 
-  // Mostrar loading durante redirección de onboarding
-  if (!isEmpleado && needsOnboarding) {
+  // Mostrar error de conexión si no se puede cargar el broker
+  if (connectionError) {
     return (
-      <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-sm text-gray-600">Redirigiendo al onboarding...</p>
+      <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
+        <div className="text-center max-w-md mx-4 p-8 bg-white rounded-2xl shadow-lg border">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            Problemas de conexión
+          </h2>
+          <p className="text-gray-600 mb-6">
+            No pudimos conectar con la base de datos. Por favor recarga la página o intenta nuevamente en unos minutos.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition"
+            >
+              Recargar página
+            </button>
+            <button
+              onClick={() => {
+                localStorage.clear();
+                window.location.href = '/auth/login';
+              }}
+              className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition"
+            >
+              Cerrar sesión
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-4">
+            Si el problema persiste, <a href="https://wa.me/573001009305?text=Hola,%20tengo%20problemas%20para%20conectar%20con%20Guro" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">contacta a soporte por WhatsApp</a>.
+          </p>
         </div>
       </div>
     );
@@ -231,8 +247,8 @@ const UnifiedProtectedFullLayout: React.FC = () => {
           </div>
         </div>
       </div>
-      {/* Chat flotante global */}
-      <FloatingChat />
+      {/* Chat flotante global - DESACTIVADO TEMPORALMENTE */}
+      {/* <FloatingChat /> */}
     </div>
   );
 };

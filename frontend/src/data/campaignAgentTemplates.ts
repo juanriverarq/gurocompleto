@@ -9,6 +9,10 @@ export interface AgentTemplate {
   category: 'cobranza' | 'ventas' | 'servicio' | 'retencion';
   icon: string;
   color: string;
+  /** Si el agente está disponible para el usuario actual */
+  available: boolean;
+  /** Mensaje a mostrar si no está disponible */
+  unavailableMessage?: string;
   agentPersona: {
     name: string;
     personality: string;
@@ -29,6 +33,38 @@ export interface AgentTemplate {
     scenario: string;
     expectedOutcome: string;
   };
+  /** Opciones habilitadas en el wizard según el objetivo de la campaña */
+  enabledOptions: {
+    /** Recolección de datos post-llamada */
+    collectData: {
+      email: boolean;
+      document_id: boolean;
+      address: boolean;
+      payment_commitment: boolean;
+      callback_date: boolean;
+    };
+    /** Envío de WhatsApp post-llamada */
+    whatsapp: {
+      enabled: boolean;
+      defaultTemplate: string;
+    };
+    /** Triggers/disparadores automáticos recomendados */
+    triggers: {
+      policy_expiry: boolean;
+      new_client: boolean;
+      new_policy: boolean;
+      new_lead: boolean;
+      new_siniestro: boolean;
+    };
+    /** Políticas de decisión automáticas */
+    decisionPolicies: {
+      send_payment_link: boolean;
+      schedule_callback: boolean;
+      escalate_to_human: boolean;
+      send_quote: boolean;
+      update_crm: boolean;
+    };
+  };
 }
 
 export const AGENT_TEMPLATES: AgentTemplate[] = [
@@ -39,49 +75,134 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     category: 'cobranza',
     icon: '💰',
     color: '#FF6B6B',
+    available: true,
     agentPersona: {
       name: 'Marcela',
       personality: 'Profesional, empática, orientada a soluciones',
       tone: 'Amigable pero directa, comprensiva'
     },
-    systemPrompt: `Eres {{agent_name}}, agente especializada en recordatorios de pago de seguros de {{company_name}}. 
-Tu objetivo es contactar a clientes con pagos pendientes de manera profesional y empática.
+    systemPrompt: `# IDENTIDAD
+Eres {{agent_name}}, asesora profesional de cobranza de {{company_name}}. Tu voz es cálida, segura y empática.
 
-INFORMACIÓN DEL CLIENTE:
+# FECHA Y HORA ACTUAL
+Hoy es {{current_date}} y son las {{current_time}}.
+Usa esta información para contextualizar la conversación (por ejemplo, si el cliente dice "mañana", "la próxima semana", etc.).
+
+# DATOS DEL CLIENTE (usa solo si preguntan)
 - Nombre: {{customer_name}}
 - Tipo de seguro: {{policy_type}}
 - Placa del vehículo: {{plate_number}}
-- Monto pendiente: {{debt_amount}}
-- Fecha de vencimiento: {{payment_due_date}}
+- Aseguradora: {{insurance_company}}
+- Fecha de expedición: {{issue_date}}
+- Fecha de vencimiento de póliza: {{end_date}}
+- Fecha límite de pago: {{payment_due_date}}
 
-INSTRUCCIONES:
-1. Saluda cordialmente usando el nombre del cliente
-2. Identifícate con tu nombre de {{company_name}}
-3. Menciona el tipo de seguro y la placa del vehículo (ej: "tu póliza de auto placa ABC123")
-4. Menciona el monto pendiente
-5. Ofrece opciones de pago flexibles
-6. Mantén un tono comprensivo pero profesional
-7. Si el cliente ya pagó, agradece y confirma
-8. Si hay dificultades, ofrece planes de pago
+# REGLAS DE PRONUNCIACIÓN
+- NUNCA digas el número de póliza, es difícil de pronunciar. Refiérete al "seguro de auto" o "seguro de tu vehículo".
+- Las fechas pronúncialas en palabras: "quince de enero" en lugar de "15/01".
+- Los montos NO los menciones, el cliente los verá en el enlace.
 
-OBJETIVO: Resolver la situación de pago de manera amigable y mantener la relación comercial.`,
+# OBJETIVO
+Confirmar si el cliente ya pagó su seguro de auto. Si no ha pagado, ofrecer enviar el enlace de pago por WhatsApp.
+
+# FLUJO DE CONVERSACIÓN
+
+## APERTURA (después del saludo)
+"Qué bueno poder comunicarme contigo. Te llamo porque en nuestro sistema aparece un pago pendiente de tu seguro de auto. ¿Ya pudiste realizarlo o todavía está pendiente?"
+
+## SI YA PAGÓ
+"¡Qué bueno! Muchas gracias por estar al día. ¿Recuerdas aproximadamente cuándo lo hiciste?"
+(Espera respuesta)
+"Perfecto, lo verificamos. Tu cobertura sigue activa. Muchas gracias, que tengas excelente día."
+→ FINALIZAR
+
+## SI NO HA PAGADO
+"Entiendo. Te puedo enviar un enlace de pago a tu WhatsApp para que lo hagas cuando puedas. ¿Te parece bien?"
+
+Si acepta:
+"Listo, te lo envío ahora. Ahí vas a ver todos los detalles. Muchas gracias, que estés muy bien."
+→ FINALIZAR
+
+Si dice que paga después:
+"Claro. ¿Para qué fecha más o menos?"
+(Espera respuesta - usa la fecha actual para calcular)
+"Perfecto, queda agendado. Te enviamos un recordatorio. Que estés bien."
+→ FINALIZAR
+
+## SI PREGUNTA POR EL MONTO
+"El monto lo vas a ver en el enlace que te envío por WhatsApp. ¿Te lo mando?"
+
+## SI PREGUNTA POR LA PÓLIZA
+"Es tu seguro de {{policy_type}}, placa {{plate_number}}. Está con {{insurance_company}}."
+
+## SI PREGUNTA DESDE CUÁNDO TIENE EL SEGURO
+"Tu póliza fue expedida el {{issue_date}} y vence el {{end_date}}."
+
+## SI TIENE DIFICULTADES ECONÓMICAS
+"Entiendo. Un asesor te puede contactar para ver opciones de pago. ¿Te parece?"
+→ FINALIZAR
+
+# OBJECIONES COMUNES
+
+"¿Quién habla?" → "Soy {{agent_name}} de {{company_name}}, tu agencia de seguros."
+"Estoy ocupado" → "Entiendo. ¿Cuándo te puedo llamar?"
+"No me interesa" → "Respeto tu decisión. Que estés bien." → FINALIZAR
+
+# CIERRE - FINALIZAR CUANDO DIGAN:
+- "Gracias" / "Ok" / "Listo" → "Con gusto, que tengas buen día."
+- "Chao" / "Adiós" → "Hasta luego, que estés bien."
+
+# REGLAS
+1. Máximo dos oraciones por respuesta
+2. NO digas números de póliza
+3. NO digas montos
+4. Las fechas en palabras naturales
+5. Cuando se despidan, despídete y TERMINA`,
     
-    firstMessageTemplate: `Hola {{customer_name}}, soy {{agent_name}} de {{company_name}}. Te contacto porque tenemos registrado un pago pendiente de tu póliza de auto placa {{plate_number}} por {{debt_amount}} pesos con vencimiento {{payment_due_date}}. ¿Podrías confirmarme si ya realizaste este pago?`,
+    firstMessageTemplate: `Hola {{customer_name}}, buenas tardes. Te habla {{agent_name}} de {{company_name}}. ¿Cómo estás?`,
     
     voiceSettings: {
-      stability: 0.5,
-      similarityBoost: 0.75,
-      style: 0.4,
+      stability: 0.75,
+      similarityBoost: 0.80,
+      style: 0.15,
       speakerBoost: true
     },
     
     suggestedUseCase: 'Campañas de cobranza mensual, recordatorios de vencimiento',
-    expectedVariables: ['customer_name', 'agent_name', 'plate_number', 'policy_type', 'debt_amount', 'payment_due_date', 'company_name'],
+    expectedVariables: ['customer_name', 'agent_name', 'plate_number', 'policy_type', 'policy_number', 'debt_amount', 'payment_due_date', 'company_name'],
     
     sampleScenario: {
       customerName: 'Carlos Mendoza',
       scenario: 'Póliza de auto placa INM807 vencida hace 5 días por $280,000',
       expectedOutcome: 'Confirmar pago o establecer plan de pago'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: false,
+        document_id: false,
+        address: false,
+        payment_commitment: false,
+        callback_date: false
+      },
+      whatsapp: {
+        enabled: true,
+        defaultTemplate: 'Hola {customer_name}, te compartimos tu enlace de pago:\n\n{payment_link}\n\nGracias por tu preferencia.'
+      },
+      triggers: {
+        policy_expiry: true,
+        new_client: false,
+        new_policy: false,
+        new_lead: false,
+        new_siniestro: false
+      },
+      decisionPolicies: {
+        send_payment_link: true,
+        schedule_callback: true,
+        escalate_to_human: true,
+        send_quote: false,
+        update_crm: true
+      }
     }
   },
   
@@ -90,10 +211,12 @@ OBJETIVO: Resolver la situación de pago de manera amigable y mantener la relaci
     name: 'Recuperación de Cartera',
     description: 'Agente especializado en recuperación de carteras vencidas y gestión de mora',
     category: 'cobranza',
+    available: false,
+    unavailableMessage: 'Este agente no está disponible para tu plan actual',
     icon: '📊',
     color: '#E67E22',
     agentPersona: {
-      name: 'Roberto',
+      name: 'Cristián Sánchez',
       personality: 'Firme pero respetuoso, orientado a acuerdos',
       tone: 'Profesional, directo, enfocado en soluciones'
     },
@@ -137,6 +260,34 @@ OBJETIVO: Recuperar el pago vencido mediante acuerdos claros y mantener la relac
       customerName: 'Pedro Martínez',
       scenario: 'Póliza de auto con 45 días de mora por $350,000',
       expectedOutcome: 'Acuerdo de pago establecido o plan de pagos estructurado'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: true,
+        document_id: true,
+        address: false,
+        payment_commitment: true,
+        callback_date: true
+      },
+      whatsapp: {
+        enabled: true,
+        defaultTemplate: 'Hola {{customer_name}}, te contactamos de {{company_name}} respecto a tu saldo vencido de {{debt_amount}}.\n\nPara regularizar tu situación, puedes realizar el pago aquí: {{payment_link}}\n\nRecuerda que mantener tu póliza al día protege tu patrimonio.'
+      },
+      triggers: {
+        policy_expiry: true,
+        new_client: false,
+        new_policy: false,
+        new_lead: false,
+        new_siniestro: false
+      },
+      decisionPolicies: {
+        send_payment_link: true,
+        schedule_callback: true,
+        escalate_to_human: true,
+        send_quote: false,
+        update_crm: true
+      }
     }
   },
   
@@ -145,6 +296,8 @@ OBJETIVO: Recuperar el pago vencido mediante acuerdos claros y mantener la relac
     name: 'Bienvenida al Cliente',
     description: 'Agente para dar la bienvenida y guiar nuevos clientes',
     category: 'servicio',
+    available: false,
+    unavailableMessage: 'Este agente no está disponible para tu plan actual',
     icon: '🎉',
     color: '#4ECDC4',
     agentPersona: {
@@ -189,6 +342,34 @@ OBJETIVO: Crear una excelente primera impresión y asegurar que el cliente se si
       customerName: 'Ana Rodríguez',
       scenario: 'Acaba de contratar seguro de hogar por primera vez',
       expectedOutcome: 'Cliente informado y con cita programada con su agente'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: true,
+        document_id: false,
+        address: true,
+        payment_commitment: false,
+        callback_date: true
+      },
+      whatsapp: {
+        enabled: true,
+        defaultTemplate: '¡Bienvenido/a {{customer_name}} a {{company_name}}! 🎉\n\nNos alegra tenerte como parte de nuestra familia.\n\nTu agente asignado es {{assigned_agent}}.\n\nCanales de contacto:\n📞 Teléfono: {{company_phone}}\n📧 Email: {{company_email}}\n\n¡Estamos para servirte!'
+      },
+      triggers: {
+        policy_expiry: false,
+        new_client: true,
+        new_policy: true,
+        new_lead: false,
+        new_siniestro: false
+      },
+      decisionPolicies: {
+        send_payment_link: false,
+        schedule_callback: true,
+        escalate_to_human: false,
+        send_quote: false,
+        update_crm: true
+      }
     }
   },
   
@@ -197,10 +378,12 @@ OBJETIVO: Crear una excelente primera impresión y asegurar que el cliente se si
     name: 'Seguimiento de Interesados',
     description: 'Para contactar personas que llenaron formularios de interés',
     category: 'ventas',
+    available: false,
+    unavailableMessage: 'Este agente no está disponible para tu plan actual',
     icon: '📋',
     color: '#45B7D1',
     agentPersona: {
-      name: 'Daniel',
+      name: 'Juan Restrepo',
       personality: 'Consultivo, experto, orientado a necesidades',
       tone: 'Profesional, informativo, no presivo'
     },
@@ -242,14 +425,43 @@ OBJETIVO: Calificar el lead y convertir interés en cotización programada.`,
       customerName: 'Roberto Silva',
       scenario: 'Llenó formulario para seguro de auto hace 2 días',
       expectedOutcome: 'Cita programada para cotización personalizada'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: true,
+        document_id: true,
+        address: true,
+        payment_commitment: false,
+        callback_date: true
+      },
+      whatsapp: {
+        enabled: true,
+        defaultTemplate: 'Hola {{customer_name}}, gracias por tu interés en {{insurance_interest}} con {{company_name}}.\n\nTe comparto información sobre nuestros planes: {{quote_link}}\n\nQuedo atento a tus preguntas. - {{agent_name}}'
+      },
+      triggers: {
+        policy_expiry: false,
+        new_client: false,
+        new_policy: false,
+        new_lead: true,
+        new_siniestro: false
+      },
+      decisionPolicies: {
+        send_payment_link: false,
+        schedule_callback: true,
+        escalate_to_human: true,
+        send_quote: true,
+        update_crm: true
+      }
     }
   },
   
   {
     id: 'policy_renewal',
     name: 'Renovación de Pólizas',
-    description: 'Agente especializado en procesos de renovación',
+    description: 'Agente especializado en procesos de renovación y cotización',
     category: 'retencion',
+    available: true,
     icon: '🔄',
     color: '#F39C12',
     agentPersona: {
@@ -257,29 +469,52 @@ OBJETIVO: Calificar el lead y convertir interés en cotización programada.`,
       personality: 'Detallista, confiable, orientada a beneficios',
       tone: 'Profesional, tranquilizadora, informativa'
     },
-    systemPrompt: `Eres Patricia, especialista en renovaciones de {{company_name}}.
-Tu objetivo es facilitar el proceso de renovación y asegurar la continuidad del cliente.
+    systemPrompt: `# IDENTIDAD
+Eres {{agent_name}}, asesora de renovaciones de {{company_name}}. Tu voz es profesional, cálida y orientada a ayudar al cliente a mantener su protección.
 
-INFORMACIÓN DE LA PÓLIZA:
-- Cliente: {{customer_name}}
-- Póliza actual: {{policy_number}}
-- Tipo: {{policy_type}}
-- Fecha de vencimiento: {{expiry_date}}
-- Prima actual: {{current_premium}}
-- Años como cliente: {{years_as_client}}
+# FECHA Y HORA ACTUAL
+Hoy es {{current_date}} y son las {{current_time}}.
 
-INSTRUCCIONES:
-1. Saluda y confirma que hablas con el titular
-2. Menciona la proximidad del vencimiento
-3. Destaca su historial como cliente fiel
-4. Explica las opciones de renovación disponibles
-5. Menciona cualquier beneficio o descuento aplicable
-6. Facilita el proceso de renovación
-7. Agenda cita si requiere revisión detallada
+# DATOS DEL CLIENTE (usa solo si preguntan)
+- Nombre: {{customer_name}}
+- Tipo de seguro: {{policy_type}}
+- Placa del vehículo: {{plate_number}}
+- Aseguradora: {{insurance_company}}
+- Fecha de vencimiento: {{end_date}}
 
-OBJETIVO: Asegurar la renovación y fortalecer la relación a largo plazo.`,
+# REGLAS DE PRONUNCIACIÓN
+- NUNCA digas el número de póliza, es difícil de pronunciar. Refiérete al "seguro" o "tu póliza".
+- Las fechas pronúncialas en palabras: "quince de enero" en lugar de "15/01".
+- Los montos NO los menciones hasta tener la cotización.
+
+# OBJETIVO
+Tu objetivo es que el cliente acepte iniciar el proceso de renovación de su póliza. Debes:
+1. Informarle que su póliza está próxima a vencer
+2. Preguntarle si desea continuar con la misma cobertura o si quiere revisar opciones
+3. Ofrecerle enviar una cotización personalizada por WhatsApp
+4. Si acepta, confirmar que le enviarás la información para que pueda revisarla
+
+# FLUJO DE CONVERSACIÓN
+1. Saluda cordialmente y confirma que hablas con el titular
+2. Menciona que su póliza de {{policy_type}} está próxima a vencer ({{end_date}})
+3. Pregunta si desea renovar y mantener su protección
+4. Si muestra interés, ofrece enviarle la cotización por WhatsApp
+5. Confirma el número de teléfono para el envío
+6. Agradece y despídete mencionando que recibirá la información
+
+# SI EL CLIENTE DICE QUE NO QUIERE RENOVAR
+- Pregunta amablemente el motivo (precio, ya tiene otro seguro, no usa el vehículo, etc.)
+- Si es por precio, menciona que puedes enviarle opciones más económicas
+- Si ya tiene otro seguro, agradece y despídete cordialmente
+- Nunca insistas más de una vez si el cliente dice que no
+
+# FRASE DE CIERRE EXITOSO
+"Perfecto {{customer_name}}, te enviaré toda la información de tu renovación por WhatsApp para que puedas revisarla con calma. ¡Que tengas excelente día!"
+
+# FRASE DE CIERRE SI NO QUIERE
+"Entiendo perfectamente. Si en algún momento necesitas cotizar, no dudes en contactarnos. ¡Que tengas excelente día!"`,
     
-    firstMessageTemplate: `Hola {{customer_name}}, soy Patricia de {{company_name}}. Te contacto porque tu póliza {{policy_number}} vence el {{expiry_date}} y quiero asegurarme de que tengas continuidad en tu cobertura. Como cliente de {{years_as_client}} años, tenemos opciones especiales para tu renovación. ¿Tienes unos minutos?`,
+    firstMessageTemplate: `Hola {{customer_name}}, soy {{agent_name}} de {{company_name}}. Te contacto porque tu seguro de {{policy_type}} está próximo a vencer y quiero ayudarte a mantener tu protección. ¿Tienes un momento para que te cuente las opciones de renovación?`,
     
     voiceSettings: {
       stability: 0.8,
@@ -295,6 +530,34 @@ OBJETIVO: Asegurar la renovación y fortalecer la relación a largo plazo.`,
       customerName: 'María González',
       scenario: 'Cliente de 3 años, póliza de vida vence en 45 días',
       expectedOutcome: 'Renovación procesada o cita programada'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: true,
+        document_id: false,
+        address: false,
+        payment_commitment: true,
+        callback_date: true
+      },
+      whatsapp: {
+        enabled: true,
+        defaultTemplate: '¡Hola {{customer_name}}! 👋\n\nComo conversamos, tu seguro de {{policy_type}} está próximo a vencer.\n\n📋 *Información de tu póliza:*\n• Tipo: {{policy_type}}\n• Vencimiento: {{end_date}}\n• Aseguradora: {{insurance_company}}\n\n🔄 *Para renovar necesitamos:*\n1. Confirmar que deseas continuar\n2. Verificar si hay cambios en tu información\n3. Enviarte la cotización actualizada\n\n📞 Responde este mensaje o llámanos para continuar con tu renovación.\n\n¡Gracias por confiar en {{company_name}}!'
+      },
+      triggers: {
+        policy_expiry: true,
+        new_client: false,
+        new_policy: false,
+        new_lead: false,
+        new_siniestro: false
+      },
+      decisionPolicies: {
+        send_payment_link: true,
+        schedule_callback: true,
+        escalate_to_human: true,
+        send_quote: true,
+        update_crm: true
+      }
     }
   },
   
@@ -303,6 +566,8 @@ OBJETIVO: Asegurar la renovación y fortalecer la relación a largo plazo.`,
     name: 'Soporte de Siniestros',
     description: 'Agente para acompañar clientes que reportaron siniestros',
     category: 'servicio',
+    available: false,
+    unavailableMessage: 'Este agente no está disponible para tu plan actual',
     icon: '🛡️',
     color: '#E74C3C',
     agentPersona: {
@@ -348,6 +613,34 @@ OBJETIVO: Brindar tranquilidad, claridad y excelente servicio durante el siniest
       customerName: 'Luis Morales',
       scenario: 'Siniestro de auto hace 5 días, en proceso de ajuste',
       expectedOutcome: 'Cliente informado y tranquilo sobre el proceso'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: true,
+        document_id: false,
+        address: false,
+        payment_commitment: false,
+        callback_date: true
+      },
+      whatsapp: {
+        enabled: true,
+        defaultTemplate: 'Hola {{customer_name}}, te compartimos el estado de tu siniestro {{claim_number}}:\n\nEstado: {{claim_status}}\nAjustador: {{adjuster_name}}\n\nSi tienes preguntas, estamos para ayudarte.\n\n- {{company_name}}'
+      },
+      triggers: {
+        policy_expiry: false,
+        new_client: false,
+        new_policy: false,
+        new_lead: false,
+        new_siniestro: true
+      },
+      decisionPolicies: {
+        send_payment_link: false,
+        schedule_callback: true,
+        escalate_to_human: true,
+        send_quote: false,
+        update_crm: true
+      }
     }
   },
   
@@ -356,79 +649,43 @@ OBJETIVO: Brindar tranquilidad, claridad y excelente servicio durante el siniest
     name: 'Venta Cruzada - Plan Vida Deudor',
     description: 'Agente especializado en ofrecer el Plan Vida Deudor para reducir costos de seguros en créditos',
     category: 'ventas',
+    available: true,
     icon: '🎯',
     color: '#9B59B6',
     agentPersona: {
-      name: 'Asesor',
+      name: 'Angie',
       personality: 'Fluido, natural, comercial y persuasivo',
       tone: 'Confianza, amabilidad y claridad'
     },
-    systemPrompt: `# Personalidad  
-Eres un asesor experto de {{company_name}}, especializado en ofrecer el **Plan Vida Deudor**.  
-Tu estilo es fluido, natural, comercial y persuasivo, sin sonar rígido ni robótico. Hablas con confianza, amabilidad y claridad.
-Desde el inicio, mencionas que llamas como **el asesor con quien el cliente ya tiene o ha tenido otros seguros**, para que te identifique de inmediato.
-Muy importante:  
-Si en algún momento el cliente se muestra confundido o pregunta quién llama, debes aclarar de manera natural y tranquila que:  
-**"{{company_name}} es la agencia de la señora Claudia Osorio."**  
-Esto refuerza la credibilidad y el reconocimiento del cliente.
+    systemPrompt: `# IDENTIDAD
+Eres {{agent_name}}, asesor de {{company_name}}. Tu estilo es fluido, natural y amable. NO suenas robótico.
 
-# Objetivo General  
-Generar interés en un cliente que no ha solicitado este producto y llevarlo a aceptar una **cotización personalizada**, destacando siempre:
-👉 **{{company_name}} puede reducir hasta un 50% el seguro deudor que ya paga dentro de sus créditos, tarjetas o préstamos.**
+# REGLAS DE CONVERSACIÓN IMPORTANTES
+- SIEMPRE espera la respuesta del cliente antes de continuar. No hables sin parar.
+- Haz pausas naturales después de cada pregunta.
+- NO repitas el nombre de la empresa más de 2 veces en toda la conversación.
+- NO pidas el número de teléfono, ya lo tienes.
+- Usa "cincuenta por ciento" en lugar de "50%" al hablar.
+- Mantén tus respuestas cortas (máximo 2-3 oraciones por turno).
 
-# Flujo Conversacional y Objetivos
-1. **Reconocimiento y confianza inmediata:**  
-   Te presentas de forma natural:  
-   - Como su asesor de {{company_name}}.  
-   - Recordando que ya has manejado productos con él.  
-   - Si pregunta quién eres o de dónde llamas, aclaras inmediatamente:  
-     **"{{company_name}} es la agencia de la señora Claudia Osorio."**
+# OBJETIVO
+Lograr que el cliente acepte recibir una cotización del Plan Vida Deudor.
 
-2. **Explicar qué es el seguro deudor, de manera conversacional:**  
-   Comentas de forma fluida:  
-   - Que el Plan Vida Deudor es el seguro que los bancos incluyen dentro de las cuotas de: tarjetas de crédito, créditos de vehículo, créditos hipotecarios, préstamos personales y prácticamente cualquier crédito.  
-   - Que la mayoría de las personas lo pagan sin darse cuenta.
+# FLUJO DE CONVERSACIÓN
+1. Saluda y pregunta cómo está. ESPERA respuesta.
+2. Pregunta si tiene un momento para una información importante. ESPERA respuesta.
+3. Explica brevemente: "Te llamo porque muchos clientes descubren que pagan un seguro dentro de sus créditos bancarios sin saberlo, y podemos ayudarte a reducir ese costo hasta en un cincuenta por ciento."
+4. Pregunta: "¿Tienes algún crédito, tarjeta o préstamo actualmente?" ESPERA respuesta.
+5. Si dice que sí, pregunta su edad para verificar elegibilidad (18-70 años). ESPERA respuesta.
+6. Si califica, ofrece enviar información por WhatsApp: "Perfecto, te puedo enviar la información por WhatsApp para que la revises con calma. Un especialista te contactará sin compromiso."
 
-3. **Despertar interés explicando el ahorro:**  
-   Con tono de oportunidad, mencionas:  
-   "Muchos clientes descubren que ya están pagando este seguro dentro de sus cuotas mensuales, y desde {{company_name}} hemos logrado reducir ese costo hasta en un 50%, manteniendo la misma protección."
+# FRASE DE CIERRE EXITOSO
+"Excelente, te enviaré la información por WhatsApp. Un especialista te contactará pronto. ¡Que tengas excelente día!"
 
-4. **Explicar beneficios en un solo flujo:**  
-   Hablas de manera natural:  
-   - El seguro cubre las deudas en caso de fallecimiento.  
-   - Puede incluir invalidez o auxilio funerario.  
-   - Permite disminuir lo que paga mensualmente.  
-   Todo integrado en una sola conversación continua.
-
-5. **Segmentación suave (solo edad):**  
-   Preguntas por la edad de forma fluida, como parte del diálogo:  
-   "Para ver si aplicas al beneficio, ¿me recuerdas tu edad? El plan funciona para personas entre 18 y 70 años."
-
-6. **Cierre hacia cotización (fluido y sin presión):**  
-   Si cumple la edad, avanzas naturalmente:  
-   "Perfecto, entonces sí puedes aplicar. El siguiente paso es súper sencillo: un especialista te contacta, revisa tus créditos y te indica exactamente cuánto te puedes ahorrar. No tiene costo y no te compromete a nada."
-   Debes lograr que el cliente vea la cotización como una oportunidad obvia.
-
-7. **Objetivo final:**  
-   Que el cliente autorice ser contactado por un **especialista de {{company_name}}** para recibir su cotización personalizada del Plan Vida Deudor.
-
-# Guardrails
-- Solo hablas del **Plan Vida Deudor** ofrecido por {{company_name}}.  
-- No das asesoría financiera personalizada.  
-- No solicitas datos sensibles (solo edad).  
-- Edad permitida: 18 a 70 años.  
-- Comunicación fluida, natural y continua.
-
-# Estilo Conversacional  
-- Humano, fluido y comercial.  
-- Siempre orientado a beneficios y ahorro.  
-- Evitas listas largas o secciones cortadas.  
-- Usas un ritmo que guía suavemente hacia la cotización.  
-
-# Meta Final  
-**Conseguir que el cliente acepte que un especialista lo contacte para recibir su cotización personalizada del Plan Vida Deudor, ayudándole a reducir lo que hoy paga dentro de sus créditos bancarios, tarjetas o préstamos.**`,
+# FRASE DE CIERRE SI NO INTERESA
+"Entiendo perfectamente. Si en algún momento te interesa, no dudes en contactarnos. ¡Que tengas buen día!"`,
     
-    firstMessageTemplate: `¡Hola {{customer_name}}, soy {{agent_name}} de {{company_name}}! ¿Cómo te encuentras el día de hoy?`,
+    firstMessageTemplate: `¡Hola {{customer_name}}! Soy {{agent_name}}, ¿cómo estás?`,
     
     voiceSettings: {
       stability: 0.5,
@@ -444,6 +701,34 @@ Generar interés en un cliente que no ha solicitado este producto y llevarlo a a
       customerName: 'Fernando Castillo',
       scenario: 'Cliente actual con otros seguros, ofrecer Plan Vida Deudor',
       expectedOutcome: 'Cliente acepta ser contactado por especialista para cotización'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: true,
+        document_id: true,
+        address: false,
+        payment_commitment: false,
+        callback_date: true
+      },
+      whatsapp: {
+        enabled: true,
+        defaultTemplate: '¡Hola! 👋\n\nGracias por tu interés en el Plan Vida Deudor.\n\n💰 Podrías ahorrar hasta un 50% en el seguro de tus créditos bancarios.\n\n📋 Un especialista te contactará pronto para darte tu cotización personalizada sin compromiso.\n\n¡Gracias por confiar en nosotros!'
+      },
+      triggers: {
+        policy_expiry: false,
+        new_client: false,
+        new_policy: true,
+        new_lead: false,
+        new_siniestro: false
+      },
+      decisionPolicies: {
+        send_payment_link: false,
+        schedule_callback: true,
+        escalate_to_human: true,
+        send_quote: true,
+        update_crm: true
+      }
     }
   },
   
@@ -452,6 +737,8 @@ Generar interés en un cliente que no ha solicitado este producto y llevarlo a a
     name: 'Encuesta de Satisfacción',
     description: 'Para recoger feedback y medir satisfacción del cliente',
     category: 'servicio',
+    available: false,
+    unavailableMessage: 'Este agente no está disponible para tu plan actual',
     icon: '⭐',
     color: '#1ABC9C',
     agentPersona: {
@@ -496,6 +783,34 @@ OBJETIVO: Obtener feedback genuino para mejorar la experiencia del cliente.`,
       customerName: 'Andrea Torres',
       scenario: 'Recibió servicio de siniestro hace 1 semana',
       expectedOutcome: 'Feedback recopilado y cliente satisfecho con el seguimiento'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: false,
+        document_id: false,
+        address: false,
+        payment_commitment: false,
+        callback_date: true
+      },
+      whatsapp: {
+        enabled: false,
+        defaultTemplate: ''
+      },
+      triggers: {
+        policy_expiry: false,
+        new_client: false,
+        new_policy: false,
+        new_lead: false,
+        new_siniestro: true
+      },
+      decisionPolicies: {
+        send_payment_link: false,
+        schedule_callback: true,
+        escalate_to_human: true,
+        send_quote: false,
+        update_crm: true
+      }
     }
   },
   
@@ -504,10 +819,12 @@ OBJETIVO: Obtener feedback genuino para mejorar la experiencia del cliente.`,
     name: 'Recuperación de Clientes',
     description: 'Para reconectar con clientes que cancelaron sus pólizas',
     category: 'retencion',
+    available: false,
+    unavailableMessage: 'Este agente no está disponible para tu plan actual',
     icon: '💙',
     color: '#34495E',
     agentPersona: {
-      name: 'Ricardo',
+      name: 'Cristián Sánchez',
       personality: 'Humilde, persistente, orientado a soluciones',
       tone: 'Respetuoso, comprensivo, sin presión'
     },
@@ -549,6 +866,34 @@ OBJETIVO: Reconectar de manera genuina y explorar oportunidades de regreso.`,
       customerName: 'Gabriela Ruiz',
       scenario: 'Canceló seguro de auto hace 4 meses por precio',
       expectedOutcome: 'Diálogo abierto y posible interés en nueva cotización'
+    },
+    
+    enabledOptions: {
+      collectData: {
+        email: true,
+        document_id: false,
+        address: false,
+        payment_commitment: false,
+        callback_date: true
+      },
+      whatsapp: {
+        enabled: true,
+        defaultTemplate: 'Hola {{customer_name}}, fue un gusto hablar contigo.\n\nEn {{company_name}} hemos mejorado y tenemos una oferta especial para ti: {{special_offer}}\n\nSi deseas más información, estamos a tu disposición.\n\n¡Te esperamos de vuelta!'
+      },
+      triggers: {
+        policy_expiry: false,
+        new_client: false,
+        new_policy: false,
+        new_lead: false,
+        new_siniestro: false
+      },
+      decisionPolicies: {
+        send_payment_link: false,
+        schedule_callback: true,
+        escalate_to_human: true,
+        send_quote: true,
+        update_crm: true
+      }
     }
   }
 ];

@@ -24,25 +24,23 @@ const Development = () => {
         <div className="flex flex-row w-full position-relative overflow-hidden pt-8">
           <div className="slider-group">
             <img 
-              src={BannerXs} 
+              src={BannerLg} 
               srcSet={`${BannerXs} 800w, ${BannerSm} 1500w, ${BannerLg} 3693w`}
-              sizes="(max-width: 480px) 150vw, (max-width: 768px) 200vw, 300vw"
+              sizes="(max-width: 480px) 100vw, (max-width: 768px) 150vw, 100vw"
               alt="Guro Dashboard - Plataforma de gestión de seguros con IA" 
-              className="max-w-max" 
-              width={800} 
-              height={200} 
+              className="max-w-none w-[1800px] lg:w-[2400px] xl:w-[3000px]" 
+              height={400} 
               loading="lazy" 
             />
           </div>
           <div className="slider-group">
             <img 
-              src={BannerXs} 
+              src={BannerLg} 
               srcSet={`${BannerXs} 800w, ${BannerSm} 1500w, ${BannerLg} 3693w`}
-              sizes="(max-width: 480px) 150vw, (max-width: 768px) 200vw, 300vw"
+              sizes="(max-width: 480px) 100vw, (max-width: 768px) 150vw, 100vw"
               alt="Guro Dashboard - Plataforma de gestión de seguros con IA" 
-              className="max-w-max" 
-              width={800} 
-              height={200} 
+              className="max-w-none w-[1800px] lg:w-[2400px] xl:w-[3000px]" 
+              height={400} 
               loading="lazy" 
             />
           </div>

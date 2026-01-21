@@ -303,6 +303,21 @@ const NuevoLead: React.FC = () => {
           </div>
         </TitleCard>
 
+        <TitleCard title="Descripción">
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Descripción del negocio
+            </label>
+            <Textarea
+              id="description"
+              value={(formData as any).description || ''}
+              onChange={(e) => handleInputChange('description' as any, e.target.value)}
+              placeholder="Describe el contexto del negocio, necesidades del cliente, etc."
+              rows={3}
+            />
+          </div>
+        </TitleCard>
+
         <TitleCard title="Detalles">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField

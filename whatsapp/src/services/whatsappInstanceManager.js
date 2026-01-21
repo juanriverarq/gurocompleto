@@ -56,6 +56,32 @@ class WhatsAppInstanceManager {
             }
         }
     }
+
+    /**
+     * Enviar mensaje usando la primera instancia conectada disponible
+     */
+    async sendMessage(phone, message, options = {}) {
+        // Buscar una instancia conectada
+        for (let [instanceId, instance] of this.instances) {
+            if (instance.isConnected()) {
+                console.log(`📤 [${instanceId}] Enviando mensaje a ${phone}`);
+                return await instance.sendMessage(phone, message, options);
+            }
+        }
+        throw new Error('No hay instancias de WhatsApp conectadas');
+    }
+
+    /**
+     * Obtener la primera instancia conectada
+     */
+    getConnectedInstance() {
+        for (let [instanceId, instance] of this.instances) {
+            if (instance.isConnected()) {
+                return instance;
+            }
+        }
+        return null;
+    }
 }
 
 module.exports = WhatsAppInstanceManager;

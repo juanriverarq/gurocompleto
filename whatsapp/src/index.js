@@ -53,6 +53,7 @@ class GuromensajesServer {
 
             // Compartir servicios globalmente para las rutas
             this.app.locals.whatsappManager = this.whatsappManager;
+            this.app.locals.whatsappService = this.whatsappManager; // Alias para compatibilidad con rutas de mensajes
             this.app.locals.database = this.database;
             this.app.locals.automationService = this.automationService;
             this.app.locals.io = this.io;
@@ -79,9 +80,33 @@ class GuromensajesServer {
         this.app.use(express.json({ limit: '50mb' }));
         this.app.use(express.urlencoded({ extended: true, limit: '50mb' }));
         
-        // Archivos estáticos
-        this.app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-        this.app.use(express.static(path.join(__dirname, '../public')));
+        // Bloquear acceso público al dashboard - solo permitir API y health
+        this.app.use((req, res, next) => {
+            const allowedPaths = ['/api/', '/health', '/socket.io'];
+            const isAllowed = allowedPaths.some(path => req.path.startsWith(path));
+            
+            if (!isAllowed && req.path === '/') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Acceso no autorizado',
+                    hint: 'Este servicio es solo para uso interno via API'
+                });
+            }
+            
+            // Bloquear archivos estáticos del dashboard
+            if (!isAllowed && (req.path.endsWith('.html') || req.path.endsWith('.js') || req.path.endsWith('.css'))) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Acceso no autorizado'
+                });
+            }
+            
+            next();
+        });
+        
+        // Archivos estáticos - deshabilitados para producción
+        // this.app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+        // this.app.use(express.static(path.join(__dirname, '../public')));
     }
 
     initializeRoutes() {

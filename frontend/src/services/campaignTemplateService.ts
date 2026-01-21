@@ -46,7 +46,7 @@ export interface PaginatedResponse<T> {
 }
 
 // Configuración de la API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+import { API_BASE_URL } from '../config/apiUrl';
 
 // Helper para obtener el token de autenticación Firebase
 const getAuthToken = async (): Promise<string | null> => {

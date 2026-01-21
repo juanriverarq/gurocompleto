@@ -1,6 +1,30 @@
 // Configuración centralizada de la aplicación
+// Detectar automáticamente si estamos en producción basándose en el hostname
+const getApiBaseUrl = (): string => {
+  // 1. Primero intentar variable de entorno
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // 2. Runtime override
+  if (typeof window !== 'undefined' && (window as any).__ENV__?.API_BASE_URL) {
+    return (window as any).__ENV__.API_BASE_URL;
+  }
+  
+  // 3. Detectar producción por hostname
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'guro.co' || hostname === 'www.guro.co' || hostname.endsWith('.guro.co')) {
+      return 'https://app.guro.co/api';
+    }
+  }
+  
+  // 4. Fallback para desarrollo local
+  return 'http://localhost:8081/api';
+};
+
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:8081/api',
+  BASE_URL: getApiBaseUrl(),
   ENDPOINTS: {
     AUTH: {
       SYNC_FIREBASE_USER: '/auth/sync-firebase-user',

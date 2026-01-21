@@ -118,7 +118,7 @@ const InsuranceBenefits = () => {
           {/* Resultados Comprobados */}
           <div className="bg-white dark:bg-darkgray rounded-3xl p-6 sm:p-12 shadow-2xl mx-4">
             <div className="text-center mb-8 sm:mb-12">
-              <div className="flex justify-center items-center gap-3 mb-6">
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-3 mb-6">
                 <div className="flex">
                   <div className="-ms-2 h-8 w-8">
                     <img
@@ -151,8 +151,8 @@ const InsuranceBenefits = () => {
                     />
                   </div>
                 </div>
-                <p className="text-ld text-lg">
-                  Más de 150 clientes ya transformaron su negocio con Guro
+                <p className="text-ld text-sm sm:text-lg text-center">
+                  +150 agencias ya transformaron su negocio con Guro
                 </p>
               </div>
               <h3 

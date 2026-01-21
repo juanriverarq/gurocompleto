@@ -647,6 +647,23 @@ const EditarLead: React.FC = () => {
           </div>
         </Card>
 
+        {/* Descripción del negocio */}
+        <Card>
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium flex items-center">
+              <Icon icon="solar:document-text-bold-duotone" className="w-5 h-5 mr-2 text-primary" />
+              Descripción del Negocio
+            </h3>
+
+            <Textarea
+              value={(formData as any)?.description || ''}
+              onChange={(e) => handleInputChange('description' as any, e.target.value)}
+              placeholder="Describe el contexto del negocio, necesidades del cliente, etc."
+              rows={3}
+            />
+          </div>
+        </Card>
+
         {/* Notas */}
         <Card>
           <div className="space-y-4">

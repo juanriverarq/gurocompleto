@@ -65,16 +65,12 @@ export const SaasProvider: React.FC<SaasProviderProps> = ({ children }) => {
       });
 
       if (!response.ok) {
-        // Si es 403 y necesita onboarding, no limpiar el token
+        // Si es 403 y necesita onboarding, mostrar error (ya no redirigimos)
         if (response.status === 403) {
           const errorData = await response.json();
           if (errorData.needs_onboarding) {
-            setError(errorData.message);
-            // Redirigir al onboarding si es necesario
-            if (errorData.onboarding_step === 'create_broker') {
-              window.location.href = '/onboarding/create-broker';
-              return;
-            }
+            setError('Problemas de conexión con la base de datos. Recarga la página o intenta nuevamente en unos minutos.');
+            return;
           }
         }
         throw new Error('Sesión inválida');

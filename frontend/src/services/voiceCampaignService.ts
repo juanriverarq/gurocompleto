@@ -6,7 +6,21 @@
 import { auth } from '../config/firebase';
 
 // Configuración de la API de Laravel
-const LARAVEL_API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+// Detectar automáticamente si estamos en producción basándose en el hostname
+const getApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined' && (window as any).__ENV__?.API_BASE_URL) {
+    return (window as any).__ENV__.API_BASE_URL;
+  }
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'guro.co' || hostname === 'www.guro.co' || hostname.endsWith('.guro.co')) {
+      return 'https://app.guro.co/api';
+    }
+  }
+  return 'http://localhost:8081/api';
+};
+const LARAVEL_API_BASE_URL = getApiBaseUrl();
 
 // Helper para obtener el token de autenticación Firebase
 const getAuthToken = async (): Promise<string | null> => {
@@ -1149,6 +1163,131 @@ class VoiceCampaignService {
       errors,
     };
   }
+
+  // ==================== LLAMADAS PROGRAMADAS ====================
+
+  /**
+   * Obtener llamadas programadas de una campaña
+   */
+  async getScheduledCalls(campaignId: number, filters?: {
+    status?: string;
+    date?: string;
+    from_date?: string;
+    to_date?: string;
+  }): Promise<ScheduledCallsResponse> {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.date) params.append('date', filters.date);
+      if (filters?.from_date) params.append('from_date', filters.from_date);
+      if (filters?.to_date) params.append('to_date', filters.to_date);
+
+      const queryString = params.toString();
+      const endpoint = `/saas/voice-campaigns/${campaignId}/scheduled-calls${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await this.makeRequest(endpoint, 'GET');
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        data: { total: 0, pending: 0, completed: 0, failed: 0, calls: [] },
+        message: error.message || 'Error al obtener llamadas programadas',
+      };
+    }
+  }
+
+  /**
+   * Programar llamadas para una campaña basándose en su objetivo
+   */
+  async scheduleCallsForCampaign(campaignId: number, options?: {
+    days_before?: number[];
+    days_after?: number[];
+    limit?: number;
+  }): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const endpoint = `/saas/voice-campaigns/${campaignId}/schedule-calls`;
+      const response = await this.makeRequest(endpoint, 'POST', options || {});
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Error al programar llamadas',
+      };
+    }
+  }
+
+  /**
+   * Ejecutar una llamada programada específica
+   */
+  async executeScheduledCall(scheduledCallId: number): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const endpoint = `/saas/voice-campaigns/scheduled-calls/${scheduledCallId}/execute`;
+      const response = await this.makeRequest(endpoint, 'POST');
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Error al ejecutar llamada programada',
+      };
+    }
+  }
+
+  /**
+   * Reintentar una llamada programada fallida (no contestada, ocupado, etc.)
+   */
+  async retryScheduledCall(scheduledCallId: number): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const endpoint = `/saas/voice-campaigns/scheduled-calls/${scheduledCallId}/retry`;
+      const response = await this.makeRequest(endpoint, 'POST');
+      return response;
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Error al reintentar llamada programada',
+      };
+    }
+  }
+}
+
+// Interfaces para llamadas programadas
+export interface ScheduledCall {
+  id: number;
+  client_name: string;
+  client_phone: string;
+  status_reason?: string;
+  scheduled_date: string;
+  scheduled_time?: string;
+  reason: string;
+  reason_description: string;
+  status: 'pending' | 'queued' | 'called' | 'completed' | 'skipped' | 'failed' | 'cancelled';
+  status_description: string;
+  priority: number;
+  poliza_number?: string;
+  called_at?: string;
+  contact_data?: {
+    policy_number?: string;
+    policy_type?: string;
+    plate_number?: string;
+    insurance_company?: string;
+    debt_amount?: number;
+    payment_due_date?: string;
+    end_date?: string;
+    expiry_date?: string;
+    client_id?: number;
+    poliza_id?: number;
+  };
+}
+
+export interface ScheduledCallsResponse {
+  success: boolean;
+  data: {
+    total: number;
+    pending: number;
+    completed: number;
+    failed: number;
+    calls: ScheduledCall[];
+  };
+  message?: string;
 }
 
 // Crear instancia única del servicio

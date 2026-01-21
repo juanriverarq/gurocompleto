@@ -227,6 +227,57 @@ class VoiceCampaignTrigger extends Model
     }
 
     /**
+     * Obtiene el rango de días antes del vencimiento (número simple, no array).
+     * Retorna el máximo valor si es un array, o el valor directo si es un número.
+     */
+    public function getExpiryBeforeDaysRange(): int
+    {
+        if ($this->type !== self::TYPE_POLICY_EXPIRY) {
+            return 0;
+        }
+        $o = $this->expiry_offsets ?: [];
+        $val = $o['before_days'] ?? 7;
+        
+        // Si es un array (compatibilidad con formato anterior), tomar el máximo
+        if (is_array($val)) {
+            return count($val) > 0 ? max(array_map('intval', $val)) : 0;
+        }
+        
+        // Si es string con comas (formato CSV anterior), parsear y tomar máximo
+        if (is_string($val) && str_contains($val, ',')) {
+            $parts = array_map('intval', explode(',', $val));
+            return count($parts) > 0 ? max($parts) : 0;
+        }
+        
+        return (int) $val;
+    }
+
+    /**
+     * Obtiene el rango de días después del vencimiento (número simple, no array).
+     */
+    public function getExpiryAfterDaysRange(): int
+    {
+        if ($this->type !== self::TYPE_POLICY_EXPIRY) {
+            return 0;
+        }
+        $o = $this->expiry_offsets ?: [];
+        $val = $o['after_days'] ?? 1;
+        
+        // Si es un array (compatibilidad con formato anterior), tomar el máximo
+        if (is_array($val)) {
+            return count($val) > 0 ? max(array_map('intval', $val)) : 0;
+        }
+        
+        // Si es string con comas (formato CSV anterior), parsear y tomar máximo
+        if (is_string($val) && str_contains($val, ',')) {
+            $parts = array_map('intval', explode(',', $val));
+            return count($parts) > 0 ? max($parts) : 0;
+        }
+        
+        return (int) $val;
+    }
+
+    /**
      * Campos de mapeo de contacto.
      */
     public function getPhoneField(): string

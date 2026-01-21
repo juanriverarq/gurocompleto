@@ -47,10 +47,12 @@ class VoiceCampaignCall extends Model
         'total_cost_usd',
         'total_cost_cop',
         'total_cost_with_markup_usd',
-        'total_cost_with_markup_cop'
+        'total_cost_with_markup_cop',
+        'contact_data'
     ];
 
     protected $casts = [
+        'contact_data' => 'json',
         'call_initiated_at' => 'datetime',
         'call_answered_at' => 'datetime',
         'call_ended_at' => 'datetime',

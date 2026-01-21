@@ -1,6 +1,5 @@
 import { auth } from '../config/firebase';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+import { API_BASE_URL } from '../config/apiUrl';
 
 export interface SendgridTemplate {
   id: string;

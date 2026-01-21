@@ -195,3 +195,14 @@ Schedule::command('voice-campaigns:process-policy-expiry --days-range=60')
     ->dailyAt('06:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/voice-campaign-triggers.log'));
+
+/**
+ * Ejecuta llamadas programadas de campañas de voz automáticamente.
+ * Procesa en lotes de máximo 20 llamadas simultáneas.
+ * Solo ejecuta dentro de horario permitido (8am-8pm Colombia).
+ * Ver comando: voice:execute-scheduled-calls
+ */
+Schedule::command('voice:execute-scheduled-calls --batch-size=20')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/voice-scheduled-calls.log'));

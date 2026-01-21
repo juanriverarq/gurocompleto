@@ -71,21 +71,16 @@ const UnifiedProtectedRoute: React.FC<UnifiedProtectedRouteProps> = ({
       return;
     }
 
-    // Si el usuario necesita onboarding, redirigir según el paso (solo luego de verificar SaaS)
-    if (saasChecked && needsOnboarding) {
-      navigate(`/onboarding/create-broker?returnTo=${encodeURIComponent(currentPath)}`);
+    // Si el usuario necesita onboarding o no tiene tenant, mostrar error de conexión
+    // (ya no redirigimos a /onboarding/create-broker)
+    if (saasChecked && (needsOnboarding || (!tenant && isEmailVerified && !isEmpleado))) {
+      // No redirigir - el UnifiedProtectedFullLayout mostrará el error de conexión
       return;
     }
 
     // Si el email no está verificado (solo para usuarios Firebase, no empleados), redirigir
     if (!isEmailVerified && !isEmpleado) {
       navigate('/auth/verification-prompt');
-      return;
-    }
-
-    // Garantía adicional: si es usuario Firebase verificado y no tiene broker asignado, llevar a onboarding (solo cuando SaaS ya fue verificado)
-    if (!isEmpleado && isEmailVerified && saasChecked && !tenant) {
-      navigate(`/onboarding/create-broker?returnTo=${encodeURIComponent(currentPath)}`);
       return;
     }
 
