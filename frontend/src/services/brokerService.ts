@@ -21,7 +21,7 @@ export interface ApiResponse<T> {
 }
 
 // Configuración de la API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+import { API_BASE_URL } from '../config/apiUrl';
 
 // Usar las nuevas rutas SaaS
 const API_PREFIX = '/saas/brokers';

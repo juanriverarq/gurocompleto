@@ -53,11 +53,7 @@ class FirebaseAuthMiddleware
                 ], 401);
             }
 
-            Log::info('Token Firebase verificado correctamente', [
-                'uid' => $uid,
-                'email' => $email,
-                'email_verified' => $emailVerified
-            ]);
+            // Log removido para mejorar rendimiento
 
             // Buscar o crear el usuario en la base de datos local
             $user = User::where('firebase_uid', $uid)->first();
@@ -240,10 +236,7 @@ class FirebaseAuthMiddleware
                 throw new \Exception('Firma JWT inválida');
             }
 
-            Log::info('Token Firebase validado exitosamente (firma y claims)', [
-                'uid' => $payload->sub,
-                'email' => $payload->email ?? null,
-            ]);
+            // Log removido para mejorar rendimiento
 
             return $payload;
 

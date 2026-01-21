@@ -809,10 +809,20 @@ export const polizaService = {
         per_page: 1 
       });
       
+      console.log('🔍 [checkPolizaExists] Buscando:', numeroPoliza.trim());
+      console.log('🔍 [checkPolizaExists] Respuesta:', response);
+      
       if (response.success && response.data) {
         const polizas = Array.isArray(response.data) ? response.data : (response.data as any).data || [];
+        console.log('🔍 [checkPolizaExists] Pólizas encontradas:', polizas.length, polizas.map((p: any) => p.numero_poliza));
+        
         if (polizas.length > 0) {
           const found = polizas[0];
+          // Verificar que el número de póliza coincida EXACTAMENTE
+          if (found.numero_poliza !== numeroPoliza.trim()) {
+            console.log('🔍 [checkPolizaExists] No coincide exactamente:', found.numero_poliza, '!==', numeroPoliza.trim());
+            return { exists: false };
+          }
           // Si estamos editando, excluir la póliza actual
           if (excludeId && found.id?.toString() === excludeId) {
             return { exists: false };

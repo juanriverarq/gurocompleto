@@ -63,7 +63,11 @@ class SalesFunnel extends Model
         'days_in_current_stage',
         'total_days_in_funnel',
         'final_value',
-        'policy_number'
+        'policy_number',
+        'description',
+        'ramo_id',
+        'poliza_id',
+        'external_reference'
     ];
 
     protected $casts = [
@@ -175,6 +179,16 @@ class SalesFunnel extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Cliente::class, 'client_id');
+    }
+
+    public function ramo(): BelongsTo
+    {
+        return $this->belongsTo(Ramo::class, 'ramo_id');
+    }
+
+    public function poliza(): BelongsTo
+    {
+        return $this->belongsTo(Poliza::class, 'poliza_id');
     }
 
     // Scopes

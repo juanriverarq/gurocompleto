@@ -14,8 +14,8 @@ use App\Http\Controllers\SaaS\SaasPolizasController;
 use App\Http\Controllers\SaaS\PolizaDocumentsController;
 use App\Http\Controllers\SaaS\AutomovilesController;
 use App\Http\Controllers\SaaS\MasterAccountController;
-use App\Http\Controllers\SaaS\BillingController;
-use App\Http\Controllers\SaaS\NotificationController;
+use App\Http\Controllers\Api\BillingController;
+// use App\Http\Controllers\SaaS\NotificationController; // TODO: Controlador no existe
 use App\Http\Controllers\SaaS\AuditController;
 use App\Http\Controllers\SaaS\EmpleadosController;
 use App\Http\Controllers\SaaS\SaasCommercialTasksController;
@@ -29,6 +29,7 @@ use App\Http\Controllers\TaskController;
 use App\Http\Controllers\Api\WhatsAppInstanceController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\CallToolsController;
+use App\Http\Controllers\SaaS\SaasSalesPerformanceController;
 
 // Enforce numeric-only route parameters to prevent static path collisions (e.g., "available-whatsapp-instances")
 Route::pattern('id', '[0-9]+');
@@ -699,8 +700,8 @@ Route::middleware('firebase.auth')->group(function () {
     });
     
 // Rutas de Wallet (expuestas también en api.php para compatibilidad)
-// Usamos Firebase Auth + SecurityAuthMiddleware para autenticación unificada y segura
-Route::middleware(['firebase.auth','security.auth','global.broker.auth'])->prefix('saas')->group(function () {
+// Usamos unified.auth + global.broker.auth para autenticación
+Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->group(function () {
     Route::prefix('wallet')->group(function () {
         Route::get('/balance', [WalletController::class, 'getBalance']);
         Route::get('/transactions', [WalletController::class, 'getTransactionHistory']);
@@ -962,6 +963,15 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
         Route::get('/invoices', [\App\Http\Controllers\Api\SubscriptionController::class, 'invoices']);
         Route::get('/invoices/{invoiceId}/download', [\App\Http\Controllers\Api\SubscriptionController::class, 'downloadInvoice']);
         Route::get('/usage', [\App\Http\Controllers\Api\SubscriptionController::class, 'usage']);
+    });
+    
+    // Wallet - Balance y transacciones
+    Route::prefix('wallet')->group(function () {
+        Route::get('/balance', [WalletController::class, 'getBalance']);
+        Route::get('/transactions', [WalletController::class, 'getTransactionHistory']);
+        Route::post('/checkout/wompi', [WalletController::class, 'wompiCheckout']);
+        Route::post('/signature/wompi', [WalletController::class, 'wompiSignature']);
+        Route::post('/confirm/wompi', [WalletController::class, 'wompiConfirm']);
     });
     
     // Rutas protegidas SaaS con Autenticación Unificada + verificación de permisos
@@ -1268,21 +1278,21 @@ Route::post('saas/voice-campaigns/webhooks/elevenlabs', [\App\Http\Controllers\A
 // Ruta adicional explícita con slash inicial para evitar ambigüedad de prefijos
 Route::post('/saas/voice-campaigns/webhooks/elevenlabs', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'receiveElevenLabsWebhook'])->name('webhooks.elevenlabs.alt');
 
-    // Notificaciones
-    Route::middleware('saas.auth')->group(function () {
-        Route::get('notifications', [NotificationController::class, 'getNotifications']);
-        Route::post('notifications', [NotificationController::class, 'createNotification']);
-        Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
-        Route::patch('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-        Route::patch('notifications/preferences', [NotificationController::class, 'updateNotificationPreferences']);
-    });
+    // Notificaciones - TODO: NotificationController no existe
+    // Route::middleware('saas.auth')->group(function () {
+    //     Route::get('notifications', [NotificationController::class, 'getNotifications']);
+    //     Route::post('notifications', [NotificationController::class, 'createNotification']);
+    //     Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    //     Route::patch('notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    //     Route::patch('notifications/preferences', [NotificationController::class, 'updateNotificationPreferences']);
+    // });
 
-    // Webhooks
-    Route::middleware('saas.auth')->group(function () {
-        Route::get('webhooks', [NotificationController::class, 'getWebhooks']);
-        Route::post('webhooks', [NotificationController::class, 'configureWebhook']);
-        Route::post('webhooks/{webhook}/test', [NotificationController::class, 'testWebhook']);
-    });
+    // Webhooks - TODO: NotificationController no existe
+    // Route::middleware('saas.auth')->group(function () {
+    //     Route::get('webhooks', [NotificationController::class, 'getWebhooks']);
+    //     Route::post('webhooks', [NotificationController::class, 'configureWebhook']);
+    //     Route::post('webhooks/{webhook}/test', [NotificationController::class, 'testWebhook']);
+    // });
 
     // Auditoría y Seguridad
     Route::middleware('saas.auth')->group(function () {
@@ -1547,48 +1557,17 @@ Route::get('/test-auth-simple', function(Request $request) {
 // Usar ruta protegida: /saas/dashboard/data (con middleware de autenticación)
 
 // RUTA ESPECÍFICA ANTES DEL GRUPO SAAS GENERAL (orden crítico en Laravel)
-// Ruta temporal que DEBE usar el middleware UnifiedAuthMiddleware
 Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $request) {
-    \Log::info('🚀 DEBUG - RUTA EJECUTANDOSE - middleware debería haberse ejecutado ANTES');
-    \Log::info('🚀 DEBUG - Request data:', [
-        'auth_type' => $request->get('auth_type'),
-        'broker_id' => $request->get('broker_id'),
-        'authenticated_user' => $request->get('authenticated_user') ? 'YES' : 'NO',
-        'authenticated_empleado' => $request->get('authenticated_empleado') ? 'YES' : 'NO'
-    ]);
-    
     // Obtener el usuario autenticado por el middleware UnifiedAuthMiddleware
     $user = \App\Http\Middleware\UnifiedAuthMiddleware::getAuthenticatedUser($request);
     
-    \Log::info('🚀 DEBUG - Usuario obtenido del middleware:', [
-        'user_found' => $user !== null,
-        'user_id' => $user ? $user->id : null,
-        'user_email' => $user ? $user->email : null,
-        'auth_type' => $request->get('auth_type'),
-        'broker_id' => $request->get('broker_id')
-    ]);
-    
     // Si llegamos aquí sin usuario, el middleware falló
     if (!$user) {
-        \Log::error('🚀 DEBUG - MIDDLEWARE FALLO - No hay usuario después del middleware');
         return response()->json([
             'success' => false,
-            'message' => 'Error de middleware - usuario no encontrado',
-            'debug' => 'El middleware se ejecutó pero no proporcionó usuario',
-            'request_data' => [
-                'auth_type' => $request->get('auth_type'),
-                'broker_id' => $request->get('broker_id'),
-                'has_authenticated_user' => $request->get('authenticated_user') ? true : false,
-                'has_authenticated_empleado' => $request->get('authenticated_empleado') ? true : false
-            ]
+            'message' => 'Usuario no autenticado'
         ], 401);
     }
-    
-    \Log::info('🚀 DEBUG - TODO CORRECTO - Usuario:', [
-        'id' => $user->id,
-        'email' => $user->email,
-        'name' => $user->name
-    ]);
     
     $broker = $user->getPrimaryBroker();
     $needsOnboarding = !$broker;
@@ -1636,11 +1615,6 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
                     'nombre_comercial' => $broker->name
                 ]
             ]
-        ],
-        'debug_info' => [
-            'middleware_executed' => true,
-            'auth_method' => 'UnifiedAuthMiddleware',
-            'user_source' => $request->get('auth_type')
         ]
     ]);
 });
@@ -1939,6 +1913,13 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
             
             // 🔊 Prueba de llamada de voz con ElevenLabs
             Route::post('/test-call', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'testCall']);
+            
+            // 📅 Llamadas programadas
+            Route::get('/{id}/scheduled-calls', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'getScheduledCalls'])->whereNumber('id');
+            Route::post('/{id}/schedule-calls', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'scheduleCallsForCampaign'])->whereNumber('id');
+            Route::post('/{id}/refresh-calls', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'refreshScheduledCalls'])->whereNumber('id');
+            Route::post('/scheduled-calls/{scheduledCallId}/execute', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'executeScheduledCall'])->whereNumber('scheduledCallId');
+            Route::post('/scheduled-calls/{scheduledCallId}/retry', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'retryScheduledCall'])->whereNumber('scheduledCallId');
         });
 
         // =============================

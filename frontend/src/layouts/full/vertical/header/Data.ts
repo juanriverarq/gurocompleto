@@ -334,11 +334,6 @@ const profileDD: ProfileType[] = [
     icon: "solar:user-bold-duotone",
   },
   {
-    title: "Configuración",
-    url: "/theme-pages/account-settings",
-    icon: "solar:settings-bold-duotone",
-  },
-  {
     title: "Mis Facturas",
     url: "/apps/billing/facturas",
     icon: "solar:bill-list-bold-duotone",

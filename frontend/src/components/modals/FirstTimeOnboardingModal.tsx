@@ -61,7 +61,21 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
     }));
   };
 
+  const [formError, setFormError] = useState('');
+
   const handleSaveBrokerData = async () => {
+    setFormError('');
+    
+    // Validar campos obligatorios
+    if (!formData.name.trim()) {
+      setFormError('El nombre comercial es obligatorio');
+      return;
+    }
+    if (!formData.document_number.trim()) {
+      setFormError('El número de documento es obligatorio');
+      return;
+    }
+    
     setIsLoading(true);
     try {
       await api.put('/saas/broker/profile', formData);
@@ -70,15 +84,10 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
       setCurrentStep(2);
     } catch (error) {
       console.error('Error guardando datos del broker:', error);
-      // Continuar de todos modos
-      setCurrentStep(2);
+      setFormError('Error guardando los datos. Intenta nuevamente.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleSkipToTutorials = () => {
-    setCurrentStep(2);
   };
 
   const handleFinish = () => {
@@ -89,10 +98,18 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
 
   const videoSrc = `https://www.youtube.com/embed/${TUTORIAL_VIDEOS[activeVideoIndex]?.id}?rel=0&controls=1&modestbranding=1`;
 
+  // No permitir cerrar el modal en el paso 1 (formulario obligatorio)
+  const handleModalClose = () => {
+    if (currentStep === 2) {
+      onClose();
+    }
+    // En paso 1, no hacer nada - el usuario debe completar el formulario
+  };
+
   return (
     <Modal
       show={isOpen}
-      onClose={onClose}
+      onClose={handleModalClose}
       size={currentStep === 1 ? 'lg' : '4xl'}
       dismissible={false}
       className="font-['Manrope',sans-serif]"
@@ -231,14 +248,15 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
               </div>
             </div>
 
+            {/* Error message */}
+            {formError && (
+              <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+                {formError}
+              </div>
+            )}
+
             {/* Actions */}
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
-              <button
-                onClick={handleSkipToTutorials}
-                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition"
-              >
-                Completar después
-              </button>
+            <div className="flex items-center justify-end mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
               <button
                 onClick={handleSaveBrokerData}
                 disabled={isLoading}

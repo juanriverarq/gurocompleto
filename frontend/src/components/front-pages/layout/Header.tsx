@@ -27,15 +27,14 @@ const FrontHeader = () => {
   return (
     <>
       <header
-        className={` top-0 z-50 ${
+        className={`top-0 z-50 ${
           isSticky
-            ? "bg-white dark:bg-dark shadow-md fixed w-full py-5"
-            : "bg-lightgray dark:bg-darkgray lg:py-9 py-5 "
+            ? "bg-white dark:bg-dark shadow-md fixed w-full py-4"
+            : "bg-lightgray dark:bg-darkgray lg:py-9 py-4"
         }`}
       >
-       
-        <div className="container-1218 mx-auto px-4 flex items-center">
-          <div className="flex items-center">
+        <div className="container-1218 mx-auto px-4 flex items-center justify-between">
+          <div className="flex items-center flex-shrink-0">
             <FullLogo />
           </div>
           
@@ -51,7 +50,7 @@ const FrontHeader = () => {
             </div>
           </div>
           
-          <div className="xl:hidden block">
+          <div className="xl:hidden flex items-center">
             <MobileMenu/>
           </div>
         </div>

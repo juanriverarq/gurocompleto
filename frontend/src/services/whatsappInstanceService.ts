@@ -3,9 +3,7 @@
  * ARREGLADO: Usando la misma lógica de autenticación que campaignService
  */
 import { auth } from '../config/firebase';
-
-// Configuración base de la API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
+import { API_BASE_URL } from '../config/apiUrl';
 
 // Helper para obtener el token de autenticación Firebase (IGUAL QUE CAMPAIGN SERVICE)
 const getAuthToken = async (): Promise<string | null> => {

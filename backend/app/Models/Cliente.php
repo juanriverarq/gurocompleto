@@ -92,6 +92,40 @@ class Cliente extends Model
         'next_follow_up_at' => 'datetime',
     ];
 
+    /**
+     * Boot del modelo - actualizar llamadas programadas cuando cambia el teléfono
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::updated(function (Cliente $cliente) {
+            // Si cambió el teléfono móvil, actualizar llamadas programadas pendientes
+            if ($cliente->isDirty('mobile_phone') && !empty($cliente->mobile_phone)) {
+                VoiceCampaignScheduledCall::where('client_id', $cliente->id)
+                    ->where('status', VoiceCampaignScheduledCall::STATUS_PENDING)
+                    ->each(function ($call) use ($cliente) {
+                        $contactData = is_array($call->contact_data) ? $call->contact_data : [];
+                        $contactData['phone'] = $cliente->mobile_phone;
+                        $call->update(['contact_data' => $contactData]);
+                    });
+            }
+
+            // También actualizar el nombre si cambió
+            if ($cliente->isDirty(['first_name', 'last_name'])) {
+                $fullName = trim("{$cliente->first_name} {$cliente->last_name}");
+                VoiceCampaignScheduledCall::where('client_id', $cliente->id)
+                    ->where('status', VoiceCampaignScheduledCall::STATUS_PENDING)
+                    ->each(function ($call) use ($fullName) {
+                        $contactData = is_array($call->contact_data) ? $call->contact_data : [];
+                        $contactData['name'] = $fullName;
+                        $contactData['customer_name'] = $fullName;
+                        $call->update(['contact_data' => $contactData]);
+                    });
+            }
+        });
+    }
+
     // ===== RELACIONES =====
 
     /**

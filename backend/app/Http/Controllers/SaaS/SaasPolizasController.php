@@ -229,40 +229,8 @@ class SaasPolizasController extends Controller
     public function indexDev(Request $request)
     {
         try {
-            // Log inicial para debugging
-            \Log::info('🔍 [DEBUG] SaasPolizasController::indexDev - INICIANDO', [
-                'request_data' => [
-                    'has_authenticated_broker_id' => $request->has('authenticated_broker_id'),
-                    'authenticated_broker_id_value' => $request->get('authenticated_broker_id'),
-                    'dev_broker_header' => $request->header('X-Dev-Broker-Id'),
-                    'user_from_request' => $request->user() ? [
-                        'id' => $request->user()->id,
-                        'email' => $request->user()->email,
-                        'broker_id' => $request->user()->broker_id
-                    ] : null,
-                ],
-                'auth_data' => [
-                    'user_authenticated' => Auth::check(),
-                    'user_id' => Auth::check() ? Auth::user()->id : null,
-                    'user_broker_id' => Auth::check() ? Auth::user()->broker_id : null,
-                ],
-                'filters' => $request->only(['search', 'aseguradora', 'ramo', 'estado', 'vendedor', 'fecha_inicio', 'fecha_fin']),
-                'pagination' => $request->only(['per_page', 'page', 'sort_field', 'sort_direction'])
-            ]);
-            
             // Obtener broker_id dinámicamente usando el método unificado
             $brokerId = $this->getBrokerId($request);
-            
-            \Log::info('🔍 [DEBUG] Broker ID obtenido', [
-                'broker_id' => $brokerId
-            ]);
-            
-            // Verificar cuántas pólizas hay para este broker
-            $totalPolizasParaBroker = Poliza::where('broker_id', $brokerId)->count();
-            \Log::info('🔍 [DEBUG] Total pólizas para broker', [
-                'broker_id' => $brokerId,
-                'total_polizas' => $totalPolizasParaBroker
-            ]);
             
             // OPTIMIZACIÓN: Construir la query base con aislamiento multi-tenant y eager loading optimizado
             $query = Poliza::where('broker_id', $brokerId)
@@ -331,6 +299,11 @@ class SaasPolizasController extends Controller
 
             if ($request->has('client_id') && !empty($request->client_id)) {
                 $query->where('client_id', $request->client_id);
+            }
+
+            // Filtro EXACTO por número de póliza (para verificar duplicados)
+            if ($request->has('numero_poliza') && !empty($request->numero_poliza)) {
+                $query->where('policy_number', trim($request->numero_poliza));
             }
 
             if ($request->has('vendedor') && !empty($request->vendedor)) {
@@ -495,6 +468,11 @@ class SaasPolizasController extends Controller
 
             if ($request->has('client_id') && !empty($request->client_id)) {
                 $query->where('client_id', $request->client_id);
+            }
+
+            // Filtro EXACTO por número de póliza (para verificar duplicados)
+            if ($request->has('numero_poliza') && !empty($request->numero_poliza)) {
+                $query->where('policy_number', trim($request->numero_poliza));
             }
 
             if ($request->has('vendedor') && !empty($request->vendedor)) {
@@ -1127,6 +1105,49 @@ class SaasPolizasController extends Controller
     }
 
     /**
+     * Obtener solo el primer nombre del cliente (para evitar duplicación con apellidos)
+     */
+    private function getClientFirstName($poliza): string
+    {
+        $client = $poliza->client;
+        
+        // Si no hay cliente relacionado, usar client_name de la póliza
+        if (!$client) {
+            return $poliza->client_name ?? '';
+        }
+        
+        // Si es empresa, usar razón social completa en nombres_cliente
+        $clientType = strtolower($client->client_type ?? '');
+        if (in_array($clientType, ['business', 'empresa', 'juridica', 'juridico'])) {
+            return $client->company_legal_name ?: ($client->company ?: ($client->first_name ?? ''));
+        }
+        
+        // Para personas naturales, solo devolver first_name
+        return $client->first_name ?? ($poliza->client_name ?? '');
+    }
+
+    /**
+     * Obtener solo el apellido del cliente
+     */
+    private function getClientLastName($poliza): string
+    {
+        $client = $poliza->client;
+        
+        // Si no hay cliente o es empresa, no hay apellido separado
+        if (!$client) {
+            return '';
+        }
+        
+        $clientType = strtolower($client->client_type ?? '');
+        if (in_array($clientType, ['business', 'empresa', 'juridica', 'juridico'])) {
+            return ''; // Empresas no tienen apellido separado
+        }
+        
+        // Para personas naturales, devolver last_name
+        return $client->last_name ?? '';
+    }
+
+    /**
      * Transform Poliza model to frontend format
      */
     private function transformPolizaToFrontend($poliza)
@@ -1157,9 +1178,9 @@ class SaasPolizasController extends Controller
             
             // Información del cliente
             'cliente_id' => $poliza->client_id,
-            // Para empresas usar company o company_legal_name, para personas usar first_name + last_name
-            'nombres_cliente' => $this->getClientDisplayName($poliza),
-            'apellidos_cliente' => $poliza->client?->last_name ?? '',
+            // Para empresas usar razón social, para personas separar first_name y last_name
+            'nombres_cliente' => $this->getClientFirstName($poliza),
+            'apellidos_cliente' => $this->getClientLastName($poliza),
             'dni_cliente' => $poliza->client_document ?: ($poliza->client?->document_number ?? ''),
             'tipo_documento' => strtolower((string)($poliza->client?->document_type ?? 'cc')),
             'telefono_cliente' => $poliza->client?->phone ?? '',

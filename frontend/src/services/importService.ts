@@ -1,6 +1,7 @@
 import { auth } from '../config/firebase';
+import { API_BASE_URL } from '../config/apiUrl';
 
-const API_BASE = `${import.meta.env.VITE_API_URL || 'http://localhost:8081/api'}/saas/imports`;
+const API_BASE = `${API_BASE_URL}/saas/imports`;
 
 async function getAuthToken(): Promise<string | null> {
   try {

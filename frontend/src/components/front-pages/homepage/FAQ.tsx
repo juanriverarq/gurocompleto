@@ -6,39 +6,51 @@ export const FAQ = () => {
   const Questions = [
     {
       key: "question1",
-      question: "¿Cómo funciona el asistente de IA en Guro?",
+      question: "¿Qué incluye la prueba gratuita de 7 días?",
       answer:
-        "Nuestro asistente de IA está entrenado específicamente en el sector de seguros. Puedes pedirle que cree pólizas, genere reportes, analice perfiles de clientes, e incluso que asigne tareas a tu equipo usando lenguaje natural.",
+        "Acceso completo a todos los módulos: gestión de clientes, pólizas, siniestros, renovaciones, CRM de ventas, cartera, comisiones, WhatsApp Marketing, Email Marketing y las herramientas de IA. Sin límites ni restricciones durante el trial.",
     },
     {
       key: "question2",
-      question: "¿Qué tan precisa es la lectura automática de documentos?",
+      question: "¿Cómo funciona el Lector de PDF con IA?",
       answer:
-        "Nuestra tecnología de IA tiene una precisión del 98% en la extracción de datos de pólizas, contratos y documentos legales. El sistema aprende continuamente y mejora con cada documento procesado.",
+        "Sube cualquier póliza o documento en PDF y nuestra IA extrae automáticamente los datos clave: asegurado, vigencias, coberturas, primas y más. El sistema aprende y mejora con cada documento procesado.",
     },
     {
       key: "question3",
-      question: "¿Cómo identifica Guro las oportunidades de ventas cruzadas?",
+      question: "¿Puedo enviar mensajes masivos por WhatsApp?",
       answer:
-        "Guro analiza automáticamente el perfil completo de cada cliente: edad, historial de pólizas, cambios de vida, patrones de pago y más. Usando IA predictiva, identifica qué productos tienen mayor probabilidad de éxito para cada cliente específico.",
+        "Sí, el módulo de WhatsApp Marketing permite enviar campañas masivas, recordatorios de vencimiento y mensajes automáticos a tus clientes. Puedes escalar según tu necesidad.",
     },
     {
       key: "question4",
-      question: "¿Mis datos están seguros en Guro?",
+      question: "¿Cómo funciona el cálculo automático de comisiones?",
       answer:
-        "Absolutamente. Utilizamos encriptación de grado bancario, cumplimos con todas las regulaciones de protección de datos y nunca compartimos información confidencial. Tus datos permanecen completamente privados y seguros.",
+        "Guro calcula automáticamente las comisiones por cada póliza según las reglas que configures: porcentajes por aseguradora, ramo, vendedor y tipo de negocio. Genera liquidaciones listas para pagar con un clic.",
     },
     {
       key: "question5",
-      question: "¿Puedo integrar Guro con mis sistemas actuales?",
+      question: "¿Qué herramientas de IA incluye Guro?",
       answer:
-        "Sí, Guro está diseñado para integrarse fácilmente con los principales sistemas de gestión de seguros, CRMs y bases de datos. Nuestro equipo te ayuda con la migración sin interrumpir tu operación.",
+        "Incluye: Chatbot IA 24/7 para atención al cliente, Call Center con agentes de voz IA, predicciones de renovación y riesgo de fuga, y recomendaciones inteligentes de ventas cruzadas basadas en el perfil del cliente.",
     },
     {
       key: "question6",
-      question: "¿Necesito entrenar a mi equipo para usar Guro?",
+      question: "¿Cuántos usuarios puedo agregar a mi cuenta?",
       answer:
-        "Guro está diseñado para ser intuitivo. La mayoría de nuestros clientes empiezan a ver resultados el primer día. Incluimos capacitación personalizada y soporte continuo para maximizar tu inversión.",
+        "El primer usuario está incluido. Puedes agregar usuarios adicionales según tu plan, con descuentos por volumen a medida que crece tu equipo.",
+    },
+    {
+      key: "question7",
+      question: "¿Puedo personalizar Guro con mi marca?",
+      answer:
+        "Sí, con el módulo de Marca Blanca puedes usar tu logotipo, colores corporativos y dominio propio. Tus clientes verán tu marca, no la de Guro.",
+    },
+    {
+      key: "question8",
+      question: "¿Cómo me ayuda Guro con las renovaciones?",
+      answer:
+        "El sistema te alerta automáticamente de pólizas próximas a vencer, prioriza por riesgo de fuga, envía recordatorios automáticos al cliente por WhatsApp/Email, y te muestra métricas de renovación en tiempo real.",
     },
   ];
   return (

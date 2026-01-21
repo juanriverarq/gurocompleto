@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 
@@ -6,14 +6,16 @@ const DashboardBuilding: React.FC = () => {
   const {
     saasChecked,
     checkSaasStatus,
-    needsOnboarding,
     hasCompleteSaasAccess,
-    isEmpleado,
+    tenant,
   } = useUnifiedAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const search = new URLSearchParams(location.search);
   const returnTo = search.get('returnTo') || '';
+  
+  // Estado para detectar si ya pasó tiempo suficiente y no hay conexión
+  const [showConnectionError, setShowConnectionError] = useState(false);
 
   useEffect(() => {
     if (!saasChecked) {
@@ -22,17 +24,69 @@ const DashboardBuilding: React.FC = () => {
   }, [saasChecked, checkSaasStatus]);
 
   useEffect(() => {
-    if (!isEmpleado && needsOnboarding) {
-      const next = returnTo
-        ? `/onboarding/create-broker?returnTo=${encodeURIComponent(returnTo)}`
-        : '/onboarding/create-broker';
-      navigate(next, { replace: true });
-    } else if (hasCompleteSaasAccess) {
+    if (hasCompleteSaasAccess) {
       const dest = returnTo || '/apps';
       navigate(dest, { replace: true });
     }
-  }, [needsOnboarding, hasCompleteSaasAccess, isEmpleado, navigate, returnTo]);
+  }, [hasCompleteSaasAccess, navigate, returnTo]);
 
+  // Si después de verificar no hay tenant, mostrar error de conexión
+  useEffect(() => {
+    if (saasChecked && !tenant && !hasCompleteSaasAccess) {
+      // Dar un pequeño delay antes de mostrar el error
+      const timer = setTimeout(() => {
+        setShowConnectionError(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [saasChecked, tenant, hasCompleteSaasAccess]);
+
+  const handleReload = () => {
+    window.location.reload();
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    window.location.href = '/auth/login';
+  };
+
+  // Mostrar error de conexión si ya verificó y no hay tenant
+  if (showConnectionError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="bg-white rounded-2xl shadow-lg border p-8 w-full max-w-md text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Problemas de conexión</h1>
+          <p className="text-gray-600 mb-6">
+            No pudimos conectar con la base de datos. Por favor recarga la página o intenta nuevamente en unos minutos.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={handleReload}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition"
+            >
+              Recargar página
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition"
+            >
+              Cerrar sesión
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-4">
+            Si el problema persiste, <a href="https://wa.me/573001009305?text=Hola,%20tengo%20problemas%20para%20conectar%20con%20Guro" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">contacta a soporte por WhatsApp</a>.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Pantalla de carga mientras verifica
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
       <div className="bg-white rounded-xl shadow-md border p-8 w-full max-w-md text-center">
@@ -41,20 +95,6 @@ const DashboardBuilding: React.FC = () => {
         <p className="text-gray-600 mt-2">
           Estamos terminando de cargar tu contexto y permisos. Esto puede tardar unos segundos.
         </p>
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <button
-            onClick={() => checkSaasStatus().catch(() => {})}
-            className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-          >
-            Reintentar
-          </button>
-          <button
-            onClick={() => navigate(returnTo || '/apps', { replace: true })}
-            className="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Volver a mi ruta
-          </button>
-        </div>
       </div>
     </div>
   );

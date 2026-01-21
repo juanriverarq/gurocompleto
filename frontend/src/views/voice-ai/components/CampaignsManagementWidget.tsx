@@ -14,6 +14,7 @@ import CampaignWizard from '../../../components/campaign/CampaignWizard';
 import DynamicFieldsConfig from '../../../components/voice-ai/DynamicFieldsConfig';
 import DecisionPoliciesConfig from '../../../components/voice-ai/DecisionPoliciesConfig';
 import CollectedDataDisplay from '../../../components/voice-ai/CollectedDataDisplay';
+import ScheduledCallsList from '../../../components/voice-ai/ScheduledCallsList';
 import {
   getConversationalAgents
 } from '../../../services/elevenLabsService';
@@ -538,14 +539,29 @@ const CampaignsManagementWidget: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'running': return 'bg-green-100 text-green-800';
-      case 'paused': return 'bg-yellow-100 text-yellow-800';
-      case 'completed': return 'bg-purple-100 text-purple-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'draft': return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+      case 'scheduled': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+      case 'running': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+      case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+      case 'paused': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+      case 'completed': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+      case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
+  };
+
+  // Traducir estados de campaña al español
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      'draft': 'BORRADOR',
+      'scheduled': 'PROGRAMADA',
+      'running': 'ACTIVO',
+      'active': 'ACTIVO',
+      'paused': 'PAUSADA',
+      'completed': 'FINALIZADA',
+      'cancelled': 'CANCELADA',
+    };
+    return labels[status] || status.toUpperCase();
   };
 
   const getPriorityColor = (priority: string) => {
@@ -767,7 +783,7 @@ const CampaignsManagementWidget: React.FC = () => {
                             {(c.status === 'paused') && <Icon icon="solar:pause-bold" className="w-3.5 h-3.5" />}
                             {(c.status === 'completed') && <Icon icon="solar:check-circle-bold" className="w-3.5 h-3.5" />}
                             {(c.status === 'cancelled') && <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />}
-                            {c.status === 'completed' ? 'FINALIZADA' : (c.status || '').toUpperCase()}
+                            {getStatusLabel(c.status)}
                           </span>
                         </td>
                         <td className="px-4 py-3">{(c as any).agent_name || '-'}</td>
@@ -833,7 +849,7 @@ const CampaignsManagementWidget: React.FC = () => {
                                   {actionLoading[c.id] === 'start' ? <Spinner size="sm" /> : <Icon icon="solar:play-bold-duotone" height={18} />} Iniciar
                                 </Dropdown.Item>
                               )}
-                              {c.status === 'running' && (
+                              {(c.status === 'running' || c.status === 'active') && (
                                 <Dropdown.Item className="flex gap-3" onClick={async () => {
                                   await runWithLoading(c.id, 'pause', async () => {
                                     const r = await voiceCampaignService.pauseVoiceCampaign(c.id);
@@ -853,7 +869,7 @@ const CampaignsManagementWidget: React.FC = () => {
                                   {actionLoading[c.id] === 'resume' ? <Spinner size="sm" /> : <Icon icon="solar:play-bold-duotone" height={18} />} Reanudar
                                 </Dropdown.Item>
                               )}
-                              {(c.status === 'running' || c.status === 'paused') && (
+                              {(c.status === 'running' || c.status === 'active' || c.status === 'paused') && (
                                 <Dropdown.Item className="flex gap-3" onClick={async () => {
                                   await runWithLoading(c.id, 'cancel', async () => {
                                     const r = await voiceCampaignService.cancelVoiceCampaign(c.id);
@@ -861,16 +877,6 @@ const CampaignsManagementWidget: React.FC = () => {
                                   });
                                 }}>
                                   {actionLoading[c.id] === 'cancel' ? <Spinner size="sm" /> : <Icon icon="solar:stop-bold-duotone" height={18} />} Cancelar
-                                </Dropdown.Item>
-                              )}
-                              {(c.status === 'completed' || c.status === 'cancelled') && (
-                                <Dropdown.Item className="flex gap-3" onClick={async () => {
-                                  await runWithLoading(c.id, 'restart', async () => {
-                                    const r = await voiceCampaignService.restartVoiceCampaign(c.id);
-                                    if (r.success) await loadCampaigns();
-                                  });
-                                }}>
-                                  {actionLoading[c.id] === 'restart' ? <Spinner size="sm" /> : <Icon icon="solar:restart-bold-duotone" height={18} />} Repetir
                                 </Dropdown.Item>
                               )}
                               <Dropdown.Item className="flex gap-3" onClick={() => { setCampaignToEdit(c); setIsEditModalOpen(true); }}>
@@ -899,7 +905,7 @@ const CampaignsManagementWidget: React.FC = () => {
             <DialogTitle>Detalles de Campaña: {selectedCampaign?.name}</DialogTitle>
           </DialogHeader>
           {selectedCampaign && (
-            <CampaignDetailView campaign={selectedCampaign} />
+            <CampaignDetailView campaign={selectedCampaign} onRefresh={loadCampaigns} />
           )}
         </DialogContent>
       </Dialog>
@@ -994,13 +1000,50 @@ const CampaignsManagementWidget: React.FC = () => {
 // (Formulario eliminado - funcionalidad movida al CampaignWizard)
 
 // Componente para vista detallada de campaña
-const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign }) => {
+const CampaignDetailView: React.FC<{ campaign: VoiceCampaign; onRefresh?: () => void }> = ({ campaign, onRefresh }) => {
+  // Traducir razones de finalización de VAPI al español
+  const translateTerminationReason = (reason: string): string => {
+    if (!reason) return 'N/A';
+    const translations: Record<string, string> = {
+      'assistant-said-end-call-phrase': 'El asistente finalizó la llamada',
+      'customer-said-end-call-phrase': 'El cliente finalizó la llamada',
+      'silence-timed-out': 'Tiempo de silencio agotado',
+      'max-duration-reached': 'Duración máxima alcanzada',
+      'customer-did-not-answer': 'El cliente no contestó',
+      'customer-busy': 'Cliente ocupado',
+      'customer-ended-call': 'El cliente colgó',
+      'assistant-ended-call': 'El asistente finalizó',
+      'voicemail-reached': 'Buzón de voz detectado',
+      'machine-detected': 'Contestadora detectada',
+      'no-answer': 'Sin respuesta',
+      'busy': 'Ocupado',
+      'failed': 'Llamada fallida',
+      'dial-no-answer': 'Sin respuesta al marcar',
+      'dial-busy': 'Línea ocupada',
+      'hangup': 'Llamada colgada',
+      'error': 'Error en la llamada',
+      'pipeline-error': 'Error de conexión',
+    };
+    return translations[reason] || reason.replace(/-/g, ' ').replace(/_/g, ' ');
+  };
+
   // Normalizar origen de estadísticas - buscar en stats, statistics, o directamente en campaign
   const statsRaw: any = (campaign as any).statistics || (campaign as any).stats || {};
   const campaignData: any = campaign;
-  const totalContacts = Number(statsRaw.total_contacts ?? statsRaw.total_targets ?? campaignData.total_targets ?? campaign.contacts?.length ?? 0);
-  const completed = Number(statsRaw.completed_calls ?? statsRaw.calls_successful ?? campaignData.calls_successful ?? 0);
-  const failed = Number(statsRaw.failed_calls ?? statsRaw.calls_failed ?? campaignData.calls_failed ?? 0);
+  
+  // Estado para estadísticas de llamadas programadas
+  const [scheduledStats, setScheduledStats] = useState({ total: 0, pending: 0, completed: 0, failed: 0 });
+  
+  // Usar estadísticas de llamadas programadas si están disponibles, sino usar las de campaña
+  const totalContacts = scheduledStats.total > 0 
+    ? scheduledStats.total 
+    : Number(statsRaw.total_contacts ?? statsRaw.total_targets ?? campaignData.total_targets ?? campaign.contacts?.length ?? 0);
+  const completed = scheduledStats.completed > 0 
+    ? scheduledStats.completed 
+    : Number(statsRaw.completed_calls ?? statsRaw.calls_successful ?? campaignData.calls_successful ?? 0);
+  const failed = scheduledStats.failed > 0 
+    ? scheduledStats.failed 
+    : Number(statsRaw.failed_calls ?? statsRaw.calls_failed ?? campaignData.calls_failed ?? 0);
   const noAnswer = Number(statsRaw.no_answer_calls ?? 0);
   const busy = Number(statsRaw.busy_calls ?? 0);
   const cancelled = Number(statsRaw.cancelled_calls ?? 0);
@@ -1231,189 +1274,137 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
   const objectiveRate = contacted > 0 ? Math.round((completed / contacted) * 100) : 0;
   
   return (
-    <div className="space-y-6">
-      {/* Header con información básica */}
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-6">
-        {/* Fila 1: Métricas principales */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {totalContacts}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Total Contactos</div>
+    <div className="space-y-4">
+      {/* Header compacto con métricas principales */}
+      <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-4">
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 text-center">
+          <div className="p-2">
+            <div className="text-xl font-bold text-blue-600">{totalContacts}</div>
+            <div className="text-xs text-gray-500">Total</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">
-              {contacted}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Contactados</div>
+          <div className="p-2">
+            <div className="text-xl font-bold text-cyan-600">{contacted}</div>
+            <div className="text-xs text-gray-500">Contactados</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-              {notContacted}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">No Contactados</div>
+          <div className="p-2">
+            <div className="text-xl font-bold text-orange-500">{notContacted}</div>
+            <div className="text-xs text-gray-500">No Contact.</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {contactRate}%
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Tasa Contactabilidad</div>
+          <div className="p-2">
+            <div className="text-xl font-bold text-indigo-600">{contactRate}%</div>
+            <div className="text-xs text-gray-500">Contactab.</div>
           </div>
-        </div>
-        
-        {/* Separador */}
-        <div className="border-t border-gray-200 dark:border-gray-700 my-4"></div>
-        
-        {/* Fila 2: Métricas de objetivo */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {completed}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Objetivo Cumplido</div>
+          <div className="p-2">
+            <div className="text-xl font-bold text-green-600">{completed}</div>
+            <div className="text-xs text-gray-500">Cumplido</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-              {failed}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Objetivo No Cumplido</div>
+          <div className="p-2">
+            <div className="text-xl font-bold text-red-500">{failed}</div>
+            <div className="text-xs text-gray-500">No Cumplido</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {objectiveRate}%
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Tasa de Éxito</div>
+          <div className="p-2">
+            <div className="text-xl font-bold text-purple-600">{objectiveRate}%</div>
+            <div className="text-xs text-gray-500">Éxito</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gray-600 dark:text-gray-400">
-              {successRate}%
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Éxito Global</div>
+          <div className="p-2">
+            <div className="text-xl font-bold text-gray-600">{successRate}%</div>
+            <div className="text-xs text-gray-500">Global</div>
           </div>
         </div>
       </div>
 
-      {/* Información de la campaña */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Detalles generales */}
+      {/* Contenido principal: Llamadas programadas (solo para campañas con triggers, no inmediatas) */}
+      {(campaign.settings as any)?.template_id !== 'cross_sell' && (
+        <ScheduledCallsList 
+          campaignId={campaign.id} 
+          onCallExecuted={onRefresh}
+          onStatsLoaded={setScheduledStats}
+        />
+      )}
+
+      {/* Grid de información y estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Info General - Compacta */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="solar:document-text-bold" className="w-5 h-5 text-blue-600" />
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Icon icon="solar:document-text-bold" className="w-4 h-4 text-blue-600" />
               Información General
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Estado</Label>
-                <div className="mt-1">
-                  <Badge className={`${campaign.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' : 
-                    campaign.status === 'running' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300' :
-                    campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' :
-                    'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300'}`}>
-                    {campaign.status === 'draft' && 'Borrador'}
-                    {campaign.status === 'scheduled' && 'Programada'}
-                    {campaign.status === 'running' && 'Activa'}
-                    {campaign.status === 'paused' && 'Pausada'}
-                    {campaign.status === 'completed' && 'Completada'}
-                    {campaign.status === 'cancelled' && 'Cancelada'}
-                  </Badge>
-                </div>
+          <CardContent className="pt-0 space-y-3">
+            {/* Estado y Prioridad en línea */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Estado:</span>
+                <Badge className={`text-xs ${campaign.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                  campaign.status === 'running' ? 'bg-emerald-100 text-emerald-800' :
+                  campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-gray-100 text-gray-800'}`}>
+                  {campaign.status === 'draft' && 'Borrador'}
+                  {campaign.status === 'scheduled' && 'Programada'}
+                  {campaign.status === 'running' && ((campaign.settings as any)?.template_id === 'cross_sell' ? 'En Ejecución' : 'Activa')}
+                  {campaign.status === 'paused' && 'Pausada'}
+                  {campaign.status === 'completed' && 'Finalizado'}
+                  {campaign.status === 'cancelled' && 'Cancelada'}
+                </Badge>
               </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Prioridad</Label>
-                <div className="mt-1">
-                  <Badge className={`${campaign.priority === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300' :
-                    campaign.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' :
-                    'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'}`}>
-                    {campaign.priority === 'high' && 'Alta'}
-                    {campaign.priority === 'medium' && 'Media'}
-                    {campaign.priority === 'low' && 'Baja'}
-                  </Badge>
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Prioridad:</span>
+                <Badge className={`text-xs ${campaign.priority === 'high' ? 'bg-red-100 text-red-800' :
+                  campaign.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-green-100 text-green-800'}`}>
+                  {campaign.priority === 'high' && 'Alta'}
+                  {campaign.priority === 'medium' && 'Media'}
+                  {campaign.priority === 'low' && 'Baja'}
+                </Badge>
               </div>
             </div>
 
-            <div>
-              <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Descripción</Label>
-              <p className="mt-1 text-sm text-gray-900 dark:text-white">
-                {campaign.description || 'Sin descripción'}
-              </p>
-            </div>
+            {/* Descripción */}
+            <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">
+              {campaign.description || 'Sin descripción'}
+            </p>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Objetivo</Label>
-                <div className="mt-1 flex items-center gap-2">
-                  <Icon icon="solar:target-bold" className="w-4 h-4 text-purple-600" />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {(campaign as any).template_name || (campaign as any).objective || campaign.name || 'No especificado'}
-                  </span>
-                </div>
+            {/* Objetivo y Agente */}
+            <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex items-center gap-1.5">
+                <Icon icon="solar:target-bold" className="w-3.5 h-3.5 text-purple-600" />
+                <span className="text-gray-600">{(campaign as any).template_name || campaign.name || 'N/A'}</span>
               </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Agente</Label>
-                <div className="mt-1 flex items-center gap-2">
-                  <Icon icon="solar:user-speak-rounded-bold" className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {campaign.agent_name || 'Sin asignar'}
-                  </span>
-                </div>
+              <div className="flex items-center gap-1.5">
+                <Icon icon="solar:user-speak-rounded-bold" className="w-3.5 h-3.5 text-blue-600" />
+                <span className="text-gray-600">{campaign.agent_name || 'Sin asignar'}</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Creada</Label>
-                <p className="mt-1 text-sm text-gray-900 dark:text-white">
-                  {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString('es-ES', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  }) : 'N/A'}
-                </p>
-              </div>
-              {campaign.completed_at && (
-                <div>
-                  <Label className="text-sm font-medium text-gray-600 dark:text-gray-400">Completada</Label>
-                  <p className="mt-1 text-sm text-gray-900 dark:text-white">
-                    {new Date(campaign.completed_at).toLocaleDateString('es-ES', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                </div>
-              )}
+            {/* Fecha */}
+            <div className="text-xs text-gray-500">
+              Creada: {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString('es-ES', {
+                day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+              }) : 'N/A'}
             </div>
           </CardContent>
         </Card>
 
-        {/* Estadísticas detalladas */}
+        {/* Estadísticas - Compacta */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon icon="solar:chart-square-bold" className="w-5 h-5 text-green-600" />
-              Estadísticas Detalladas
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Icon icon="solar:chart-square-bold" className="w-4 h-4 text-green-600" />
+              Estadísticas
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Llamadas pendientes</span>
-                <span className="font-medium text-gray-900 dark:text-white">
+          <CardContent className="pt-0 space-y-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                <div className="text-lg font-semibold text-gray-900 dark:text-white">
                   {Math.max(0, totalContacts - processedTerm)}
-                </span>
+                </div>
+                <div className="text-xs text-gray-500">Pendientes</div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Duración promedio</span>
-                <span className="font-medium text-gray-900 dark:text-white">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                <div className="text-lg font-semibold text-gray-900 dark:text-white">
                   {(() => {
                     const avgFromCalls = contactCalls.length > 0
                       ? Math.round(contactCalls.reduce((s, c) => s + (Number(c.duration) || 0), 0) / contactCalls.length)
@@ -1421,43 +1412,53 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
                     const val = avgDurationSeconds > 0 ? Math.round(avgDurationSeconds) : avgFromCalls;
                     return val > 0 ? `${val}s` : 'N/A';
                   })()}
-                </span>
+                </div>
+                <div className="text-xs text-gray-500">Duración Prom.</div>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Costo total</span>
-                <span className="font-medium text-gray-900 dark:text-white">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                <div className="text-lg font-semibold text-gray-900 dark:text-white">
                   {(() => {
                     const sumCalls = contactCalls.reduce((s, c) => s + (Number(c.cost_total) || 0), 0);
                     const total = typeof (statsRaw as any).total_cost_cop === 'number' ? Number((statsRaw as any).total_cost_cop) : sumCalls;
-                    return `COP ${total.toFixed(2)}`;
+                    return `$${total.toFixed(0)}`;
                   })()}
-                </span>
+                </div>
+                <div className="text-xs text-gray-500">Costo COP</div>
               </div>
             </div>
 
             {/* Barra de progreso */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Progreso</span>
-                <span className="font-medium text-gray-900 dark:text-white">
-                  {totalContacts > 0 ? Math.round((processedTerm / totalContacts) * 100) : 0}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div 
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full transition-all duration-500"
-                  style={{ 
-                    width: `${totalContacts > 0 ? (processedTerm / totalContacts) * 100 : 0}%` 
-                  }}
-                ></div>
-              </div>
+            <div>
+              {(() => {
+                // Calcular progreso: usar llamadas programadas si existen, sino usar estadísticas de campaña
+                const hasScheduledCalls = scheduledStats.total > 0;
+                const completedAndFailed = hasScheduledCalls 
+                  ? (scheduledStats.completed + scheduledStats.failed)
+                  : (completed + failed);
+                const total = hasScheduledCalls ? scheduledStats.total : totalContacts;
+                const progressPercent = total > 0 ? Math.min(100, Math.round((completedAndFailed / total) * 100)) : 0;
+                return (
+                  <>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-gray-500">Progreso</span>
+                      <span className="font-medium">{progressPercent}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                      <div 
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 h-1.5 rounded-full transition-all"
+                        style={{ width: `${progressPercent}%` }}
+                      ></div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Resultados por contacto - basado en conversaciones reales */}
-              {campaign.status === 'completed' && (
+      {(campaign.status === 'completed' || campaign.status === 'running' || contactCalls.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1488,15 +1489,39 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
                     </tr>
                   ) : (
                     contactCalls.slice(0, 10).map((c) => {
-                      const wasContacted = (c.duration || 0) >= 10 && !['no-answer', 'busy', 'failed', 'machine-detected', 'voicemail'].includes(c.raw?.call_result?.termination_reason);
+                      // Determinar estado de contacto
+                      const callStatus = c.raw?.status || c.status;
+                      const terminationReason = c.raw?.call_result?.termination_reason;
+                      const duration = c.duration || 0;
+                      
+                      // Si la llamada nunca se inició (pending, failed sin duración)
+                      const neverExecuted = ['pending', 'failed'].includes(callStatus) && duration === 0;
+                      // Si hubo error de conexión/número
+                      const connectionError = ['failed'].includes(callStatus) || terminationReason === 'failed';
+                      // Si fue contactado (duración >= 10s y no fue no-answer, busy, etc.)
+                      const wasContacted = duration >= 10 && !['no-answer', 'busy', 'failed', 'machine-detected', 'voicemail', 'dial-no-answer'].includes(terminationReason);
+                      
                       const objectiveSuccess = c.raw?.call_result?.call_successful ?? null;
+                      
+                      // Determinar badge de contactado
+                      let contactBadge = { color: 'bg-gray-100 text-gray-600', text: 'Pendiente' };
+                      if (neverExecuted) {
+                        contactBadge = { color: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400', text: 'Pendiente' };
+                      } else if (connectionError && duration === 0) {
+                        contactBadge = { color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300', text: 'Error' };
+                      } else if (wasContacted) {
+                        contactBadge = { color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300', text: 'Sí' };
+                      } else {
+                        contactBadge = { color: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300', text: 'No' };
+                      }
+                      
                       return (
                         <tr key={c.id} className="border-b border-gray-100 dark:border-gray-800">
                           <td className="py-2 text-gray-900 dark:text-white">{c.name}</td>
                           <td className="py-2 text-gray-600 dark:text-gray-400">{c.phone}</td>
                           <td className="py-2">
-                            <Badge className={`text-xs ${wasContacted ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'}`}>
-                              {wasContacted ? 'Sí' : 'No'}
+                            <Badge className={`text-xs ${contactBadge.color}`}>
+                              {contactBadge.text}
                             </Badge>
                           </td>
                           <td className="py-2">
@@ -1613,17 +1638,33 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
             )}
 
             {/* Transcripción de la llamada */}
-            {(selectedContactCall?.raw?.call_metadata?.transcript || selectedContactCall?.raw?.call_result?.transcript_summary) && (
-              <div className="rounded-lg p-4 border bg-white border-gray-200 dark:bg-gray-900 dark:border-gray-700">
-                <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                  <Icon icon="solar:document-text-bold" className="w-4 h-4 text-blue-500" />
-                  {selectedContactCall?.raw?.call_metadata?.transcript ? 'Transcripción' : 'Resumen de la Conversación'}
-                </h4>
-                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-48 overflow-y-auto">
-                  {selectedContactCall?.raw?.call_metadata?.transcript || selectedContactCall?.raw?.call_result?.transcript_summary}
-                </div>
+            <div className="rounded-lg p-4 border bg-white border-gray-200 dark:bg-gray-900 dark:border-gray-700">
+              <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <Icon icon="solar:document-text-bold" className="w-4 h-4 text-blue-500" />
+                {selectedContactCall?.raw?.call_metadata?.transcript ? 'Transcripción' : 'Resumen de la Conversación'}
+              </h4>
+              <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                {(() => {
+                  const transcript = selectedContactCall?.raw?.call_metadata?.transcript;
+                  const summary = selectedContactCall?.raw?.call_result?.transcript_summary;
+                  
+                  // Si hay transcripción, mostrarla
+                  if (transcript && typeof transcript === 'string' && transcript.length > 10) {
+                    return transcript;
+                  }
+                  
+                  // Si hay resumen válido (no es un mensaje genérico de error)
+                  if (summary && typeof summary === 'string' && summary.length > 10 && 
+                      !summary.toLowerCase().includes('proporciona la transcripción') &&
+                      !summary.toLowerCase().includes('provide the transcript')) {
+                    return summary;
+                  }
+                  
+                  // Mensaje por defecto
+                  return 'La transcripción de esta llamada no está disponible. Esto puede ocurrir si la llamada fue muy corta o hubo problemas de conexión.';
+                })()}
               </div>
-            )}
+            </div>
 
             {/* Resultado del objetivo */}
             {selectedContactCall?.raw?.call_result && (
@@ -1644,7 +1685,7 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign }> = ({ campaign })
                   <div>
                     <span className="text-sm text-gray-600 dark:text-gray-400">Razón de Finalización</span>
                     <div className="mt-1 text-sm text-gray-900 dark:text-white">
-                      {selectedContactCall.raw.call_result.termination_reason || 'N/A'}
+                      {translateTerminationReason(selectedContactCall.raw.call_result.termination_reason)}
                     </div>
                   </div>
                 </div>
@@ -1787,7 +1828,7 @@ const CampaignEditForm: React.FC<{
                             campaign.status === 'completed' ? 'Completada' : 'Cancelada'}
             </p>
             <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-              {campaign.status === 'running' ? 'La campaña se está ejecutando actualmente' :
+              {campaign.status === 'running' ? 'La campaña está activa y lista para ejecutar llamadas' :
                campaign.status === 'completed' ? 'Esta campaña ya ha sido completada' :
                'Puedes modificar la configuración de esta campaña'}
             </p>

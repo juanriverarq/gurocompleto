@@ -319,9 +319,10 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
           if (response.ok) {
             const data = await response.json();
             if (data.success && data.needs_onboarding) {
-              setNeedsOnboarding(true);
-              setOnboardingStep('create_broker');
-              setSaasError('Usuario necesita crear un broker');
+              // Ya NO activamos onboarding - mostramos error de conexión
+              setNeedsOnboarding(false);
+              setOnboardingStep(null);
+              setSaasError('Problemas de conexión con la base de datos');
             }
           }
         } catch (error) { }
@@ -686,17 +687,17 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // Si el endpoint devuelve needs_onboarding en 200 o no hay broker, activar onboarding
-          const shouldOnboard = data?.data?.needs_onboarding === true || !data?.data?.broker;
-          if (shouldOnboard) {
+          // Si no hay broker, NO activar onboarding - dejar que el layout muestre error de conexión
+          if (!data?.data?.broker) {
             setUsuarioSaas(data.data.user || null);
             setTenant(null);
             setPermisos(data?.data?.user?.permisos || data?.data?.user?.permissions || []);
-            setNeedsOnboarding(true);
-            setOnboardingStep('create_broker');
+            setNeedsOnboarding(false); // Ya no activamos onboarding
+            setOnboardingStep(null);
             setTrialExpired(false);
             setTrialEndsAt(null);
             setSaasChecked(true);
+            setSaasError('No se pudo cargar la información del broker');
             return;
           }
 
@@ -729,9 +730,10 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
           setTrialEndsAt(errorData.trial_ends_at || null);
           // Mantener usuario autenticado, pero bloquear módulos
         } else if (errorData.needs_onboarding) {
-          setNeedsOnboarding(true);
-          setOnboardingStep(errorData.onboarding_step || 'create_broker');
-          setSaasError(errorData.message);
+          // Ya NO activamos onboarding - mostramos error de conexión
+          setNeedsOnboarding(false);
+          setOnboardingStep(null);
+          setSaasError('Problemas de conexión con la base de datos. Recarga la página o intenta nuevamente.');
         } else {
           throw new Error(errorData.message || 'Acceso denegado');
         }

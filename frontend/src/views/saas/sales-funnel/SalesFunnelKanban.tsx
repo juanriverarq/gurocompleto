@@ -93,6 +93,11 @@ const SalesFunnelKanban: React.FC = () => {
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
 
+  // Estados para eliminación
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<SalesFunnelLead | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   // Cargar leads
   useEffect(() => {
     loadLeads();
@@ -159,6 +164,28 @@ const SalesFunnelKanban: React.FC = () => {
     setLeadToChangeState(lead);
     setNewState(lead.stage);
     setShowStateModal(true);
+  };
+
+  // Función para eliminar negocio
+  const handleDeleteClick = (lead: SalesFunnelLead) => {
+    setLeadToDelete(lead);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!leadToDelete) return;
+
+    try {
+      setDeleting(true);
+      await salesFunnelService.deleteLead(leadToDelete.id);
+      await loadLeads();
+      setShowDeleteModal(false);
+      setLeadToDelete(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al eliminar negocio');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // Confirmar cambio de etapa
@@ -442,6 +469,21 @@ const SalesFunnelKanban: React.FC = () => {
                                             Cambiar Estado
                                           </Dropdown.Item>
                                         )}
+                                        {canEdit && (
+                                          <>
+                                            <Dropdown.Divider />
+                                            <Dropdown.Item
+                                              onClick={() => handleDeleteClick(lead)}
+                                              className="flex gap-2 items-center text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                            >
+                                              <IconifyIcon
+                                                icon="solar:trash-bin-trash-bold-duotone"
+                                                height={15}
+                                              />
+                                              Eliminar
+                                            </Dropdown.Item>
+                                          </>
+                                        )}
                                       </Dropdown>
                                     </div>
 
@@ -649,6 +691,45 @@ const SalesFunnelKanban: React.FC = () => {
             }}
           />
         )}
+
+        {/* Modal de confirmación de eliminación */}
+        <Modal show={showDeleteModal} onClose={() => setShowDeleteModal(false)} size="md">
+          <Modal.Header>Eliminar Negocio</Modal.Header>
+          <Modal.Body>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                ¿Estás seguro de que deseas eliminar el negocio{' '}
+                <strong>
+                  {leadToDelete?.full_name ||
+                    `${leadToDelete?.first_name} ${leadToDelete?.last_name}`}
+                </strong>
+                ?
+              </p>
+              <Alert color="warning">
+                Esta acción no se puede deshacer.
+              </Alert>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button color="light" onClick={() => setShowDeleteModal(false)} disabled={deleting}>
+              Cancelar
+            </Button>
+            <Button
+              color="failure"
+              onClick={confirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <Spinner size="sm" className="mr-2" />
+                  Eliminando...
+                </>
+              ) : (
+                'Eliminar'
+              )}
+            </Button>
+          </Modal.Footer>
+        </Modal>
       </div>
     </PermissionGate>
   );

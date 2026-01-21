@@ -219,7 +219,7 @@ const BaseMenuitems: MenuitemsType[] = [
   },
   {
     id: uniqueId(),
-    title: 'Comparador Autos',
+    title: 'Comparador',
     icon: 'solar:shield-check-bold-duotone',
     href: '#',
     chip: 'Próximamente',

@@ -2,14 +2,31 @@ import axios from 'axios';
 import { auth } from './firebase';
 
 // Configuración base de la API
-// Permitir override en runtime vía window.__ENV__.API_BASE_URL
-const runtimeApiBase =
-  typeof window !== 'undefined' && (window as any).__ENV__ && (window as any).__ENV__.API_BASE_URL
-    ? (window as any).__ENV__.API_BASE_URL
-    : undefined;
+// Detectar automáticamente si estamos en producción basándose en el hostname
+const getApiBaseUrl = (): string => {
+  // 1. Runtime override
+  if (typeof window !== 'undefined' && (window as any).__ENV__?.API_BASE_URL) {
+    return (window as any).__ENV__.API_BASE_URL;
+  }
+  
+  // 2. Variable de entorno
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // 3. Detectar producción por hostname
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'guro.co' || hostname === 'www.guro.co' || hostname.endsWith('.guro.co')) {
+      return 'https://app.guro.co/api';
+    }
+  }
+  
+  // 4. Fallback para desarrollo local
+  return 'http://localhost:8081/api';
+};
 
-export const API_BASE_URL =
-  runtimeApiBase || import.meta.env.VITE_API_URL || 'http://localhost:8081/api';
+export const API_BASE_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,

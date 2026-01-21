@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path, { resolve } from 'path';
 import fs from 'fs/promises';
 import svgr from '@svgr/rollup';
-
+// Pre-rendering deshabilitado temporalmente - usar react-snap post-build
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -38,11 +38,6 @@ export default defineConfig({
         include: ['pdfjs-dist']
     },
 
-
-    
-    // plugins: [react(),svgr({
-    //   exportAsDefault: true
-    // })],
 
     plugins: [svgr(), react()],
     server: {
