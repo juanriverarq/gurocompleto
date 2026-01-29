@@ -24,13 +24,13 @@ class WalletController extends Controller
     public function getBalance(Request $request): JsonResponse
     {
         try {
-            $user = $request->user();
+            $user = $this->getAuthenticatedUser($request);
             $brokerId = $this->getBrokerId($request);
 
-            if (!$user || !$brokerId) {
+            if (!$brokerId) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuario o broker no autenticado'
+                    'message' => 'Broker no autenticado'
                 ], 401);
             }
 
@@ -38,7 +38,7 @@ class WalletController extends Controller
             $wallet = Wallet::firstOrCreate(
                 ['broker_id' => $brokerId],
                 [
-                    'user_id' => $user->id,
+                    'user_id' => $user ? $user->id : null,
                     'balance_cop' => 0,
                     'balance_usd' => 0,
                     'pending_balance' => 0,

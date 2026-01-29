@@ -86,6 +86,38 @@ Route::post('/saas/whatsapp/webhook/bulk-send-complete', [\App\Http\Controllers\
 // =============================================================
 Route::post('/webhooks/whatsapp-status', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'statusChange']);
 
+// =============================================================
+// Webhook WhatsApp sync instances (PÚBLICO - llamado por microservicio al iniciar)
+// Permite al microservicio obtener lista de instancias para restaurar
+// =============================================================
+Route::get('/webhooks/whatsapp-sync', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'syncInstances']);
+
+// =============================================================
+// Webhook WhatsApp microservice startup (PÚBLICO - llamado por microservicio al iniciar)
+// Notifica al backend que el microservicio ha reiniciado para re-registrar instancias
+// =============================================================
+Route::post('/webhooks/whatsapp-startup', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'microserviceStartup']);
+
+// =============================================================
+// Webhook WhatsApp incoming message (PÚBLICO - llamado por microservicio)
+// Procesa mensajes entrantes con el ChatbotProcessor
+// =============================================================
+Route::post('/webhooks/whatsapp-message', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'incomingMessage'])
+    ->name('api.whatsapp.webhook');
+
+// =============================================================
+// Webhook WhatsApp sync message (PÚBLICO - llamado por microservicio)
+// Sincroniza mensajes enviados desde el móvil al Inbox
+// =============================================================
+Route::post('/webhooks/whatsapp-sync-message', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'syncMessage']);
+
+// =============================================================
+// Webhook Meta Cloud API (PÚBLICO - llamado por Meta/Facebook)
+// Para recibir mensajes de WhatsApp Business Cloud API
+// =============================================================
+Route::get('/webhooks/meta-whatsapp', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'metaWebhookVerify']);
+Route::post('/webhooks/meta-whatsapp', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'metaWebhookReceive']);
+
 // Rutas públicas de autenticación (sin middleware)
 Route::prefix('auth')->group(function () {
     // Estas rutas no necesitan autenticación
@@ -905,6 +937,84 @@ Route::middleware(['security.auth'])->prefix('saas/whatsapp-instances')->group(f
     Route::post('{whatsAppInstance}/disconnect', [WhatsAppInstanceController::class, 'disconnect']);
     Route::delete('{whatsAppInstance}', [WhatsAppInstanceController::class, 'destroy']);
     Route::post('refresh-all-statuses', [WhatsAppInstanceController::class, 'refreshAllStatuses']);
+    
+    // Cloud API endpoints
+    Route::post('{whatsAppInstance}/cloud-api/send', [WhatsAppInstanceController::class, 'sendCloudApiMessage']);
+    Route::post('{whatsAppInstance}/cloud-api/test', [WhatsAppInstanceController::class, 'testCloudApiConnection']);
+});
+
+// =============================================================================
+// RUTAS SAAS: WHATSAPP INBOX (PROTEGIDAS)
+// =============================================================================
+
+Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/whatsapp-inbox')->group(function () {
+    // Estadísticas
+    Route::get('stats', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getStats']);
+    
+    // Departamentos
+    Route::get('departments', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getDepartments']);
+    Route::post('departments', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'createDepartment']);
+    Route::put('departments/{department}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'updateDepartment']);
+    Route::delete('departments/{department}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'deleteDepartment']);
+    Route::post('departments/{department}/members', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'addMemberToDepartment']);
+    Route::delete('departments/{department}/members/{userId}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'removeMemberFromDepartment']);
+    
+    // Conversaciones
+    Route::get('conversations', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getConversations']);
+    Route::get('conversations/mine', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getMyConversations']);
+    Route::get('conversations/{conversation}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getConversation']);
+    Route::put('conversations/{conversation}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'updateConversation']);
+    Route::get('conversations/{conversation}/messages', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getConversationMessages']);
+    Route::post('conversations/{conversation}/messages', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'sendMessage']);
+    Route::post('conversations/{conversation}/media', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'sendMediaMessage']);
+    Route::post('conversations/{conversation}/assign', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'assignConversation']);
+    Route::post('conversations/{conversation}/assign-department', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'assignToDepartment']);
+    Route::post('conversations/{conversation}/resolve', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'resolveConversation']);
+    Route::post('conversations/{conversation}/notes', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'addNote']);
+    
+    // Respuestas rápidas
+    Route::get('quick-replies', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getQuickReplies']);
+    Route::post('quick-replies', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'createQuickReply']);
+});
+
+// =============================================================================
+// RUTAS SAAS: CHATBOTS WHATSAPP (PROTEGIDAS)
+// =============================================================================
+
+Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/chatbots')->group(function () {
+    // CRUD Chatbots
+    Route::get('/', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'store']);
+    Route::get('{id}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'show']);
+    Route::put('{id}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'update']);
+    Route::delete('{id}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'destroy']);
+    Route::post('{id}/duplicate', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'duplicate']);
+    
+    // Flows
+    Route::get('{chatbotId}/flows', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'getFlows']);
+    Route::post('{chatbotId}/flows', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'createFlow']);
+    Route::put('flows/{flowId}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'updateFlow']);
+    Route::delete('flows/{flowId}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'deleteFlow']);
+    
+    // Nodes
+    Route::post('flows/{flowId}/nodes', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'createNode']);
+    Route::put('flows/{flowId}/nodes/bulk', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'updateNodesBulk']);
+    Route::put('nodes/{nodeId}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'updateNode']);
+    Route::delete('nodes/{nodeId}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'deleteNode']);
+    
+    // Triggers
+    Route::get('{chatbotId}/triggers', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'getTriggers']);
+    Route::post('{chatbotId}/triggers', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'createTrigger']);
+    Route::put('triggers/{triggerId}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'updateTrigger']);
+    Route::delete('triggers/{triggerId}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'deleteTrigger']);
+    
+    // Sessions
+    Route::get('{chatbotId}/sessions', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'getSessions']);
+    Route::delete('sessions/{sessionId}', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'endSession']);
+    
+    // Analytics
+    Route::get('{chatbotId}/analytics', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'getAnalytics']);
+    Route::get('{chatbotId}/analytics/detailed', [\App\Http\Controllers\Api\WhatsAppChatbotController::class, 'getDetailedAnalytics']);
 });
 
 // Rutas protegidas (requieren autenticación Sanctum - para compatibilidad)
@@ -928,6 +1038,35 @@ Route::prefix('master/auth')->group(function () {
 });
 
 // =============================================================================
+// PANEL MASTER (SUPERADMIN) - Dashboard global de la plataforma
+// =============================================================================
+Route::prefix('master-panel')->group(function () {
+    // Login público (sin middleware)
+    Route::post('/login', [\App\Http\Controllers\Api\MasterDashboardController::class, 'login']);
+    
+    // Rutas protegidas con Sanctum
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/logout', [\App\Http\Controllers\Api\MasterDashboardController::class, 'logout']);
+        Route::get('/me', [\App\Http\Controllers\Api\MasterDashboardController::class, 'me']);
+        Route::get('/stats', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getGlobalStats']);
+        Route::get('/brokers', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getBrokers']);
+        Route::get('/usuarios', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getUsuarios']);
+        Route::get('/facturacion', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getFacturacion']);
+        Route::get('/logs', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getLogs']);
+        
+        // Rutas específicas de broker (deben ir antes de la ruta genérica {brokerId})
+        Route::get('/brokers/{brokerId}/full-detail', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getBrokerFullDetail']);
+        Route::get('/brokers/{brokerId}/payments', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getBrokerPayments']);
+        Route::patch('/brokers/{brokerId}/toggle-status', [\App\Http\Controllers\Api\MasterDashboardController::class, 'toggleBrokerStatus']);
+        Route::post('/brokers/{brokerId}/wallet', [\App\Http\Controllers\Api\MasterDashboardController::class, 'updateBrokerWallet']);
+        Route::put('/brokers/{brokerId}/subscription', [\App\Http\Controllers\Api\MasterDashboardController::class, 'updateBrokerSubscription']);
+        
+        // Ruta genérica de broker (debe ir al final)
+        Route::get('/brokers/{brokerId}', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getBrokerDetail']);
+    });
+});
+
+// =============================================================================
 // RUTAS SAAS CON AUTENTICACIÓN UNIFICADA - SISTEMA UNIFICADO
 // =============================================================================
 
@@ -936,12 +1075,20 @@ Route::middleware(['unified.auth', 'security.auth'])->prefix('saas')->group(func
     Route::post('onboarding/create-broker', [OnboardingController::class, 'createBrokerWithFirebase']);
     // Nuevo endpoint simplificado para el flujo de registro rápido
     Route::post('onboarding/create-broker-simple', [OnboardingController::class, 'createBrokerSimplified']);
+    // Obtener perfil del broker (para verificar datos de onboarding)
+    Route::get('broker/profile', [OnboardingController::class, 'getBrokerProfile']);
     // Actualizar perfil del broker (para completar datos después del registro)
     Route::put('broker/profile', [OnboardingController::class, 'updateBrokerProfile']);
 });
 
 // Rutas SaaS con Autenticación Unificada (Firebase + Empleados)
 // Aisladas por broker y protegidas por permisos
+// Billing endpoints que deben funcionar incluso con trial expirado (solo autenticación, sin verificar broker activo)
+Route::middleware(['unified.auth'])->prefix('saas/billing')->group(function () {
+    Route::get('/pending-intent', [\App\Http\Controllers\Api\SubscriptionController::class, 'pendingIntent']);
+    Route::get('/subscription', [\App\Http\Controllers\Api\SubscriptionController::class, 'current']);
+});
+
 Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('saas')->group(function () {
     
     // Catálogos de solo lectura (empleados activos y usuarios) - protegidos por unified.auth + global.broker.auth + saas.auth (del grupo padre)
@@ -957,9 +1104,8 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
     // Verificar estado del usuario SaaS
     // Route::get('me', [SaasAuthController::class, 'firebaseMe']); // Comentado temporalmente
     
-    // Billing - Suscripción y Facturas
+    // Billing - Suscripción y Facturas (rutas que requieren broker activo)
     Route::prefix('billing')->group(function () {
-        Route::get('/subscription', [\App\Http\Controllers\Api\SubscriptionController::class, 'current']);
         Route::get('/invoices', [\App\Http\Controllers\Api\SubscriptionController::class, 'invoices']);
         Route::get('/invoices/{invoiceId}/download', [\App\Http\Controllers\Api\SubscriptionController::class, 'downloadInvoice']);
         Route::get('/usage', [\App\Http\Controllers\Api\SubscriptionController::class, 'usage']);
@@ -1301,6 +1447,8 @@ Route::post('/saas/voice-campaigns/webhooks/elevenlabs', [\App\Http\Controllers\
         Route::get('audit/stats', [AuditController::class, 'getAuditStats']);
         Route::get('audit/export', [AuditController::class, 'exportAuditLogs']);
         Route::get('audit/security-alerts', [AuditController::class, 'getSecurityAlerts']);
+        Route::get('audit/users-dashboard', [AuditController::class, 'getUsersDashboard']);
+        Route::get('audit/user/{userId}', [AuditController::class, 'getUserActivity']);
     });
 
 // Rutas para cuentas master (usuarios propietarios de brokers)
@@ -1586,6 +1734,25 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
         ], 403);
     }
     
+    // Verificar si el trial ha expirado
+    $isTrialExpired = $broker->status === 'trial' && 
+                      $broker->trial_ends_at && 
+                      $broker->trial_ends_at->isPast();
+    
+    // También verificar si el estado ya es trial_expired
+    $isTrialExpired = $isTrialExpired || $broker->status === 'trial_expired';
+    
+    if ($isTrialExpired) {
+        return response()->json([
+            'success' => false,
+            'error_code' => 'TRIAL_EXPIRED',
+            'message' => 'Tu periodo de prueba ha expirado. Por favor, actualiza tu plan para continuar.',
+            'trial_ends_at' => $broker->trial_ends_at?->toISOString(),
+            'broker_id' => $broker->id,
+            'broker_name' => $broker->name,
+        ], 403);
+    }
+    
     return response()->json([
         'success' => true,
         'data' => [
@@ -1601,10 +1768,19 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
             'broker' => [
                 'id' => $broker->id,
                 'nombre' => $broker->name,
+                'name' => $broker->name,
                 'email' => $broker->email,
+                'nit' => $broker->document_number,
+                'document_number' => $broker->document_number,
+                'telefono' => $broker->phone,
+                'phone' => $broker->phone,
+                'ciudad' => $broker->city,
+                'city' => $broker->city,
+                'direccion' => $broker->address,
                 'plan' => $broker->plan,
                 'status' => $broker->status,
                 'trial_ends_at' => $broker->trial_ends_at?->toISOString(),
+                'subscription_ends_at' => $broker->subscription_ends_at?->toISOString(),
                 'branding' => [
                     'logo' => $broker->getLogoUrl(),
                     'colores' => [
@@ -2455,7 +2631,7 @@ Route::post('/saas/login', function (\Illuminate\Http\Request $request) {
 });
 
 // ===== HOTFIX: Endpoints adicionales SaaS (usuarios, auditoría, configuración) =====
-Route::middleware(['security.auth','global.broker.auth'])->prefix('saas')->group(function () {
+Route::middleware(['unified.auth','global.broker.auth'])->prefix('saas')->group(function () {
     // Usuarios (alias de /admin/users para compatibilidad con frontend)
     Route::get('/usuarios', [\App\Http\Controllers\AdminController::class, 'getUsers']);
     Route::post('/usuarios', [\App\Http\Controllers\AdminController::class, 'createUser']);
@@ -2468,6 +2644,12 @@ Route::middleware(['security.auth','global.broker.auth'])->prefix('saas')->group
     // Auditoría
     Route::get('/audit-logs', [\App\Http\Controllers\SaaS\AuditController::class, 'getAuditLogs']);
     Route::post('/audit-logs', [\App\Http\Controllers\SaaS\AuditController::class, 'createAuditLog']);
+    Route::get('/audit/logs', [\App\Http\Controllers\SaaS\AuditController::class, 'getAuditLogs']);
+    Route::get('/audit/stats', [\App\Http\Controllers\SaaS\AuditController::class, 'getAuditStats']);
+    Route::get('/audit/users-dashboard', [\App\Http\Controllers\SaaS\AuditController::class, 'getUsersDashboard']);
+    Route::get('/audit/user/{userId}', [\App\Http\Controllers\SaaS\AuditController::class, 'getUserActivity']);
+    Route::get('/audit/security-alerts', [\App\Http\Controllers\SaaS\AuditController::class, 'getSecurityAlerts']);
+    Route::get('/audit/export', [\App\Http\Controllers\SaaS\AuditController::class, 'exportAuditLogs']);
 
     // Configuración (proxy a BrokerController settings)
     Route::get('/configuracion', function (\Illuminate\Http\Request $request) {

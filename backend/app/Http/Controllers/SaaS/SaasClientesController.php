@@ -47,7 +47,8 @@ class SaasClientesController extends Controller
     }
 
     /**
-     * Get all clientes without pagination (limited to 1000 for security)
+     * Get all clientes without pagination (optimized for campaigns/selectors)
+     * Only returns essential fields to avoid memory issues
      */
     public function all(Request $request)
     {
@@ -55,26 +56,44 @@ class SaasClientesController extends Controller
             // Get broker_id dynamically
             $brokerId = $this->getBrokerId($request);
             
-            // Debug log
-            \Log::info('🔍 [DEBUG] SaasClientesController::all', [
-                'broker_id' => $brokerId,
-                'user_from_request' => $request->user() ? [
-                    'id' => $request->user()->id,
-                    'email' => $request->user()->email,
-                    'broker_id' => $request->user()->broker_id
-                ] : null
-            ]);
-            
-            // Get all clients of the broker (increased limit for campaigns)
+            // Optimized query: select only essential fields for campaigns/selectors
+            // This prevents memory exhaustion with large client bases
             $clientes = Cliente::where('broker_id', $brokerId)
+                ->select([
+                    'id',
+                    'first_name',
+                    'last_name',
+                    'document_number',
+                    'document_type',
+                    'email',
+                    'mobile_phone',
+                    'phone',
+                    'city',
+                    'status',
+                    'client_type',
+                    'company'
+                ])
                 ->orderBy('first_name')
                 ->orderBy('last_name')
-                ->limit(20000) // Increased limit to handle more clients
+                ->limit(10000)
                 ->get();
             
-            // Transform data for frontend
+            // Transform data with minimal fields (no heavy processing)
             $transformedClientes = $clientes->map(function ($cliente) {
-                return $this->transformClienteToFrontend($cliente);
+                return [
+                    'id' => $cliente->id,
+                    'nombre' => $cliente->first_name,
+                    'apellidos' => $cliente->last_name,
+                    'cuit' => $cliente->document_number,
+                    'tipo_documento' => $cliente->document_type,
+                    'email_principal' => $cliente->email,
+                    'celular_principal' => $cliente->mobile_phone,
+                    'telefono' => $cliente->phone,
+                    'ciudad' => $cliente->city,
+                    'estado' => $cliente->status,
+                    'client_type' => $cliente->client_type ?? (($cliente->document_type === 'NIT' || !empty($cliente->company)) ? 'empresa' : 'persona'),
+                    'empresa' => $cliente->company,
+                ];
             });
             
             // Always return success with appropriate message
@@ -460,6 +479,11 @@ class SaasClientesController extends Controller
                 $mappedData['priority'] = $request->input('priority');
             }
             
+            // Etiquetas/Tags
+            if ($request->has('etiquetas') || $request->has('tags')) {
+                $mappedData['tags'] = $request->input('etiquetas', $request->input('tags'));
+            }
+            
             // Log para debug - ver datos después del mapeo
             \Log::info('Datos después del mapeo (sanitizado)', [
                 'campos' => array_keys($mappedData)
@@ -497,6 +521,7 @@ class SaasClientesController extends Controller
                 'legal_representative_document_number' => 'nullable|string|max:100',
                 'monthly_income' => 'nullable|numeric',
                 'priority' => 'nullable|in:low,medium,high',
+                'tags' => 'nullable|string|max:1000',
             ]);
 
             // Reglas condicionales
@@ -679,6 +704,11 @@ class SaasClientesController extends Controller
 
             if ($request->has('monthly_income')) $mappedData['monthly_income'] = $request->input('monthly_income');
             if ($request->has('priority')) $mappedData['priority'] = $request->input('priority');
+            
+            // Etiquetas/Tags
+            if ($request->has('etiquetas') || $request->has('tags')) {
+                $mappedData['tags'] = $request->input('etiquetas', $request->input('tags'));
+            }
 
             // Normalizar estado (aceptar 'status' o 'estado')
             if ($request->has('status') || $request->has('estado')) {
@@ -735,6 +765,7 @@ class SaasClientesController extends Controller
                 'legal_representative_document_number' => 'nullable|string|max:100',
                 'monthly_income' => 'nullable|numeric',
                 'priority' => 'nullable|in:low,medium,high',
+                'tags' => 'nullable|string|max:1000',
             ];
 
             if ($clientTypeForValidation === 'persona') {

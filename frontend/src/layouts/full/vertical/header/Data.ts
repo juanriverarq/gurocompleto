@@ -150,7 +150,7 @@ const pageLinks: LinkType[] = [
     title: "Authentication Design",
   },
   {
-    href: "/auth/auth1/register",
+    href: "/comenzar",
     title: "Register Now",
   },
   {

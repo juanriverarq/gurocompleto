@@ -14,6 +14,7 @@ export type ModuleKey =
   | 'miniweb'
   | 'documentos'
   | 'ia_chatbot'
+  | 'ia_chatbot_sura'
   | 'ia_callcenter'
   | 'ia_predicciones'
   | 'ia_ventas_cruzadas'
@@ -257,12 +258,24 @@ export const MODULES: ModuleItem[] = [
   },
   {
     key: 'ia_chatbot',
-    name: 'IA Chatbot',
+    name: 'Asistente IA',
     description: 'Asistente IA 24/7 para ventas y soporte',
     icon: 'solar:cpu-bolt-bold-duotone',
     color: 'bg-lightprimary',
     pricePerUser: 25000,
-    longDescription: 'Chatbot con IA avanzada para atención al cliente, ventas y soporte 24/7. Incluye 1,000 conversaciones/mes.',
+    longDescription: 'Asistente con IA avanzada para atención al cliente, ventas y soporte 24/7. Incluye 1,000 conversaciones/mes.',
+  },
+  {
+    key: 'ia_chatbot_sura',
+    name: 'Chatbot WhatsApp',
+    description: 'Incluye 1,000 contactos/mes',
+    icon: 'solar:chat-round-dots-bold-duotone',
+    color: 'bg-lightsuccess',
+    pricePerUser: 120000, // Precio fijo mensual (no por usuario)
+    annualOnly: false,
+    annualPrice: 1008000, // 120,000 * 12 * 0.70 (30% descuento anual)
+    consumptionBased: true,
+    longDescription: 'Chatbot automatizado para WhatsApp con flujos personalizables, transferencia a agentes y respuestas automáticas. Incluye 1,000 contactos/mes. $70 por contacto adicional. $120,000/mes o $1,008,000/año (30% OFF).',
   },
   {
     key: 'ia_callcenter',

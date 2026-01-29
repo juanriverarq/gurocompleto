@@ -13,6 +13,9 @@ const LazyAuthProvider = lazy(() =>
 const LazyTerminologiaProvider = lazy(() => 
   import('./context/TerminologiaContext').then(mod => ({ default: mod.TerminologiaProvider }))
 );
+const LazyWhatsAppNotificationProvider = lazy(() => 
+  import('./context/WhatsAppNotificationContext').then(mod => ({ default: mod.WhatsAppNotificationProvider }))
+);
 
 function App() {
   return (
@@ -21,9 +24,11 @@ function App() {
       <Suspense fallback={<Spinner />}>
         <LazyAuthProvider>
           <LazyTerminologiaProvider>
-            <Flowbite theme={{ theme: customTheme }}>
-              <RouterProvider router={router} />
-            </Flowbite>
+            <LazyWhatsAppNotificationProvider>
+              <Flowbite theme={{ theme: customTheme }}>
+                <RouterProvider router={router} />
+              </Flowbite>
+            </LazyWhatsAppNotificationProvider>
           </LazyTerminologiaProvider>
         </LazyAuthProvider>
       </Suspense>

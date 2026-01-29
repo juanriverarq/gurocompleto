@@ -9,6 +9,7 @@ class Subscription extends Model
 {
     protected $fillable = [
         'user_id',
+        'broker_id',
         'status',
         'period',
         'users_count',
@@ -19,6 +20,7 @@ class Subscription extends Model
         'starts_at',
         'current_period_end',
         'canceled_at',
+        'auto_renew',
     ];
 
     protected $casts = [
@@ -27,11 +29,17 @@ class Subscription extends Model
         'starts_at' => 'datetime',
         'current_period_end' => 'datetime',
         'canceled_at' => 'datetime',
+        'auto_renew' => 'boolean',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function broker(): BelongsTo
+    {
+        return $this->belongsTo(Broker::class);
     }
 }
 

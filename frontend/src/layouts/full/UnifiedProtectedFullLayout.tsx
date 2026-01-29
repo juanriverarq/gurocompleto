@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useContext, useEffect, useState, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Customizer } from './shared/customizer/Customizer';
 import { CustomizerContext } from '../../context/CustomizerContext';
@@ -8,7 +8,8 @@ import Header from './vertical/header/Header';
 import PartialTransitioning from 'src/components/headless-ui/Transition/PartialTransitioning';
 import api from 'src/config/api';
 import ScrollToTop from 'src/components/shared/ScrollToTop';
-import FloatingChat from 'src/components/chat/FloatingChat';
+import FirstTimeOnboardingModal from 'src/components/modals/FirstTimeOnboardingModal';
+import SubscriptionPaymentModal from 'src/components/modals/SubscriptionPaymentModal';
 
 const UnifiedProtectedFullLayout: React.FC = () => {
   const { activeLayout, isLayout } = useContext(CustomizerContext);
@@ -18,11 +19,10 @@ const UnifiedProtectedFullLayout: React.FC = () => {
     hasCompleteSaasAccess,
     needsOnboarding,
     user,
-    empleado,
     isEmpleado,
-    usuarioSaas,
     tenant,
     saasChecked,
+    trialExpired,
   } = useUnifiedAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,6 +85,92 @@ const UnifiedProtectedFullLayout: React.FC = () => {
 
   // Estado para mostrar error de conexión
   const [connectionError, setConnectionError] = React.useState(false);
+  
+  // Estado para el modal de onboarding obligatorio
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [brokerProfileChecked, setBrokerProfileChecked] = useState(false);
+  const [brokerProfileData, setBrokerProfileData] = useState<any>(null);
+  
+  // Verificar el perfil del broker directamente desde el endpoint
+  useEffect(() => {
+    const checkBrokerProfile = async () => {
+      if (isEmpleado || !isAuthenticated || loading || !tenant) return;
+      
+      try {
+        const response = await api.get('/saas/broker/profile');
+        if (response.data) {
+          setBrokerProfileData(response.data);
+          console.debug('[OnboardingCheck] Broker profile from API:', response.data);
+        }
+      } catch (error) {
+        console.error('[OnboardingCheck] Error fetching broker profile:', error);
+      } finally {
+        setBrokerProfileChecked(true);
+      }
+    };
+    
+    if (!brokerProfileChecked && tenant) {
+      checkBrokerProfile();
+    }
+  }, [isEmpleado, isAuthenticated, loading, tenant, brokerProfileChecked]);
+  
+  // Verificar si el broker tiene datos incompletos (campos obligatorios vacíos o genéricos)
+  const isBrokerDataIncomplete = useMemo(() => {
+    // Solo aplicar a usuarios normales, no empleados
+    if (isEmpleado || !tenant) return false;
+    
+    // Esperar a que se verifique el perfil del broker
+    if (!brokerProfileChecked) return false;
+    
+    // Usar datos del perfil del broker si están disponibles, sino usar tenant
+    const t = brokerProfileData || tenant as any;
+    
+    // Patrones de nombres genéricos/automáticos que indican datos no completados
+    const genericNamePatterns = [
+      'Broker de',
+      '- Agencia',
+      'Mi Agencia',
+    ];
+    
+    // El backend puede devolver 'name' o 'nombre', 'phone' o 'telefono', etc.
+    const name = (t.name || t.nombre || '').trim();
+    const isGenericName = !name || genericNamePatterns.some(pattern => name.includes(pattern));
+    
+    // Verificar campos obligatorios con datos reales
+    const hasValidName = name && !isGenericName;
+    const documentNumber = (t.document_number || t.nit || '').trim();
+    const hasDocument = documentNumber && documentNumber.length > 3;
+    const phone = (t.phone || t.telefono || '').trim();
+    const hasPhone = phone && phone.length > 5;
+    const city = (t.city || t.ciudad || '').trim();
+    const hasCity = city && city.length > 2;
+    
+    // Debug: mostrar qué campos faltan
+    console.debug('[OnboardingCheck] Broker validation:', {
+      source: brokerProfileData ? 'API profile' : 'tenant',
+      name,
+      isGenericName,
+      hasValidName,
+      documentNumber,
+      hasDocument,
+      phone,
+      hasPhone,
+      city,
+      hasCity,
+      result: !hasValidName || !hasDocument || !hasPhone || !hasCity
+    });
+    
+    return !hasValidName || !hasDocument || !hasPhone || !hasCity;
+  }, [tenant, isEmpleado, brokerProfileChecked, brokerProfileData]);
+  
+  // OBLIGATORIO: Mostrar modal si los datos del broker están incompletos
+  useEffect(() => {
+    if (isBrokerDataIncomplete && !isEmpleado && isAuthenticated && !loading) {
+      setShowOnboardingModal(true);
+      // Limpiar el flag de onboarding completado
+      localStorage.removeItem('guro_onboarding_completed');
+    }
+  }, [isBrokerDataIncomplete, isEmpleado, isAuthenticated, loading]);
 
   // Verificar si hay problemas de conexión con el backend
   useEffect(() => {
@@ -155,6 +241,19 @@ const UnifiedProtectedFullLayout: React.FC = () => {
     return null;
   }
 
+  // Si el trial expiró, mostrar el modal de pago obligatorio
+  if (trialExpired && !isEmpleado) {
+    return (
+      <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
+        <SubscriptionPaymentModal
+          isOpen={true}
+          onClose={() => {}}
+          reason="trial_expired"
+        />
+      </div>
+    );
+  }
+
   // Mostrar error de conexión si no se puede cargar el broker
   if (connectionError) {
     return (
@@ -213,43 +312,70 @@ const UnifiedProtectedFullLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex w-full min-h-screen dark:bg-darkgray">
-      <div className="page-wrapper flex w-full min-w-0">
-        {/* Header/sidebar */}
-        {activeLayout == 'vertical' ? <Sidebar /> : null}
-        <div className="page-wrapper-sub flex flex-col w-full min-w-0 dark:bg-darkgray">
-          {/* Top Header  */}
-          {activeLayout == 'horizontal' ? (
-            <Header layoutType="horizontal" />
-          ) : (
-            <Header layoutType="vertical" />
-          )}
+    <>
+      {/* Modal OBLIGATORIO para completar datos del broker */}
+      <FirstTimeOnboardingModal
+        isOpen={showOnboardingModal || isBrokerDataIncomplete}
+        onClose={() => {
+          // Solo permitir cerrar si los datos están completos
+          if (!isBrokerDataIncomplete) {
+            setShowOnboardingModal(false);
+          }
+          // Si los datos están incompletos, no hacer nada - el modal permanece abierto
+        }}
+        onComplete={() => {
+          // Recargar la página para obtener los datos actualizados del broker
+          window.location.reload();
+        }}
+      />
+      
+      {/* Modal OBLIGATORIO para pago cuando el trial expira */}
+      <SubscriptionPaymentModal
+        isOpen={trialExpired && !isEmpleado}
+        onClose={() => {
+          // No permitir cerrar - es obligatorio pagar
+        }}
+        reason="trial_expired"
+      />
+      
+      <div className="flex w-full min-h-screen dark:bg-darkgray">
+        <div className="page-wrapper flex w-full min-w-0">
+          {/* Header/sidebar */}
+          {activeLayout == 'vertical' ? <Sidebar /> : null}
+          <div className="page-wrapper-sub flex flex-col w-full min-w-0 dark:bg-darkgray">
+            {/* Top Header  */}
+            {activeLayout == 'horizontal' ? (
+              <Header layoutType="horizontal" />
+            ) : (
+              <Header layoutType="vertical" />
+            )}
 
-          <div
-            className={`bg-lightgray dark:bg-dark h-full ${
-              activeLayout != 'horizontal' ? 'rounded-bb' : 'rounded-none'
-            }`}
-          >
-            {/* Body Content  */}
             <div
-              className={`${
-                isLayout == 'full'
-                  ? 'w-full py-8 md:py-10 px-4 md:px-6 xl:px-8 2xl:px-10'
-                  : 'container mx-auto py-8 md:py-10'
-              } ${activeLayout == 'horizontal' ? 'xl:mt-3' : ''} min-w-0 overflow-x-auto`}
+              className={`bg-lightgray dark:bg-dark h-full ${
+                activeLayout != 'horizontal' ? 'rounded-bb' : 'rounded-none'
+              }`}
             >
-              <ScrollToTop>
-                <Outlet />
-              </ScrollToTop>
+              {/* Body Content  */}
+              <div
+                className={`${
+                  isLayout == 'full'
+                    ? 'w-full py-8 md:py-10 px-4 md:px-6 xl:px-8 2xl:px-10'
+                    : 'container mx-auto py-8 md:py-10'
+                } ${activeLayout == 'horizontal' ? 'xl:mt-3' : ''} min-w-0 overflow-x-auto`}
+              >
+                <ScrollToTop>
+                  <Outlet />
+                </ScrollToTop>
+              </div>
+              <Customizer />
+              <PartialTransitioning />
             </div>
-            <Customizer />
-            <PartialTransitioning />
           </div>
         </div>
+        {/* Chat flotante global - DESACTIVADO TEMPORALMENTE */}
+        {/* <FloatingChat /> */}
       </div>
-      {/* Chat flotante global - DESACTIVADO TEMPORALMENTE */}
-      {/* <FloatingChat /> */}
-    </div>
+    </>
   );
 };
 

@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Services\WhatsAppBridgeService;
+use App\Services\ChatbotProcessorService;
+use App\Services\WhatsAppClassificationService;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -14,7 +17,24 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Registrar WhatsAppBridgeService como singleton
+        $this->app->singleton(WhatsAppBridgeService::class, function ($app) {
+            return new WhatsAppBridgeService();
+        });
+
+        // Registrar WhatsAppClassificationService
+        $this->app->singleton(WhatsAppClassificationService::class, function ($app) {
+            return new WhatsAppClassificationService();
+        });
+
+        // Registrar ChatbotProcessorService
+        $this->app->singleton(ChatbotProcessorService::class, function ($app) {
+            return new ChatbotProcessorService(
+                $app->make(WhatsAppBridgeService::class),
+                $app->make(WhatsAppClassificationService::class),
+                $app->make(\App\Services\AIResponseService::class)
+            );
+        });
     }
 
     /**

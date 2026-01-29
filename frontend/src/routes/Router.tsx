@@ -85,6 +85,11 @@ const SignupFlow = Loadable(lazy(() => import('../views/pages/onboarding/SignupF
 const LandingPages = Loadable(lazy(() => import('../views/pages/landingpages/LandingPages')));
 
 const Error = Loadable(lazy(() => import('../views/authentication/Error')));
+const BlogSegurosSEO = Loadable(
+  lazy(() => import('../views/pages/frontend-pages/BlogSegurosSEO')),
+);
+const BlogIndex = Loadable(lazy(() => import('../views/pages/frontend-pages/BlogIndex')));
+const BlogArticle = Loadable(lazy(() => import('../views/pages/frontend-pages/BlogArticle')));
 
 // Seguros Apps
 const Polizas = Loadable(lazy(() => import('../views/apps/seguros/polizas/Polizas')));
@@ -151,6 +156,7 @@ const QuoteForm = Loadable(lazy(() => import('../views/public/QuoteForm')));
 
 // Admin Apps
 const Usuarios = Loadable(lazy(() => import('../views/apps/admin/usuarios/Usuarios')));
+const ReportesUsuarios = Loadable(lazy(() => import('../views/apps/admin/reportes-usuarios/ReportesUsuarios')));
 const Roles = Loadable(lazy(() => import('../views/apps/admin/roles/Roles')));
 const DemoPermisosLoadable = Loadable(
   lazy(() => import('../views/apps/admin/demo-permisos/DemoPermisos')),
@@ -240,8 +246,31 @@ const ServiciosTerceros = Loadable(
 const MobileAuthPage = Loadable(lazy(() => import('../pages/MobileAuth')));
 const EmpleadoLogin = Loadable(lazy(() => import('../views/auth/EmpleadoLogin')));
 
+// WhatsApp Apps
+const WhatsAppDashboard = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppDashboard')));
+const WhatsAppConexiones = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppConexiones')));
+const WhatsAppInbox = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppInboxPro')));
+const ChatbotsList = Loadable(lazy(() => import('../views/apps/whatsapp/ChatbotsList')));
+const ChatbotsAnalytics = Loadable(lazy(() => import('../views/apps/whatsapp/ChatbotsAnalytics')));
+const ChatbotFlowEditor = Loadable(lazy(() => import('../views/apps/whatsapp/chatbot-editor/FlowEditorSimple')));
+
 // Test Components
 const TestWelcomeModal = Loadable(lazy(() => import('../components/TestWelcomeModal')));
+
+// Master Panel (SUPERADMIN)
+const MasterPanelLogin = Loadable(lazy(() => import('../views/master-panel/MasterPanelLogin')));
+const MasterPanelLayout = Loadable(lazy(() => import('../views/master-panel/MasterPanelLayout')));
+const MasterDashboardContent = Loadable(lazy(() => import('../views/master-panel/MasterDashboardContent')));
+const MasterBrokersPage = Loadable(lazy(() => import('../views/master-panel/MasterBrokersPage')));
+const MasterBrokerEditPage = Loadable(lazy(() => import('../views/master-panel/MasterBrokerEditPage')));
+const MasterUsuariosPage = Loadable(lazy(() => import('../views/master-panel/MasterUsuariosPage')));
+const MasterFinanzasPage = Loadable(lazy(() => import('../views/master-panel/MasterFinanzasPage')));
+const MasterLlamadasPage = Loadable(lazy(() => import('../views/master-panel/MasterLlamadasPage')));
+const MasterCampanasPage = Loadable(lazy(() => import('../views/master-panel/MasterCampanasPage')));
+const MasterConfiguracionPage = Loadable(lazy(() => import('../views/master-panel/MasterConfiguracionPage')));
+const MasterFacturacionPage = Loadable(lazy(() => import('../views/master-panel/MasterFacturacionPage')));
+const MasterBrokerDetailPage = Loadable(lazy(() => import('../views/master-panel/MasterBrokerDetailPage')));
+const MasterLogsPage = Loadable(lazy(() => import('../views/master-panel/MasterLogsPage')));
 
 const Router = [
   // Landing Page como página principal
@@ -250,11 +279,16 @@ const Router = [
     element: <BlankLayout />,
     children: [
       { path: '/', element: <LandingPages /> },
+      { path: '/blog', element: <BlogIndex /> },
+      { path: '/blog/software-seguros-colombia', element: <BlogSegurosSEO /> },
+      { path: '/blog/:slug', element: <BlogArticle /> },
       { path: '/regalo', element: <Regalo /> },
       { path: '/terminos-condiciones', element: <TerminosCondiciones /> },
       { path: '/politica-privacidad', element: <PoliticaPrivacidad /> },
       // Transitional route while SaaS contexto/tenant se termina de resolver
       { path: '/dashboard-building', element: <DashboardBuilding /> },
+      { path: '/empleados/login', element: <EmpleadoLogin /> },
+      { path: '/auth/login', element: <Login /> },
     ],
   },
   // Dashboard bajo /apps
@@ -314,6 +348,7 @@ const Router = [
 
       // Admin Routes
       { path: '/apps/admin/usuarios', element: <Usuarios /> },
+      { path: '/apps/admin/usuarios/reportes', element: <ReportesUsuarios /> },
       { path: '/apps/admin/roles', element: <Roles /> },
       { path: '/apps/admin/demo-permisos', element: <DemoPermisosLoadable /> },
       { path: '/apps/admin/informacion-agencia', element: <InformacionAgencia /> },
@@ -392,6 +427,21 @@ const Router = [
       { path: '/apps/saas/configuracion-masiva', element: <ConfiguracionMasiva /> },
       { path: '/apps/calendar', element: <CalendarPage /> },
 
+      // WhatsApp Routes
+      { path: '/apps/whatsapp/dashboard', element: <WhatsAppDashboard /> },
+      { path: '/apps/whatsapp/conexiones', element: <WhatsAppConexiones /> },
+      { path: '/apps/whatsapp/inbox', element: <WhatsAppInbox /> },
+      { path: '/apps/whatsapp/campanas', element: <ConfiguracionMasiva /> },
+      { path: '/apps/whatsapp/campanas/nueva', element: <ConfiguracionMasiva /> },
+      { path: '/apps/whatsapp/programados', element: <ConfiguracionMasiva /> },
+      { path: '/apps/whatsapp/plantillas', element: <ConfiguracionMasiva /> },
+      { path: '/apps/whatsapp/chatbots', element: <ChatbotsList /> },
+      { path: '/apps/whatsapp/chatbots/nuevo', element: <ChatbotsList /> },
+      { path: '/apps/whatsapp/chatbots/flujos', element: <ChatbotFlowEditor /> },
+      { path: '/apps/whatsapp/chatbots/analisis', element: <ChatbotsAnalytics /> },
+      { path: '/apps/whatsapp/chatbots/respuestas', element: <ChatbotsList /> },
+            { path: '/apps/whatsapp/reportes', element: <WhatsAppDashboard /> },
+
       { path: '*', element: <Navigate to="/auth/404" /> },
     ],
   },
@@ -437,7 +487,7 @@ const Router = [
       { path: '/auth/mobile', element: <MobileAuthPage /> },
 
       { path: '/auth/auth1/login', element: <Login /> },
-      { path: '/auth/auth1/register', element: <Register /> },
+      { path: '/auth/auth1/register', element: <Navigate to="/comenzar" replace /> },
       { path: '/auth/maintenance', element: <Maintainance /> },
       { path: '/test/welcome-modal', element: <TestWelcomeModal /> },
       { path: '404', element: <Error /> },
@@ -455,6 +505,30 @@ const Router = [
       { path: 'forgot-password', element: <ForgotPassword /> },
       { path: 'two-steps', element: <TwoSteps /> },
       { path: 'email-verification', element: <EmailVerification /> },
+    ],
+  },
+  // Panel Master (SUPERADMIN) - Login sin layout
+  {
+    path: '/master-panel/login',
+    element: <MasterPanelLogin />,
+  },
+  // Panel Master (SUPERADMIN) - Rutas con layout
+  {
+    path: '/master-panel',
+    element: <MasterPanelLayout />,
+    children: [
+      { path: 'dashboard', element: <MasterDashboardContent /> },
+      { path: 'brokers', element: <MasterBrokersPage /> },
+      { path: 'brokers/:id/editar', element: <MasterBrokerEditPage /> },
+      { path: 'usuarios', element: <MasterUsuariosPage /> },
+      { path: 'finanzas', element: <MasterFinanzasPage /> },
+      { path: 'llamadas', element: <MasterLlamadasPage /> },
+      { path: 'campanas', element: <MasterCampanasPage /> },
+      { path: 'configuracion', element: <MasterConfiguracionPage /> },
+      { path: 'facturacion', element: <MasterFacturacionPage /> },
+      { path: 'brokers/:id/detalle', element: <MasterBrokerDetailPage /> },
+      { path: 'logs', element: <MasterLogsPage /> },
+      { path: '', element: <Navigate to="/master-panel/dashboard" /> },
     ],
   },
 ];

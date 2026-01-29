@@ -98,9 +98,9 @@ const AuthRegister = () => {
           // Ignorar errores aquí, el registro ya fue exitoso
         }
 
-        // Redirigir al destino (por defecto /checkout)
+        // Redirigir al destino (por defecto /apps - trial de 7 días gratis)
         const params = new URLSearchParams(location.search);
-        const redirect = params.get('redirect') || '/checkout';
+        const redirect = params.get('redirect') || '/apps';
         navigate(redirect, { replace: true });
         return;
       } else {

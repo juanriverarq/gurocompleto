@@ -13,6 +13,7 @@ const MobileDrawer = () => {
     { name: "Funciones", href: "#funciones", isLink: false },
     { name: "Características", href: "#caracteristicas", isLink: false },
     { name: "Testimonios", href: "#testimonios", isLink: false },
+    { name: "Blog", href: "/blog", isLink: true },
     { name: "Precios", href: "/precios", isLink: true },
     { name: "FAQ", href: "#faq", isLink: false }
   ];

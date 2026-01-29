@@ -10,6 +10,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Services\WhatsAppCloudApiService;
 
 class WhatsAppInstanceController extends Controller
 {
@@ -53,10 +54,67 @@ class WhatsAppInstanceController extends Controller
         }
 
         $validated = $request->validate([
+            'connection_type' => 'nullable|in:baileys,cloud_api',
             'phone_number' => 'nullable|string',
             'webhook_url' => 'nullable|url',
             'settings' => 'nullable|array',
+            'cloud_api_phone_id' => 'nullable|string',
+            'cloud_api_business_id' => 'nullable|string',
+            'cloud_api_token' => 'nullable|string',
+            'cloud_api_verify_token' => 'nullable|string',
         ]);
+
+        $connectionType = $validated['connection_type'] ?? 'baileys';
+
+        // Validar credenciales de Cloud API antes de crear la instancia
+        if ($connectionType === 'cloud_api') {
+            $phoneId = $validated['cloud_api_phone_id'] ?? null;
+            $token = $validated['cloud_api_token'] ?? null;
+
+            if (empty($phoneId) || empty($token)) {
+                return response([
+                    'error' => 'Phone Number ID y Access Token son requeridos para Cloud API'
+                ], 422);
+            }
+
+            // Verificar credenciales con la API de Meta
+            try {
+                $verifyResponse = Http::withToken($token)
+                    ->timeout(10)
+                    ->get("https://graph.facebook.com/v22.0/{$phoneId}");
+
+                if (!$verifyResponse->successful()) {
+                    $errorData = $verifyResponse->json();
+                    $errorMessage = $errorData['error']['message'] ?? 'Credenciales inválidas';
+                    
+                    Log::warning('❌ [CLOUD API] Credenciales inválidas', [
+                        'phone_id' => $phoneId,
+                        'error' => $errorMessage
+                    ]);
+
+                    return response([
+                        'error' => 'Credenciales de Cloud API inválidas: ' . $errorMessage
+                    ], 422);
+                }
+
+                $phoneData = $verifyResponse->json();
+                Log::info('✅ [CLOUD API] Credenciales verificadas', [
+                    'phone_id' => $phoneId,
+                    'verified_name' => $phoneData['verified_name'] ?? 'N/A',
+                    'display_phone' => $phoneData['display_phone_number'] ?? 'N/A'
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error('❌ [CLOUD API] Error al verificar credenciales', [
+                    'phone_id' => $phoneId,
+                    'error' => $e->getMessage()
+                ]);
+
+                return response([
+                    'error' => 'No se pudo verificar las credenciales de Cloud API: ' . $e->getMessage()
+                ], 422);
+            }
+        }
 
         // Generar instance_id único
         $instanceId = 'instance_' . $broker->id . '_' . Str::random(8);
@@ -65,91 +123,99 @@ class WhatsAppInstanceController extends Controller
         $instance = WhatsAppInstance::create([
             'broker_id' => $broker->id,
             'instance_id' => $instanceId,
+            'connection_type' => $connectionType,
+            'cloud_api_phone_id' => $validated['cloud_api_phone_id'] ?? null,
+            'cloud_api_business_id' => $validated['cloud_api_business_id'] ?? null,
+            'cloud_api_token' => $validated['cloud_api_token'] ?? null,
+            'cloud_api_verify_token' => $validated['cloud_api_verify_token'] ?? null,
             'phone_number' => $validated['phone_number'] ?? null,
             'webhook_url' => $validated['webhook_url'] ?? null,
             'settings' => $validated['settings'] ?? [],
-            'status' => 'disconnected',
+            'status' => $connectionType === 'cloud_api' ? 'connected' : 'disconnected',
         ]);
 
-        // Inicializar instancia en el microservicio - SINCRONIZACIÓN AUTOMÁTICA
-        try {
-            Log::info('🔄 [INSTANCE SYNC] Creando instancia en microservicio', [
-                'instance_id' => $instanceId,
-                'broker_id' => $broker->id,
-                'microservice_url' => $this->whatsappMicroserviceUrl
-            ]);
-            
-            $response = Http::timeout(10)->post($this->whatsappMicroserviceUrl . '/instances', [
-                'instanceId' => $instanceId,
-                'webhook' => $validated['webhook_url'] ?? null,
-                'settings' => $validated['settings'] ?? [],
-            ]);
-
-            if ($response->successful()) {
-                $responseData = $response->json();
-                
-                Log::info('✅ [INSTANCE SYNC] Instancia creada en microservicio', [
+        // Solo sincronizar con microservicio si es tipo Baileys (QR)
+        // Cloud API no necesita el microservicio, se conecta directamente a Meta
+        if ($connectionType === 'baileys') {
+            try {
+                Log::info('🔄 [INSTANCE SYNC] Creando instancia en microservicio', [
                     'instance_id' => $instanceId,
-                    'response' => $responseData
+                    'broker_id' => $broker->id,
+                    'microservice_url' => $this->whatsappMicroserviceUrl
                 ]);
                 
-                $instance->update([
-                    'status' => 'connecting',
-                    'session_data' => $responseData,
-                    'last_activity_at' => now()
+                $response = Http::timeout(10)->post($this->whatsappMicroserviceUrl . '/instances', [
+                    'instanceId' => $instanceId,
+                    'webhook' => $validated['webhook_url'] ?? null,
+                    'settings' => $validated['settings'] ?? [],
                 ]);
-                
-                // Esperar un momento y verificar si se conectó automáticamente
-                sleep(2);
-                
-                try {
-                    $statusResponse = Http::timeout(5)->get($this->whatsappMicroserviceUrl . '/instances/' . $instanceId . '/status');
-                    if ($statusResponse->successful()) {
-                        $statusData = $statusResponse->json();
-                        $newStatus = $statusData['connected'] ? 'connected' : ($statusData['connecting'] ? 'connecting' : 'disconnected');
-                        
-                        Log::info('📊 [INSTANCE SYNC] Estado inicial de instancia', [
+
+                if ($response->successful()) {
+                    $responseData = $response->json();
+                    
+                    Log::info('✅ [INSTANCE SYNC] Instancia creada en microservicio', [
+                        'instance_id' => $instanceId,
+                        'response' => $responseData
+                    ]);
+                    
+                    $instance->update([
+                        'status' => 'connecting',
+                        'session_data' => $responseData,
+                        'last_activity_at' => now()
+                    ]);
+                    
+                    // Esperar un momento y verificar si se conectó automáticamente
+                    sleep(2);
+                    
+                    try {
+                        $statusResponse = Http::timeout(5)->get($this->whatsappMicroserviceUrl . '/instances/' . $instanceId . '/status');
+                        if ($statusResponse->successful()) {
+                            $statusData = $statusResponse->json();
+                            $newStatus = $statusData['connected'] ? 'connected' : ($statusData['connecting'] ? 'connecting' : 'disconnected');
+                            
+                            Log::info('📊 [INSTANCE SYNC] Estado inicial de instancia', [
+                                'instance_id' => $instanceId,
+                                'status' => $newStatus,
+                                'connected' => $statusData['connected'] ?? false
+                            ]);
+                            
+                            $instance->update([
+                                'status' => $newStatus,
+                                'last_activity_at' => now()
+                            ]);
+                        }
+                    } catch (\Exception $statusError) {
+                        Log::warning('⚠️ [INSTANCE SYNC] No se pudo verificar estado inicial', [
                             'instance_id' => $instanceId,
-                            'status' => $newStatus,
-                            'connected' => $statusData['connected'] ?? false
-                        ]);
-                        
-                        $instance->update([
-                            'status' => $newStatus,
-                            'last_activity_at' => now()
+                            'error' => $statusError->getMessage()
                         ]);
                     }
-                } catch (\Exception $statusError) {
-                    Log::warning('⚠️ [INSTANCE SYNC] No se pudo verificar estado inicial', [
+                } else {
+                    Log::error('❌ [INSTANCE SYNC] Error al crear instancia en microservicio', [
                         'instance_id' => $instanceId,
-                        'error' => $statusError->getMessage()
+                        'status_code' => $response->status(),
+                        'response_body' => $response->body()
+                    ]);
+                    
+                    // Marcar instancia como error pero no fallar la creación en BD
+                    $instance->update([
+                        'status' => 'error',
+                        'error_message' => 'Failed to create in microservice: ' . $response->body()
                     ]);
                 }
-            } else {
-                Log::error('❌ [INSTANCE SYNC] Error al crear instancia en microservicio', [
+            } catch (\Exception $e) {
+                Log::error('❌ [INSTANCE SYNC] Exception al crear instancia en microservicio', [
                     'instance_id' => $instanceId,
-                    'status_code' => $response->status(),
-                    'response_body' => $response->body()
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
                 ]);
                 
                 // Marcar instancia como error pero no fallar la creación en BD
                 $instance->update([
                     'status' => 'error',
-                    'error_message' => 'Failed to create in microservice: ' . $response->body()
+                    'error_message' => 'Exception creating in microservice: ' . $e->getMessage()
                 ]);
             }
-        } catch (\Exception $e) {
-            Log::error('❌ [INSTANCE SYNC] Exception al crear instancia en microservicio', [
-                'instance_id' => $instanceId,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            // Marcar instancia como error pero no fallar la creación en BD
-            $instance->update([
-                'status' => 'error',
-                'error_message' => 'Exception creating in microservice: ' . $e->getMessage()
-            ]);
         }
 
         return response($instance->load('broker'), 201);
@@ -301,6 +367,11 @@ class WhatsAppInstanceController extends Controller
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
+        }
+
+        // Para instancias Cloud API, verificar directamente con Meta (no usar microservicio Baileys)
+        if ($whatsAppInstance->isCloudApi()) {
+            return $this->getCloudApiStatus($whatsAppInstance);
         }
 
         try {
@@ -650,5 +721,202 @@ class WhatsAppInstanceController extends Controller
             'total_instances' => count($instances),
             'results' => $results
         ], 200);
+    }
+
+    /**
+     * Enviar mensaje usando Cloud API
+     */
+    public function sendCloudApiMessage(Request $request, WhatsAppInstance $whatsAppInstance): Response
+    {
+        $user = $request->user();
+        $broker = $user->getPrimaryBroker();
+        
+        if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
+            return response(['error' => 'Unauthorized'], 403);
+        }
+
+        if (!$whatsAppInstance->isCloudApi()) {
+            return response(['error' => 'Esta instancia no está configurada para Cloud API'], 400);
+        }
+
+        $validated = $request->validate([
+            'to' => 'required|string',
+            'message' => 'required_without:template|string|nullable',
+            'template' => 'required_without:message|string|nullable',
+            'template_language' => 'nullable|string',
+            'template_components' => 'nullable|array',
+        ]);
+
+        $cloudApiService = new WhatsAppCloudApiService();
+
+        if (!empty($validated['template'])) {
+            // Enviar mensaje con plantilla
+            $result = $cloudApiService->sendTemplateMessage(
+                $whatsAppInstance,
+                $validated['to'],
+                $validated['template'],
+                $validated['template_language'] ?? 'es',
+                $validated['template_components'] ?? []
+            );
+        } else {
+            // Enviar mensaje de texto
+            $result = $cloudApiService->sendTextMessage(
+                $whatsAppInstance,
+                $validated['to'],
+                $validated['message']
+            );
+        }
+
+        if ($result['success']) {
+            return response([
+                'success' => true,
+                'message' => 'Mensaje enviado correctamente',
+                'message_id' => $result['message_id'] ?? null
+            ], 200);
+        }
+
+        return response([
+            'success' => false,
+            'error' => $result['error'] ?? 'Error al enviar mensaje',
+            'error_details' => $result['error_details'] ?? null
+        ], 400);
+    }
+
+    /**
+     * Probar conexión Cloud API
+     */
+    public function testCloudApiConnection(Request $request, WhatsAppInstance $whatsAppInstance): Response
+    {
+        $user = $request->user();
+        $broker = $user->getPrimaryBroker();
+        
+        if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
+            return response(['error' => 'Unauthorized'], 403);
+        }
+
+        if (!$whatsAppInstance->isCloudApi()) {
+            return response(['error' => 'Esta instancia no está configurada para Cloud API'], 400);
+        }
+
+        $cloudApiService = new WhatsAppCloudApiService();
+        $result = $cloudApiService->getBusinessProfile($whatsAppInstance);
+
+        if ($result['success']) {
+            $whatsAppInstance->update([
+                'status' => 'connected',
+                'last_connected_at' => now(),
+                'last_activity_at' => now(),
+                'error_message' => null
+            ]);
+
+            return response([
+                'success' => true,
+                'message' => 'Conexión exitosa con Cloud API',
+                'business_profile' => $result['data']
+            ], 200);
+        }
+
+        $whatsAppInstance->update([
+            'status' => 'error',
+            'error_message' => $result['error'] ?? 'Error de conexión'
+        ]);
+
+        return response([
+            'success' => false,
+            'error' => $result['error'] ?? 'Error al conectar con Cloud API'
+        ], 400);
+    }
+
+    /**
+     * Obtener estado de instancia Cloud API verificando con Meta
+     */
+    protected function getCloudApiStatus(WhatsAppInstance $whatsAppInstance): Response
+    {
+        try {
+            // Verificar credenciales con la API de Meta
+            $response = Http::withToken($whatsAppInstance->cloud_api_token)
+                ->timeout(10)
+                ->get("https://graph.facebook.com/v22.0/{$whatsAppInstance->cloud_api_phone_id}", [
+                    'fields' => 'id,display_phone_number,verified_name,quality_rating,status,is_pin_enabled'
+                ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                // Determinar estado basado en la respuesta de Meta
+                $metaStatus = $data['status'] ?? 'UNKNOWN';
+                $isConnected = in_array($metaStatus, ['CONNECTED', 'READY', 'UNKNOWN']); // UNKNOWN suele significar OK
+                
+                $newStatus = $isConnected ? 'connected' : 'disconnected';
+                
+                // Actualizar instancia
+                $whatsAppInstance->update([
+                    'status' => $newStatus,
+                    'phone_number' => $data['display_phone_number'] ?? $whatsAppInstance->phone_number,
+                    'last_activity_at' => now(),
+                    'error_message' => null
+                ]);
+
+                Log::info('✅ [CLOUD API STATUS] Estado verificado con Meta', [
+                    'instance_id' => $whatsAppInstance->instance_id,
+                    'meta_status' => $metaStatus,
+                    'new_status' => $newStatus,
+                    'phone' => $data['display_phone_number'] ?? 'N/A'
+                ]);
+
+                return response([
+                    'success' => true,
+                    'instanceId' => $whatsAppInstance->instance_id,
+                    'status' => $newStatus,
+                    'connected' => $isConnected,
+                    'connecting' => false,
+                    'connection_type' => 'cloud_api',
+                    'phoneNumber' => $data['display_phone_number'] ?? null,
+                    'verifiedName' => $data['verified_name'] ?? null,
+                    'qualityRating' => $data['quality_rating'] ?? null,
+                    'metaStatus' => $metaStatus
+                ], 200);
+            }
+
+            // Error de credenciales o conexión
+            $error = $response->json()['error'] ?? ['message' => 'Error desconocido'];
+            
+            Log::warning('⚠️ [CLOUD API STATUS] Error verificando con Meta', [
+                'instance_id' => $whatsAppInstance->instance_id,
+                'error' => $error
+            ]);
+
+            $whatsAppInstance->update([
+                'status' => 'error',
+                'error_message' => $error['message'] ?? 'Error de conexión con Meta',
+                'last_activity_at' => now()
+            ]);
+
+            return response([
+                'success' => false,
+                'instanceId' => $whatsAppInstance->instance_id,
+                'status' => 'error',
+                'connected' => false,
+                'connecting' => false,
+                'connection_type' => 'cloud_api',
+                'error' => $error['message'] ?? 'Error de conexión'
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [CLOUD API STATUS] Exception verificando estado', [
+                'instance_id' => $whatsAppInstance->instance_id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response([
+                'success' => false,
+                'instanceId' => $whatsAppInstance->instance_id,
+                'status' => 'error',
+                'connected' => false,
+                'connecting' => false,
+                'connection_type' => 'cloud_api',
+                'error' => $e->getMessage()
+            ], 200);
+        }
     }
 }

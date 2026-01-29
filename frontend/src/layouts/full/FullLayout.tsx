@@ -1,4 +1,4 @@
-import { FC, useContext } from 'react';
+import { FC, useContext, lazy, Suspense } from 'react';
 import { Outlet } from 'react-router';
 import { Customizer } from './shared/customizer/Customizer';
 import { CustomizerContext } from '../../context/CustomizerContext';
@@ -6,6 +6,8 @@ import Sidebar from './vertical/sidebar/Sidebar';
 import Header from './vertical/header/Header';
 import PartialTransitioning from 'src/components/headless-ui/Transition/PartialTransitioning';
 import ScrollToTop from 'src/components/shared/ScrollToTop';
+
+const WhatsAppToast = lazy(() => import('src/components/whatsapp/WhatsAppToast'));
 
 
 const FullLayout: FC = () => {
@@ -51,6 +53,10 @@ const FullLayout: FC = () => {
           </div>
         </div>
       </div>
+      {/* Toast de notificaciones de WhatsApp */}
+      <Suspense fallback={null}>
+        <WhatsAppToast />
+      </Suspense>
     </div>
       </>
   );

@@ -108,14 +108,43 @@ const SEGMENT_COLORS = [
 
 class ClientSegmentService {
   private segments: ClientSegment[] = [];
+  private readonly STORAGE_KEY = 'guro_client_segments';
+
+  constructor() {
+    this.loadFromStorage();
+  }
+
+  /**
+   * Carga segmentos desde localStorage
+   */
+  private loadFromStorage(): void {
+    try {
+      const stored = localStorage.getItem(this.STORAGE_KEY);
+      if (stored) {
+        this.segments = JSON.parse(stored);
+      }
+    } catch (error) {
+      console.error('Error loading segments from storage:', error);
+      this.segments = [];
+    }
+  }
+
+  /**
+   * Guarda segmentos en localStorage
+   */
+  private saveToStorage(): void {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.segments));
+    } catch (error) {
+      console.error('Error saving segments to storage:', error);
+    }
+  }
 
   /**
    * Obtiene todos los segmentos
    */
   async getSegments(): Promise<ClientSegment[]> {
-    
-    
-    // TODO: Implementar llamada real a la API
+    this.loadFromStorage(); // Recargar por si hay cambios
     return this.segments;
   }
 
@@ -125,13 +154,14 @@ class ClientSegmentService {
   async createSegment(segment: Omit<ClientSegment, 'id' | 'created_at' | 'updated_at'>): Promise<ClientSegment> {
     const newSegment: ClientSegment = {
       ...segment,
-      id: Date.now(), // Mock ID
+      id: Date.now(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       color: segment.color || this.getRandomColor()
     };
 
     this.segments.push(newSegment);
+    this.saveToStorage();
     return newSegment;
   }
 
@@ -150,6 +180,7 @@ class ClientSegmentService {
       updated_at: new Date().toISOString()
     };
 
+    this.saveToStorage();
     return this.segments[index];
   }
 
@@ -163,6 +194,7 @@ class ClientSegmentService {
     }
 
     this.segments.splice(index, 1);
+    this.saveToStorage();
   }
 
   /**

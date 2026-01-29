@@ -211,7 +211,7 @@ class CampaignController extends Controller
                 'description' => 'nullable|string',
                 'message_template' => 'required|string',
                 'select_all_clients' => 'nullable|boolean',
-                'whatsapp_instance_id' => 'nullable|integer|exists:whats_app_instances,id',
+                'whatsapp_instance_id' => 'nullable|integer|exists:whatsapp_instances,id',
                 // Media opcional (si ya se subió por /media-upload)
                 'media_url' => 'nullable|url',
                 'media_type' => 'nullable|in:image'
@@ -440,7 +440,7 @@ class CampaignController extends Controller
                 'message_template' => 'required|string',
                 'scheduled_date' => 'required|date|after:5 minutes',
                 'select_all_clients' => 'nullable|boolean',
-                'whatsapp_instance_id' => 'nullable|integer|exists:whats_app_instances,id',
+                'whatsapp_instance_id' => 'nullable|integer|exists:whatsapp_instances,id',
                 // Media opcional (para ejecución futura)
                 'media_url' => 'nullable|url',
                 'media_type' => 'nullable|in:image'

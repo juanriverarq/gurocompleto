@@ -1,0 +1,1 @@
+import"./index-CgYaZsxQ.js";import{r as e}from"./vendor-charts-CIqHj9iK.js";const o=e.createContext(void 0),a=()=>{const t=e.useContext(o);if(t===void 0)throw new Error("useSaas debe ser usado dentro de un SaasProvider");return t};export{a as u};

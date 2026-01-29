@@ -33,6 +33,19 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/comercial/equipos-ventas': 'equipos_ventas',
   '/apps/comercial/rendimiento': 'analisis_rendimiento',
 
+  // WhatsApp
+  '/apps/whatsapp/dashboard': 'whatsapp_business',
+  '/apps/whatsapp/conexiones': 'whatsapp_business',
+  '/apps/whatsapp/campanas': 'whatsapp_business',
+  '/apps/whatsapp/campanas/nueva': 'whatsapp_business',
+  '/apps/whatsapp/programados': 'whatsapp_business',
+  '/apps/whatsapp/plantillas': 'whatsapp_business',
+  '/apps/whatsapp/chatbots': 'whatsapp_business',
+  '/apps/whatsapp/chatbots/nuevo': 'whatsapp_business',
+  '/apps/whatsapp/chatbots/flujos': 'whatsapp_business',
+  '/apps/whatsapp/chatbots/respuestas': 'whatsapp_business',
+  '/apps/whatsapp/reportes': 'whatsapp_business',
+
   // Marketing Digital
   '/apps/marketing/sms': 'sms_marketing',
   '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
@@ -124,8 +137,8 @@ export const canAccessRouteWithAction = (
 ): boolean => {
   const module = ROUTE_PERMISSION_MAP[route];
   if (!module) {
-    // Si la ruta no está mapeada aún, ocultamos por defecto en el sidebar
-    return false;
+    // Si la ruta no está mapeada aún, permitir acceso por defecto
+    return true;
   }
   return hasPermission(module, action);
 };

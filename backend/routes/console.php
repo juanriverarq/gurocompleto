@@ -206,3 +206,16 @@ Schedule::command('voice:execute-scheduled-calls --batch-size=20')
     ->everyMinute()
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/voice-scheduled-calls.log'));
+
+/**
+ * Procesa suscripciones y cobros recurrentes diariamente.
+ * - Verifica trials expirados y cambia su estado
+ * - Notifica suscripciones próximas a vencer (5, 3, 1 días)
+ * - Procesa suscripciones vencidas
+ * - Genera cobros recurrentes para renovaciones
+ * Ver comando: billing:process-subscriptions
+ */
+Schedule::command('billing:process-subscriptions')
+    ->dailyAt('00:30')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/subscription-billing.log'));

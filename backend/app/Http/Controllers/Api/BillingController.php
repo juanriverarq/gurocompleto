@@ -90,21 +90,63 @@ class BillingController extends Controller
         if ($intent->period === 'annual') {
             if ($hasSuraCoupon) {
                 // Para Sura: usar subtotal SIN descuento 12%, luego aplicar 30% Sura
-                $subtotalWithDiscount = (int) ($totals['subtotalAnnual'] ?? 0);
+                $subtotalWithDiscount = (int) ($totals['subtotalAnnual'] ?? $totals['totalAnnualEquivalent'] ?? 0);
                 $discountAnnual = (int) ($totals['discountAnnual'] ?? 0);
                 $subtotalBeforeDiscount = $subtotalWithDiscount + $discountAnnual;
                 // Aplicar solo 30% de Sura
                 $suraDiscount = (int) round($subtotalBeforeDiscount * 0.30);
                 $amount = $subtotalBeforeDiscount - $suraDiscount;
             } else {
-                // Flujo normal: ya incluye descuento 12%
-                $amount = (int) ($totals['subtotalAnnual'] ?? 0);
+                // Flujo normal: usar subtotalAnnual o totalAnnualEquivalent (calculado dinámicamente)
+                $amount = (int) ($totals['subtotalAnnual'] ?? $totals['totalAnnualEquivalent'] ?? $totals['total'] ?? 0);
             }
         } else {
-            $amount = (int) ($totals['subtotalMonthly'] ?? 0);
+            $amount = (int) ($totals['subtotalMonthly'] ?? $totals['total'] ?? 0);
         }
         
-        $amountInCents = $amount;
+        // Si el monto sigue siendo 0, calcular dinámicamente basado en módulos
+        if ($amount <= 0) {
+            $modules = is_array($intent->modules) ? $intent->modules : [];
+            $usersCount = $intent->users_count ?? 1;
+            $storageGb = $intent->storage_gb ?? 10;
+            
+            // Precios base por módulo (mensual por usuario)
+            $modulePrices = [
+                'crm' => 25000,
+                'polizas' => 35000,
+                'cotizador' => 20000,
+                'marketing' => 15000,
+                'cobranza' => 20000,
+                'reportes' => 10000,
+                'voice_ai' => 30000,
+                'whatsapp' => 25000,
+            ];
+            
+            $basePrice = 0;
+            foreach ($modules as $module) {
+                $moduleKey = is_array($module) ? ($module['id'] ?? $module['key'] ?? '') : $module;
+                if (isset($modulePrices[$moduleKey])) {
+                    $basePrice += $modulePrices[$moduleKey];
+                }
+            }
+            
+            if ($basePrice == 0) {
+                $basePrice = 50000; // Precio base mínimo
+            }
+            
+            $subtotalMonthly = $basePrice * $usersCount;
+            $extraStorage = max(0, $storageGb - 10);
+            $subtotalMonthly += $extraStorage * 5000;
+            
+            if ($intent->period === 'annual') {
+                $amount = (int) ($subtotalMonthly * 12 * 0.80); // 20% descuento anual
+            } else {
+                $amount = $subtotalMonthly;
+            }
+        }
+        
+        // Wompi espera el monto en centavos para COP (pero COP no tiene centavos, así que es el valor directo)
+        $amountInCents = $amount * 100; // Convertir a centavos para Wompi
         if ($amountInCents <= 0) {
             return response()->json(['success' => false, 'message' => 'El monto es inválido'], 422);
         }
@@ -119,12 +161,21 @@ class BillingController extends Controller
         $signatureRaw = $reference . $amountInCents . $currency . $integrityKey;
         $signature = hash('sha256', $signatureRaw);
 
-        // URL de retorno (frontend)
-        $frontendBase = rtrim(config('app.url'), '/'); // en .env APP_URL debe apuntar al frontend si es monorepo
-        // Si APP_URL apunta al backend, construir desde Origin de la request
-        if (!$frontendBase || str_contains($frontendBase, '/api')) {
-            $origin = $request->headers->get('Origin') ?: $request->getSchemeAndHttpHost();
+        // URL de retorno (frontend) - siempre usar el Origin del request para obtener la URL del frontend
+        $origin = $request->headers->get('Origin');
+        if ($origin) {
             $frontendBase = rtrim($origin, '/');
+        } else {
+            // Fallback: usar APP_URL o construir desde el host
+            $frontendBase = rtrim(config('app.frontend_url', config('app.url')), '/');
+            // Si sigue apuntando al backend, usar el referer
+            if (str_contains($frontendBase, ':8001') || str_contains($frontendBase, '/api')) {
+                $referer = $request->headers->get('Referer');
+                if ($referer) {
+                    $parsed = parse_url($referer);
+                    $frontendBase = ($parsed['scheme'] ?? 'http') . '://' . ($parsed['host'] ?? 'localhost') . (isset($parsed['port']) ? ':' . $parsed['port'] : '');
+                }
+            }
         }
         // Anexar referencia y monto al redirect para que el frontend pueda confirmar sin consultar primero a Wompi
         $redirectUrl = $frontendBase . '/wallet/return?ref=' . urlencode($reference) . '&amount=' . $amountInCents;

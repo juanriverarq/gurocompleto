@@ -932,3 +932,17 @@ input[data-plate-input]:active {
   color: #1a1a1a !important;
   border: none !important;
 }
+
+/* ==== Animación para toast de WhatsApp ==== */
+@keyframes shrink-width {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-shrink-width {
+  animation: shrink-width linear forwards;
+}

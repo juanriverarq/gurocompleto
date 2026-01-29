@@ -120,9 +120,13 @@
                     <th>Aseguradora</th>
                     <th>Ramo</th>
                     <th class="right">Prima</th>
+                    <th class="right">% Com.</th>
                     <th class="right">Com. Bruta</th>
+                    <th class="right">% Ret.</th>
                     <th class="right">Ret.</th>
+                    <th class="right">% ICA</th>
                     <th class="right">ICA</th>
+                    <th class="right">% IVA</th>
                     <th class="right">IVA</th>
                     <th class="right">Neto</th>
                 </tr>
@@ -135,9 +139,13 @@
                     <td>{{ $detalle->aseguradora }}</td>
                     <td>{{ $detalle->ramo }}</td>
                     <td class="right">${{ number_format($detalle->prima_neta, 0, ',', '.') }}</td>
+                    <td class="right">{{ number_format($detalle->porcentaje_comision, 1) }}%</td>
                     <td class="right green">${{ number_format($detalle->comision_bruta, 0, ',', '.') }}</td>
+                    <td class="right">{{ number_format($detalle->porcentaje_retencion, 1) }}%</td>
                     <td class="right red">${{ number_format($detalle->monto_retencion, 0, ',', '.') }}</td>
+                    <td class="right">{{ number_format($detalle->porcentaje_retencion_ica, 1) }}%</td>
                     <td class="right red">${{ number_format($detalle->monto_retencion_ica, 0, ',', '.') }}</td>
+                    <td class="right">{{ number_format($detalle->porcentaje_iva, 1) }}%</td>
                     <td class="right">${{ number_format($detalle->monto_iva, 0, ',', '.') }}</td>
                     <td class="right green" style="font-weight: bold;">${{ number_format($detalle->comision_neta, 0, ',', '.') }}</td>
                 </tr>

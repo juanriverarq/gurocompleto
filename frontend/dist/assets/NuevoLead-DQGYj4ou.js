@@ -1,1 +1,0 @@
-import{a,j as s,V as t}from"./index-Bq3rgjZ7.js";import{r}from"./vendor-charts-CIqHj9iK.js";const c=()=>{const e=a();return r.useEffect(()=>{e("/apps/saas/sales-funnel/lista")},[e]),s.jsxs("div",{className:"flex items-center justify-center h-screen",children:[s.jsx(t,{size:"lg"}),s.jsx("span",{className:"ml-3",children:"Redirigiendo..."})]})};export{c as default};

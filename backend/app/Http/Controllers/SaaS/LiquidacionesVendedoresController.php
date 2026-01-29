@@ -765,6 +765,7 @@ class LiquidacionesVendedoresController extends Controller
                 'cantidad_polizas' => 0,
                 'prima_total' => 0,
                 'comision_bruta_total' => 0,
+                'iva_comision_total' => 0,
                 'retencion_total' => 0,
                 'reteiva_total' => 0,
                 'retencion_ica_total' => 0,
@@ -782,6 +783,10 @@ class LiquidacionesVendedoresController extends Controller
                         }
                     }
 
+                    // Calcular IVA de comisión (porcentaje IVA del vendedor sobre la comisión bruta)
+                    $comisionBruta = (float) $detalle->comision_bruta;
+                    $ivaComision = $comisionBruta * ($vendedor->porcentaje_iva / 100);
+
                     $polizas[] = [
                         'liquidacion_codigo' => $liq->codigo,
                         'liquidacion_fecha' => $liq->fecha_generacion,
@@ -793,7 +798,8 @@ class LiquidacionesVendedoresController extends Controller
                         'prima_neta' => (float) $detalle->prima_neta,
                         'porcentaje_comision' => (float) $detalle->porcentaje_comision,
                         'porcentaje_comision_ramo' => $porcentajeRamo, // Porcentaje configurado en el ramo
-                        'comision_bruta' => (float) $detalle->comision_bruta,
+                        'comision_bruta' => $comisionBruta,
+                        'iva_comision' => $ivaComision,
                         'retencion_fuente' => (float) $detalle->monto_retencion,
                         'retencion_iva' => (float) $detalle->monto_iva,
                         'retencion_ica' => (float) $detalle->monto_retencion_ica,
@@ -802,7 +808,8 @@ class LiquidacionesVendedoresController extends Controller
 
                     $totales['cantidad_polizas']++;
                     $totales['prima_total'] += (float) $detalle->prima_neta;
-                    $totales['comision_bruta_total'] += (float) $detalle->comision_bruta;
+                    $totales['comision_bruta_total'] += $comisionBruta;
+                    $totales['iva_comision_total'] += $ivaComision;
                     $totales['retencion_total'] += (float) $detalle->monto_retencion;
                     $totales['reteiva_total'] += (float) $detalle->monto_iva;
                     $totales['retencion_ica_total'] += (float) $detalle->monto_retencion_ica;
@@ -1431,6 +1438,7 @@ class LiquidacionesVendedoresController extends Controller
             $porcentajeComisionRamo = 0;
             if ($poliza->ramo_id && $poliza->aseguradora_id) {
                 $comisionAseguradora = \DB::table('comisiones_aseguradoras')
+                    ->where('broker_id', $brokerId)
                     ->where('ramo_id', $poliza->ramo_id)
                     ->where('aseguradora_id', $poliza->aseguradora_id)
                     ->first();

@@ -20,6 +20,20 @@ class FirebaseServiceProvider extends ServiceProvider
             $factory = (new Factory())->withProjectId($projectId);
 
             $path = env('GOOGLE_APPLICATION_CREDENTIALS');
+            // Fallback a base_path si la ruta no es absoluta o no existe
+            if ($path && !@is_readable($path)) {
+                $basePath = base_path($path);
+                if (@is_readable($basePath)) {
+                    $path = $basePath;
+                }
+            }
+            // También intentar firebase-admin.json en la raíz del proyecto
+            if (!$path || !@is_readable($path)) {
+                $defaultPath = base_path('firebase-admin.json');
+                if (@is_readable($defaultPath)) {
+                    $path = $defaultPath;
+                }
+            }
             if ($path && @is_readable($path)) {
                 try { Log::info('[Firebase] Using service account file', ['path' => $path]); } catch (\Throwable $e) {}
                 $factory = $factory->withServiceAccount($path);
@@ -44,6 +58,20 @@ class FirebaseServiceProvider extends ServiceProvider
             $factory = (new Factory())->withProjectId($projectId);
 
             $path = env('GOOGLE_APPLICATION_CREDENTIALS');
+            // Fallback a base_path si la ruta no es absoluta o no existe
+            if ($path && !@is_readable($path)) {
+                $basePath = base_path($path);
+                if (@is_readable($basePath)) {
+                    $path = $basePath;
+                }
+            }
+            // También intentar firebase-admin.json en la raíz del proyecto
+            if (!$path || !@is_readable($path)) {
+                $defaultPath = base_path('firebase-admin.json');
+                if (@is_readable($defaultPath)) {
+                    $path = $defaultPath;
+                }
+            }
             if ($path && @is_readable($path)) {
                 try { Log::info('[Firebase] Using service account file (storage)', ['path' => $path]); } catch (\Throwable $e) {}
                 $factory = $factory->withServiceAccount($path);

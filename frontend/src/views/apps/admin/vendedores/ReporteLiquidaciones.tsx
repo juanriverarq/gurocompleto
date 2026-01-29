@@ -39,6 +39,7 @@ interface PolizaDetalle {
   porcentaje_comision: number;
   porcentaje_comision_ramo: number | null;
   comision_bruta: number;
+  iva_comision: number;
   retencion_fuente: number;
   retencion_iva: number;
   retencion_ica: number;
@@ -117,6 +118,7 @@ const ReporteLiquidaciones: React.FC = () => {
     cantidad_polizas: 0,
     prima_total: 0,
     comision_bruta_total: 0,
+    iva_comision_total: 0,
     retencion_total: 0,
     reteiva_total: 0,
     retencion_ica_total: 0,
@@ -582,6 +584,7 @@ const ReporteLiquidaciones: React.FC = () => {
           cantidad_polizas: 0,
           prima_total: 0,
           comision_bruta_total: 0,
+          iva_comision_total: 0,
           retencion_total: 0,
           reteiva_total: 0,
           retencion_ica_total: 0,
@@ -613,21 +616,23 @@ const ReporteLiquidaciones: React.FC = () => {
         [`Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}`],
         [`Generado: ${new Date().toLocaleDateString('es-CO')}`],
         [], // Fila vacía
-        ['Nº Póliza', 'Cliente', 'Aseguradora', 'Ramo', 'Fecha Póliza', 'Prima Neta', 'Comisión Bruta', 'Ret. Fuente', 'Ret. IVA', 'Ret. ICA', 'Comisión Neta'],
+        ['Nº Póliza', 'Cliente', 'Aseguradora', 'Ramo', 'Fecha Póliza', '% Com', 'Prima Neta', '% Agen', 'Comisión Bruta', 'IVA Comisión', 'Ret. Fuente', 'Ret. IVA', 'Comisión Neta'],
         ...polizasVendedor.map(p => [
           p.numero_poliza,
           p.cliente,
           p.aseguradora,
           p.ramo,
           p.fecha_poliza ? new Date(p.fecha_poliza).toLocaleDateString('es-CO') : '',
+          p.porcentaje_comision_ramo ?? '-',
           round2(p.prima_neta),
+          round2(p.porcentaje_comision),
           round2(p.comision_bruta),
+          round2(p.iva_comision || 0),
           round2(p.retencion_fuente),
           round2(p.retencion_iva),
-          round2(p.retencion_ica),
           round2(p.comision_neta)
         ]),
-        ['TOTALES', '', '', '', `${totalesVendedor.cantidad_polizas} pólizas`, round2(totalesVendedor.prima_total), round2(totalesVendedor.comision_bruta_total), round2(totalesVendedor.retencion_total), round2(totalesVendedor.reteiva_total), round2(totalesVendedor.retencion_ica_total), round2(totalesVendedor.comision_neta_total)]
+        ['TOTALES', '', '', '', `${totalesVendedor.cantidad_polizas} pólizas`, '', round2(totalesVendedor.prima_total), '', round2(totalesVendedor.comision_bruta_total), round2(totalesVendedor.iva_comision_total || 0), round2(totalesVendedor.retencion_total), round2(totalesVendedor.reteiva_total), round2(totalesVendedor.comision_neta_total)]
       ];
       
       // Crear workbook y worksheet
@@ -641,11 +646,13 @@ const ReporteLiquidaciones: React.FC = () => {
         { wch: 20 }, // Aseguradora
         { wch: 15 }, // Ramo
         { wch: 12 }, // Fecha Póliza
+        { wch: 8 },  // % Com
         { wch: 15 }, // Prima Neta
+        { wch: 8 },  // % Agen
         { wch: 15 }, // Comisión Bruta
+        { wch: 15 }, // IVA Comisión
         { wch: 12 }, // Ret. Fuente
         { wch: 12 }, // Ret. IVA
-        { wch: 12 }, // Ret. ICA
         { wch: 15 }, // Comisión Neta
       ];
       
@@ -671,102 +678,138 @@ const ReporteLiquidaciones: React.FC = () => {
       logoBase64 = await imageToBase64(logoUrl);
     }
 
+    const primaryColor = '#3b82f6';
+
     const printContent = `
       <!DOCTYPE html>
-      <html>
+      <html lang="es">
       <head>
+        <meta charset="UTF-8">
         <title>Reporte ${vendedorSeleccionado.nombres} - ${nombreAgencia}</title>
         <style>
-          * { box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; margin: 0; color: #333; }
-          .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #635BFF; }
-          .logo-container { flex: 0 0 auto; }
-          .logo { max-height: 80px; max-width: 200px; object-fit: contain; }
-          .report-title { text-align: center; margin: 20px 0; }
-          .report-title h1 { font-size: 22px; color: #1a1a2e; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1px; }
-          .report-title .vendedor-info { font-size: 16px; color: #333; margin: 5px 0; font-weight: 600; }
-          .report-title .periodo { font-size: 14px; color: #666; margin: 5px 0; }
-          .summary-cards { display: flex; justify-content: space-between; margin: 20px 0; gap: 10px; flex-wrap: wrap; }
-          .summary-card { flex: 1; min-width: 100px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #dee2e6; }
-          .summary-card.highlight { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-color: #28a745; }
-          .summary-card .label { font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 5px; }
-          .summary-card .value { font-size: 14px; font-weight: bold; color: #1a1a2e; }
-          .summary-card.highlight .value { color: #155724; }
-          table { width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 20px; }
-          th { background: linear-gradient(135deg, #635BFF 0%, #4a47cc 100%); color: white; padding: 8px 4px; text-align: right; font-weight: 600; text-transform: uppercase; font-size: 8px; letter-spacing: 0.5px; }
-          th:first-child { text-align: left; border-radius: 6px 0 0 0; }
-          th:last-child { border-radius: 0 6px 0 0; }
-          td { border-bottom: 1px solid #e9ecef; padding: 6px 4px; text-align: right; }
-          td:nth-child(1), td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: left; }
-          th:nth-child(1), th:nth-child(2), th:nth-child(3), th:nth-child(4) { text-align: left; }
-          tr:nth-child(even) { background-color: #f8f9fa; }
-          tr:hover { background-color: #e3f2fd; }
-          .totales { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important; font-weight: bold; }
-          .totales td { border-top: 2px solid #28a745; padding: 10px 4px; }
-          .currency { font-family: 'Consolas', monospace; }
-          .text-green { color: #28a745; }
-          .text-red { color: #dc3545; }
-          .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #999; }
-          .footer-left { text-align: left; }
-          .footer-right { text-align: right; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9px; line-height: 1.3; color: #333; padding: 15px 20px; }
+          
+          /* Header con 3 columnas */
+          .header { display: table; width: 100%; margin-bottom: 12px; border-bottom: 3px solid ${primaryColor}; padding-bottom: 10px; }
+          .header-left { display: table-cell; width: 25%; vertical-align: middle; }
+          .header-center { display: table-cell; width: 50%; text-align: center; vertical-align: middle; }
+          .header-right { display: table-cell; width: 25%; text-align: right; vertical-align: middle; }
+          .logo { max-width: 120px; max-height: 50px; }
+          .titulo { font-size: 14px; font-weight: bold; color: ${primaryColor}; margin-bottom: 2px; }
+          .codigo { font-size: 11px; color: #64748b; font-weight: bold; }
+          .fecha { font-size: 8px; color: #64748b; }
+          
+          /* Info boxes */
+          .info-row { display: table; width: 100%; margin-bottom: 10px; }
+          .info-box { display: table-cell; width: 50%; vertical-align: top; padding-right: 10px; }
+          .info-box-title { font-size: 9px; font-weight: bold; color: #333; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; margin-bottom: 5px; }
+          .info-item { margin-bottom: 2px; }
+          .info-label { color: #64748b; }
+          .info-value { font-weight: bold; }
+          
+          /* Porcentajes */
+          .porcentajes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 6px 10px; margin-bottom: 10px; }
+          .porcentajes-title { font-weight: bold; color: #333; margin-bottom: 4px; font-size: 8px; }
+          .porcentajes-grid { display: table; width: 100%; }
+          .porcentaje-item { display: table-cell; text-align: center; }
+          .porcentaje-label { font-size: 7px; color: #64748b; }
+          .porcentaje-value { font-size: 10px; font-weight: bold; }
+          
+          /* Tabla */
+          table.detalles { width: 100%; border-collapse: collapse; font-size: 8px; }
+          table.detalles th { background-color: ${primaryColor}; color: white; padding: 5px 4px; text-align: left; font-weight: bold; font-size: 7px; }
+          table.detalles th.right { text-align: right; }
+          table.detalles td { padding: 4px; border-bottom: 1px solid #e2e8f0; }
+          table.detalles td.right { text-align: right; }
+          table.detalles tr:nth-child(even) { background-color: #f8fafc; }
+          
+          /* Totales */
+          .totales-section { margin-top: 10px; display: table; width: 100%; }
+          .totales-left { display: table-cell; width: 60%; vertical-align: top; }
+          .totales-right { display: table-cell; width: 40%; vertical-align: top; }
+          .totales-box { border: 2px solid ${primaryColor}; border-radius: 6px; padding: 8px; }
+          .totales-row { display: table; width: 100%; margin-bottom: 3px; }
+          .totales-label { display: table-cell; text-align: left; color: #333; font-size: 9px; }
+          .totales-value { display: table-cell; text-align: right; font-weight: bold; font-size: 9px; }
+          .totales-total { border-top: 2px solid ${primaryColor}; padding-top: 5px; margin-top: 5px; }
+          .totales-total .totales-label { font-size: 10px; font-weight: bold; color: #333; }
+          .totales-total .totales-value { font-size: 12px; }
+          
+          /* Colores */
+          .red { color: #dc2626; }
+          .green { color: #16a34a; }
+          .purple { color: #7c3aed; }
+          
+          /* Footer */
+          .footer { margin-top: 20px; text-align: center; font-size: 7px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 5px; }
+          
           @media print { 
-            body { padding: 15px; } 
-            .header { margin-bottom: 20px; }
-            .summary-cards { margin: 15px 0; }
-            @page { margin: 1cm; }
+            body { padding: 10px; }
+            @page { margin: 0.5cm; size: letter landscape; }
           }
         </style>
       </head>
       <body>
+        <!-- Header -->
         <div class="header">
-          <div class="logo-container">
-            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="logo" />` : (logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo" />` : `<div style="font-size:28px;font-weight:bold;color:#635BFF;">${nombreAgencia}</div>`)}
+          <div class="header-left">
+            ${logoBase64 ? `<img src="${logoBase64}" class="logo" alt="" />` : (logoUrl ? `<img src="${logoUrl}" class="logo" alt="" />` : `<strong style="font-size: 12px; color: ${primaryColor};">${nombreAgencia}</strong>`)}
+          </div>
+          <div class="header-center">
+            <div class="titulo">LIQUIDACIÓN DE COMISIONES</div>
+            <div class="codigo">${vendedorSeleccionado.nombres}</div>
+          </div>
+          <div class="header-right">
+            <div class="fecha">${new Date().toLocaleDateString('es-CO')}</div>
           </div>
         </div>
 
-        <div class="report-title">
-          <h1>Reporte de Comisiones</h1>
-          <p class="vendedor-info">${vendedorSeleccionado.nombres}</p>
-          <p class="periodo">${vendedorSeleccionado.tipo_documento}: ${vendedorSeleccionado.numero_documento}</p>
-          <p class="periodo">Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}</p>
-        </div>
-
-        <div class="summary-cards">
-          <div class="summary-card">
-            <div class="label">Pólizas</div>
-            <div class="value">${totalesVendedor.cantidad_polizas}</div>
+        <!-- Info Agencia y Vendedor -->
+        <div class="info-row">
+          <div class="info-box">
+            <div class="info-box-title">AGENCIA</div>
+            <div class="info-item"><span class="info-value">${nombreAgencia}</span></div>
+            <div class="info-item"><span class="info-label">NIT:</span> ${agenciaInfo?.document_number || 'N/A'}</div>
+            <div class="info-item"><span class="info-label">Dir:</span> ${agenciaInfo?.address || 'N/A'}, ${agenciaInfo?.city || ''}</div>
+            <div class="info-item"><span class="info-label">Tel:</span> ${agenciaInfo?.phone || 'N/A'}</div>
           </div>
-          <div class="summary-card">
-            <div class="label">Prima Total</div>
-            <div class="value">${formatCurrency(totalesVendedor.prima_total)}</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">Comisión Bruta</div>
-            <div class="value">${formatCurrency(totalesVendedor.comision_bruta_total)}</div>
-          </div>
-          <div class="summary-card">
-            <div class="label">Retenciones</div>
-            <div class="value">${formatCurrency(totalesVendedor.retencion_total + totalesVendedor.reteiva_total + totalesVendedor.retencion_ica_total)}</div>
-          </div>
-          <div class="summary-card highlight">
-            <div class="label">Comisión Neta</div>
-            <div class="value">${formatCurrency(totalesVendedor.comision_neta_total)}</div>
+          <div class="info-box">
+            <div class="info-box-title">VENDEDOR</div>
+            <div class="info-item"><span class="info-value">${vendedorSeleccionado.nombres}</span></div>
+            <div class="info-item"><span class="info-label">${vendedorSeleccionado.tipo_documento}:</span> ${vendedorSeleccionado.numero_documento}</div>
+            <div class="info-item"><span class="info-label">Período:</span> ${formatDate(periodoInicio)} - ${formatDate(periodoFin)}</div>
+            <div class="info-item"><span class="info-label">Pólizas:</span> ${totalesVendedor.cantidad_polizas}</div>
           </div>
         </div>
 
-        <table>
+        <!-- Porcentajes Aplicados -->
+        <div class="porcentajes">
+          <div class="porcentajes-title">PORCENTAJES APLICADOS</div>
+          <div class="porcentajes-grid">
+            <div class="porcentaje-item"><div class="porcentaje-label">Comisión</div><div class="porcentaje-value green">${vendedorSeleccionado.porcentaje_comision}%</div></div>
+            <div class="porcentaje-item"><div class="porcentaje-label">Ret. Fuente</div><div class="porcentaje-value red">${vendedorSeleccionado.porcentaje_retencion}%</div></div>
+            <div class="porcentaje-item"><div class="porcentaje-label">IVA</div><div class="porcentaje-value">${vendedorSeleccionado.porcentaje_iva}%</div></div>
+            <div class="porcentaje-item"><div class="porcentaje-label">Ret. IVA</div><div class="porcentaje-value red">${vendedorSeleccionado.porcentaje_retencion_iva}%</div></div>
+          </div>
+        </div>
+
+        <!-- Tabla de Pólizas -->
+        <table class="detalles">
           <thead>
             <tr>
-              <th>Nº Póliza</th>
+              <th>Póliza</th>
               <th>Cliente</th>
               <th>Aseguradora</th>
               <th>Ramo</th>
-              <th>Prima Neta</th>
-              <th>Com. Bruta</th>
-              <th>Ret. Fte</th>
-              <th>Ret. IVA</th>
-              <th>Ret. ICA</th>
-              <th>Neto</th>
+              <th class="right">% Com</th>
+              <th class="right">Prima</th>
+              <th class="right">% Agen</th>
+              <th class="right">Com. Bruta</th>
+              <th class="right">IVA Com.</th>
+              <th class="right">Ret. Fte</th>
+              <th class="right">Ret. IVA</th>
+              <th class="right">Neto</th>
             </tr>
           </thead>
           <tbody>
@@ -776,34 +819,36 @@ const ReporteLiquidaciones: React.FC = () => {
                 <td>${p.cliente}</td>
                 <td>${p.aseguradora}</td>
                 <td>${p.ramo}</td>
-                <td class="currency">${formatCurrency(p.prima_neta)}</td>
-                <td class="currency">${formatCurrency(p.comision_bruta)}</td>
-                <td class="currency text-red">${formatCurrency(p.retencion_fuente)}</td>
-                <td class="currency text-red">${formatCurrency(p.retencion_iva)}</td>
-                <td class="currency text-red">${formatCurrency(p.retencion_ica)}</td>
-                <td class="currency text-green" style="font-weight:bold">${formatCurrency(p.comision_neta)}</td>
+                <td class="right">${p.porcentaje_comision_ramo ?? '-'}%</td>
+                <td class="right">$${Math.round(p.prima_neta).toLocaleString('es-CO')}</td>
+                <td class="right">${p.porcentaje_comision}%</td>
+                <td class="right green">$${Math.round(p.comision_bruta).toLocaleString('es-CO')}</td>
+                <td class="right purple">$${Math.round(p.iva_comision || 0).toLocaleString('es-CO')}</td>
+                <td class="right red">$${Math.round(p.retencion_fuente).toLocaleString('es-CO')}</td>
+                <td class="right red">$${Math.round(p.retencion_iva).toLocaleString('es-CO')}</td>
+                <td class="right green" style="font-weight: bold;">$${Math.round(p.comision_neta).toLocaleString('es-CO')}</td>
               </tr>
             `).join('')}
-            <tr class="totales">
-              <td colspan="4">TOTALES (${totalesVendedor.cantidad_polizas} pólizas)</td>
-              <td class="currency">${formatCurrency(totalesVendedor.prima_total)}</td>
-              <td class="currency">${formatCurrency(totalesVendedor.comision_bruta_total)}</td>
-              <td class="currency text-red">${formatCurrency(totalesVendedor.retencion_total)}</td>
-              <td class="currency text-red">${formatCurrency(totalesVendedor.reteiva_total)}</td>
-              <td class="currency text-red">${formatCurrency(totalesVendedor.retencion_ica_total)}</td>
-              <td class="currency text-green">${formatCurrency(totalesVendedor.comision_neta_total)}</td>
-            </tr>
           </tbody>
         </table>
 
-        <div class="footer">
-          <div class="footer-left">
-            ${agenciaInfo?.document_number ? `NIT: ${agenciaInfo.document_number}` : ''}
-          </div>
-          <div class="footer-right">
-            Generado el ${new Date().toLocaleString('es-CO')}
+        <!-- Totales -->
+        <div class="totales-section">
+          <div class="totales-left"></div>
+          <div class="totales-right">
+            <div class="totales-box">
+              <div class="totales-row"><span class="totales-label">Prima Total:</span><span class="totales-value">$${Math.round(totalesVendedor.prima_total).toLocaleString('es-CO')}</span></div>
+              <div class="totales-row"><span class="totales-label">Comisión Bruta:</span><span class="totales-value green">$${Math.round(totalesVendedor.comision_bruta_total).toLocaleString('es-CO')}</span></div>
+              <div class="totales-row"><span class="totales-label">(+) IVA Comisión:</span><span class="totales-value purple">$${Math.round(totalesVendedor.iva_comision_total || 0).toLocaleString('es-CO')}</span></div>
+              <div class="totales-row"><span class="totales-label">(-) Ret. Fuente:</span><span class="totales-value red">$${Math.round(totalesVendedor.retencion_total).toLocaleString('es-CO')}</span></div>
+              <div class="totales-row"><span class="totales-label">(-) Ret. IVA:</span><span class="totales-value red">$${Math.round(totalesVendedor.reteiva_total).toLocaleString('es-CO')}</span></div>
+              <div class="totales-row totales-total"><span class="totales-label">NETO A PAGAR:</span><span class="totales-value green">$${Math.round(totalesVendedor.comision_neta_total).toLocaleString('es-CO')}</span></div>
+            </div>
           </div>
         </div>
+
+        <!-- Footer -->
+        <div class="footer">${nombreAgencia} | ${agenciaInfo?.phone || ''} | ${agenciaInfo?.email || ''} | Generado: ${new Date().toLocaleString('es-CO')}</div>
       </body>
       </html>
     `;
@@ -812,7 +857,6 @@ const ReporteLiquidaciones: React.FC = () => {
     if (printWindow) {
       printWindow.document.write(printContent);
       printWindow.document.close();
-      // Pequeño delay para asegurar que el contenido se renderice
       setTimeout(() => printWindow.print(), 300);
     }
   };
@@ -1097,6 +1141,10 @@ const ReporteLiquidaciones: React.FC = () => {
                   <p className="text-xs text-gray-500">Comisión Bruta</p>
                   <p className="text-sm font-bold text-blue-600">{formatCurrency(totalesVendedor.comision_bruta_total)}</p>
                 </div>
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2 text-center">
+                  <p className="text-xs text-gray-500">IVA Comisión</p>
+                  <p className="text-sm font-bold text-purple-600">+{formatCurrency(totalesVendedor.iva_comision_total || 0)}</p>
+                </div>
                 <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-2 text-center">
                   <p className="text-xs text-gray-500">Ret. Fuente</p>
                   <p className="text-sm font-bold text-red-600">-{formatCurrency(totalesVendedor.retencion_total)}</p>
@@ -1104,10 +1152,6 @@ const ReporteLiquidaciones: React.FC = () => {
                 <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-2 text-center">
                   <p className="text-xs text-gray-500">Ret. IVA</p>
                   <p className="text-sm font-bold text-orange-600">-{formatCurrency(totalesVendedor.reteiva_total)}</p>
-                </div>
-                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-2 text-center">
-                  <p className="text-xs text-gray-500">Ret. ICA</p>
-                  <p className="text-sm font-bold text-orange-600">-{formatCurrency(totalesVendedor.retencion_ica_total)}</p>
                 </div>
                 <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2 text-center">
                   <p className="text-xs text-gray-500">Neto</p>
@@ -1123,11 +1167,13 @@ const ReporteLiquidaciones: React.FC = () => {
                     <Table.HeadCell>Cliente</Table.HeadCell>
                     <Table.HeadCell>Aseguradora</Table.HeadCell>
                     <Table.HeadCell>Ramo</Table.HeadCell>
+                    <Table.HeadCell className="text-center">% Com</Table.HeadCell>
                     <Table.HeadCell className="text-right">Prima</Table.HeadCell>
+                    <Table.HeadCell className="text-center">% Agen</Table.HeadCell>
                     <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
+                    <Table.HeadCell className="text-right">IVA Com.</Table.HeadCell>
                     <Table.HeadCell className="text-right">Ret. Fte</Table.HeadCell>
                     <Table.HeadCell className="text-right">Ret. IVA</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Ret. ICA</Table.HeadCell>
                     <Table.HeadCell className="text-right font-bold">Neto</Table.HeadCell>
                   </Table.Head>
                   <Table.Body>
@@ -1141,11 +1187,13 @@ const ReporteLiquidaciones: React.FC = () => {
                         <Table.Cell className="text-xs">
                           <Badge color="purple" size="xs">{p.ramo}</Badge>
                         </Table.Cell>
+                        <Table.Cell className="text-center font-mono text-xs">{p.porcentaje_comision_ramo ?? '-'}%</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs">{formatCurrency(p.prima_neta)}</Table.Cell>
+                        <Table.Cell className="text-center font-mono text-xs">{p.porcentaje_comision}%</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs text-blue-600">{formatCurrency(p.comision_bruta)}</Table.Cell>
+                        <Table.Cell className="text-right font-mono text-xs text-purple-600">{formatCurrency(p.iva_comision || 0)}</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs text-red-500">-{formatCurrency(p.retencion_fuente)}</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs text-orange-500">-{formatCurrency(p.retencion_iva)}</Table.Cell>
-                        <Table.Cell className="text-right font-mono text-xs text-orange-500">-{formatCurrency(p.retencion_ica)}</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs font-bold text-green-600">{formatCurrency(p.comision_neta)}</Table.Cell>
                       </Table.Row>
                     ))}

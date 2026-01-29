@@ -1,41 +1,214 @@
 import { Icon } from "@iconify/react";
-import { Dropdown } from "flowbite-react";
+import { Dropdown, Badge, Tooltip } from "flowbite-react";
+import { useNavigate } from "react-router-dom";
+import { useWhatsAppNotifications } from "src/context/WhatsAppNotificationContext";
 
 const Notifications = () => {
+  const navigate = useNavigate();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    clearNotifications,
+    soundEnabled,
+    setSoundEnabled,
+    desktopNotificationsEnabled,
+    requestDesktopPermission,
+  } = useWhatsAppNotifications();
+
+  const handleNotificationClick = (notification: any) => {
+    markAsRead(notification.id);
+    const url = notification.conversationId 
+      ? `/apps/whatsapp/inbox?conversation=${notification.conversationId}`
+      : '/apps/whatsapp/inbox';
+    
+    // Usar navigate primero, con fallback a window.location
+    try {
+      navigate(url);
+    } catch {
+      window.location.href = url;
+    }
+  };
+
+  const formatTime = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    
+    if (minutes < 1) return 'Ahora';
+    if (minutes < 60) return `Hace ${minutes}m`;
+    if (hours < 24) return `Hace ${hours}h`;
+    return date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+  };
+
+  const handleEnableDesktop = async () => {
+    await requestDesktopPermission();
+  };
+
   return (
     <div className="relative group/menu">
       <Dropdown
         label=""
-        className="w-screen sm:w-[360px] py-6 rounded-sm z-[30]"
+        className="w-screen sm:w-[380px] py-4 rounded-xl z-[30]"
         dismissOnClick={false}
         renderTrigger={() => (
           <div className="relative">
             <span className="h-10 w-10 hover:bg-lightprimary text-darklink dark:text-white rounded-full flex justify-center items-center cursor-pointer group-hover/menu:bg-lightprimary group-hover/menu:text-primary">
               <Icon icon="solar:bell-bing-line-duotone" height={20} />
             </span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </div>
         )}
       >
-        <div className="flex items-center px-6 justify-between mb-4">
-          <h3 className="mb-0 text-lg font-semibold text-ld">Notificaciones</h3>
+        {/* Header */}
+        <div className="flex items-center px-4 justify-between mb-3 border-b border-gray-100 dark:border-gray-700 pb-3">
+          <div className="flex items-center gap-2">
+            <Icon icon="solar:bell-bold" className="text-primary" height={20} />
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+              Notificaciones
+            </h3>
+            {unreadCount > 0 && (
+              <Badge color="failure" size="sm">{unreadCount}</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <Tooltip content={soundEnabled ? 'Silenciar' : 'Activar sonido'}>
+              <button
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  soundEnabled ? 'text-primary bg-primary/10' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                <Icon icon={soundEnabled ? 'solar:volume-loud-bold' : 'solar:volume-cross-bold'} height={16} />
+              </button>
+            </Tooltip>
+            {notifications.length > 0 && (
+              <Tooltip content="Marcar todo como leído">
+                <button
+                  onClick={markAllAsRead}
+                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Icon icon="solar:check-read-bold" height={16} />
+                </button>
+              </Tooltip>
+            )}
+          </div>
         </div>
 
-        <div className="px-6 py-8 text-center">
-          <Icon
-            icon="solar:confetti-bold-duotone"
-            height={64}
-            className="text-primary mx-auto mb-4"
-          />
-          <h4 className="text-lg font-semibold text-dark dark:text-white mb-2">
-            ¡Bienvenido a Guro!
-          </h4>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            El sistema de notificaciones estará disponible próximamente.
-          </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-            Aquí recibirás alertas sobre pólizas, renovaciones y más.
-          </p>
+        {/* Notificaciones de escritorio */}
+        {!desktopNotificationsEnabled && (
+          <div className="mx-4 mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Icon icon="solar:bell-bing-bold" className="text-blue-500 mt-0.5" height={18} />
+              <div className="flex-1">
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  Activa las notificaciones de escritorio para no perderte ningún mensaje
+                </p>
+                <button
+                  onClick={handleEnableDesktop}
+                  className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                >
+                  Activar notificaciones →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lista de notificaciones */}
+        <div className="max-h-[350px] overflow-y-auto">
+          {notifications.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <Icon
+                icon="solar:inbox-line-bold-duotone"
+                height={48}
+                className="text-gray-300 dark:text-gray-600 mx-auto mb-3"
+              />
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No hay notificaciones
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                Los nuevos mensajes de WhatsApp aparecerán aquí
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1 px-2">
+              {notifications.slice(0, 10).map((notification) => (
+                <button
+                  key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
+                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                    notification.read
+                      ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      : 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      notification.read 
+                        ? 'bg-gray-100 dark:bg-gray-700' 
+                        : 'bg-green-100 dark:bg-green-800'
+                    }`}>
+                      <Icon 
+                        icon="ic:baseline-whatsapp" 
+                        height={20} 
+                        className={notification.read ? 'text-gray-500' : 'text-green-600'}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={`text-sm font-medium truncate ${
+                          notification.read 
+                            ? 'text-gray-700 dark:text-gray-300' 
+                            : 'text-gray-900 dark:text-white'
+                        }`}>
+                          {notification.phone}
+                        </p>
+                        <span className="text-xs text-gray-400 flex-shrink-0">
+                          {formatTime(notification.timestamp)}
+                        </span>
+                      </div>
+                      <p className={`text-xs truncate mt-0.5 ${
+                        notification.read 
+                          ? 'text-gray-500 dark:text-gray-400' 
+                          : 'text-gray-600 dark:text-gray-300'
+                      }`}>
+                        {notification.message}
+                      </p>
+                    </div>
+                    {!notification.read && (
+                      <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0 mt-2"></div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Footer */}
+        {notifications.length > 0 && (
+          <div className="border-t border-gray-100 dark:border-gray-700 mt-3 pt-3 px-4 flex items-center justify-between">
+            <button
+              onClick={() => navigate('/apps/whatsapp/inbox')}
+              className="text-sm text-primary hover:text-primary/80 font-medium"
+            >
+              Ver todas las conversaciones
+            </button>
+            <button
+              onClick={clearNotifications}
+              className="text-xs text-gray-400 hover:text-gray-600"
+            >
+              Limpiar
+            </button>
+          </div>
+        )}
       </Dropdown>
     </div>
   );

@@ -26,7 +26,7 @@ const getAppCategories = (): AppCategory[] => {
   );
   
   const inteligenciaArtificial = MODULES.filter(m => 
-    ['ia_chatbot', 'ia_callcenter', 'ia_predicciones', 'ia_ventas_cruzadas', 'lector_pdf_ia'].includes(m.key)
+    ['ia_chatbot', 'ia_chatbot_sura', 'ia_callcenter', 'ia_predicciones', 'ia_ventas_cruzadas', 'lector_pdf_ia'].includes(m.key)
   );
   
   const finanzas = MODULES.filter(m => 
