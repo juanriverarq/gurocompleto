@@ -190,9 +190,11 @@ Route::post('/saas/voice-campaigns/tools/query-clients/{conversationId}', [\App\
 Route::post('/saas/elevenlabs/tts/{voiceId}', [\App\Http\Controllers\Api\ElevenLabsProxyController::class, 'tts']);
 
 // =============================================================================
-// Mensajeros - público temporal (sin middlewares)
+// Rutas SaaS protegidas con autenticación unificada
+// (Anteriormente públicas - ahora requieren Firebase token)
 // =============================================================================
-Route::prefix('saas')->group(function () {
+Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group(function () {
+    // Mensajeros
     Route::prefix('mensajeros')->group(function () {
         Route::get('/vehiculos', [App\Http\Controllers\SaaS\MensajerosController::class, 'vehiculos']);
         Route::get('/', [App\Http\Controllers\SaaS\MensajerosController::class, 'index']);
@@ -201,20 +203,8 @@ Route::prefix('saas')->group(function () {
         Route::put('/{id}', [App\Http\Controllers\SaaS\MensajerosController::class, 'update'])->whereNumber('id');
         Route::delete('/{id}', [App\Http\Controllers\SaaS\MensajerosController::class, 'destroy'])->whereNumber('id');
     });
-    
-    // Equipos comerciales - público temporal (sin middlewares)
-    Route::prefix('sales-teams')->group(function () {
-        Route::get('/', [App\Http\Controllers\SaaS\SaasSalesTeamsController::class, 'index']);
-        Route::post('/', [App\Http\Controllers\SaaS\SaasSalesTeamsController::class, 'store']);
-        Route::get('/{team}', [App\Http\Controllers\SaaS\SaasSalesTeamsController::class, 'show'])->whereNumber('team');
-        Route::put('/{team}', [App\Http\Controllers\SaaS\SaasSalesTeamsController::class, 'update'])->whereNumber('team');
-        Route::delete('/{team}', [App\Http\Controllers\SaaS\SaasSalesTeamsController::class, 'destroy'])->whereNumber('team');
-        Route::get('/{team}/members', [App\Http\Controllers\SaaS\SaasSalesTeamsController::class, 'members'])->whereNumber('team');
-        Route::post('/{team}/members', [App\Http\Controllers\SaaS\SaasSalesTeamsController::class, 'addMember'])->whereNumber('team');
-        Route::delete('/{team}/members/{userId}', [App\Http\Controllers\SaaS\SaasSalesTeamsController::class, 'removeMember'])->whereNumber('team')->whereNumber('userId');
-    });
 
-    // Cartera de Clientes - público temporal (sin middlewares)
+    // Cartera de Clientes
     Route::prefix('cartera-clientes')->group(function () {
         Route::get('/', [App\Http\Controllers\SaaS\CarteraClientesController::class, 'index']);
         Route::post('/', [App\Http\Controllers\SaaS\CarteraClientesController::class, 'store']);
@@ -223,7 +213,7 @@ Route::prefix('saas')->group(function () {
         Route::delete('/{id}', [App\Http\Controllers\SaaS\CarteraClientesController::class, 'destroy'])->whereNumber('id');
     });
 
-    // Enlaces de Cotización - público temporal (sin middlewares)
+    // Enlaces de Cotización
     Route::prefix('enlaces-cotizacion')->group(function () {
         Route::get('/', [App\Http\Controllers\SaaS\EnlacesCotizacionController::class, 'index']);
         Route::post('/', [App\Http\Controllers\SaaS\EnlacesCotizacionController::class, 'store']);
@@ -232,7 +222,7 @@ Route::prefix('saas')->group(function () {
         Route::post('/{id}/toggle', [App\Http\Controllers\SaaS\EnlacesCotizacionController::class, 'toggle'])->whereNumber('id');
     });
 
-    // Contratos de Intermediación - público temporal (sin middlewares)
+    // Contratos de Intermediación
     Route::prefix('contratos')->group(function () {
         Route::get('/', [App\Http\Controllers\SaaS\ContratosIntermediacionController::class, 'index']);
         Route::post('/', [App\Http\Controllers\SaaS\ContratosIntermediacionController::class, 'store']);
@@ -240,196 +230,29 @@ Route::prefix('saas')->group(function () {
         Route::delete('/{id}', [App\Http\Controllers\SaaS\ContratosIntermediacionController::class, 'destroy'])->whereNumber('id');
     });
 
-    // Metas/Objetivos - público temporal (sin middlewares)
-    // Usa resolución DEV de usuario/broker via query/header o fallback
-    Route::prefix('goals')->group(function () {
-        $resolveUser = function(\Illuminate\Http\Request $request) {
-            try {
-                $uid = 'public-user';
-                $brokerId = (int) ($request->query('broker_id')
-                    ?? $request->header('X-Dev-Broker-Id')
-                    ?? env('DEV_FALLBACK_BROKER_ID', 0));
-                if ($brokerId <= 0) {
-                    $brokerId = (int) (\App\Models\Broker::query()->active()->orderBy('id')->value('id') ?: 0);
-                }
-                if ($brokerId <= 0) {
-                    return [null, response()->json(['success'=>false,'message'=>'broker_id no resuelto'], 400)];
-                }
-                // Inyectar contexto mínimo esperado por controladores (user()->broker_id)
-                $user = new class($brokerId) {
-                    public $broker_id; public function __construct($b){ $this->broker_id=$b; }
-                };
-                // Fijar usuario en request a través de macro simple
-                $request->setUserResolver(function() use ($user) { return $user; });
-                // También mergear broker_id para queries directas
-                $request->merge(['broker_id' => $brokerId]);
-                return [$user, null];
-            } catch (\Throwable $e) {
-                return [null, response()->json(['success'=>false,'message'=>$e->getMessage()], 500)];
-            }
-        };
-
-        Route::get('/', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesGoalsController::class)->index($request);
-        });
-        Route::get('/statistics', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesGoalsController::class)->statistics($request);
-        });
-        Route::post('/', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesGoalsController::class)->store($request);
-        });
-        Route::get('/{goal}', function (\Illuminate\Http\Request $request, \App\Models\SalesGoal $goal) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesGoalsController::class)->show($request, $goal);
-        })->whereNumber('goal');
-        Route::put('/{goal}', function (\Illuminate\Http\Request $request, \App\Models\SalesGoal $goal) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesGoalsController::class)->update($request, $goal);
-        })->whereNumber('goal');
-        Route::delete('/{goal}', function (\Illuminate\Http\Request $request, \App\Models\SalesGoal $goal) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesGoalsController::class)->destroy($request, $goal);
-        })->whereNumber('goal');
-    });
-
-    // Rendimiento Comercial - público temporal (sin middlewares)
-    Route::prefix('sales-performance')->group(function () {
-        // Reusar el mismo resolvedor de goals
-        $resolveUser = function(\Illuminate\Http\Request $request) {
-            try {
-                $brokerId = (int) ($request->query('broker_id') ?? $request->header('X-Dev-Broker-Id') ?? env('DEV_FALLBACK_BROKER_ID', 0));
-                if ($brokerId <= 0) { $brokerId = (int) (\App\Models\Broker::query()->active()->orderBy('id')->value('id') ?: 0); }
-                if ($brokerId <= 0) { return [null, response()->json(['success'=>false,'message'=>'broker_id no resuelto'], 400)]; }
-                $user = new class($brokerId) { public $broker_id; public function __construct($b){ $this->broker_id=$b; } };
-                $request->setUserResolver(function() use ($user) { return $user; });
-                $request->merge(['broker_id' => $brokerId]);
-                return [$user, null];
-            } catch (\Throwable $e) { return [null, response()->json(['success'=>false,'message'=>$e->getMessage()], 500)]; }
-        };
-
-        Route::get('/metrics', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesPerformanceController::class)->getMetrics($request);
-        });
-        Route::get('/agents', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesPerformanceController::class)->getAgentsPerformance($request);
-        });
-        Route::get('/teams', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesPerformanceController::class)->getTeamsPerformance($request);
-        });
-        Route::get('/statistics', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesPerformanceController::class)->getStatistics($request);
-        });
-        Route::get('/export', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasSalesPerformanceController::class)->exportPerformance($request);
-        });
-    });
-
-    // Estados de Cuenta - público temporal (sin middlewares)
+    // Estados de Cuenta
     Route::prefix('cartera/estados-cuenta')->group(function () {
-        $resolveUser = function(\Illuminate\Http\Request $request) {
-            try {
-                $brokerId = (int) ($request->query('broker_id') ?? $request->header('X-Dev-Broker-Id') ?? env('DEV_FALLBACK_BROKER_ID', 0));
-                if ($brokerId <= 0) { $brokerId = (int) (\App\Models\Broker::query()->active()->orderBy('id')->value('id') ?: 0); }
-                if ($brokerId <= 0) { return [null, response()->json(['success'=>false,'message'=>'broker_id no resuelto'], 400)]; }
-                $user = new class($brokerId) { public $broker_id; public function __construct($b){ $this->broker_id=$b; } };
-                $request->setUserResolver(function() use ($user) { return $user; });
-                $request->merge(['broker_id' => $brokerId]);
-                return [$user, null];
-            } catch (\Throwable $e) { return [null, response()->json(['success'=>false,'message'=>$e->getMessage()], 500)]; }
-        };
-
-        Route::get('/metrics', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasEstadosCuentaController::class)->metrics($request);
-        });
-        Route::get('/agents', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasEstadosCuentaController::class)->agents($request);
-        });
-        Route::get('/advisor/{userId}/summary', function (\Illuminate\Http\Request $request, int $userId) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasEstadosCuentaController::class)->advisorSummary($request, $userId);
-        })->whereNumber('userId');
-        Route::get('/advisor/{userId}/movements', function (\Illuminate\Http\Request $request, int $userId) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasEstadosCuentaController::class)->advisorMovements($request, $userId);
-        })->whereNumber('userId');
+        Route::get('/metrics', [App\Http\Controllers\SaaS\SaasEstadosCuentaController::class, 'metrics']);
+        Route::get('/agents', [App\Http\Controllers\SaaS\SaasEstadosCuentaController::class, 'agents']);
+        Route::get('/advisor/{userId}/summary', [App\Http\Controllers\SaaS\SaasEstadosCuentaController::class, 'advisorSummary'])->whereNumber('userId');
+        Route::get('/advisor/{userId}/movements', [App\Http\Controllers\SaaS\SaasEstadosCuentaController::class, 'advisorMovements'])->whereNumber('userId');
     });
 
-    // Reportes Financieros - público temporal (sin middlewares)
+    // Reportes Financieros
     Route::prefix('cartera/reportes-financieros')->group(function () {
-        $resolveUser = function(\Illuminate\Http\Request $request) {
-            try {
-                $brokerId = (int) ($request->query('broker_id') ?? $request->header('X-Dev-Broker-Id') ?? env('DEV_FALLBACK_BROKER_ID', 0));
-                if ($brokerId <= 0) { $brokerId = (int) (\App\Models\Broker::query()->active()->orderBy('id')->value('id') ?: 0); }
-                if ($brokerId <= 0) { return [null, response()->json(['success'=>false,'message'=>'broker_id no resuelto'], 400)]; }
-                $user = new class($brokerId) { public $broker_id; public function __construct($b){ $this->broker_id=$b; } };
-                $request->setUserResolver(function() use ($user) { return $user; });
-                $request->merge(['broker_id' => $brokerId]);
-                return [$user, null];
-            } catch (\Throwable $e) { return [null, response()->json(['success'=>false,'message'=>$e->getMessage()], 500)]; }
-        };
-
-        Route::get('/monthly', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasReportesFinancierosController::class)->monthly($request);
-        });
-        Route::get('/by-advisor', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasReportesFinancierosController::class)->byAdvisor($request);
-        });
-        Route::get('/by-insurer', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\SaasReportesFinancierosController::class)->byInsurer($request);
-        });
+        Route::get('/monthly', [App\Http\Controllers\SaaS\SaasReportesFinancierosController::class, 'monthly']);
+        Route::get('/by-advisor', [App\Http\Controllers\SaaS\SaasReportesFinancierosController::class, 'byAdvisor']);
+        Route::get('/by-insurer', [App\Http\Controllers\SaaS\SaasReportesFinancierosController::class, 'byInsurer']);
     });
 
-    // Anticipos y Ajustes - público temporal (sin middlewares)
+    // Anticipos y Ajustes
     Route::prefix('cartera/anticipos-ajustes')->group(function () {
-        $resolveUser = function(\Illuminate\Http\Request $request) {
-            try {
-                $brokerId = (int) ($request->query('broker_id') ?? $request->header('X-Dev-Broker-Id') ?? env('DEV_FALLBACK_BROKER_ID', 0));
-                if ($brokerId <= 0) { $brokerId = (int) (\App\Models\Broker::query()->active()->orderBy('id')->value('id') ?: 0); }
-                if ($brokerId <= 0) { return [null, response()->json(['success'=>false,'message'=>'broker_id no resuelto'], 400)]; }
-                $user = new class($brokerId) { public $broker_id; public $id = 1; public function __construct($b){ $this->broker_id=$b; } };
-                $request->setUserResolver(function() use ($user) { return $user; });
-                $request->merge(['broker_id' => $brokerId]);
-                return [$user, null];
-            } catch (\Throwable $e) { return [null, response()->json(['success'=>false,'message'=>$e->getMessage()], 500)]; }
-        };
-
-        Route::get('/', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->index($request);
-        });
-        Route::post('/', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->store($request);
-        });
-        Route::get('/estadisticas', function (\Illuminate\Http\Request $request) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->estadisticas($request);
-        });
-        Route::post('/{id}/aprobar', function (\Illuminate\Http\Request $request, int $id) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->aprobar($request, $id);
-        })->whereNumber('id');
-        Route::post('/{id}/rechazar', function (\Illuminate\Http\Request $request, int $id) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->rechazar($request, $id);
-        })->whereNumber('id');
-        Route::delete('/{id}', function (\Illuminate\Http\Request $request, int $id) use ($resolveUser) {
-            [, $err] = $resolveUser($request); if ($err) return $err;
-            return app(\App\Http\Controllers\SaaS\AnticiposAjustesController::class)->destroy($request, $id);
-        })->whereNumber('id');
+        Route::get('/', [App\Http\Controllers\SaaS\AnticiposAjustesController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\SaaS\AnticiposAjustesController::class, 'store']);
+        Route::get('/estadisticas', [App\Http\Controllers\SaaS\AnticiposAjustesController::class, 'estadisticas']);
+        Route::post('/{id}/aprobar', [App\Http\Controllers\SaaS\AnticiposAjustesController::class, 'aprobar'])->whereNumber('id');
+        Route::post('/{id}/rechazar', [App\Http\Controllers\SaaS\AnticiposAjustesController::class, 'rechazar'])->whereNumber('id');
+        Route::delete('/{id}', [App\Http\Controllers\SaaS\AnticiposAjustesController::class, 'destroy'])->whereNumber('id');
     });
 });
 
@@ -529,57 +352,22 @@ Route::post('/test/voice-call-fix/{conversationId}', function(string $conversati
 });
 }
 
-// Rutas de autenticación para empleados (sin middleware)
+// Rutas de autenticación para empleados
 Route::prefix('empleado-auth')->group(function () {
+    // Rutas públicas (necesarias para login)
     Route::post('/login', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'login']);
     Route::post('/verificar', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'verificarEmpleado']);
-    Route::post('/logout', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'logout']);
-    Route::post('/cambiar-password', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'cambiarPassword']);
-    Route::get('/perfil', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'perfil']);
     Route::post('/validar-token', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'validarToken']);
-    Route::post('/generar-password-temporal', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'generarPasswordTemporal']);
-    // Contexto actualizado del empleado autenticado (requiere Firebase ID Token)
-    Route::get('/contexto', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'contexto'])
-        ->middleware(['firebase.auth']);
-    // Versión ligera del contexto (para invalidación sin descargar payload)
-    Route::get('/version', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'version'])
-        ->middleware(['firebase.auth']);
-});
-
-// Endpoint de debug para empleados (sin middleware)
-Route::get('/debug/empleado-auth', function(Request $request) {
-    return response()->json([
-        'timestamp' => now()->toISOString(),
-        'headers' => [
-            'authorization' => $request->header('Authorization') ? 'PRESENT' : 'MISSING',
-            'x_dev_broker_id' => $request->header('X-Dev-Broker-Id') ?: 'MISSING',
-            'content_type' => $request->header('Content-Type'),
-            'user_agent' => $request->header('User-Agent'),
-        ],
-        'request_data' => [
-            'has_authenticated_broker_id' => $request->has('authenticated_broker_id'),
-            'authenticated_broker_id_value' => $request->get('authenticated_broker_id'),
-            'auth_type' => $request->get('auth_type'),
-            'broker_id' => $request->get('broker_id'),
-        ],
-        'firebase_auth' => [
-            'user_from_request' => $request->user() ? [
-                'id' => $request->user()->id,
-                'email' => $request->user()->email,
-                'broker_id' => $request->user()->broker_id,
-            ] : null,
-        ],
-        'laravel_auth' => [
-            'user_authenticated' => \Illuminate\Support\Facades\Auth::check(),
-            'user_id' => \Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::user()->id : null,
-            'user_broker_id' => \Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::user()->broker_id : null,
-        ],
-        'database_info' => [
-            'total_brokers' => \App\Models\Broker::count(),
-            'total_empleados' => \Schema::hasTable('empleados') ? \App\Models\Empleado::count() : 0,
-            'total_users' => \App\Models\User::count(),
-        ]
-    ]);
+    
+    // Rutas protegidas (requieren Firebase token)
+    Route::middleware(['firebase.auth'])->group(function () {
+        Route::post('/logout', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'logout']);
+        Route::post('/cambiar-password', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'cambiarPassword']);
+        Route::get('/perfil', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'perfil']);
+        Route::post('/generar-password-temporal', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'generarPasswordTemporal']);
+        Route::get('/contexto', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'contexto']);
+        Route::get('/version', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'version']);
+    });
 });
 
 // Rutas temporales de catálogos solo en modo DEBUG y con autenticación unificada
@@ -1472,237 +1260,13 @@ Route::middleware('auth:sanctum')->prefix('master')->group(function () {
 
 // RUTA DUPLICADA ELIMINADA - YA ESTÁ DEFINIDA ARRIBA
 
-/*
-|--------------------------------------------------------------------------
-| Rutas de prueba con Firebase Auth
-|--------------------------------------------------------------------------
-*/
-
-Route::middleware(['firebase.auth'])->get('/test-firebase', function (Request $request) {
-    return response()->json([
-        'success' => true,
-        'message' => 'Firebase Auth funcionando correctamente',
-        'user' => [
-            'id' => $request->user()->id,
-            'name' => $request->user()->name,
-            'email' => $request->user()->email,
-            'firebase_uid' => $request->user()->firebase_uid,
-            'user_type' => $request->user()->user_type,
-        ],
-        'firebase_uid' => $request->firebase_uid,
-        'firebase_claims' => $request->firebase_claims
-    ]);
-});
-
-/*
-|--------------------------------------------------------------------------
-| Rutas de debugging (para identificar problemas)
-|--------------------------------------------------------------------------
-*/
-Route::get('/debug/user-status', function(Request $request) {
-    $authUser = auth('api')->user();
-    
-    return response()->json([
-        'firebase_user' => $authUser ? [
-            'id' => $authUser->id,
-            'email' => $authUser->email,
-            'broker_id' => $authUser->broker_id,
-            'user_type' => $authUser->user_type,
-            'needs_onboarding' => $authUser->needs_onboarding,
-        ] : null,
-        'owned_broker' => $authUser && $authUser->ownedBroker ? [
-            'id' => $authUser->ownedBroker->id,
-            'razon_social' => $authUser->ownedBroker->razon_social,
-            'email' => $authUser->ownedBroker->email,
-        ] : null,
-        'related_broker' => $authUser && $authUser->broker ? [
-            'id' => $authUser->broker->id,
-            'razon_social' => $authUser->broker->razon_social,
-            'email' => $authUser->broker->email,
-        ] : null,
-        'timestamp' => now()->toISOString(),
-    ]);
-});
-
-Route::get('/debug/unified-auth-check', function(Request $request) {
-    $authUser = auth('api')->user();
-    
-    if (!$authUser) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Usuario no autenticado',
-            'debug' => [
-                'isAuthenticated' => false,
-                'tenant' => null,
-                'usuarioSaas' => null,
-                'needsOnboarding' => true,
-                'hasCompleteSaasAccess' => false,
-            ]
-        ]);
-    }
-    
-    $broker = $authUser->ownedBroker ?: $authUser->broker;
-    $needsOnboarding = $authUser->needs_onboarding || !$broker;
-    
-    return response()->json([
-        'success' => true,
-        'debug' => [
-            'isAuthenticated' => true,
-            'tenant' => $broker ? [
-                'id' => $broker->id,
-                'razon_social' => $broker->razon_social,
-                'nit' => $broker->nit,
-                'email' => $broker->email,
-                'ciudad' => $broker->ciudad,
-                'pais' => $broker->pais,
-                'telefono' => $broker->telefono,
-                'identificacion_tipo' => $broker->identificacion_tipo,
-                'branding' => [
-                    'nombre_comercial' => $broker->nombre_comercial ?? $broker->razon_social,
-                    'logo_url' => $broker->logo_url,
-                    'colores' => [
-                        'primario' => '#635BFF',
-                        'secundario' => '#6C757D',
-                        'acento' => '#0D6EFD'
-                    ],
-                    'favicon' => null
-                ]
-            ] : null,
-            'usuarioSaas' => [
-                'id' => $authUser->id,
-                'name' => $authUser->name,
-                'email' => $authUser->email,
-                'user_type' => $authUser->user_type,
-                'broker_id' => $authUser->broker_id,
-                'rol' => $authUser->user_type === 'MASTER' ? 'admin' : 'user',
-                'permissions' => [
-                    'dashboard' => ['view' => true, 'create' => true, 'edit' => true, 'delete' => true],
-                    'polizas' => ['view' => true, 'create' => true, 'edit' => true, 'delete' => true],
-                    'clientes' => ['view' => true, 'create' => true, 'edit' => true, 'delete' => true],
-                    'reportes' => ['view' => true, 'create' => true, 'edit' => true, 'delete' => true],
-                    'admin' => ['view' => $authUser->user_type === 'MASTER', 'create' => $authUser->user_type === 'MASTER', 'edit' => $authUser->user_type === 'MASTER', 'delete' => $authUser->user_type === 'MASTER'],
-                ]
-            ],
-            'needsOnboarding' => $needsOnboarding,
-            'hasCompleteSaasAccess' => !$needsOnboarding && $broker !== null,
-        ]
-    ]);
-});
-
 // ====================================================================
 // RUTAS PARA ELEVENLABS WEBHOOK - SIN AUTENTICACIÓN (REQUERIDO)
 // ====================================================================
-// ElevenLabs necesita acceder a estas rutas sin autenticación para obtener
-// información dinámica del cliente durante las llamadas de voz
-
-// Webhook original (GET) - Para tools
 Route::get('/v1/customer/{phone_number}', [SaasClientesController::class, 'getCustomerByPhone'])->where('phone_number', '.*');
-
-// Webhook de inicialización de conversación (POST) - Para Twilio personalization
 Route::post('/v1/conversation-initiation', [SaasClientesController::class, 'getConversationInitiationData']);
 
-// Test route
-Route::get('/test-simple', function() {
-    return response()->json([
-        'success' => true,
-        'message' => 'Backend Laravel funcionando correctamente',
-        'timestamp' => now()
-    ]);
-});
 
-// ⚠️ RUTAS DE TESTING ELIMINADAS POR SEGURIDAD
-// Las rutas /test/voice-campaigns/* han sido eliminadas porque permitían
-// acceso sin autenticación a funcionalidad completa del sistema.
-// Para testing en desarrollo, usar las rutas protegidas con autenticación apropiada.
-
-// ⚠️ RUTAS DE TESTING DE WHATSAPP ELIMINADAS POR SEGURIDAD
-// Las rutas /test/whatsapp-instances/* han sido eliminadas porque permitían
-// acceso sin autenticación a instancias de WhatsApp y códigos QR.
-// Para testing, usar las rutas protegidas /saas/whatsapp-instances/* con autenticación.
-
-// ⚠️ RUTAS TEMPORALES ELIMINADAS POR SEGURIDAD
-// /temp/campaigns/send-history-debug y /campaign-templates eliminadas
-// Para plantillas de campañas usar: /saas/campaign-templates (con autenticación)
-
-// ⚠️ RUTA TEMPORAL DE CLIENTES ELIMINADA POR SEGURIDAD
-// /saas/clientes/all-temp eliminada - exponía datos de clientes sin autenticación
-// Usar ruta protegida: /saas/clientes/all (con middleware de autenticación)
-
-// Test route for unified middleware
-Route::middleware('unified.auth')->get('/test-unified-middleware', function(Request $request) {
-    $user = \App\Http\Middleware\UnifiedAuthMiddleware::getAuthenticatedUser($request);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Middleware UnifiedAuth funcionando correctamente',
-        'middleware_executed' => true,
-        'auth_type' => $request->get('auth_type'),
-        'user_found' => $user !== null,
-        'user_data' => $user ? [
-            'id' => $user->id,
-            'email' => $user->email,
-            'name' => $user->name
-        ] : null,
-        'headers' => [
-            'authorization' => $request->header('Authorization') ? 'PRESENT' : 'MISSING',
-            'content_type' => $request->header('Content-Type'),
-        ],
-        'timestamp' => now()
-    ]);
-});
-
-// Debug route for authentication issues
-Route::get('/debug-auth-status', function(Request $request) {
-    $authHeader = $request->header('Authorization');
-    $hasToken = !empty($authHeader) && str_starts_with($authHeader, 'Bearer ');
-
-    return response()->json([
-        'auth_header_present' => $hasToken,
-        'auth_header_length' => $hasToken ? strlen($authHeader) : 0,
-        'token_length' => $hasToken ? strlen(substr($authHeader, 7)) : 0,
-        'user_authenticated' => auth('api')->check(),
-        'current_user' => auth('api')->user() ? [
-            'id' => auth('api')->user()->id,
-            'email' => auth('api')->user()->email,
-            'user_type' => auth('api')->user()->user_type,
-        ] : null,
-        'firebase_user' => $request->user() ? [
-            'id' => $request->user()->id,
-            'email' => $request->user()->email,
-        ] : null,
-        'timestamp' => now()
-    ]);
-});
-
-// Ruta temporal de debug para diagnóstico de broker (protegida)
-Route::middleware(['security.auth'])->group(function () {
-    Route::get('/debug/polizas/broker', [SaasPolizasController::class, 'debugBroker']);
-    Route::get('/debug/polizas', function(Request $request) {
-        $controller = new SaasPolizasController();
-        return $controller->indexDev($request);
-    });
-});
-
-// Test auth route without middleware
-Route::get('/test-auth-simple', function(Request $request) {
-    $user = auth('api')->user();
-    
-    return response()->json([
-        'success' => true,
-        'user' => $user ? [
-            'id' => $user->id,
-            'email' => $user->email,
-            'user_type' => $user->user_type,
-            'broker_id' => $user->broker_id,
-        ] : null,
-        'headers' => $request->headers->all(),
-        'timestamp' => now()
-    ]);
-});
-
-// ⚠️ RUTA TEMPORAL DE DASHBOARD ELIMINADA POR SEGURIDAD
-// /temp/dashboard-real eliminada - exponía datos sensibles del dashboard
-// Usar ruta protegida: /saas/dashboard/data (con middleware de autenticación)
 
 // RUTA ESPECÍFICA ANTES DEL GRUPO SAAS GENERAL (orden crítico en Laravel)
 Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $request) {
@@ -1874,59 +1438,6 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     // Rutas de clientes (con autenticación Firebase)
     Route::middleware(['firebase.auth'])->group(function () {
         
-        // RUTA ME-SIMPLE FUNCIONANDO CON EL MISMO MIDDLEWARE QUE CLIENTES
-        Route::get('/me-simple-working', function(Request $request) {
-            \Log::info('🎯 RUTA ME-SIMPLE-WORKING - USANDO FIREBASE.AUTH IGUAL QUE CLIENTES');
-            
-            // Obtener usuario exactamente como lo hace SaasClientesController
-            $user = $request->user();
-            
-            \Log::info('🎯 Usuario obtenido con firebase.auth:', [
-                'user_found' => $user !== null,
-                'user_id' => $user ? $user->id : null,
-                'user_email' => $user ? $user->email : null,
-                'user_type' => $user ? $user->user_type : null,
-                'broker_id' => $user ? $user->broker_id : null,
-                'firebase_uid' => $user ? $user->firebase_uid : null
-            ]);
-            
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Usuario no autenticado con firebase.auth'
-                ], 401);
-            }
-            
-            $broker = $user->getPrimaryBroker();
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'MIDDLEWARE FIREBASE.AUTH FUNCIONANDO CORRECTAMENTE',
-                'data' => [
-                    'user' => [
-                        'id' => $user->id,
-                        'nombre' => $user->name,
-                        'email' => $user->email,
-                        'user_type' => $user->user_type,
-                        'broker_id' => $user->broker_id,
-                        'firebase_uid' => $user->firebase_uid,
-                    ],
-                    'broker' => $broker ? [
-                        'id' => $broker->id,
-                        'nombre' => $broker->name,
-                        'email' => $broker->email,
-                        'plan' => $broker->plan,
-                        'status' => $broker->status,
-                    ] : null
-                ],
-                'middleware_info' => [
-                    'middleware_used' => 'unified.auth', 'global.broker.auth',
-                    'same_as_clientes' => true,
-                    'source' => 'api.php línea 1131'
-                ]
-            ]);
-        });
-
     // Rutas para WhatsApp Instances
     Route::prefix('whatsapp-instances')->group(function () {
         Route::get('/', [WhatsAppInstanceController::class, 'index']);
@@ -2118,182 +1629,6 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
     });
 
 
-    // Ruta de debug temporal para verificar póliza
-    Route::get('/debug/poliza/{id}', function($id) {
-        try {
-            $poliza = \App\Models\Poliza::find($id);
-            if (!$poliza) {
-                return response()->json(['error' => 'Póliza no encontrada'], 404);
-            }
-
-            return response()->json([
-                'poliza' => [
-                    'id' => $poliza->id,
-                    'policy_number' => $poliza->policy_number,
-                    'status' => $poliza->status,
-                    'broker_id' => $poliza->broker_id,
-                    'client_id' => $poliza->client_id,
-                    'type' => $poliza->type,
-                    'insurance_company' => $poliza->insurance_company,
-                    'start_date' => $poliza->start_date,
-                    'end_date' => $poliza->end_date,
-                ],
-                'is_active' => $poliza->status === 'active',
-                'broker_check' => $poliza->broker_id == 21, // Broker ID del error
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ], 500);
-        }
-    });
-
-    // Ruta de debug para mostrar valores permitidos para siniestros
-    Route::get('/debug/siniestros-constants', function() {
-        return response()->json([
-            'tipos_siniestro_disponibles' => \App\Models\Siniestro::TIPOS_SINIESTRO_DISPONIBLES,
-            'tipos_siniestro_completos' => \App\Models\Siniestro::TIPOS_SINIESTRO,
-            'estados' => \App\Models\Siniestro::ESTADOS,
-            'prioridades' => \App\Models\Siniestro::PRIORIDADES,
-            'campos_requeridos_para_crear' => [
-                'poliza_id' => 'ID de la póliza (requerido)',
-                'cliente_id' => 'ID del cliente (requerido)',
-                'tipo_siniestro' => 'Tipo de siniestro (requerido, debe estar en tipos_siniestro_disponibles)',
-                'fecha_ocurrencia' => 'Fecha de ocurrencia (requerido, formato YYYY-MM-DD)',
-                'monto_reclamo' => 'Monto reclamado (requerido, numérico)',
-                'descripcion_hechos' => 'Descripción de los hechos (requerido)',
-                'aseguradora' => 'Nombre de la aseguradora (requerido)',
-            ],
-            'ejemplo_request' => [
-                'poliza_id' => 32005,
-                'cliente_id' => 123,
-                'tipo_siniestro' => 'robo',
-                'fecha_ocurrencia' => '2024-09-20',
-                'monto_reclamo' => 5000000,
-                'descripcion_hechos' => 'Robo del vehículo en parqueadero',
-                'aseguradora' => 'Seguros XYZ',
-                'lugar_ocurrencia' => 'Parqueadero Centro',
-                'ciudad_ocurrencia' => 'Bogotá',
-                'departamento_ocurrencia' => 'Cundinamarca'
-            ]
-        ]);
-    });
-
-    // Debug endpoint para verificar estado de autenticación
-    Route::get('/debug/auth-status', function(Request $request) {
-        $user = $request->user();
-        $empleado = $request->get('authenticated_empleado');
-        $authType = $request->get('auth_type');
-        $brokerId = $request->get('broker_id');
-
-        return response()->json([
-            'timestamp' => now()->toISOString(),
-            'auth_type' => $authType,
-            'has_user' => $user !== null,
-            'has_empleado' => $empleado !== null,
-            'broker_id' => $brokerId,
-            'user_data' => $user ? [
-                'id' => $user->id,
-                'email' => $user->email,
-                'name' => $user->name,
-                'user_type' => $user->user_type,
-                'firebase_uid' => $user->firebase_uid,
-            ] : null,
-            'empleado_data' => $empleado ? [
-                'id' => $empleado->id,
-                'email' => $empleado->email,
-                'nombres' => $empleado->nombres,
-                'cargo' => $empleado->cargo,
-            ] : null,
-            'headers' => [
-                'authorization' => $request->header('Authorization') ? 'PRESENT' : 'MISSING',
-                'content_type' => $request->header('Content-Type'),
-            ],
-            'middleware_applied' => true,
-        ]);
-    })->middleware(['unified.auth']);
-
-    // Debug route específico para siniestros
-    Route::get('/debug/siniestros-auth', function(Request $request) {
-        Log::info('🔍 DEBUG SINIESTROS AUTH - Iniciando');
-        
-        $authType = $request->get('auth_type');
-        $user = $request->get('authenticated_user');
-        $empleado = $request->get('authenticated_empleado');
-        $brokerId = $request->get('broker_id');
-        
-        Log::info('🔍 DEBUG SINIESTROS AUTH - Datos del request', [
-            'auth_type' => $authType,
-            'has_user' => $user !== null,
-            'has_empleado' => $empleado !== null,
-            'broker_id' => $brokerId
-        ]);
-        
-        $authenticatedEntity = null;
-        $permisos = [];
-        
-        if ($authType === 'empleado' && $empleado) {
-            $authenticatedEntity = $empleado;
-            $permisos = $empleado->obtenerPermisos();
-            Log::info('🔍 DEBUG - Empleado autenticado', [
-                'empleado_id' => $empleado->id,
-                'empleado_email' => $empleado->email,
-                'rol_id' => $empleado->rol_id,
-                'rol_nombre' => $empleado->rol ? $empleado->rol->nombre : 'SIN ROL',
-                'permisos_count' => count($permisos),
-                'tiene_siniestros_ver' => $empleado->tienePermiso('siniestros.ver'),
-                'puede_acceder' => $empleado->puedeAcceder()
-            ]);
-        } elseif ($authType === 'firebase' && $user) {
-            $authenticatedEntity = $user;
-            $permisos = $user->permissions ?? [];
-            Log::info('🔍 DEBUG - Usuario Firebase autenticado', [
-                'user_id' => $user->id,
-                'user_email' => $user->email,
-                'user_type' => $user->user_type,
-                'permisos_count' => count($permisos)
-            ]);
-        }
-        
-        return response()->json([
-            'success' => true,
-            'debug_info' => [
-                'auth_type' => $authType,
-                'broker_id' => $brokerId,
-                'authenticated_entity' => $authenticatedEntity ? [
-                    'id' => $authenticatedEntity->id,
-                    'email' => $authenticatedEntity->email,
-                    'type' => get_class($authenticatedEntity)
-                ] : null,
-                'permisos' => $permisos,
-                'permisos_siniestros' => [
-                    'siniestros.ver' => $authenticatedEntity ? $authenticatedEntity->tienePermiso('siniestros.ver') : false,
-                    'siniestros.*' => $authenticatedEntity ? $authenticatedEntity->tienePermiso('siniestros.*') : false,
-                    'siniestros.crear' => $authenticatedEntity ? $authenticatedEntity->tienePermiso('siniestros.crear') : false,
-                ],
-                'middleware_chain' => [
-                    'unified.auth' => 'PASSED',
-                    'global.broker.auth' => 'PASSED',
-                    'saas.auth' => 'PASSED'
-                ]
-            ]
-        ]);
-    })->middleware(['unified.auth', 'global.broker.auth', 'saas.auth']);
-
-    // Endpoint de prueba simple para verificar interceptor
-    Route::get('/test-interceptor', function(Request $request) {
-        return response()->json([
-            'success' => true,
-            'message' => 'Interceptor funcionando correctamente',
-            'timestamp' => now()->toISOString(),
-            'headers' => [
-                'authorization' => $request->header('Authorization') ? 'PRESENT' : 'MISSING',
-                'content_type' => $request->header('Content-Type'),
-            ],
-        ]);
-    })->middleware(['unified.auth']);
-    
     // Rutas básicas para WhatsApp
     Route::prefix('whatsapp-basic')->group(function () {
         Route::post('/initialize', [App\Http\Controllers\WhatsAppBasicController::class, 'initialize']);

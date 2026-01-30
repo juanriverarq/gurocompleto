@@ -1,1 +1,0 @@
-import{j as e}from"./index-CgYaZsxQ.js";import"./vendor-charts-CIqHj9iK.js";const t=()=>e.jsx(e.Fragment,{children:e.jsx("div",{className:"md:py-20 py-12 relative bg-white dark:bg-dark",id:"demos",children:e.jsx("div",{className:"container"})})});export{t as default};

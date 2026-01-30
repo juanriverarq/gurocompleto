@@ -41,4 +41,10 @@ return [
         'client_secret' => env('GOOGLE_MOBILE_CLIENT_SECRET'),
     ],
 
+    // Configuración WhatsApp Cloud API
+    'whatsapp' => [
+        'cloud_api_verify_token' => env('WHATSAPP_CLOUD_API_VERIFY_TOKEN', 'guro_webhook_verify_2024'),
+        'service_url' => env('WHATSAPP_SERVICE_URL', 'http://localhost:3000/api/v1'),
+    ],
+
 ];

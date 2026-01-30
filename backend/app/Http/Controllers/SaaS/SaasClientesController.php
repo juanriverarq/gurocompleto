@@ -192,8 +192,8 @@ class SaasClientesController extends Controller
                                    ->where('first_name', 'like', "%{$last}%");
                             });
                             
-                            // Concatenación directa "first last" por si aplica
-                            $q->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$first} {$last}%");
+                            // Concatenación directa "first last" por si aplica (usando binding para evitar SQL injection)
+                            $q->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$first} {$last}%"]);
                         }
                     }
                 });
@@ -1254,7 +1254,7 @@ class SaasClientesController extends Controller
                                    ->where('first_name', 'like', "%{$last}%");
                             });
                             
-                            $q->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$first} {$last}%");
+                            $q->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$first} {$last}%"]);
                         }
                     }
                 });

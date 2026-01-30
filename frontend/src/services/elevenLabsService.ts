@@ -209,7 +209,9 @@ interface CreateAgentRequest {
 
 // Configuración base
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
-const DEFAULT_API_KEY = 'sk_06bf990afaf79a11677ac77a93d58d3abbdc6e254f776c7e';
+// NOTA: Las llamadas a ElevenLabs deben hacerse a través del backend proxy
+// para no exponer la API key en el frontend
+const DEFAULT_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
 
 // Constantes de conversión
 const CREDITS_TO_USD_RATE = 0.000198; // 1 crédito = $0.000198

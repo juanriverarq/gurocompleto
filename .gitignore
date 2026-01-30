@@ -1,3 +1,77 @@
+# Firebase credentials
 backend/firebase-admin.json
 guro-b3911-firebase-adminsdk-fbsvc-6a2f247208.json
-backend/firebase-admin.json
+
+# Environment files (CRITICAL - never commit secrets)
+# NOTE: These files should be edited directly on the server, not via Git
+.env
+!.env.example
+backend/.env
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+whatsapp/.env
+whatsapp/.env.*
+!whatsapp/.env.example
+
+# Database dumps (may contain sensitive data)
+*.sql
+!backend/database/migrations/*.sql
+
+# Production builds and archives
+*.zip
+backend-prod.zip
+frontend-prod.zip
+whatsapp.zip
+
+# Logs
+*.log
+logs/
+
+# Auth sessions (WhatsApp)
+whatsapp/auth_info/
+auth_info/
+
+# IDE and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node modules (already in subfolder gitignores but adding for safety)
+node_modules/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+!whatsapp/data/*.db
+
+# Compiled files
+*.pyc
+__pycache__/
+dist/
+
+# Package managers
+.yarn/cache/
+.pnp.*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Build artifacts
+build/
+*.map

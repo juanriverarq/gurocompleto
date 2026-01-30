@@ -3,6 +3,7 @@ import { Button, TextInput, Textarea } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
 import api from 'src/config/api';
+import { sanitizeHtml } from 'src/utils/sanitize';
 import saraAvatar from 'src/assets/images/profile/sara.webp';
 
 interface ExportData {
@@ -452,7 +453,7 @@ const FloatingChat = () => {
                     }`}
                   >
                     <div 
-                      dangerouslySetInnerHTML={{ __html: formatMessage(displayMessage) }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatMessage(displayMessage)) }}
                       className="leading-relaxed"
                     />
                     
