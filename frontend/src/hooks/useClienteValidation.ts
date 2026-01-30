@@ -24,6 +24,8 @@ export interface ClienteFormData {
   representante_legal?: string;
   representante_legal_tipo_documento?: string;
   representante_legal_documento?: string;
+  // Segmentación
+  etiquetas?: string;
 }
 
 // Tipos para los errores

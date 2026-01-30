@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Card, Badge, Tabs, TextInput, Textarea, TabsRef, Alert } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import { sanitizeEmailHtml } from 'src/utils/sanitize';
 import saasApi from 'src/services/saasApi';
 import { emailCampaignService } from 'src/services/emailCampaignService';
 import { campaignTemplateService, type CampaignTemplate } from 'src/services/campaignTemplateService';
@@ -429,7 +430,7 @@ export const EmailCampaignWizard: React.FC<EmailCampaignWizardProps> = ({
                                     <div className="p-6">
                                       <h4 className="text-lg font-semibold mb-4">Vista Previa del Contenido</h4>
                                       <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700 max-h-96 overflow-y-auto">
-                                        <div dangerouslySetInnerHTML={{ __html: campContent }} />
+                                        <div dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(campContent) }} />
                                       </div>
                                     </div>
                                   </Card>

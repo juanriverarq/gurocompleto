@@ -5,6 +5,7 @@ import Search from "./Search";
 import { Icon } from "@iconify/react";
 import CreateButton from "./CreateButton";
 import Notifications from "./Notifications";
+import WhatsAppInboxButton from "./WhatsAppInboxButton";
 import Profile from "./Profile";
 import FullLogo from "../../shared/logo/FullLogo";
 import MobileHeaderItems from "./MobileHeaderItems";
@@ -53,10 +54,32 @@ const Header = ({ layoutType }: HeaderPropsType) => {
     return normalized === 'trial' || normalized === 'en_trial' || normalized === 'prueba' || normalized === 'trial_active';
   };
 
+  const isSubscriptionActive = () => {
+    const status = (tenant as any)?.status || (tenant as any)?.estado;
+    if (!status) return false;
+    const normalized = String(status).toLowerCase();
+    return normalized === 'active' || normalized === 'activo';
+  };
+
   const getTrialDaysLeft = () => {
     try {
       if (!tenant || !isTrialActive()) return null;
       const endsSource = trialEndsAt || (tenant as any)?.trial_ends_at || null;
+      if (!endsSource) return null;
+      const now = new Date();
+      const ends = new Date(endsSource);
+      const diffMs = ends.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      return diffDays < 0 ? 0 : diffDays;
+    } catch {
+      return null;
+    }
+  };
+
+  const getSubscriptionDaysLeft = () => {
+    try {
+      if (!tenant || !isSubscriptionActive()) return null;
+      const endsSource = (tenant as any)?.subscription_ends_at || null;
       if (!endsSource) return null;
       const now = new Date();
       const ends = new Date(endsSource);
@@ -99,16 +122,38 @@ const Header = ({ layoutType }: HeaderPropsType) => {
             : "bg-transparent"
         }`}
       >
-        {/* Trial banner superior */}
+        {/* Banner superior de trial o suscripción */}
         {(() => {
-          if (!isTrialActive()) return null;
-          const days = getTrialDaysLeft();
-          if (typeof days === 'number') {
+          // Primero verificar si está en trial
+          if (isTrialActive()) {
+            const days = getTrialDaysLeft();
+            if (typeof days === 'number') {
+              // Colores según urgencia
+              const bgColor = days <= 2 
+                ? 'from-red-600 via-red-500 to-orange-500' 
+                : days <= 5 
+                  ? 'from-amber-600 via-orange-500 to-yellow-500'
+                  : 'from-blue-600 via-indigo-600 to-violet-600';
+              
+              return (
+                <div className={`w-full bg-gradient-to-r ${bgColor} text-white relative z-[10]`}>
+                  <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
+                    <span className="hidden sm:inline">
+                      {days <= 2 ? '⚠️ ¡Tu prueba está por terminar!' : 'Estás usando la versión de prueba.'}
+                    </span>
+                    <strong>{days} {days === 1 ? 'día restante' : 'días restantes'}</strong>
+                    <a href="/apps/billing/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
+                      Activar plan
+                    </a>
+                  </div>
+                </div>
+              );
+            }
+            // Si no pudimos calcular días, igualmente mostrar CTA de trial activo
             return (
               <div className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white relative z-[10]">
                 <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
-                  <span className="hidden sm:inline">Estás usando la versión de prueba.</span>
-                  <strong>{days} días restantes</strong>
+                  <span className="hidden sm:inline">Versión de prueba activa.</span>
                   <a href="/apps/billing/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
                     Activar plan
                   </a>
@@ -116,17 +161,38 @@ const Header = ({ layoutType }: HeaderPropsType) => {
               </div>
             );
           }
-          // Si no pudimos calcular días, igualmente mostrar CTA de trial activo
-          return (
-            <div className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white relative z-[10]">
-              <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
-                <span className="hidden sm:inline">Versión de prueba activa.</span>
-                <a href="/apps/billing/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
-                  Activar plan
-                </a>
-              </div>
-            </div>
-          );
+          
+          // Si tiene suscripción activa, verificar si está próxima a vencer (5 días o menos)
+          if (isSubscriptionActive()) {
+            const days = getSubscriptionDaysLeft();
+            if (typeof days === 'number' && days <= 5) {
+              // Colores según urgencia
+              const bgColor = days <= 1 
+                ? 'from-red-600 via-red-500 to-orange-500' 
+                : days <= 3 
+                  ? 'from-amber-600 via-orange-500 to-yellow-500'
+                  : 'from-blue-600 via-indigo-600 to-violet-600';
+              
+              const message = days === 0 
+                ? '⚠️ Tu suscripción vence hoy'
+                : days === 1 
+                  ? '⚠️ Tu suscripción vence mañana'
+                  : `Tu próximo pago es en ${days} días`;
+              
+              return (
+                <div className={`w-full bg-gradient-to-r ${bgColor} text-white relative z-[10]`}>
+                  <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
+                    <span>{message}</span>
+                    <a href="/apps/billing/suscripcion" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
+                      Ver detalles
+                    </a>
+                  </div>
+                </div>
+              );
+            }
+          }
+          
+          return null;
         })()}
         <Navbar
           fluid
@@ -211,6 +277,9 @@ const Header = ({ layoutType }: HeaderPropsType) => {
                   </span>
                 </div>
               )}
+
+              {/* WhatsApp Inbox Button */}
+              <WhatsAppInboxButton />
 
               {/* Notification Dropdown */}
               <Notifications />

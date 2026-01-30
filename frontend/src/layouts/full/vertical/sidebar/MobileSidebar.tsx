@@ -77,16 +77,14 @@ const filteredMenuitems = getFilteredMenuItems(hasPermission, canAccessModule, t
   // Filter menu items based on selected icon - same logic as desktop sidebar
   function getMenuItemsBySelectedIcon() {
     const sectionMap: { [key: number]: string[] } = {
-      1: ['Panel de Control'], // Dashboard icon
-      2: ['Operaciones de Seguros'], // Shield icon
-      3: ['Gestión Comercial'], // Commercial icon
-      4: ['Marketing Digital'], // Marketing icon
-      5: ['Inteligencia Artificial'], // AI icon
-      6: ['Gestión Financiera'], // Money icon
-      7: ['Gestión Documental'], // Legal icon
-      8: ['Tienda de Apps'], // Apps Store icon
-      9: ['Integraciones'], // Integration icon
-      10: ['Administración'], // Settings icon
+      1: ['Inicio'],
+      2: ['Seguros'],
+      3: ['Comercial'],
+      4: ['Finanzas'],
+      5: ['Comunicaciones'],
+      6: ['Inteligencia Artificial'],
+      7: ['Documentos'],
+      8: ['Configuración'],
     };
 
     const targetSections = sectionMap[selectedIconId || 1] || [];

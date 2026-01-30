@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Card, TextInput, Badge } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import api from 'src/config/api';
+import { sanitizeHtml } from 'src/utils/sanitize';
 import saraAvatar from 'src/assets/images/profile/sara.webp';
 
 export interface ExportData {
@@ -342,12 +343,12 @@ const AsistenteIA = () => {
                       <div 
                         className="whitespace-pre-line text-sm leading-relaxed"
                         dangerouslySetInnerHTML={{ 
-                          __html: formatMessage(
+                          __html: sanitizeHtml(formatMessage(
                             mensaje.mensaje + 
                             (expandedMessages.has(mensaje.id) && mensaje.export?.available 
                               ? formatExpandedResults(mensaje.export) 
                               : '')
-                          ) 
+                          ))
                         }}
                       />
                       

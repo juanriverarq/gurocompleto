@@ -79,14 +79,17 @@ class GlobalBrokerAuth
 
             // Verificar que el broker esté activo y no haya expirado el trial
             if (!$this->brokerAuthService->isBrokerActive($broker)) {
+                $isTrialExpired = $broker->isTrial() && $broker->isTrialExpired();
                 $error = [
                     'success' => false,
-                    'message' => $broker->isTrial() && $broker->isTrialExpired()
+                    'message' => $isTrialExpired
                         ? 'Tu periodo de prueba ha expirado. Por favor, actualiza tu plan para continuar.'
                         : 'Broker inactivo o suspendido',
-                    'error_code' => $broker->isTrial() && $broker->isTrialExpired() ? 'TRIAL_EXPIRED' : 'BROKER_INACTIVE',
+                    'error_code' => $isTrialExpired ? 'TRIAL_EXPIRED' : 'BROKER_INACTIVE',
+                    'broker_id' => $broker->id,
+                    'broker_name' => $broker->name,
                 ];
-                if ($broker->isTrial()) {
+                if ($broker->isTrial() || $isTrialExpired) {
                     $error['trial_ends_at'] = optional($broker->trial_ends_at)->toISOString();
                 }
                 return response()->json($error, 403);

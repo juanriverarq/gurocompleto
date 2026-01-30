@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import SubscriptionPaymentModal from 'src/components/modals/SubscriptionPaymentModal';
 
 const DashboardBuilding: React.FC = () => {
   const {
@@ -8,6 +9,7 @@ const DashboardBuilding: React.FC = () => {
     checkSaasStatus,
     hasCompleteSaasAccess,
     tenant,
+    trialExpired,
   } = useUnifiedAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,14 +34,27 @@ const DashboardBuilding: React.FC = () => {
 
   // Si después de verificar no hay tenant, mostrar error de conexión
   useEffect(() => {
-    if (saasChecked && !tenant && !hasCompleteSaasAccess) {
+    if (saasChecked && !tenant && !hasCompleteSaasAccess && !trialExpired) {
       // Dar un pequeño delay antes de mostrar el error
       const timer = setTimeout(() => {
         setShowConnectionError(true);
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [saasChecked, tenant, hasCompleteSaasAccess]);
+  }, [saasChecked, tenant, hasCompleteSaasAccess, trialExpired]);
+
+  // Si el trial expiró, mostrar el modal de pago
+  if (trialExpired) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <SubscriptionPaymentModal
+          isOpen={true}
+          onClose={() => {}}
+          reason="trial_expired"
+        />
+      </div>
+    );
+  }
 
   const handleReload = () => {
     window.location.reload();

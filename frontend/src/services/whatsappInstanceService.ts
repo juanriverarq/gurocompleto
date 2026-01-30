@@ -17,10 +17,17 @@ const getAuthToken = async (): Promise<string | null> => {
 };
 
 // Interfaces para las instancias de WhatsApp
+export type ConnectionType = 'baileys' | 'cloud_api';
+
 export interface WhatsAppInstance {
   id?: number;
   broker_id: number;
   instance_id: string;
+  connection_type: ConnectionType;
+  cloud_api_phone_id?: string;
+  cloud_api_business_id?: string;
+  cloud_api_token?: string;
+  cloud_api_verify_token?: string;
   session_id?: string;
   phone_number?: string;
   status: 'disconnected' | 'connecting' | 'connected' | 'qr_pending' | 'authenticated' | 'error';
@@ -45,10 +52,16 @@ export interface WhatsAppInstance {
 }
 
 export interface CreateInstanceRequest {
+  connection_type: ConnectionType;
   phone_number?: string;
   webhook_url?: string;
   settings?: any;
-  broker_id?: number; // ✅ Opcional - Laravel lo obtiene del Firebase token
+  broker_id?: number;
+  // Campos para Cloud API
+  cloud_api_phone_id?: string;
+  cloud_api_business_id?: string;
+  cloud_api_token?: string;
+  cloud_api_verify_token?: string;
 }
 
 export interface InstanceStatusResponse {
@@ -66,8 +79,6 @@ export interface QRCodeResponse {
 }
 
 class WhatsAppInstanceService {
-  private baseUrl = `${API_BASE_URL}/saas/whatsapp-instances`;
-
   /**
    * Realizar petición HTTP a Laravel (USANDO EL MISMO PATRÓN QUE CAMPAIGN SERVICE)
    */

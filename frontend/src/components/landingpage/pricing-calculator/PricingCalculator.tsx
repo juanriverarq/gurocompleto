@@ -112,16 +112,16 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
           totals,
           source: 'pricing_calculator',
         });
-        // Ir directo al checkout
-        window.location.href = '/checkout';
+        // Ir directo al dashboard - trial de 7 días gratis
+        window.location.href = '/apps';
       } else {
-        // Forzar registro antes de continuar
-        const redirect = encodeURIComponent('/checkout');
+        // Forzar registro antes de continuar - irá al dashboard después
+        const redirect = encodeURIComponent('/apps');
         window.location.href = `/auth/register?redirect=${redirect}`;
       }
     } catch (e) {
       // Si falla por auth o red, enviar a registro como fallback
-      const redirect = encodeURIComponent('/checkout');
+      const redirect = encodeURIComponent('/apps');
       window.location.href = `/auth/register?redirect=${redirect}`;
     }
   };

@@ -195,6 +195,7 @@ export const clienteService = {
         branch_name: cliente.branch_name,
         status: cliente.estado,
         notes: cliente.observaciones,
+        tags: (cliente as any).etiquetas || '',
       };
 
       if (cliente.client_type === 'empresa') {
@@ -254,6 +255,7 @@ export const clienteService = {
       if (cliente.branch_name !== undefined) payload.branch_name = cliente.branch_name;
       if (cliente.estado !== undefined) payload.status = cliente.estado;
       if (cliente.observaciones !== undefined) payload.notes = cliente.observaciones;
+      if ((cliente as any).etiquetas !== undefined) payload.tags = (cliente as any).etiquetas;
 
       if (cliente.client_type === 'empresa') {
         if (cliente.razon_social !== undefined) {

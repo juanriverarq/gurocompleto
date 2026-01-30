@@ -251,56 +251,222 @@ class WhatsAppInstance {
     }
 
     async handleIncomingMessages(messageUpdate) {
-        const { messages } = messageUpdate;
+        const { messages, type } = messageUpdate;
         
         for (const message of messages) {
-            if (!message.key.fromMe && message.message) {
-                const phone = message.key.remoteJid.replace('@s.whatsapp.net', '');
-                const messageText = message.message.conversation || 
-                                 message.message.extendedTextMessage?.text || '';
-                
-                // Actualizar última actividad
-                this.lastActivity = new Date();
-                
-                // Guardar mensaje en la base de datos con instance_id
+            // Ignorar mensajes de status/broadcast
+            if (message.key.remoteJid === 'status@broadcast') continue;
+            if (!message.message) continue;
+            
+            const isFromMe = message.key.fromMe;
+            const phone = message.key.remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '');
+            const messageText = message.message.conversation || 
+                             message.message.extendedTextMessage?.text || 
+                             message.message.imageMessage?.caption ||
+                             message.message.videoMessage?.caption ||
+                             message.message.documentMessage?.caption ||
+                             '';
+            
+            // Detectar tipo de mensaje
+            let messageType = 'text';
+            let mediaData = null;
+            
+            if (message.message.imageMessage) {
+                messageType = 'image';
+                mediaData = { mimetype: message.message.imageMessage.mimetype };
+            } else if (message.message.videoMessage) {
+                messageType = 'video';
+                mediaData = { mimetype: message.message.videoMessage.mimetype };
+            } else if (message.message.audioMessage) {
+                messageType = 'audio';
+                mediaData = { mimetype: message.message.audioMessage.mimetype, ptt: message.message.audioMessage.ptt };
+            } else if (message.message.documentMessage) {
+                messageType = 'document';
+                mediaData = { 
+                    mimetype: message.message.documentMessage.mimetype,
+                    filename: message.message.documentMessage.fileName 
+                };
+            } else if (message.message.stickerMessage) {
+                messageType = 'sticker';
+            } else if (message.message.locationMessage) {
+                messageType = 'location';
+                mediaData = {
+                    latitude: message.message.locationMessage.degreesLatitude,
+                    longitude: message.message.locationMessage.degreesLongitude
+                };
+            } else if (message.message.contactMessage) {
+                messageType = 'contact';
+            }
+            
+            // Actualizar última actividad
+            this.lastActivity = new Date();
+            
+            // Guardar mensaje en la base de datos local (ignorar errores de duplicados)
+            try {
                 await this.database.saveMessage({
                     id: message.key.id,
                     phone,
                     message: messageText,
-                    type: 'received',
+                    type: isFromMe ? 'sent' : 'received',
+                    messageType: messageType,
+                    media: mediaData,
                     timestamp: new Date(message.messageTimestamp * 1000),
                     instance_id: this.instanceId
                 });
-                
-                // Verificar si el contacto existe, si no, crearlo
-                let contact = await this.database.getContact(phone, this.instanceId);
-                if (!contact) {
-                    await this.database.saveContact({
-                        phone,
-                        name: phone,
-                        tags: ['nuevo'],
-                        instance_id: this.instanceId
-                    });
+            } catch (dbError) {
+                // Ignorar errores de duplicados - el mensaje ya existe
+                if (!dbError.message?.includes('UNIQUE constraint')) {
+                    console.error(`⚠️ [${this.instanceId}] Error guardando mensaje local:`, dbError.message);
                 }
-                
-                // Emitir evento de nuevo mensaje específico por instancia
-                this.io.emit(`new_message_${this.instanceId}`, {
-                    instanceId: this.instanceId,
-                    phone,
-                    message: messageText,
-                    timestamp: new Date(message.messageTimestamp * 1000)
-                });
-                
-                // También emitir evento general
-                this.io.emit('new_message', {
-                    instanceId: this.instanceId,
-                    phone,
-                    message: messageText,
-                    timestamp: new Date(message.messageTimestamp * 1000)
-                });
-                
-                console.log(`📥 [${this.instanceId}] Mensaje recibido de ${phone}: ${messageText}`);
             }
+            
+            // Solo para mensajes entrantes: verificar/crear contacto
+            if (!isFromMe) {
+                try {
+                    let contact = await this.database.getContact(phone, this.instanceId);
+                    if (!contact) {
+                        await this.database.saveContact({
+                            phone,
+                            name: message.pushName || phone,
+                            tags: ['nuevo'],
+                            instance_id: this.instanceId
+                        });
+                    }
+                } catch (contactError) {
+                    // Ignorar errores de contacto
+                }
+            }
+            
+            // Emitir evento de nuevo mensaje específico por instancia
+            this.io.emit(`new_message_${this.instanceId}`, {
+                instanceId: this.instanceId,
+                phone,
+                message: messageText,
+                messageType: messageType,
+                media: mediaData,
+                fromMe: isFromMe,
+                timestamp: new Date(message.messageTimestamp * 1000)
+            });
+            
+            // También emitir evento general
+            this.io.emit('new_message', {
+                instanceId: this.instanceId,
+                phone,
+                message: messageText,
+                messageType: messageType,
+                media: mediaData,
+                fromMe: isFromMe,
+                timestamp: new Date(message.messageTimestamp * 1000)
+            });
+            
+            // Emitir evento inbox_message para el frontend del Inbox
+            // Nota: Este evento no tiene conversationId, el frontend buscará por teléfono
+            this.io.emit('inbox_message', {
+                instanceId: this.instanceId,
+                phone,
+                message: {
+                    message_id: message.key.id,
+                    direction: isFromMe ? 'outgoing' : 'incoming',
+                    sender_type: isFromMe ? 'agent' : 'client',
+                    message_type: messageType,
+                    content: messageText,
+                    media: mediaData,
+                    created_at: new Date(message.messageTimestamp * 1000).toISOString()
+                }
+            });
+            
+            const direction = isFromMe ? '📤 enviado a' : '📥 recibido de';
+            console.log(`${direction} [${this.instanceId}] ${phone}: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}`);
+            
+            if (isFromMe) {
+                // Mensajes SALIENTES (enviados desde móvil) - sincronizar con Laravel
+                this.syncMessageToLaravel(message, phone, messageText, messageType, mediaData, true);
+            } else {
+                // Mensajes ENTRANTES - procesar con chatbot
+                this.sendMessageWebhook(message, phone, messageText, messageType, mediaData);
+            }
+        }
+    }
+
+    /**
+     * Sincronizar mensaje enviado desde el móvil con Laravel
+     */
+    async syncMessageToLaravel(message, phone, messageText, messageType, mediaData, fromMe) {
+        try {
+            const laravelUrl = process.env.LARAVEL_API_URL || 'http://127.0.0.1:8001/api';
+            const webhookUrl = `${laravelUrl}/webhooks/whatsapp-sync-message`;
+            
+            const payload = {
+                instance_id: this.instanceId,
+                phone: phone,
+                message: messageText,
+                message_id: message.key.id,
+                type: messageType,
+                media: mediaData,
+                from_me: fromMe,
+                timestamp: new Date(message.messageTimestamp * 1000).toISOString()
+            };
+            
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Webhook-Secret': process.env.WEBHOOK_SECRET || 'guro-whatsapp-webhook-secret'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.synced) {
+                    console.log(`📡 [${this.instanceId}] Mensaje sincronizado con Laravel para ${phone}`);
+                }
+            }
+        } catch (error) {
+            console.error(`⚠️ [${this.instanceId}] Error sincronizando mensaje:`, error.message);
+        }
+    }
+
+    /**
+     * Enviar webhook a Laravel cuando llega un mensaje
+     */
+    async sendMessageWebhook(message, phone, messageText, messageType = 'text', mediaData = null) {
+        try {
+            const laravelUrl = process.env.LARAVEL_API_URL || 'http://127.0.0.1:8001/api';
+            const webhookUrl = `${laravelUrl}/webhooks/whatsapp-message`;
+            
+            console.log(`🔄 [${this.instanceId}] Enviando webhook a: ${webhookUrl}`);
+            
+            const payload = {
+                instance_id: this.instanceId,
+                phone: phone,
+                message: messageText,
+                message_id: message.key.id,
+                type: messageType,
+                media: mediaData,
+                push_name: message.pushName || null,
+                timestamp: new Date(message.messageTimestamp * 1000).toISOString()
+            };
+            
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Webhook-Secret': process.env.WEBHOOK_SECRET || 'guro-whatsapp-webhook-secret'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            const responseText = await response.text();
+            console.log(`📡 [${this.instanceId}] Webhook response (${response.status}): ${responseText.substring(0, 200)}`);
+            
+            if (response.ok) {
+                console.log(`✅ [${this.instanceId}] Webhook enviado exitosamente a Laravel para ${phone}`);
+            } else {
+                console.error(`❌ [${this.instanceId}] Webhook falló (${response.status}): ${responseText}`);
+            }
+        } catch (error) {
+            console.error(`⚠️ [${this.instanceId}] Error enviando webhook:`, error.message);
         }
     }
 

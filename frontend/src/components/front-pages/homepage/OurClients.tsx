@@ -46,7 +46,7 @@ const OurClients = () => {
                 Desde agentes independientes hasta grandes aseguradoras, profesionales de toda Latinoamérica están transformando sus negocios con nuestra IA.
               </p>
               <Link
-                to="/auth/auth1/register"
+                to="/comenzar"
                 className="text-darklink dark:text-white text-15 font-bold underline decoration-2 underline-offset-[6px] text-primary-ld hover:text-primary transition-colors"
               >
                 Únete a Guro Hoy

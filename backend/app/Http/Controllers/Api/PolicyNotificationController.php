@@ -97,7 +97,7 @@ class PolicyNotificationController extends Controller
             $brokerId = (int)$brokerId;
 
             $validator = Validator::make($request->all(), [
-                'whatsapp_instance_id' => 'nullable|exists:whats_app_instances,id',
+                'whatsapp_instance_id' => 'nullable|exists:whatsapp_instances,id',
                 'is_active' => 'boolean',
                 'name' => 'string|max:255',
                 'description' => 'nullable|string',

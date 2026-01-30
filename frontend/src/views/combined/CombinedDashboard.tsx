@@ -3,7 +3,6 @@ import { Tabs } from "flowbite-react";
 import { Icon } from "@iconify/react";
 import Dashboard3 from '../dashboard/Dashboard3';
 import VoiceAIDashboard from '../voice-ai/VoiceAIDashboard';
-import ElectronicInvoicingDashboard from '../dashboards/ElectronicInvoicingDashboard';
 import ConfiguracionMasiva from '../saas/configuracion-masiva/ConfiguracionMasiva';
 import Plantillas from '../apps/marketing/plantillas/Plantillas';
 import CarteraClientes from '../apps/cartera/CarteraClientes';
@@ -11,8 +10,6 @@ import DashboardConfigModal from '../../components/modals/DashboardConfigModal';
 import { useWelcomeModal } from '../../hooks/useWelcomeModal';
 import type { TutorialSection } from '../../components/modals/OnboardingTutorialModal';
 import OnboardingTutorialModal from '../../components/modals/OnboardingTutorialModal';
-import FirstTimeOnboardingModal from '../../components/modals/FirstTimeOnboardingModal';
-// import { getAuth } from 'firebase/auth';
 
 interface DashboardConfig {
   id: string;
@@ -27,12 +24,14 @@ const CombinedDashboard = () => {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
-  const [firstTimeOnboardingOpen, setFirstTimeOnboardingOpen] = useState(false);
   
   // Hook para la modal de bienvenida
   const { showWelcomeModal, closeWelcomeModal } = useWelcomeModal(true);
   
-  // Verificar si es primera vez (onboarding no completado)
+  // La verificación de datos incompletos ahora está en UnifiedProtectedFullLayout
+  // Ya no necesitamos duplicar esa lógica aquí
+  
+  // Verificar si es primera vez (solo para tutoriales, no para onboarding obligatorio)
   const isFirstTime = !localStorage.getItem('guro_onboarding_completed');
 
   // Config del tutorial (según indicaciones del usuario)
@@ -114,16 +113,12 @@ const CombinedDashboard = () => {
     } catch {}
   }, []);
 
-  // Si la lógica de bienvenida indica mostrar modal
-  // Si es primera vez, mostrar el onboarding completo (datos + tutoriales)
-  // Si no es primera vez, mostrar solo tutoriales
+  // El modal de onboarding obligatorio ahora está en UnifiedProtectedFullLayout
+  // Aquí solo manejamos el tutorial de bienvenida
   useEffect(() => {
-    if (showWelcomeModal) {
-      if (isFirstTime) {
-        setFirstTimeOnboardingOpen(true);
-      } else {
-        setTutorialOpen(true);
-      }
+    if (showWelcomeModal && isFirstTime) {
+      // Solo mostrar tutorial si el onboarding no está completado
+      setTutorialOpen(true);
     }
   }, [showWelcomeModal, isFirstTime]);
   
@@ -276,18 +271,7 @@ const CombinedDashboard = () => {
         sections={tutorialSections}
       />
 
-      {/* First Time Onboarding Modal (datos del broker + tutoriales) */}
-      <FirstTimeOnboardingModal
-        isOpen={firstTimeOnboardingOpen}
-        onClose={() => {
-          setFirstTimeOnboardingOpen(false);
-          closeWelcomeModal();
-        }}
-        onComplete={() => {
-          setFirstTimeOnboardingOpen(false);
-          closeWelcomeModal();
-        }}
-      />
+      {/* El modal de onboarding obligatorio ahora está en UnifiedProtectedFullLayout */}
     </div>
   );
 };

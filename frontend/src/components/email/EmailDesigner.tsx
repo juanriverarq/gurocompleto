@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TextInput, Textarea, Label } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import { sanitizeEmailHtml } from 'src/utils/sanitize';
 
 type EmailDesignerProps = {
   initialHtml?: string;
@@ -428,7 +429,7 @@ const EmailDesigner: React.FC<EmailDesignerProps> = ({ initialHtml, height = 600
             <span className="font-semibold text-sm text-gray-700 dark:text-gray-300">Vista Previa</span>
           </div>
           <div className="p-4 overflow-y-auto" style={{ height: 'calc(100% - 52px)' }}>
-            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(previewHtml) }} />
           </div>
         </div>
       </div>

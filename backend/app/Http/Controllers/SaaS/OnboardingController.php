@@ -400,6 +400,48 @@ class OnboardingController extends Controller
     }
 
     /**
+     * Obtener perfil del broker (para verificar datos de onboarding)
+     */
+    public function getBrokerProfile(Request $request)
+    {
+        try {
+            $user = UnifiedAuthMiddleware::getAuthenticatedUser($request);
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            $broker = $user->getPrimaryBroker();
+            if (!$broker) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes un broker asociado'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'name' => $broker->name,
+                'legal_name' => $broker->legal_name,
+                'document_type' => $broker->document_type ?? 'NIT',
+                'document_number' => $broker->document_number,
+                'phone' => $broker->phone,
+                'address' => $broker->address,
+                'city' => $broker->city,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo perfil del broker: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener el perfil'
+            ], 500);
+        }
+    }
+
+    /**
      * Actualizar perfil del broker (para completar datos después del registro)
      */
     public function updateBrokerProfile(Request $request)

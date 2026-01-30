@@ -12,6 +12,7 @@ import  { useState, useContext } from "react";
 import SimpleBar from "simplebar-react";
 import { Icon } from "@iconify/react";
 import { EmailContext } from "src/context/EmailContext";
+import { sanitizeEmailHtml } from "src/utils/sanitize";
 import React from 'react';
 import emailSv from "/src/assets/images/backgrounds/emailSv.png"
 
@@ -151,7 +152,7 @@ const EmailContent: React.FC<MailListItemProps> = ({
                 <div
                   className="email-content"
                   dangerouslySetInnerHTML={{
-                    __html: selectedEmail.emailContent,
+                    __html: sanitizeEmailHtml(selectedEmail.emailContent),
                   }}
                 ></div>
                 {hasAttachments && (

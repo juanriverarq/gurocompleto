@@ -894,7 +894,7 @@ const Menuitems = [
                 id: uniqueId(),
                 title: "Side Register",
 
-                href: "/auth/auth1/register",
+                href: "/comenzar",
               },
               {
                 id: uniqueId(),

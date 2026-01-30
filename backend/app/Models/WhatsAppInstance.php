@@ -12,11 +12,16 @@ class WhatsAppInstance extends Model
     use HasFactory;
 
     // Usar el nombre correcto de la tabla en la base de datos
-    protected $table = 'whats_app_instances';
+    protected $table = 'whatsapp_instances';
 
     protected $fillable = [
         'broker_id',
         'instance_id',
+        'connection_type',
+        'cloud_api_phone_id',
+        'cloud_api_business_id',
+        'cloud_api_token',
+        'cloud_api_verify_token',
         'session_id',
         'phone_number',
         'status',
@@ -41,7 +46,22 @@ class WhatsAppInstance extends Model
         'last_connected_at' => 'datetime',
         'last_activity_at' => 'datetime',
         'is_active' => 'boolean',
+        'cloud_api_token' => 'encrypted',
     ];
+
+    // Constantes para tipos de conexión
+    const CONNECTION_BAILEYS = 'baileys';
+    const CONNECTION_CLOUD_API = 'cloud_api';
+
+    public function isBaileys(): bool
+    {
+        return $this->connection_type === self::CONNECTION_BAILEYS;
+    }
+
+    public function isCloudApi(): bool
+    {
+        return $this->connection_type === self::CONNECTION_CLOUD_API;
+    }
 
     // Relaciones
     public function broker(): BelongsTo

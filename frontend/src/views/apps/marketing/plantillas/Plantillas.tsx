@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, Badge, Button, Alert, Modal, TextInput, Textarea } from 'flowbite-react';
+import { sanitizeEmailHtml } from 'src/utils/sanitize';
 import {
   Card as SCard,
   CardContent as SCardContent,
@@ -1635,7 +1636,7 @@ const Plantillas = () => {
                                 height: '400%',
                               }}
                             >
-                              <div dangerouslySetInnerHTML={{ __html: tpl.content }} />
+                              <div dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(tpl.content) }} />
                             </div>
 
                             {/* Overlay con acciones rápidas - aparece al hover */}
@@ -1819,7 +1820,7 @@ const Plantillas = () => {
                         <h4 className="font-semibold mb-3">Vista Previa del Email</h4>
                         <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700 max-h-96 overflow-y-auto">
                           <div
-                            dangerouslySetInnerHTML={{ __html: plantillaSeleccionada.content }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(plantillaSeleccionada.content) }}
                           />
                         </div>
                       </div>

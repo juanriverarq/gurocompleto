@@ -171,10 +171,10 @@ api.interceptors.response.use(
         // Intentar refrescar token de Firebase primero
         const user = auth.currentUser;
         if (user) {
-          console.log('🔄 Intentando refrescar token Firebase...');
+          if (import.meta.env.DEV) console.log('🔄 Intentando refrescar token Firebase...');
           const newToken = await user.getIdToken(true); // Force refresh
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          console.log('✅ Token Firebase refrescado, reintentando petición...');
+          if (import.meta.env.DEV) console.log('✅ Token Firebase refrescado, reintentando petición...');
           isRefreshing = false;
           return api(originalRequest);
         }
@@ -182,7 +182,7 @@ api.interceptors.response.use(
         // Si no hay usuario Firebase, intentar refrescar token de empleado
         const empleadoToken = localStorage.getItem('empleado_token');
         if (empleadoToken) {
-          console.log('🔄 Intentando refrescar token de empleado...');
+          if (import.meta.env.DEV) console.log('🔄 Intentando refrescar token de empleado...');
           try {
             // Intentar refrescar token de empleado desde el backend
             const refreshResponse = await fetch(
@@ -207,7 +207,7 @@ api.interceptors.response.use(
                   localStorage.setItem('empleado_token', newToken);
                 }
                 originalRequest.headers.Authorization = `Bearer ${newToken}`;
-                console.log('✅ Token de empleado validado/refrescado, reintentando petición...');
+                if (import.meta.env.DEV) console.log('✅ Token de empleado validado/refrescado, reintentando petición...');
                 isRefreshing = false;
                 return api(originalRequest);
               }
@@ -234,7 +234,7 @@ api.interceptors.response.use(
       const inEmpleadoLogin = currentPath.startsWith('/empleados/login');
       if (!inAuth && !inOnboarding && !inEmpleadoLogin) {
         const target = hasEmpleado ? '/empleados/login' : '/auth/auth1/login';
-        console.log('🔄 Redirigiendo al login debido a token expirado...', {
+        if (import.meta.env.DEV) console.log('🔄 Redirigiendo al login debido a token expirado...', {
           target,
           from: currentPath,
         });

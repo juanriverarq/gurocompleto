@@ -9,11 +9,31 @@ use App\Models\User;
 class AuthService
 {
     /**
-     * Obtener el usuario autenticado desde Firebase
+     * Obtener el usuario autenticado desde Firebase o Empleado
      */
     public static function getAuthenticatedUser(Request $request): ?User
     {
         try {
+            // Primero verificar si es un empleado autenticado
+            $empleado = $request->get('authenticated_empleado');
+            if ($empleado) {
+                // Para empleados, crear un objeto User virtual con los datos necesarios
+                $user = new User();
+                $user->id = $empleado->id;
+                $user->email = $empleado->email;
+                $user->name = trim(($empleado->nombres ?? '') . ' ' . ($empleado->apellidos ?? ''));
+                $user->broker_id = $empleado->broker_id;
+                $user->user_type = 'EMPLEADO';
+                $user->firebase_uid = 'empleado:' . $empleado->id;
+                
+                Log::info('✅ [AUTH SERVICE] Empleado autenticado encontrado', [
+                    'empleado_id' => $empleado->id,
+                    'email' => $empleado->email,
+                    'broker_id' => $empleado->broker_id
+                ]);
+                return $user;
+            }
+            
             // Intentar obtener usuario desde el middleware firebase.auth
             $user = $request->user();
             

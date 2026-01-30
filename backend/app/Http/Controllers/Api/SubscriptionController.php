@@ -244,6 +244,114 @@ class SubscriptionController extends Controller
     }
 
     /**
+     * Obtener intención de suscripción pendiente (para mostrar en modal de pago)
+     */
+    public function pendingIntent(Request $request): JsonResponse
+    {
+        try {
+            $user = UnifiedAuthMiddleware::getAuthenticatedUser($request);
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no autenticado'
+                ], 401);
+            }
+
+            // Buscar la intención de suscripción más reciente pendiente
+            $pendingIntent = SubscriptionIntent::where('user_id', $user->id)
+                ->where('status', 'pending')
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            if (!$pendingIntent) {
+                return response()->json([
+                    'success' => true,
+                    'data' => null,
+                    'message' => 'No hay intención de suscripción pendiente'
+                ]);
+            }
+
+            // Calcular totales si no existen o están incompletos
+            $totals = $pendingIntent->totals ?? [];
+            
+            // Si no hay subtotalMonthly, calcular basado en módulos
+            if (!isset($totals['subtotalMonthly']) || $totals['subtotalMonthly'] == 0) {
+                $modules = $pendingIntent->modules ?? [];
+                $usersCount = $pendingIntent->users_count ?? 1;
+                $storageGb = $pendingIntent->storage_gb ?? 10;
+                
+                // Precios base por módulo (mensual por usuario)
+                $modulePrices = [
+                    'crm' => 25000,
+                    'polizas' => 35000,
+                    'cotizador' => 20000,
+                    'marketing' => 15000,
+                    'cobranza' => 20000,
+                    'reportes' => 10000,
+                    'voice_ai' => 30000,
+                    'whatsapp' => 25000,
+                ];
+                
+                // Calcular precio base por módulos
+                $basePrice = 0;
+                foreach ($modules as $module) {
+                    $moduleKey = is_array($module) ? ($module['id'] ?? $module['key'] ?? '') : $module;
+                    if (isset($modulePrices[$moduleKey])) {
+                        $basePrice += $modulePrices[$moduleKey];
+                    }
+                }
+                
+                // Si no hay módulos seleccionados, usar precio base mínimo
+                if ($basePrice == 0) {
+                    $basePrice = 50000; // Precio base mínimo
+                }
+                
+                // Multiplicar por usuarios
+                $subtotalMonthly = $basePrice * $usersCount;
+                
+                // Agregar costo de almacenamiento extra (10GB incluidos)
+                $extraStorage = max(0, $storageGb - 10);
+                $storageCost = $extraStorage * 5000; // $5,000 por GB extra
+                $subtotalMonthly += $storageCost;
+                
+                // Calcular anual con descuento del 20%
+                $annualDiscount = 0.20;
+                $totalAnnual = $subtotalMonthly * 12 * (1 - $annualDiscount);
+                
+                $totals = [
+                    'subtotalMonthly' => $subtotalMonthly,
+                    'totalAnnualEquivalent' => $totalAnnual,
+                    'annualDiscount' => $annualDiscount * 100,
+                    'total' => $pendingIntent->period === 'annual' ? $totalAnnual : $subtotalMonthly,
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $pendingIntent->id,
+                    'period' => $pendingIntent->period,
+                    'users_count' => $pendingIntent->users_count,
+                    'storage_gb' => $pendingIntent->storage_gb,
+                    'modules' => $pendingIntent->modules,
+                    'totals' => $totals,
+                    'created_at' => $pendingIntent->created_at->toISOString(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo intención pendiente', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener la intención de suscripción'
+            ], 500);
+        }
+    }
+
+    /**
      * Obtener estadísticas de uso
      */
     public function usage(Request $request): JsonResponse

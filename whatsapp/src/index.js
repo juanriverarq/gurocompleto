@@ -24,8 +24,11 @@ class GuromensajesServer {
         this.server = http.createServer(this.app);
         this.io = socketIo(this.server, {
             cors: {
-                origin: "*",
-                methods: ["GET", "POST"]
+                origin: process.env.CORS_ORIGINS 
+                    ? process.env.CORS_ORIGINS.split(',') 
+                    : ["https://app.guro.co", "https://guro.co", "http://localhost:5173"],
+                methods: ["GET", "POST"],
+                credentials: true
             }
         });
         this.port = process.env.PORT || 3000;

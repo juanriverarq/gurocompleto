@@ -18,7 +18,7 @@ const HeroText = () => {
                 <Button
                   color={"primary"}
                   as={Link}
-                  to="/auth/auth1/register"
+                  to="/comenzar"
                   className="px-4 font-bold sm:w-fit w-full"
                 >
                   Create an Account

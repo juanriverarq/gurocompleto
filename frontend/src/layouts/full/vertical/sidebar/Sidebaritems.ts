@@ -24,10 +24,12 @@ export interface MenuitemsType {
 }
 
 const BaseMenuitems: MenuitemsType[] = [
-  // 🏠 PANEL DE CONTROL
+  // ═══════════════════════════════════════════════════════════════
+  // 1. 🏠 INICIO
+  // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
-    subheader: 'Panel de Control',
+    subheader: 'Inicio',
   },
   {
     id: uniqueId(),
@@ -36,10 +38,12 @@ const BaseMenuitems: MenuitemsType[] = [
     href: '/apps/',
   },
 
-  // 🛡️ OPERACIONES DE SEGUROS
+  // ═══════════════════════════════════════════════════════════════
+  // 2. 🛡️ SEGUROS (Core del negocio)
+  // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
-    subheader: 'Operaciones de Seguros',
+    subheader: 'Seguros',
   },
   {
     id: uniqueId(),
@@ -57,12 +61,6 @@ const BaseMenuitems: MenuitemsType[] = [
         href: '/apps/seguros/clientes/nuevo',
         requiredAction: 'crear',
       },
-      {
-        id: uniqueId(),
-        title: 'Seguimiento Comercial',
-        href: '/apps/seguros/seguimiento',
-      },
-      // Ítem removido: Embudo de Conversión
     ],
   },
   {
@@ -113,22 +111,22 @@ const BaseMenuitems: MenuitemsType[] = [
     ],
   },
 
-  // 💼 GESTIÓN COMERCIAL
+  // ═══════════════════════════════════════════════════════════════
+  // 3. 💼 COMERCIAL (Ventas y seguimiento)
+  // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
-    subheader: 'Gestión Comercial',
+    subheader: 'Comercial',
   },
-  // Orden propuesto: Embudo, Seguimiento, Metas, Equipos, Rendimiento
   {
     id: uniqueId(),
-    title: 'Negocios',
-    icon: 'solar:target-bold-duotone',
+    title: 'Embudo de Ventas',
+    icon: 'solar:chart-2-bold-duotone',
     href: '/apps/saas/sales-funnel',
   },
-  // Eliminado: Pipeline de Ventas (/apps/comercial/pipeline)
   {
     id: uniqueId(),
-    title: 'Seguimiento Comercial',
+    title: 'Seguimiento',
     icon: 'solar:clipboard-check-bold-duotone',
     href: '/apps/seguros/seguimiento',
   },
@@ -140,21 +138,17 @@ const BaseMenuitems: MenuitemsType[] = [
   },
   {
     id: uniqueId(),
-    title: 'Equipos de Ventas',
-    icon: 'solar:users-group-rounded-bold-duotone',
-    href: '/apps/comercial/equipos-ventas',
-  },
-  {
-    id: uniqueId(),
-    title: 'Análisis de Rendimiento',
+    title: 'Rendimiento',
     icon: 'solar:graph-up-bold-duotone',
     href: '/apps/comercial/rendimiento',
   },
 
-  // 💰 GESTIÓN FINANCIERA
+  // ═══════════════════════════════════════════════════════════════
+  // 4. 💰 FINANZAS
+  // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
-    subheader: 'Gestión Financiera',
+    subheader: 'Finanzas',
   },
   {
     id: uniqueId(),
@@ -166,13 +160,23 @@ const BaseMenuitems: MenuitemsType[] = [
     id: uniqueId(),
     title: 'Comisiones',
     icon: 'solar:dollar-minimalistic-bold-duotone',
-    href: '/apps/comisiones/por-poliza',
-  },
-  {
-    id: uniqueId(),
-    title: 'Liquidar Vendedor / Asesor',
-    icon: 'solar:calculator-bold-duotone',
-    href: '/apps/cartera/liquidar-vendedores',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'Por Póliza',
+        href: '/apps/comisiones/por-poliza',
+      },
+      {
+        id: uniqueId(),
+        title: 'Anticipos y Ajustes',
+        href: '/apps/comisiones/anticipos-ajustes',
+      },
+      {
+        id: uniqueId(),
+        title: 'Liquidar Vendedor / Asesor',
+        href: '/apps/cartera/liquidar-vendedores',
+      },
+    ],
   },
   {
     id: uniqueId(),
@@ -180,23 +184,52 @@ const BaseMenuitems: MenuitemsType[] = [
     icon: 'solar:chart-square-bold-duotone',
     href: '/apps/cartera/reportes-financieros',
   },
-  {
-    id: uniqueId(),
-    title: 'Anticipos y Ajustes',
-    icon: 'solar:dollar-minimalistic-bold-duotone',
-    href: '/apps/comisiones/anticipos-ajustes',
-  },
 
-  // 📢 MARKETING DIGITAL
+  // ═══════════════════════════════════════════════════════════════
+  // 5. 📱 COMUNICACIONES (WhatsApp + Marketing unificados)
+  // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
-    subheader: 'Marketing Digital',
+    subheader: 'Comunicaciones',
   },
   {
     id: uniqueId(),
-    title: 'WhatsApp Marketing',
+    title: 'WhatsApp',
     icon: 'solar:chat-round-dots-bold-duotone',
-    href: '/apps/saas/configuracion-masiva',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'Inbox',
+        href: '/apps/whatsapp/inbox',
+        chip: 'Pro',
+        chipColor: 'primary',
+      },
+      {
+        id: uniqueId(),
+        title: 'Dashboard',
+        href: '/apps/whatsapp/dashboard',
+      },
+      {
+        id: uniqueId(),
+        title: 'Conexiones',
+        href: '/apps/whatsapp/conexiones',
+      },
+      {
+        id: uniqueId(),
+        title: 'Campañas',
+        href: '/apps/whatsapp/campanas',
+      },
+      {
+        id: uniqueId(),
+        title: 'Chatbots',
+        href: '/apps/whatsapp/chatbots',
+      },
+      {
+        id: uniqueId(),
+        title: 'Plantillas',
+        href: '/apps/whatsapp/plantillas',
+      },
+    ],
   },
   {
     id: uniqueId(),
@@ -204,7 +237,6 @@ const BaseMenuitems: MenuitemsType[] = [
     icon: 'solar:letter-bold-duotone',
     href: '/apps/marketing/plantillas',
   },
-
   {
     id: uniqueId(),
     title: 'Enlaces de Cotización',
@@ -217,68 +249,63 @@ const BaseMenuitems: MenuitemsType[] = [
     icon: 'solar:smartphone-2-bold-duotone',
     href: '/apps/marketing/mini-web',
   },
-  {
-    id: uniqueId(),
-    title: 'Comparador',
-    icon: 'solar:shield-check-bold-duotone',
-    href: '#',
-    chip: 'Próximamente',
-    chipColor: 'bg-gray-200 text-gray-600',
-  },
 
-  // 🤖 INTELIGENCIA ARTIFICIAL
+  // ═══════════════════════════════════════════════════════════════
+  // 6. 🤖 INTELIGENCIA ARTIFICIAL
+  // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
     subheader: 'Inteligencia Artificial',
   },
   {
     id: uniqueId(),
-    title: 'Chatbot',
+    title: 'Asistente IA',
     icon: 'solar:cpu-bolt-bold-duotone',
     href: '/apps/ia/asistente',
   },
   {
     id: uniqueId(),
-    title: 'Call center IA',
+    title: 'Call Center IA',
     icon: 'solar:phone-calling-rounded-outline',
     href: '/apps/voice-ai/dashboard',
   },
   {
     id: uniqueId(),
-    title: 'Ventas cruzadas',
+    title: 'Ventas Cruzadas',
     icon: 'solar:graph-up-bold-duotone',
     href: '/apps/ia/ventas-cruzadas',
   },
   {
     id: uniqueId(),
     title: 'Robots',
-    icon: 'solar:bolt-circle-bold-duotone',
-    href: '#',
+    icon: 'solar:robot-bold-duotone',
+    href: '/apps/ia/robots',
     chip: 'Próximamente',
-    chipColor: 'bg-gray-200 text-gray-600',
+    chipColor: 'secondary',
   },
 
-  // 📚 GESTIÓN DOCUMENTAL
+  // ═══════════════════════════════════════════════════════════════
+  // 7. 📁 DOCUMENTOS
+  // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
-    subheader: 'Gestión Documental',
+    subheader: 'Documentos',
   },
-
   {
     id: uniqueId(),
-    title: 'Clientes',
+    title: 'De Clientes',
     icon: 'solar:folder-with-files-bold-duotone',
     href: '/apps/legal/documentos-cliente',
   },
   {
     id: uniqueId(),
-    title: 'Pólizas',
+    title: 'De Pólizas',
     icon: 'solar:folder-with-files-bold-duotone',
     href: '/apps/seguros/documentos-poliza',
   },
   {
     id: uniqueId(),
-    title: 'Siniestros',
+    title: 'De Siniestros',
     icon: 'solar:folder-with-files-bold-duotone',
     href: '/apps/seguros/documentos-siniestro',
   },
@@ -289,81 +316,21 @@ const BaseMenuitems: MenuitemsType[] = [
     href: '/apps/legal/documentos-internos',
   },
 
-  // 🔗 INTEGRACIONES
+  // ═══════════════════════════════════════════════════════════════
+  // 8. ⚙️ CONFIGURACIÓN (Admin simplificado)
+  // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
-    subheader: 'Integraciones',
+    subheader: 'Configuración',
   },
   {
     id: uniqueId(),
-    title: 'Integraciones Externas',
-    icon: 'solar:programming-bold-duotone',
-    children: [
-      {
-        id: uniqueId(),
-        title: 'Conectores API',
-        href: '/apps/integraciones/conectores',
-      },
-      {
-        id: uniqueId(),
-        title: 'Webhooks',
-        href: '/apps/integraciones/webhooks',
-      },
-      {
-        id: uniqueId(),
-        title: 'Documentación API',
-        href: '/apps/integraciones/documentacion',
-      },
-    ],
-  },
-  {
-    id: uniqueId(),
-    title: 'Sincronización',
-    icon: 'solar:refresh-bold-duotone',
-    children: [
-      {
-        id: uniqueId(),
-        title: 'Sincronización Auto',
-        href: '/apps/integraciones/sincronizacion',
-      },
-      {
-        id: uniqueId(),
-        title: 'Historial de Sync',
-        href: '/apps/integraciones/historial',
-      },
-    ],
-  },
-
-  // ⚙️ ADMINISTRACIÓN
-  {
-    navlabel: true,
-    subheader: 'Administración',
-  },
-  {
-    id: uniqueId(),
-    title: 'Gestión de Usuarios',
-    icon: 'solar:users-group-rounded-bold-duotone',
-    children: [
-      {
-        id: uniqueId(),
-        title: 'Lista de Usuarios',
-        href: '/apps/admin/usuarios',
-      },
-      {
-        id: uniqueId(),
-        title: 'Roles y Permisos',
-        href: '/apps/admin/roles',
-      },
-    ],
-  },
-  {
-    id: uniqueId(),
-    title: 'Configuración Agencia',
+    title: 'Mi Agencia',
     icon: 'solar:buildings-3-bold-duotone',
     children: [
       {
         id: uniqueId(),
-        title: 'Información de Agencia',
+        title: 'Información',
         href: '/apps/admin/informacion-agencia',
       },
       {
@@ -381,6 +348,37 @@ const BaseMenuitems: MenuitemsType[] = [
         title: 'Ramos',
         href: '/apps/admin/ramos',
       },
+    ],
+  },
+  {
+    id: uniqueId(),
+    title: 'Usuarios y Roles',
+    icon: 'solar:users-group-rounded-bold-duotone',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'Usuarios',
+        href: '/apps/admin/usuarios',
+      },
+      {
+        id: uniqueId(),
+        title: 'Reportes de Actividad',
+        href: '/apps/admin/usuarios/reportes',
+        chip: 'Nuevo',
+        chipColor: 'success',
+      },
+      {
+        id: uniqueId(),
+        title: 'Roles y Permisos',
+        href: '/apps/admin/roles',
+      },
+    ],
+  },
+  {
+    id: uniqueId(),
+    title: 'Catálogos',
+    icon: 'solar:notebook-bookmark-bold-duotone',
+    children: [
       {
         id: uniqueId(),
         title: 'Vendedor / Asesor',
@@ -415,7 +413,29 @@ const BaseMenuitems: MenuitemsType[] = [
   },
   {
     id: uniqueId(),
-    title: 'Configuración del Sistema',
+    title: 'Integraciones',
+    icon: 'solar:programming-bold-duotone',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'Conectores API',
+        href: '/apps/integraciones/conectores',
+      },
+      {
+        id: uniqueId(),
+        title: 'Webhooks',
+        href: '/apps/integraciones/webhooks',
+      },
+      {
+        id: uniqueId(),
+        title: 'Sincronización',
+        href: '/apps/integraciones/sincronizacion',
+      },
+    ],
+  },
+  {
+    id: uniqueId(),
+    title: 'Sistema',
     icon: 'solar:settings-bold-duotone',
     children: [
       {

@@ -132,6 +132,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
     representante_legal: '',
     representante_legal_tipo_documento: '',
     representante_legal_documento: '',
+    etiquetas: (clienteToEdit as any)?.etiquetas || '',
   });
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -418,6 +419,7 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
               representante_legal: '',
               representante_legal_tipo_documento: '',
               representante_legal_documento: '',
+              etiquetas: '',
             });
             setCurrentStep(0);
             navigate('/apps/seguros/clientes');
@@ -436,6 +438,92 @@ const NuevoCliente: React.FC<NuevoClienteProps> = ({
         <div className="col-span-12">
           <CardBox className="mb-4">
             <Stepper currentStep={currentStep} steps={steps} onStepClick={handleStepClick} />
+            
+            {/* Segmentación / Etiquetas - Visible en todos los pasos */}
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Label className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2 mb-2">
+                <Icon icon="solar:tag-bold-duotone" className="text-primary" />
+                Etiquetas
+              </Label>
+              
+              {/* Input para etiquetas */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 max-w-sm">
+                  <Input
+                    id="nueva_etiqueta"
+                    placeholder="Escribe una etiqueta y presiona Enter..."
+                    className="pr-10 text-sm"
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const input = e.currentTarget;
+                        const value = input.value.trim().toLowerCase().replace(/\s+/g, '_');
+                        if (value && value.length >= 2) {
+                          const currentTags = (formData.etiquetas || '').split(',').filter(Boolean);
+                          if (!currentTags.includes(value)) {
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              etiquetas: [...currentTags, value].join(',') 
+                            }));
+                          }
+                          input.value = '';
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary"
+                    onClick={() => {
+                      const input = document.getElementById('nueva_etiqueta') as HTMLInputElement;
+                      const value = input?.value.trim().toLowerCase().replace(/\s+/g, '_');
+                      if (value && value.length >= 2) {
+                        const currentTags = (formData.etiquetas || '').split(',').filter(Boolean);
+                        if (!currentTags.includes(value)) {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            etiquetas: [...currentTags, value].join(',') 
+                          }));
+                        }
+                        input.value = '';
+                      }
+                    }}
+                  >
+                    <Icon icon="solar:add-circle-bold" className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Etiquetas seleccionadas */}
+              {(() => {
+                const allTags = (formData.etiquetas || '').split(',').filter(Boolean);
+                
+                if (allTags.length === 0) return null;
+                
+                return (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {allTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                      >
+                        {tag.replace(/_/g, ' ')}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newTags = allTags.filter(t => t !== tag);
+                            setFormData(prev => ({ ...prev, etiquetas: newTags.join(',') }));
+                          }}
+                          className="ml-1 text-primary/60 hover:text-red-500"
+                        >
+                          <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           </CardBox>
 
           <form

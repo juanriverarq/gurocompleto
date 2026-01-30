@@ -1,4 +1,4 @@
-//  Profile Data
+//  Mini Sidebar Icons - 8 secciones principales
 interface MiniiconsType {
   id: number;
   icon: string;
@@ -9,43 +9,42 @@ const Miniicons: MiniiconsType[] = [
   {
     id: 1,
     icon: 'solar:widget-2-bold-duotone',
-    tooltip: 'Panel de Control',
+    tooltip: 'Inicio',
   },
   {
     id: 2,
     icon: 'solar:shield-check-bold-duotone',
-    tooltip: 'Operaciones de Seguros',
+    tooltip: 'Seguros',
   },
   {
     id: 3,
     icon: 'solar:chart-2-bold-duotone',
-    tooltip: 'Gestión Comercial',
+    tooltip: 'Comercial',
   },
   {
     id: 4,
-    icon: 'solar:letter-bold-duotone',
-    tooltip: 'Marketing Digital',
+    icon: 'solar:wallet-bold-duotone',
+    tooltip: 'Finanzas',
   },
-
   {
     id: 5,
+    icon: 'solar:chat-round-dots-bold-duotone',
+    tooltip: 'Comunicaciones',
+  },
+  {
+    id: 6,
     icon: 'solar:cpu-bolt-bold-duotone',
     tooltip: 'Inteligencia Artificial',
   },
   {
-    id: 6,
-    icon: 'solar:wallet-bold-duotone',
-    tooltip: 'Gestión Financiera',
-  },
-  {
     id: 7,
-    icon: 'solar:document-bold-duotone',
-    tooltip: 'Gestión Documental',
+    icon: 'solar:folder-with-files-bold-duotone',
+    tooltip: 'Documentos',
   },
   {
-    id: 10,
+    id: 8,
     icon: 'solar:settings-bold-duotone',
-    tooltip: 'Administración',
+    tooltip: 'Configuración',
   },
 ];
 

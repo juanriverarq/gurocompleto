@@ -54,28 +54,34 @@ const NavItems: React.FC<NavItemsProps> = ({ item }) => {
               : "text-link bg-transparent group/link"
         } `}
       >
-        <span className="flex gap-3 align-center items-center justify-between w-full">
-          <span className="flex gap-3 align-center items-center">
-            {item.icon ? (
-              <Icon icon={item.icon} className={`iconify iconify--solar dark:bg-blue ${isDisabled ? 'opacity-50' : ''} ${item.color || ''}`} height={18} />
-            ) : (
-              <span
-                className={`${
-                  item.href == pathname
-                    ? "dark:bg-white rounded-full mx-1.5 group-hover/link:bg-primary !bg-primary h-[6px] w-[6px]"
-                    : "h-[6px] w-[6px] bg-black/40 dark:bg-white rounded-full mx-1.5 group-hover/link:bg-primary"
-                } `}
-              ></span>
+        <span className="flex gap-3 align-center items-center w-full">
+          {item.icon ? (
+            <Icon icon={item.icon} className={`iconify iconify--solar dark:bg-blue ${isDisabled ? 'opacity-50' : ''} ${item.color || ''}`} height={18} />
+          ) : (
+            <span
+              className={`${
+                item.href == pathname
+                  ? "dark:bg-white rounded-full mx-1.5 group-hover/link:bg-primary !bg-primary h-[6px] w-[6px]"
+                  : "h-[6px] w-[6px] bg-black/40 dark:bg-white rounded-full mx-1.5 group-hover/link:bg-primary"
+              } `}
+            ></span>
+          )}
+          <span className="flex flex-col">
+            {item.chip && (
+              <span className={`text-[8px] px-1 py-0 rounded-full whitespace-nowrap w-fit mb-0.5 ${
+                item.chipColor === 'secondary' 
+                  ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' 
+                  : item.chipColor === 'primary'
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-gray-200 text-gray-500'
+              }`}>
+                {item.chip}
+              </span>
             )}
             <span className={`max-w-36 overflow-hidden ${isDisabled ? 'text-gray-400' : ''}`}>
               {t(`${item.title}`)}
             </span>
           </span>
-          {item.chip && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${item.chipColor || 'bg-gray-200 text-gray-500'}`}>
-              {item.chip}
-            </span>
-          )}
         </span> 
       </Sidebar.Item>
     </>

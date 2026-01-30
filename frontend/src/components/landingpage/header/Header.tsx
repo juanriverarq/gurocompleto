@@ -45,6 +45,9 @@ const Header = () => {
             <Navbar.Link href="#testimonios" className="rounded-md hover:text-primary">
               Testimonios
             </Navbar.Link>
+            <Navbar.Link as={Link} to="/blog" className="rounded-md hover:text-primary">
+              Blog
+            </Navbar.Link>
             <Navbar.Link as={Link} to="/precios" className="rounded-md hover:text-primary">
               Precios
             </Navbar.Link>

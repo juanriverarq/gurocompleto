@@ -24,7 +24,7 @@ interface CreateCampaignWizardProps {
   onCampaignCreated?: (campaign: any) => void;
 }
 
-type CampaignType = 'immediate' | 'scheduled';
+type CampaignType = 'immediate' | 'scheduled' | 'birthday';
 
 interface CampaignData {
   name: string;
@@ -35,7 +35,47 @@ interface CampaignData {
   message_template: string;
   selectedClients: Cliente[];
   selectAllClients: boolean;
+  birthdayTemplate?: string;
 }
+
+// Plantillas de tarjetas de cumpleaños
+const BIRTHDAY_TEMPLATES = [
+  {
+    id: 'classic',
+    name: 'Clásica',
+    preview: '🎂',
+    image: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?w=400&h=300&fit=crop',
+    color: 'from-amber-400 to-orange-500'
+  },
+  {
+    id: 'elegant',
+    name: 'Elegante',
+    preview: '🎁',
+    image: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=400&h=300&fit=crop',
+    color: 'from-purple-400 to-pink-500'
+  },
+  {
+    id: 'fun',
+    name: 'Divertida',
+    preview: '🎈',
+    image: 'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?w=400&h=300&fit=crop',
+    color: 'from-cyan-400 to-blue-500'
+  },
+  {
+    id: 'corporate',
+    name: 'Corporativa',
+    preview: '🎊',
+    image: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=400&h=300&fit=crop',
+    color: 'from-indigo-400 to-violet-500'
+  },
+  {
+    id: 'minimal',
+    name: 'Minimalista',
+    preview: '✨',
+    image: 'https://images.unsplash.com/photo-1464349153735-7db50ed83c84?w=400&h=300&fit=crop',
+    color: 'from-gray-400 to-slate-500'
+  }
+];
 
 // Obtener variables disponibles del servicio de validación
 const AVAILABLE_VARIABLES = campaignValidationService.getAvailableVariables();
@@ -537,6 +577,22 @@ if (reset) {
       errors.push("El nombre de la campaña no puede exceder 100 caracteres");
     }
 
+    // Validar instancias de WhatsApp conectadas (para campañas inmediatas y cumpleaños)
+    if (campaignData.type === 'immediate' || campaignData.type === 'birthday') {
+      const connectedInstances = whatsappInstances.filter((inst) =>
+        inst.status === 'connected' || inst.status === 'authenticated'
+      );
+      
+      if (connectedInstances.length === 0) {
+        errors.push("No hay instancias de WhatsApp conectadas. Conecta una instancia antes de continuar.");
+      }
+    }
+
+    // Validar plantilla de cumpleaños
+    if (campaignData.type === 'birthday' && !campaignData.birthdayTemplate) {
+      errors.push("Selecciona una tarjeta de cumpleaños");
+    }
+
     // Validar fecha programada
     if (campaignData.type === 'scheduled') {
       if (!campaignData.scheduled_date) {
@@ -710,8 +766,19 @@ campaignPayload.campaign_type = 'scheduled';
 campaignPayload.scheduled_date = scheduledUtcIso;
       }
 
+      // Para campañas de cumpleaños, agregar la imagen de la plantilla seleccionada
+      if (campaignData.type === 'birthday' && campaignData.birthdayTemplate) {
+        const selectedTemplate = BIRTHDAY_TEMPLATES.find(t => t.id === campaignData.birthdayTemplate);
+        if (selectedTemplate) {
+          campaignPayload.media_url = selectedTemplate.image;
+          campaignPayload.media_type = 'image';
+          campaignPayload.campaign_subtype = 'birthday';
+          campaignPayload.birthday_template = campaignData.birthdayTemplate;
+        }
+      }
+
       let result;
-      if (campaignData.type === 'immediate') {
+      if (campaignData.type === 'immediate' || campaignData.type === 'birthday') {
         result = await campaignService.createImmediateCampaign(campaignPayload as ImmediateCampaign);
       } else if (campaignData.type === 'scheduled') {
         result = await campaignService.createScheduledCampaign(campaignPayload as ScheduledCampaign);
@@ -720,7 +787,9 @@ campaignPayload.scheduled_date = scheduledUtcIso;
       if (result?.success) {
         toast({
           title: "¡Éxito!",
-          description: campaignData.type === 'immediate'
+          description: campaignData.type === 'birthday'
+            ? "¡Felicitaciones de cumpleaños enviadas!"
+            : campaignData.type === 'immediate'
             ? "Campaña creada y mensajes enviados correctamente"
             : "Campaña programada creada correctamente"
         });
@@ -766,45 +835,70 @@ campaignPayload.scheduled_date = scheduledUtcIso;
   const campaignTypes = [
     {
       id: 'immediate',
-      icon: 'solar:lightning-bold',
+      icon: 'solar:bolt-bold-duotone',
       title: 'Inmediata',
-      description: 'Envío inmediato'
+      description: 'Envío inmediato a los destinatarios'
     },
     {
       id: 'scheduled',
-      icon: 'solar:calendar-bold',
+      icon: 'solar:calendar-mark-bold-duotone',
       title: 'Programada',
-      description: 'Fecha específica'
+      description: 'Programa el envío para una fecha'
+    },
+    {
+      id: 'birthday',
+      icon: 'solar:gift-bold-duotone',
+      title: 'Cumpleaños',
+      description: 'Felicita a tus clientes en su día'
     }
   ];
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon icon="solar:chat-square-code-bold" className="w-6 h-6" />
+            <Icon icon="solar:chat-round-dots-bold-duotone" className="w-6 h-6 text-indigo-600" />
             Crear Nueva Campaña
           </DialogTitle>
         </DialogHeader>
 
-        {/* Progress Steps */}
-        <div className="flex items-center justify-center mb-6">
-          <div className="flex items-center space-x-4">
-            <div className={`flex items-center space-x-2 ${currentStep >= 1 ? 'text-indigo-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                currentStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-gray-200'
+        {/* Progress Steps - Compacto */}
+        <div className="flex items-center justify-center mb-4 pb-4 border-b">
+          <div className="flex items-center gap-2">
+            {/* Step 1 */}
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${
+              currentStep > 1 
+                ? 'bg-green-50 text-green-700 border border-green-200' 
+                : currentStep === 1 
+                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm' 
+                  : 'bg-gray-50 text-gray-500 border border-gray-200'
+            }`}>
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
+                currentStep > 1 
+                  ? 'bg-green-500 text-white' 
+                  : currentStep === 1 
+                    ? 'bg-indigo-600 text-white' 
+                    : 'bg-gray-300 text-gray-600'
               }`}>
-                {currentStep > 1 ? <Icon icon="solar:check-circle-bold" className="w-5 h-5" /> : '1'}
+                {currentStep > 1 ? <Icon icon="solar:check-circle-bold-duotone" className="w-5 h-5" /> : '1'}
               </div>
               <span className="font-medium">Configuración</span>
             </div>
             
-            <div className={`w-12 h-0.5 ${currentStep >= 2 ? 'bg-indigo-600' : 'bg-gray-200'}`} />
+            {/* Connector */}
+            <div className={`w-12 h-1 rounded-full transition-all ${
+              currentStep > 1 ? 'bg-green-400' : 'bg-gray-200'
+            }`} />
             
-            <div className={`flex items-center space-x-2 ${currentStep >= 2 ? 'text-indigo-600' : 'text-gray-400'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                currentStep >= 2 ? 'bg-indigo-600 text-white' : 'bg-gray-200'
+            {/* Step 2 */}
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${
+              currentStep >= 2 
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm' 
+                : 'bg-gray-50 text-gray-500 border border-gray-200'
+            }`}>
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
+                currentStep >= 2 ? 'bg-indigo-600 text-white' : 'bg-gray-300 text-gray-600'
               }`}>
                 2
               </div>
@@ -819,7 +913,7 @@ campaignPayload.scheduled_date = scheduledUtcIso;
             {/* Campaign Type */}
             <div>
               <Label className="text-base font-semibold mb-3 block">Tipo de Campaña</Label>
-              <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {campaignTypes.map((type) => (
                   <button
                     key={type.id}
@@ -860,9 +954,48 @@ campaignPayload.scheduled_date = scheduledUtcIso;
               </div>
             </div>
 
-            {/* WhatsApp Instance */}
+            {/* WhatsApp Instance - Con indicador de estado */}
             <div>
-              <Label htmlFor="whatsapp-instance">Instancia de WhatsApp</Label>
+              <Label className="flex items-center gap-2 mb-2">
+                <Icon icon="solar:chat-round-dots-bold-duotone" className="w-4 h-4 text-green-500" />
+                Instancia de WhatsApp
+              </Label>
+              
+              {/* Estado de conexión */}
+              {(() => {
+                const connectedInstances = whatsappInstances.filter((inst) =>
+                  inst.status === 'connected' || inst.status === 'authenticated'
+                );
+                const hasConnected = connectedInstances.length > 0;
+                
+                return (
+                  <div className={`mb-3 p-3 rounded-lg border ${
+                    hasConnected 
+                      ? 'bg-green-50 border-green-200' 
+                      : 'bg-red-50 border-red-200'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Icon 
+                        icon={hasConnected ? "solar:check-circle-bold-duotone" : "solar:danger-triangle-bold-duotone"} 
+                        className={`w-5 h-5 ${hasConnected ? 'text-green-600' : 'text-red-600'}`} 
+                      />
+                      <div>
+                        <p className={`text-sm font-medium ${hasConnected ? 'text-green-700' : 'text-red-700'}`}>
+                          {hasConnected 
+                            ? `${connectedInstances.length} instancia(s) conectada(s)` 
+                            : 'No hay instancias conectadas'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {hasConnected 
+                            ? 'Puedes enviar mensajes de WhatsApp' 
+                            : 'Ve a Conexiones WhatsApp para conectar una instancia'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              
               <select
                 id="whatsapp-instance"
                 className="w-full p-2 border rounded-md"
@@ -883,6 +1016,49 @@ campaignPayload.scheduled_date = scheduledUtcIso;
                 Selecciona una instancia específica o deja automático
               </p>
             </div>
+
+            {/* Birthday Template Selection */}
+            {campaignData.type === 'birthday' && (
+              <div>
+                <Label className="text-base font-semibold mb-3 block flex items-center gap-2">
+                  <Icon icon="solar:gift-bold-duotone" className="w-5 h-5 text-pink-500" />
+                  Selecciona una Tarjeta de Cumpleaños
+                </Label>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  {BIRTHDAY_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => setCampaignData(prev => ({ ...prev, birthdayTemplate: template.id }))}
+                      className={`relative group overflow-hidden rounded-xl border-2 transition-all ${
+                        campaignData.birthdayTemplate === template.id
+                          ? 'border-pink-500 ring-2 ring-pink-200 shadow-lg scale-[1.02]'
+                          : 'border-gray-200 hover:border-pink-300 hover:shadow-md'
+                      }`}
+                    >
+                      <div className={`aspect-[4/3] bg-gradient-to-br ${template.color} flex items-center justify-center`}>
+                        <span className="text-4xl">{template.preview}</span>
+                      </div>
+                      <div className={`p-2 text-center text-sm font-medium ${
+                        campaignData.birthdayTemplate === template.id
+                          ? 'bg-pink-50 text-pink-700'
+                          : 'bg-white text-gray-700'
+                      }`}>
+                        {template.name}
+                      </div>
+                      {campaignData.birthdayTemplate === template.id && (
+                        <div className="absolute top-2 right-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center">
+                          <Icon icon="solar:check-bold" className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  La tarjeta se enviará junto con tu mensaje personalizado
+                </p>
+              </div>
+            )}
 
             {/* Scheduled Date (if applicable) */}
             {campaignData.type === 'scheduled' && (
@@ -1093,88 +1269,155 @@ campaignPayload.scheduled_date = scheduledUtcIso;
                 <div>
                   <Label className="text-base font-semibold mb-3 block">Destinatarios</Label>
                   
-                  {/* Select All Toggle */}
-                  <div className="flex items-center space-x-2 mb-4 p-3 border rounded-md bg-blue-50">
-                    <Switch
-                      checked={campaignData.selectAllClients}
-                      onCheckedChange={handleSelectAllToggle}
-                    />
-                    <Label className="font-medium">Enviar a todos los clientes activos</Label>
-                  </div>
+                  {/* Select All Toggle - Mejorado */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectAllToggle(!campaignData.selectAllClients)}
+                    className={`w-full flex items-center justify-between p-4 mb-4 rounded-xl border-2 transition-all ${
+                      campaignData.selectAllClients
+                        ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-400 shadow-md'
+                        : 'bg-gray-50 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        campaignData.selectAllClients
+                          ? 'bg-green-500 text-white'
+                          : 'bg-gray-200 text-gray-500'
+                      }`}>
+                        <Icon icon="solar:users-group-two-rounded-bold-duotone" className="w-5 h-5" />
+                      </div>
+                      <div className="text-left">
+                        <div className={`font-semibold ${campaignData.selectAllClients ? 'text-green-700' : 'text-gray-700'}`}>
+                          Enviar a todos los clientes
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {campaignData.selectAllClients 
+                            ? '✓ Se enviará a todos los clientes activos con celular' 
+                            : 'Haz clic para seleccionar todos automáticamente'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`w-12 h-7 rounded-full p-1 transition-all ${
+                      campaignData.selectAllClients ? 'bg-green-500' : 'bg-gray-300'
+                    }`}>
+                      <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                        campaignData.selectAllClients ? 'translate-x-5' : 'translate-x-0'
+                      }`} />
+                    </div>
+                  </button>
 
                   {!campaignData.selectAllClients && (
                     <>
                       {/* Segmentos y filtros */}
                       <div className="space-y-3 mb-4">
-                        {/* Segmentos disponibles */}
-                        <div className="p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-100">
-                          <div className="flex items-center justify-between mb-2">
-                            <Label className="text-sm font-medium text-purple-900">Segmentos Disponibles</Label>
+                        {/* Segmentos disponibles - Mejorado */}
+                        <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                                <Icon icon="solar:users-group-rounded-bold-duotone" className="w-4 h-4 text-purple-600" />
+                              </div>
+                              <div>
+                                <Label className="text-sm font-semibold text-gray-800">Segmentos Guardados</Label>
+                                <p className="text-xs text-gray-500">{segments.length} segmento(s) disponible(s)</p>
+                              </div>
+                            </div>
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
                               onClick={() => setShowSegmentManager(true)}
-                              className="h-6 px-2 text-xs"
+                              className="h-8 px-3 text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
                             >
-                              <Icon icon="solar:settings-bold" className="w-3 h-3 mr-1" />
-                              Gestionar
+                              <Icon icon="solar:settings-bold-duotone" className="w-4 h-4 mr-1" />
+                              Gestionar Segmentos
                             </Button>
                           </div>
                           
-                          <div className="flex flex-wrap gap-2">
-                            {selectedSegment && (
-                              <Button
+                          {segments.length === 0 ? (
+                            <div className="text-center py-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                              <Icon icon="solar:folder-open-bold-duotone" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                              <p className="text-sm text-gray-500">No hay segmentos creados</p>
+                              <button
                                 type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedSegment(null);
-                                  setCampaignData(prev => ({ ...prev, selectedClients: [] }));
-                                }}
-                                className="h-7 px-2 text-xs bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
-                              >
-                                <Icon icon="solar:close-circle-bold" className="w-3 h-3 mr-1" />
-                                Limpiar Segmento
-                              </Button>
-                            )}
-                            
-                            {segments.slice(0, 4).map((segment) => {
-                              const clientCount = clientSegmentService.countClientsInSegment(clients, segment);
-                              const isSelected = selectedSegment?.id === segment.id;
-                              
-                              return (
-                                <button
-                                  key={segment.id}
-                                  type="button"
-                                  onClick={() => handleSegmentSelect(segment, clientSegmentService.applySegmentFilters(clients, segment.filters))}
-                                  className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                                    isSelected
-                                      ? 'bg-purple-600 text-white'
-                                      : 'bg-white hover:bg-purple-50 text-purple-700 border border-purple-200'
-                                  }`}
-                                >
-                                  <div
-                                    className="w-2 h-2 rounded-full"
-                                    style={{ backgroundColor: isSelected ? 'white' : segment.color }}
-                                  />
-                                  {segment.name} ({clientCount})
-                                </button>
-                              );
-                            })}
-                            
-                            {segments.length > 4 && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
                                 onClick={() => setShowSegmentManager(true)}
-                                className="h-7 px-2 text-xs"
+                                className="text-xs text-purple-600 hover:text-purple-700 font-medium mt-1"
                               >
-                                +{segments.length - 4} más
-                              </Button>
-                            )}
-                          </div>
+                                + Crear primer segmento
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {selectedSegment && (
+                                <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg border border-purple-200">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedSegment.color }} />
+                                    <span className="text-sm font-medium text-purple-700">{selectedSegment.name}</span>
+                                    <Badge className="bg-purple-100 text-purple-700 text-xs">
+                                      {clientSegmentService.countClientsInSegment(clients, selectedSegment)} clientes
+                                    </Badge>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSegment(null);
+                                      setCampaignData(prev => ({ ...prev, selectedClients: [] }));
+                                    }}
+                                    className="p-1 hover:bg-purple-200 rounded-md transition-colors"
+                                  >
+                                    <Icon icon="solar:close-circle-bold-duotone" className="w-4 h-4 text-purple-600" />
+                                  </button>
+                                </div>
+                              )}
+                              
+                              <div className="grid grid-cols-2 gap-2">
+                                {segments.slice(0, 6).map((segment) => {
+                                  const clientCount = clientSegmentService.countClientsInSegment(clients, segment);
+                                  const isSelected = selectedSegment?.id === segment.id;
+                                  
+                                  return (
+                                    <button
+                                      key={segment.id}
+                                      type="button"
+                                      onClick={() => handleSegmentSelect(segment, clientSegmentService.applySegmentFilters(clients, segment.filters))}
+                                      className={`flex items-center gap-2 p-2.5 rounded-lg text-left transition-all ${
+                                        isSelected
+                                          ? 'bg-purple-100 border-2 border-purple-400 shadow-sm'
+                                          : 'bg-gray-50 border border-gray-200 hover:bg-purple-50 hover:border-purple-300'
+                                      }`}
+                                    >
+                                      <div
+                                        className="w-3 h-3 rounded-full flex-shrink-0"
+                                        style={{ backgroundColor: segment.color }}
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <div className={`text-xs font-medium truncate ${isSelected ? 'text-purple-700' : 'text-gray-700'}`}>
+                                          {segment.name}
+                                        </div>
+                                        <div className="text-[10px] text-gray-500">
+                                          {clientCount} cliente(s)
+                                        </div>
+                                      </div>
+                                      {isSelected && (
+                                        <Icon icon="solar:check-circle-bold-duotone" className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              
+                              {segments.length > 6 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowSegmentManager(true)}
+                                  className="w-full py-2 text-xs text-purple-600 hover:text-purple-700 font-medium hover:bg-purple-50 rounded-lg transition-colors"
+                                >
+                                  Ver {segments.length - 6} segmentos más →
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Search and Filters - Compact Design */}
@@ -1189,35 +1432,34 @@ campaignPayload.scheduled_date = scheduledUtcIso;
                           />
                         </div>
                         
-                        {/* Compact Filter and Actions Row */}
-                        <div className="flex items-center justify-between gap-3 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-                          {/* Filter Checkbox */}
-                          <div className="flex items-center space-x-2">
-                            <div className="flex items-center space-x-2 px-2 py-1 bg-white rounded-md shadow-sm border">
-                              <input
-                                type="checkbox"
-                                id="filter-phone"
-                                checked={showOnlyWithPhone}
-                                onChange={(e) => setShowOnlyWithPhone(e.target.checked)}
-                                className="w-3 h-3 text-blue-600 rounded border-gray-300 focus:ring-blue-500 focus:ring-1"
-                              />
-                              <Label htmlFor="filter-phone" className="text-xs font-medium text-gray-700 cursor-pointer">
-                                📱 Solo con celular
-                              </Label>
-                            </div>
+                        {/* Filter and Actions Row - Mejorado */}
+                        <div className="flex items-center justify-between gap-4 p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+                          {/* Filter Toggle */}
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setShowOnlyWithPhone(!showOnlyWithPhone)}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                showOnlyWithPhone 
+                                  ? 'bg-green-100 text-green-700 border-2 border-green-300 shadow-sm' 
+                                  : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
+                              }`}
+                            >
+                              <Icon icon="solar:smartphone-bold-duotone" className="w-4 h-4" />
+                              Solo con celular
+                              {showOnlyWithPhone && <Icon icon="solar:check-circle-bold" className="w-4 h-4 text-green-600" />}
+                            </button>
                             {showOnlyWithPhone && (
-                              <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-200">
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
                                 {filteredClients.length} de {clients.length}
-                              </Badge>
+                              </span>
                             )}
                           </div>
                           
-                          {/* Compact Bulk Actions */}
-                          <div className="flex items-center gap-1">
-                            <Button
+                          {/* Bulk Actions */}
+                          <div className="flex items-center gap-2">
+                            <button
                               type="button"
-                              variant="outline"
-                              size="sm"
                               onClick={() => {
                                 const clientsToSelect = showOnlyWithPhone
                                   ? filteredClients.filter(c => c.celular_principal)
@@ -1229,26 +1471,24 @@ campaignPayload.scheduled_date = scheduledUtcIso;
                                   )]
                                 }));
                               }}
-                              className="h-7 px-2 text-xs bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-all"
                             >
-                              <Icon icon="solar:check-square-bold" className="w-3 h-3 mr-1" />
-                              Todos
-                            </Button>
-                            <Button
+                              <Icon icon="solar:checklist-bold-duotone" className="w-4 h-4" />
+                              Seleccionar todos
+                            </button>
+                            <button
                               type="button"
-                              variant="outline"
-                              size="sm"
                               onClick={() => {
                                 setCampaignData(prev => ({
                                   ...prev,
                                   selectedClients: []
                                 }));
                               }}
-                              className="h-7 px-2 text-xs bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 transition-all"
                             >
-                              <Icon icon="solar:close-square-bold" className="w-3 h-3 mr-1" />
-                              Ninguno
-                            </Button>
+                              <Icon icon="solar:close-circle-bold-duotone" className="w-4 h-4" />
+                              Limpiar
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1423,10 +1663,16 @@ campaignPayload.scheduled_date = scheduledUtcIso;
               >
                 {loading ? (
                   <Icon icon="solar:refresh-bold" className="w-4 h-4 mr-2 animate-spin" />
+                ) : campaignData.type === 'birthday' ? (
+                  <Icon icon="solar:gift-bold-duotone" className="w-4 h-4 mr-2" />
                 ) : (
                   <Icon icon="solar:paper-plane-bold" className="w-4 h-4 mr-2" />
                 )}
-                {campaignData.type === 'immediate' ? 'Crear y Enviar' : 'Crear Campaña'}
+                {campaignData.type === 'birthday' 
+                  ? 'Enviar Felicitaciones' 
+                  : campaignData.type === 'immediate' 
+                    ? 'Crear y Enviar' 
+                    : 'Crear Campaña'}
               </Button>
             </div>
           </div>

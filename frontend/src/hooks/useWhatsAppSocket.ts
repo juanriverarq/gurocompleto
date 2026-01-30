@@ -32,6 +32,48 @@ export interface WhatsAppSocketEvents {
   onQRCleared?: (instanceId: string) => void;
   onInstanceUpdate?: (data: { instanceId: string; event: string; data: any }) => void;
   onNewMessage?: (data: { instanceId: string; phone: string; message: string; timestamp: Date }) => void;
+  // Eventos del Inbox
+  onInboxMessage?: (data: InboxMessageEvent) => void;
+  onConversationUpdate?: (data: ConversationUpdateEvent) => void;
+  onTypingIndicator?: (data: { conversationId: number; isTyping: boolean }) => void;
+  onConversationAssigned?: (data: ConversationAssignedEvent) => void;
+}
+
+export interface ConversationAssignedEvent {
+  conversationId: number;
+  assignedTo: number;
+  assignedToName: string;
+  assignedBy: number;
+  assignedByName: string;
+  phone: string;
+  contactName: string;
+  fromChatbot?: boolean;
+}
+
+export interface InboxMessageEvent {
+  conversationId: number;
+  message: {
+    id: number;
+    message_id: string | null;
+    direction: 'incoming' | 'outgoing';
+    sender_type: 'client' | 'agent' | 'bot' | 'system';
+    message_type: string;
+    content: string | null;
+    media?: any;
+    created_at: string;
+  };
+  phone: string;
+  instanceId: string;
+}
+
+export interface ConversationUpdateEvent {
+  conversationId: number;
+  updates: {
+    status?: string;
+    unread_count?: number;
+    last_message_at?: string;
+    assigned_to?: number | null;
+  };
 }
 
 export interface UseWhatsAppSocketOptions {
@@ -120,6 +162,57 @@ export function useWhatsAppSocket(options: UseWhatsAppSocketOptions = {}): UseWh
         });
       } else if (data.event === 'qr_code' && currentEvents?.onQRCode) {
         currentEvents.onQRCode({ instanceId: data.instanceId, qrCode: data.data });
+      }
+    });
+
+    // =========================================================================
+    // EVENTOS DEL INBOX (Tiempo Real)
+    // =========================================================================
+
+    // Nuevo mensaje en una conversación
+    globalSocket.on('inbox_message', (data: InboxMessageEvent) => {
+      console.log('📨 [WhatsAppSocket] inbox_message:', data);
+      const currentEvents = eventsRef.current;
+      if (currentEvents?.onInboxMessage) {
+        currentEvents.onInboxMessage(data);
+      }
+    });
+
+    // Actualización de conversación (estado, asignación, etc.)
+    globalSocket.on('conversation_update', (data: ConversationUpdateEvent) => {
+      console.log('🔄 [WhatsAppSocket] conversation_update:', data);
+      const currentEvents = eventsRef.current;
+      if (currentEvents?.onConversationUpdate) {
+        currentEvents.onConversationUpdate(data);
+      }
+    });
+
+    // Indicador de escritura
+    globalSocket.on('typing_indicator', (data: { conversationId: number; isTyping: boolean }) => {
+      const currentEvents = eventsRef.current;
+      if (currentEvents?.onTypingIndicator) {
+        currentEvents.onTypingIndicator(data);
+      }
+    });
+
+    // Nueva conversación creada
+    globalSocket.on('new_conversation', (data: any) => {
+      console.log('🆕 [WhatsAppSocket] new_conversation:', data);
+      const currentEvents = eventsRef.current;
+      if (currentEvents?.onConversationUpdate) {
+        currentEvents.onConversationUpdate({
+          conversationId: data.id,
+          updates: { status: 'pending', unread_count: 1 }
+        });
+      }
+    });
+
+    // Conversación asignada
+    globalSocket.on('conversation_assigned', (data: ConversationAssignedEvent) => {
+      console.log('👤 [WhatsAppSocket] conversation_assigned:', data);
+      const currentEvents = eventsRef.current;
+      if (currentEvents?.onConversationAssigned) {
+        currentEvents.onConversationAssigned(data);
       }
     });
   }, []);

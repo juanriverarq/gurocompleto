@@ -728,6 +728,23 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         if (errorData.error_code === 'TRIAL_EXPIRED') {
           setTrialExpired(true);
           setTrialEndsAt(errorData.trial_ends_at || null);
+          // Establecer datos mínimos del broker para que el modal funcione
+          setTenant({
+            id: errorData.broker_id,
+            name: errorData.broker_name,
+            nombre: errorData.broker_name,
+            status: 'trial_expired',
+            trial_ends_at: errorData.trial_ends_at,
+          } as any);
+          // Establecer usuario mínimo para evitar loading infinito
+          setUsuarioSaas({
+            id: 0,
+            nombre: user?.displayName || user?.email || 'Usuario',
+            email: user?.email || '',
+          } as any);
+          setNeedsOnboarding(false);
+          setSaasChecked(true);
+          setSaasLoading(false);
           // Mantener usuario autenticado, pero bloquear módulos
         } else if (errorData.needs_onboarding) {
           // Ya NO activamos onboarding - mostramos error de conexión
