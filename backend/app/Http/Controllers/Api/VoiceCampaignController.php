@@ -312,6 +312,78 @@ class VoiceCampaignController extends Controller
     }
 
     /**
+     * Controlar los faloss positivos del resultado de la llamada cuando finaliza
+     */
+    private function verifyFalsePositive(string $transcript, string $summary, bool $currentObjective): bool
+    {
+        try {
+            $aiApiKey = env('AI_API_KEY', env('DEEPSEEK_API_KEY'));
+            $aiApiUrl = env('AI_API_URL', env('DEEPSEEK_API_URL', 'https://api.deepseek.com/v1/chat/completions'));
+            
+            if (!$aiApiKey || !$aiApiUrl || empty($transcript)) {
+                Log::warning('⚠️ [VERIFY FALSE POSITIVE] API keys no configuradas', [
+                    'has_ai_key' => !empty($aiApiKey),
+                    'has_ai_url' => !empty($aiApiUrl),
+                    'has_transcript' => !empty($transcript)
+                ]);
+                return $currentObjective; // Sin API configuradas
+            }
+
+            Log::info('⚖️ [VERIFY FALSE POSITIVE] Iniciando auditoría de cumplimiento', [
+                'call_objective_before' => $currentObjective,
+                'transcript_length' => strlen($transcript)
+            ]);
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $aiApiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(15)->post($aiApiUrl, [
+                'model' => env('AI_MODEL', 'deepseek-chat'), 
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'Eres un auditor de calidad de llamadas. Tu objetivo es validar si el asistente de voz logró el objetivo comercial. Responde ÚNICAMENTE un JSON válido: {"objetivo_confirmado": boolean, "razon": "explicación breve"}'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Analiza si en esta llamada el cliente aceptó la propuesta o cumplió el objetivo.\n\nResumen: $summary\nTranscripción: $transcript"
+                    ]
+                ],
+                'response_format' => ['type' => 'json_object'],
+                'temperature' => 0.1 // Temperatura baja para mayor precisión y menos creatividad
+            ]);
+
+            if ($response->successful()) {
+                $result = $response->json();
+                $contentRaw = $result['choices'][0]['message']['content'] ?? '{}';
+                
+                // Limpiar posibles bloques de código markdown
+                $contentRaw = preg_replace('/^```json\s*|```$/', '', trim($contentRaw));
+                
+                $content = json_decode($contentRaw, true);
+                
+                if (isset($content['objetivo_confirmado'])) {
+                    Log::info('✅ [VERIFY FALSE POSITIVE] Auditoría completada', [
+                        'decision' => $content['objetivo_confirmado'],
+                        'razon' => $content['razon'] ?? 'N/A'
+                    ]);
+                    return (bool) $content['objetivo_confirmado'];
+                }
+            } else {
+                Log::warning('⚠️ [VERIFY FALSE POSITIVE] Error en API externa', [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+            }
+
+            return $currentObjective;
+        } catch (\Throwable $e) {
+            Log::error('❌ [VERIFY FALSE POSITIVE] Error crítico', ['error' => $e->getMessage()]);
+            return $currentObjective;
+        }
+    }
+
+    /**
      * Webhook para eventos post-llamada de ElevenLabs
      */
     public function receiveElevenLabsWebhook(Request $request): JsonResponse
@@ -832,9 +904,51 @@ class VoiceCampaignController extends Controller
         $recordingUrl = $message['recordingUrl'] ?? $callData['recordingUrl'] ?? null;
         $durationSeconds = (int) ($callData['duration'] ?? $message['durationSeconds'] ?? 0);
         
-        // Obtener análisis de VAPI (incluye successEvaluation)
+        // Obtener análisis de VAPI
         $analysis = $message['analysis'] ?? $callData['analysis'] ?? [];
+        $structuredData = $analysis['structuredData'] ?? [];
+
+        //Analisis - Extraemos successEvaluation y los datos que vienen del structuredData 
         $successEvaluation = $analysis['successEvaluation'] ?? null;
+        $objectiveAchieved = $structuredData['objetivo_logrado'] ?? null;
+        $isHuman = $structuredData['interaccion_humana'] ?? null;
+
+        // --- ARBITRAJE DE FALSOS POSITIVOS ---
+        // Se revisan si el sistema CREE que hubo éxito, pero hay dudas razonables:
+        // - El successEvaluation es bajo (menor a 6)
+        // - La duración es muy corta para un cierre real (menos de 25 seg)
+        $isSuspiciousSuccess = ($objectiveAchieved === true) && (
+            ($successEvaluation !== null && (float)$successEvaluation < 6) || 
+            ($durationSeconds < 25)
+        );
+
+        if ($isSuspiciousSuccess && !empty($transcript)) {
+            Log::info("⚖️ [VAPI ARBITRAJE] Validando posible falso positivo para call_id: " . $call->id);
+            
+            // Se llama a la funcion correspondiente
+            $verifiedResult = $this->verifyFalsePositive($transcript, $summary ?? '', $objectiveAchieved);
+            
+            if ($verifiedResult !== $objectiveAchieved) {
+                Log::warning("🚨 [VAPI ARBITRAJE] Resultado corregido: de TRUE a FALSE", [
+                    'call_id' => $call->id
+                ]);
+                $objectiveAchieved = $verifiedResult;
+            }
+        }
+
+        //Objetivo - Si NO vino objetivo_logrado en el structuredData, buscamos en el successEvaluation (Fallback)
+        if ($objectiveAchieved === null) {
+            if ($successEvaluation !== null) {
+                if (is_numeric($successEvaluation)) {
+                    $objectiveAchieved = (float) $successEvaluation >= 6;
+                } elseif (is_bool($successEvaluation)) {
+                    $objectiveAchieved = $successEvaluation;
+                }
+            } else {
+                // Si ni siquiera hay successEvaluation, el último recurso es la contactabilidad
+                $objectiveAchieved = null; // Lo dejamos nulo por ahora
+            }
+        }
         
         Log::info('🔔 [VAPI WEBHOOK] Procesando end-of-call-report', [
             'call_id' => $call->id,
@@ -855,30 +969,50 @@ class VoiceCampaignController extends Controller
         
         // CONTACTABILIDAD: Determinar si hubo contacto real (para estado de llamada: completed/failed)
         // Si el cliente contestó y hubo conversación = CONTACTADO (llamada completed)
-        $wasContacted = in_array($endedReason, $contactedReasons) || 
-                        ($durationSeconds >= 3 && !in_array($endedReason, $noContactReasons));
+        // $wasContacted = in_array($endedReason, $contactedReasons) || 
+        //                 ($durationSeconds >= 3 && !in_array($endedReason, $noContactReasons));
+
+        //CONTACTABILIDAD: Determinar si hubo contacto real (para estado de llamada: completed/failed)
+        // 1. Limpiamos el transcript para contar solo palabras reales
+        $cleanTranscript = trim($transcript ?? '');
+        $wordCount = !empty($cleanTranscript) ? str_word_count($cleanTranscript) : 0;
+
+        // 2. Definimos si hubo diálogo real
+        $hasRealDialogue = $wordCount > 20;
+
+        // 3. LA GRAN VALIDACIÓN DE CONTACTABILIDAD
+        // Si VAPI cree que es humano, hay suficiente texto (fue conversación), duracion(menos de 10 segundos, el agente se presenta y saluda), o si viene algun estado de VAPI, por defecto fue contactado
+        $wasContacted = (
+            ($isHuman !== false) &&             
+            $hasRealDialogue &&                 
+            $durationSeconds > 10
+        ) || (in_array($endedReason, $contactedReasons) || ($durationSeconds > 10 && !in_array($endedReason, $noContactReasons)));   
+        
+        if ($objectiveAchieved === null) {
+            $objectiveAchieved = $wasContacted;
+        }
         
         // OBJETIVO: Evaluar si se cumplió el objetivo de la llamada (para successEvaluation)
         // Esto es independiente de la contactabilidad
-        $objectiveAchieved = false;
+        // $objectiveAchieved = false;
         
-        if ($successEvaluation !== null) {
-            // Si es numérico, >= 5 es éxito (escala 1-10)
-            if (is_numeric($successEvaluation)) {
-                $objectiveAchieved = (float) $successEvaluation >= 5;
-            }
-            // Si es booleano
-            elseif (is_bool($successEvaluation)) {
-                $objectiveAchieved = $successEvaluation;
-            }
-            // Si es string: 'pass', 'true', 'yes', 'success' = éxito
-            elseif (is_string($successEvaluation)) {
-                $objectiveAchieved = in_array(strtolower($successEvaluation), ['true', 'yes', 'success', '1', 'pass'], true);
-            }
-        } else {
-            // Si no hay successEvaluation, usar contactabilidad como fallback para el objetivo
-            $objectiveAchieved = $wasContacted;
-        }
+        // if ($successEvaluation !== null) {
+        //     // Si es numérico, >= 5 es éxito (escala 1-10)
+        //     if (is_numeric($successEvaluation)) {
+        //         $objectiveAchieved = (float) $successEvaluation >= 5;
+        //     }
+        //     // Si es booleano
+        //     elseif (is_bool($successEvaluation)) {
+        //         $objectiveAchieved = $successEvaluation;
+        //     }
+        //     // Si es string: 'pass', 'true', 'yes', 'success' = éxito
+        //     elseif (is_string($successEvaluation)) {
+        //         $objectiveAchieved = in_array(strtolower($successEvaluation), ['true', 'yes', 'success', '1', 'pass'], true);
+        //     }
+        // } else {
+        //     // Si no hay successEvaluation, usar contactabilidad como fallback para el objetivo
+        //     $objectiveAchieved = $wasContacted;
+        // }
         
         Log::info('📊 [VAPI WEBHOOK] Evaluación de llamada', [
             'call_id' => $call->id,
@@ -2372,7 +2506,8 @@ Eres {$agentDisplayName}, asesor de {$safeCompany}. Tu estilo es amable, natural
 # REGLAS DE CONVERSACIÓN
 - SIEMPRE espera la respuesta del cliente antes de continuar.
 - Mantén respuestas cortas (máximo 2-3 oraciones).
-- Usa \"cincuenta por ciento\" en lugar de \"50%\".
+- NUNCA uses símbolos como %, $, o #. Escribe siempre los números, simbolos y porcentajes en palabras (ejemplo: 'por ciento', 'pesos', 'punto'). Habla exclusivamente en español de Colombia.
+- Cuando digas números de póliza o placas, dilo dígito por dígito en español.
 - NO pidas el número de teléfono, ya lo tienes.
 
 # QUÉ ES EL PLAN VIDA DEUDOR (para responder preguntas)
@@ -2580,8 +2715,47 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
                     // Configuración de análisis post-llamada en español
                     'analysisPlan' => [
                         'summaryPrompt' => 'Genera un resumen conciso en ESPAÑOL de la conversación telefónica. Incluye: el propósito de la llamada, los puntos principales discutidos, el resultado o acuerdo alcanzado, y cualquier seguimiento necesario. Máximo 3-4 oraciones.',
-                        'successEvaluationPrompt' => 'Evalúa si la llamada fue exitosa basándote en: si se logró el objetivo principal, si el cliente mostró interés, si se acordó alguna acción de seguimiento. Responde true si fue exitosa, false si no.',
+                        'successEvaluationPrompt' => '#ROL
+Actua como un Auditor de Calidad de un Call Center, experto en analisis de sentimientos y conversion.
+
+#TAREA
+Evalua el exito de la llamada en una escala del 1 al 10, donde:
+- 1: El cliente colgó de inmediato o hubo un rechazo hostil.
+- 5: El cliente escuchó la propuesta completa pero no se comprometió (llamada informativa)
+- 10: El cliente aceptó explicitamente el objetivo (ej. envío de Whatsapp, agendamiento o pago)
+
+##CRITERIOS DE EVALUACION
+Para asignar la nota, analiza:
+1. Progreso del objetivo: ¿Que tanto avanzó el asesor hacia el cierre o cumplimiento del objetivo?
+2. Engagement: ¿El cliente hizo preguntas o solo dijo "si" por compromiso?
+3. Objeciones: ¿El cliente mostró interes real o solo buscaba terminar la llamada?
+
+No te limites a números enteros, puedes usar decimales si la llamada lo amerita (ej. 6.5 si el interes del cliente fue alto pero falto compromiso al final). Responde unicamente con el numero',
                         'successEvaluationRubric' => 'NumericScale',
+                        'structuredDataPrompt' => '## TAREA
+Analiza la conversación y extrae los siguientes puntos clave:
+- interaccion_humana: ¿Cuando se hizo la llamada y se contestó ,¿Habló una persona real? (true/false)
+- objetivo_logrado: Determina si se cumplió el propósito de la llamada (ej. aceptó el link de pago, aceptó la cotización de vida deudor o confirmó la fecha de pago).
+- resultado_tecnico: Clasifica la naturaleza técnica de la llamada: "CONTACTO_EFECTIVO" (conversación fluida), "OCUPADO" (el cliente no puede hablar),"EQUIVOCADO" (persona equivocada), "BUZON" (contestador detectado), o "FALLA_TECNICA" (se corta o no se escucha).',
+                        'structuredDataSchema' => [
+                            'type' => 'object',
+                            'required' => ['interaccion_humana', 'objetivo_logrado', 'resultado_tecnico'],
+                            'properties' => [
+                                'interaccion_humana' => [
+                                    'type' => 'boolean',
+                                    'description' => 'Marcalo como TRUE si habló una persona real y respondió coherentemente. O marcalo FALSE si fue una maquina, musica de espera o nadie habló.'
+                                ],
+                                'objetivo_logrado' => [
+                                    'type' => 'boolean',
+                                    'description' => 'Marcalo como TRUE si se cumplió el objetivo principal de la llamada o si aceptó la sesoria y el seguimiento.'
+                                ],
+                                'resultado_tecnico' => [
+                                    'type' => 'string',
+                                    'enum' => ['CONTACTO_EFECTIVO', 'OCUPADO', 'EQUIVOCADO', 'BUZON', 'FALLA_TECNICA'],
+                                    'description' => 'Marca alguna de estas opciones teniendo en cuenta la clasificación tecnica de la llamada.'
+                                ]
+                            ]
+                        ]
                     ],
                 ],
                 'metadata' => [
