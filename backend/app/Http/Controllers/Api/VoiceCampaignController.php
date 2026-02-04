@@ -2432,6 +2432,40 @@ class VoiceCampaignController extends Controller
                 $whatsappEnabled = true;
             }
 
+            //Detectar si se quiere dejar un mensaje en el buzon de voz 
+            $detectVoicemail = $campaignSettings['voicemail_config']['enabled'] ?? false;
+
+            if($detectVoicemail){
+                $rawVoicemailMessage = $campaignSettings['voicemail_config']['message'] ?? '';
+                $voicemailMessage = str_replace(
+                    ['{customer_name}', '{company_name}'], 
+                    [$customerName, $companyName], 
+                    $rawVoicemailMessage
+                );
+                $voicemailPayload = [
+                    'voicemailDetection' => [
+                        'provider' => 'vapi',
+                        'beepMaxAwaitSeconds' => 25,
+                        'backoffPlan' => [
+                            'maxRetries' => 5,
+                            'startAtSeconds' => 2.5
+                        ]
+                    ],
+                    'voicemailMessage' => $voicemailMessage,
+                ];
+            }else{
+                $voicemailPayload = [
+                    'voicemailDetection' => [
+                        'provider' => 'vapi',
+                        'beepMaxAwaitSeconds' => 0,
+                        'backoffPlan' => [
+                            'maxRetries' => 3,
+                            'startAtSeconds' => 1.0
+                        ]
+                    ],
+                ];
+            }
+
             // Construir primer mensaje según tipo de campaña
             $agentDisplayName = $agentName ?: 'tu asesor';
             $safeCompany = $companyName ?: $brokerCommercialName;
@@ -2660,6 +2694,7 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
                 'assistant' => [
                     'name' => $agentDisplayName,
                     'firstMessage' => $personalizedFirstMessage,
+                    'firstMessageMode' => 'assistant-waits-for-user', //Hacemos que el agente espere a que el usuario hable primero
                     'model' => [
                         'provider' => 'openai',
                         'model' => 'gpt-4o-mini',
@@ -2706,12 +2741,8 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
                         'numWords' => 2,
                         'voiceSeconds' => 0.2,
                     ],
-                    'voicemailDetection' => [
-                        'provider' => 'twilio',
-                        'enabled' => true,
-                        'machineDetectionTimeout' => 15,
-                        'voicemailDetectionTypes' => ['machine_end_beep', 'machine_end_silence', 'machine_start'],
-                    ],
+                    // Configuración de detección de buzón de voz
+                    ...$voicemailPayload,
                     // Configuración de análisis post-llamada en español
                     'analysisPlan' => [
                         'summaryPrompt' => 'Genera un resumen conciso en ESPAÑOL de la conversación telefónica. Incluye: el propósito de la llamada, los puntos principales discutidos, el resultado o acuerdo alcanzado, y cualquier seguimiento necesario. Máximo 3-4 oraciones.',

@@ -138,6 +138,11 @@ interface CampaignData {
   };
   // Reglas de decisión (IF-THEN) - Mantenido para compatibilidad
   decisionPolicies: Array<any>;
+  // Configuración de buzón de voz
+  voicemailConfig: {
+    enabled: boolean;
+    message: string;
+  };
 }
 
 const INITIAL_CAMPAIGN_DATA: CampaignData = {
@@ -180,7 +185,11 @@ const INITIAL_CAMPAIGN_DATA: CampaignData = {
     createDealStage: 'lead',
     createDealDescription: ''
   },
-  decisionPolicies: []
+  decisionPolicies: [],
+  voicemailConfig: {
+    enabled: false,
+    message: ''
+  }
 };
 
 interface CampaignWizardProps {
@@ -721,7 +730,7 @@ const brokerClientsFiltered = React.useMemo(() => {
       case 1: return !!campaignData.selectedTemplate;
       case 2: return !!campaignData.selectedTemplate && !!selectedRealVoice;
       case 3: return !!campaignData.agentName.trim();
-      case 4: return true; // Herramientas (opcional)
+      case 4: return !campaignData.voicemailConfig.enabled || !!campaignData.voicemailConfig.message.trim(); // Herramientas (opcional), pero si se habilita buzon de voz, se debe configurar el mensaje
       case 5: {
         // Clientes: opcional si hay triggers configurados
         const triggers = buildTriggersPayload();
@@ -752,7 +761,8 @@ const brokerClientsFiltered = React.useMemo(() => {
         if (!campaignData.agentName.trim()) return "Define el nombre con el que se presentará el agente";
         return "";
       case 4:
-        return ""; // Herramientas es opcional
+        if (campaignData.voicemailConfig.enabled && !campaignData.voicemailConfig.message.trim()) return "Ingresa el mensaje para el buzón de voz";
+        return ""; // Herramientas es opcional, pero si se habilita buzon de voz, se debe configurar el mensaje
       case 5: {
         const triggers = buildTriggersPayload();
         if (triggers.length === 0 && campaignData.selectedContacts.length === 0) {
@@ -1848,7 +1858,8 @@ const brokerClientsFiltered = React.useMemo(() => {
               createDealStage: campaignData.postCallTools.createDealStage,
               createDealDescription: campaignData.postCallTools.createDealDescription
             },
-            decision_policies: campaignData.decisionPolicies
+            decision_policies: campaignData.decisionPolicies,
+            voicemail_config: campaignData.voicemailConfig
           }
         };
         
@@ -2805,6 +2816,50 @@ const brokerClientsFiltered = React.useMemo(() => {
                                 />
                               </div>
                             </Tabs.Item>
+
+                            <Tabs.Item
+                              title="Buzón de voz"
+                              icon={() => <Icon icon="solar:phone-bold-duotone" className="w-4 h-4" />}
+                            >
+                              <div className="mt-4 space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <span className="text-sm font-medium">¿Detectar buzón de voz?</span>
+                                    <p className="text-xs text-gray-500">Detecta si el buzón de voz del cliente y le deja un mensaje personalizado</p>
+                                  </div>
+                                  <ToggleSwitch
+                                    checked={campaignData.voicemailConfig.enabled}
+                                    onChange={(checked: boolean) => setCampaignData(prev => ({
+                                      ...prev,
+                                      voicemailConfig: { ...prev.voicemailConfig, enabled: checked }
+                                    }))}
+                                  />
+                                </div>
+                                {campaignData.voicemailConfig.enabled && (
+                                  <>
+                                    {/* Mensaje para dejar en el buzón de voz */}
+                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                                      {campaignData.voicemailConfig.enabled && (
+                                        <div>
+                                          <label className="text-xs text-gray-600 dark:text-gray-400">Mensaje para dejar en el buzón de voz</label>
+                                          <textarea
+                                            rows={3}
+                                            className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                                            value={campaignData.voicemailConfig.message}
+                                            onChange={(e) => setCampaignData(prev => ({
+                                              ...prev,
+                                              voicemailConfig: { ...prev.voicemailConfig, message: e.target.value }
+                                            }))}
+                                            placeholder="Hola {customer_name}, intentamos comunicarnos contigo de {company_name} pero no contestaste, te llamaremos mas tarde."
+                                          />
+                                          <p className="text-xs text-gray-500 mt-1">Variables: {'{customer_name}'}, {'{company_name}'}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </Tabs.Item>
                           </Tabs>
                         </div>
                       </Card>
@@ -2991,7 +3046,8 @@ const brokerClientsFiltered = React.useMemo(() => {
                             simultaneous_calls: campaignData.maxConcurrentCalls,
                             system_prompt: campaignData.customPrompt || campaignData.selectedTemplate.systemPrompt,
                             post_call_tools: campaignData.postCallTools,
-                            decision_policies: campaignData.decisionPolicies
+                            decision_policies: campaignData.decisionPolicies,
+                            voicemail_config: campaignData.voicemailConfig
                           },
                           save_as_draft: true
                         };
