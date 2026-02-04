@@ -2473,15 +2473,28 @@ class VoiceCampaignController extends Controller
             // Detectar si es campaña de venta cruzada
             $templateId = $campaignSettings['template_id'] ?? null;
             $isCrossSell = $templateId === 'cross_sell';
+
+            $personalizedFirstMessage = "!Hola¡, ¿Tengo el gusto de hablar con " . $customerName . "?";
             
+            // if ($isCrossSell) {
+                // Venta cruzada: saludo con empresa pero sin mencionar pólizas
+                // $personalizedFirstMessage = "¡Hola " . $customerName . "! Soy " . $agentDisplayName . " de " . $safeCompany . ", tu asesor de seguros ¿cómo estás?";
+            // } else {
+                // Otras campañas: mencionar póliza/placa si aplica
+            //     $policyTypeLabel = !empty($policyType) ? "tu seguro de {$policyType}" : "tu póliza";
+            //     $plateInfo = (!empty($plateNumber)) ? " del vehículo placa {$plateNumber}" : "";
+            //     $personalizedFirstMessage = "Hola " . $customerName . ", soy " . $agentDisplayName . " de " . $safeCompany . ". " .
+            //                                 "Quería hablar contigo sobre " . $policyTypeLabel . $plateInfo . ". ¿Tienes un momento?";
+            // }
+
             if ($isCrossSell) {
                 // Venta cruzada: saludo con empresa pero sin mencionar pólizas
-                $personalizedFirstMessage = "¡Hola " . $customerName . "! Soy " . $agentDisplayName . " de " . $safeCompany . ", tu asesor de seguros ¿cómo estás?";
+                $firstIntroduction = "Le habla " . $agentDisplayName . " de " . $safeCompany . ", tu asesor de seguros ¿cómo estás?";
             } else {
                 // Otras campañas: mencionar póliza/placa si aplica
                 $policyTypeLabel = !empty($policyType) ? "tu seguro de {$policyType}" : "tu póliza";
                 $plateInfo = (!empty($plateNumber)) ? " del vehículo placa {$plateNumber}" : "";
-                $personalizedFirstMessage = "Hola " . $customerName . ", soy " . $agentDisplayName . " de " . $safeCompany . ". " .
+                $firstIntroduction = "Le habla " . $agentDisplayName . " de " . $safeCompany . ". " .
                                             "Quería hablar contigo sobre " . $policyTypeLabel . $plateInfo . ". ¿Tienes un momento?";
             }
             
@@ -2538,6 +2551,7 @@ No hay datos adicionales que recolectar en esta llamada. Procede directamente al
 Eres {$agentDisplayName}, asesor de {$safeCompany}. Tu estilo es amable, natural y directo. Hablas español de Colombia.
 
 # REGLAS DE CONVERSACIÓN
+- Validación: Ya preguntaste por {$customerName}. Si confirma ser esa persona: Preséntate con '{$firstIntroduction}'.Si niega ser esa persona: Di \"Disculpa la confusión, que tengas un buen día\" y usa endCall.
 - SIEMPRE espera la respuesta del cliente antes de continuar.
 - Mantén respuestas cortas (máximo 2-3 oraciones).
 - NUNCA uses símbolos como %, $, o #. Escribe siempre los números, simbolos y porcentajes en palabras (ejemplo: 'por ciento', 'pesos', 'punto'). Habla exclusivamente en español de Colombia.
@@ -2644,9 +2658,9 @@ Mantén respuestas cortas y directas (máximo 2-3 oraciones). Evita repetir lo q
 Tu objetivo es que el cliente entienda claramente el motivo de la llamada (recordatorio de pago), defina el siguiente paso (pago ahora o cuándo){$whatsappInstruccion}. Si no es inmediato, confirma fecha tentativa de pago.
 
 Plan de conversación y orden:
-1) Apertura (breve):
-   - Saluda por el nombre del cliente y preséntate con el nombre del agente y la compañía.
-   - INMEDIATAMENTE indica el motivo de la llamada en una sola oración.
+1) Validación: Ya preguntaste por {$customerName}.
+    - Si confirma ser esa persona: Preséntate con '{$firstIntroduction}'.
+    - Si niega ser esa persona: Di \"Disculpa la confusión, que tengas un buen día\" y usa endCall.
 2) Desarrollo (resolver el objetivo):
    - Atiende el objetivo principal primero (recordar vencimiento, falta de cobertura, opciones de pago).
    - Haz solo las preguntas estrictamente necesarias para avanzar la intención principal.
