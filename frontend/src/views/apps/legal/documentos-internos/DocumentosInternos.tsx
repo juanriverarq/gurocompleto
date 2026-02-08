@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, Select, Spinner, TextInput, Button, Table, Badge, Modal, Pagination } from 'flowbite-react';
 import { IconEye, IconTrash, IconCloudUpload, IconRefresh, IconSearch, IconFilter } from '@tabler/icons-react';
+import HeroButton from 'src/components/HeroButton';
 import { useDropzone } from 'react-dropzone';
 import BreadcrumbComp from '../../../../layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { internalDocumentsService } from 'src/services/internalDocumentsService';
@@ -160,14 +161,7 @@ const DocumentosInternos: React.FC = () => {
               <IconRefresh className="w-4 h-4 mr-2" />
               Actualizar
             </Button>
-            <Button
-              color="blue"
-              size="sm"
-              onClick={() => { setSelectedFiles([]); setShowUpload(true); }}
-            >
-              <IconCloudUpload className="w-4 h-4 mr-2" />
-              Subir archivos
-            </Button>
+            <HeroButton icon="solar:cloud-upload-bold" onClick={() => { setSelectedFiles([]); setShowUpload(true); }} size="sm">Subir archivos</HeroButton>
           </div>
         </div>
 

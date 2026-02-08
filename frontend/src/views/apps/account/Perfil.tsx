@@ -42,7 +42,7 @@ const Perfil: React.FC = () => {
           <div className="flex gap-3 justify-center">
             <button 
               onClick={() => navigate('/auth/auth1/login')}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition"
+              className="px-6 py-2.5 text-white font-medium rounded-xl transition"
             >
               Iniciar sesión
             </button>

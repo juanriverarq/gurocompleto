@@ -1407,7 +1407,7 @@ const ReportesFinancieros = () => {
                               <div className="flex items-center">
                                 <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                                   <div
-                                    className="bg-blue-600 h-2 rounded-full"
+                                    className="bg-primary h-2 rounded-full"
                                     style={{ width: `${Math.min(100, reporte.porcentajeParticipacion)}%` }}
                                   ></div>
                                 </div>

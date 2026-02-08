@@ -10,6 +10,7 @@ import {
   Modal,
   Pagination,
 } from 'flowbite-react';
+import HeroButton from 'src/components/HeroButton';
 import { clienteService, type Cliente } from 'src/services/clienteService';
 import { clienteDocumentsService } from 'src/services/clienteDocumentsService';
 import {
@@ -237,18 +238,11 @@ const DocumentosCliente: React.FC = () => {
               Actualizar
             </Button>
             {canCreate && (
-              <Button
-                color="blue"
-                size="sm"
-                onClick={() => {
+              <HeroButton icon="solar:cloud-upload-bold" onClick={() => {
                   setUploadClienteId(selectedClienteId || '');
                   setSelectedFiles([]);
                   setShowUpload(true);
-                }}
-              >
-                <IconCloudUpload className="w-4 h-4 mr-2" />
-                Subir archivos
-              </Button>
+                }} size="sm">Subir archivos</HeroButton>
             )}
           </div>
         </div>

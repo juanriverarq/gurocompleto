@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Badge, Button, Spinner } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { Link } from 'react-router-dom';
 import whatsappMicroservice from 'src/services/whatsappMicroservice';
 
@@ -155,10 +156,7 @@ const WhatsAppDashboard: React.FC = () => {
           </div>
           <div className="flex gap-2">
             <Link to="/apps/whatsapp/conexiones">
-              <Button color="success">
-                <Icon icon="solar:add-circle-bold" className="mr-2" width={20} />
-                Nueva Conexión
-              </Button>
+              <HeroButton icon="solar:add-circle-bold">Nueva Conexión</HeroButton>
             </Link>
           </div>
         </div>

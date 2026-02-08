@@ -104,7 +104,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Embudo de ventas y oportunidades',
     icon: 'solar:target-bold-duotone',
     color: 'bg-lightwarning',
-    pricePerUser: 12000,
+    pricePerUser: 15600,
     longDescription:
       'Gestiona leads, oportunidades y embudos por etapas. Actividades, notas, responsables y métricas de conversión.',
   },
@@ -125,7 +125,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Cobros, recaudos y estados de cuenta',
     icon: 'solar:wallet-bold-duotone',
     color: 'bg-lightprimary',
-    pricePerUser: 15000,
+    pricePerUser: 19500,
     longDescription:
       'Control de recaudos, estados de cuenta, conciliaciones, reportes de morosidad y notificaciones automáticas de cobro.',
   },
@@ -135,7 +135,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Cálculo y liquidación de vendedores',
     icon: 'solar:dollar-minimalistic-bold-duotone',
     color: 'bg-lightwarning',
-    pricePerUser: 18000,
+    pricePerUser: 23400,
     longDescription:
       'Cálculo automático de comisiones por póliza, liquidación de vendedores, anticipos, ajustes y reportes detallados.',
   },
@@ -145,7 +145,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Dashboards, KPIs y analítica',
     icon: 'solar:chart-square-bold-duotone',
     color: 'bg-lightsecondary',
-    pricePerUser: 10000,
+    pricePerUser: 13000,
     longDescription:
       'Dashboards personalizables, KPIs en tiempo real, reportes exportables y analítica avanzada del negocio.',
   },
@@ -179,7 +179,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Landing page de cotización',
     icon: 'solar:smartphone-2-bold-duotone',
     color: 'bg-lightsuccess',
-    pricePerUser: 8000,
+    pricePerUser: 10400,
     longDescription:
       'Página web personalizada para captar leads y cotizaciones online. Incluye formularios y conexión al CRM.',
   },
@@ -189,7 +189,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Personaliza branding y dominio propio',
     icon: 'solar:palette-round-line-duotone',
     color: 'bg-lightsecondary',
-    pricePerUser: 12000,
+    pricePerUser: 15600,
     longDescription: 'Personalización completa: logotipo, colores, dominio propio y marca para tu empresa.',
   },
   {
@@ -200,7 +200,7 @@ export const MODULES: ModuleItem[] = [
     color: 'bg-lightprimary',
     pricePerUser: 0,
     annualOnly: true,
-    annualPrice: 336000,
+    annualPrice: 436800,
     longDescription: 'Incluye hasta 100 facturas electrónicas al mes. Si necesitas más, podemos escalar el plan.'
   },
   {
@@ -211,7 +211,7 @@ export const MODULES: ModuleItem[] = [
     color: 'bg-lightsecondary',
     pricePerUser: 0,
     annualOnly: true,
-    annualPrice: 168000,
+    annualPrice: 218400,
     longDescription: 'Módulo de nómina electrónica. Precio sujeto a plan/consumo. Consulta para una cotización personalizada.'
   },
   {
@@ -220,7 +220,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Extrae datos de pólizas automáticamente',
     icon: 'solar:document-text-bold-duotone',
     color: 'bg-lightsuccess',
-    pricePerUser: 15000,
+    pricePerUser: 19500,
     longDescription: 'Procesa pólizas y soportes en PDF con IA para extraer campos clave. Incluye 100 documentos/mes.'
   },
   {
@@ -231,7 +231,7 @@ export const MODULES: ModuleItem[] = [
     color: 'bg-lightprimary',
     pricePerUser: 0,
     annualOnly: true,
-    annualPrice: 1423500,
+    annualPrice: 1850550,
     longDescription: 'Aplicación móvil con acceso a pólizas, siniestros y notificaciones push. Facturación solo anual.',
   },
   {
@@ -242,7 +242,7 @@ export const MODULES: ModuleItem[] = [
     color: 'bg-lightwarning',
     pricePerUser: 0,
     annualOnly: true,
-    annualPrice: 700000,
+    annualPrice: 910000,
     longDescription: 'Sitio web con páginas de productos, blog y captación de leads. Facturación solo anual.',
   },
   {
@@ -262,7 +262,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Asistente IA 24/7 para ventas y soporte',
     icon: 'solar:cpu-bolt-bold-duotone',
     color: 'bg-lightprimary',
-    pricePerUser: 25000,
+    pricePerUser: 32500,
     longDescription: 'Asistente con IA avanzada para atención al cliente, ventas y soporte 24/7. Incluye 1,000 conversaciones/mes.',
   },
   {
@@ -271,11 +271,11 @@ export const MODULES: ModuleItem[] = [
     description: 'Incluye 1,000 contactos/mes',
     icon: 'solar:chat-round-dots-bold-duotone',
     color: 'bg-lightsuccess',
-    pricePerUser: 120000, // Precio fijo mensual (no por usuario)
+    pricePerUser: 156000, // Precio fijo mensual (no por usuario)
     annualOnly: false,
-    annualPrice: 1008000, // 120,000 * 12 * 0.70 (30% descuento anual)
+    annualPrice: 1310400, // 156,000 * 12 * 0.70 (30% descuento anual)
     consumptionBased: true,
-    longDescription: 'Chatbot automatizado para WhatsApp con flujos personalizables, transferencia a agentes y respuestas automáticas. Incluye 1,000 contactos/mes. $70 por contacto adicional. $120,000/mes o $1,008,000/año (30% OFF).',
+    longDescription: 'Chatbot automatizado para WhatsApp con flujos personalizables, transferencia a agentes y respuestas automáticas. Incluye 1,000 contactos/mes. $91 por contacto adicional. $156,000/mes o $1,310,400/año (30% OFF).',
   },
   {
     key: 'ia_callcenter',
@@ -295,7 +295,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Analítica predictiva y riesgo de fuga',
     icon: 'solar:chart-square-bold-duotone',
     color: 'bg-lightsecondary',
-    pricePerUser: 18000,
+    pricePerUser: 23400,
     longDescription: 'Predicción de renovaciones, riesgo de fuga de clientes y oportunidades de venta basadas en IA.',
   },
   {
@@ -304,7 +304,7 @@ export const MODULES: ModuleItem[] = [
     description: 'Recomendaciones inteligentes de productos',
     icon: 'solar:graph-up-bold-duotone',
     color: 'bg-lightsuccess',
-    pricePerUser: 15000,
+    pricePerUser: 19500,
     longDescription: 'Recomendaciones automáticas de productos adicionales basadas en el perfil del cliente y comportamiento.',
   },
 ];

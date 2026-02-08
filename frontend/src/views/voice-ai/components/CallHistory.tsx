@@ -1445,7 +1445,7 @@ const CallHistory: React.FC = () => {
                 <Button 
                   size="xs" 
                   onClick={() => handleViewCall(call)}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className=""
                 >
                   Ver Detalles
                 </Button>
@@ -1811,7 +1811,7 @@ const CallHistory: React.FC = () => {
                                     <div className={`inline-block max-w-[85%] p-4 rounded-2xl shadow-sm ${
                                       message.role === 'agent'
                                         ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600'
-                                        : 'bg-blue-500 dark:bg-blue-600 text-white'
+                                        : 'bg-primary dark:bg-primary text-white'
                                     }`}>
                                       <p className="text-sm leading-relaxed">{message.message}</p>
                                       

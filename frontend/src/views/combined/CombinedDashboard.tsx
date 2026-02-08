@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs } from "flowbite-react";
 import { Icon } from "@iconify/react";
+import { useUnifiedAuth } from '../../context/UnifiedAuthContext';
 import Dashboard3 from '../dashboard/Dashboard3';
 import VoiceAIDashboard from '../voice-ai/VoiceAIDashboard';
 import ConfiguracionMasiva from '../saas/configuracion-masiva/ConfiguracionMasiva';
@@ -20,6 +21,7 @@ interface DashboardConfig {
 }
 
 const CombinedDashboard = () => {
+  const { usuarioSaas, tenant } = useUnifiedAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -163,18 +165,20 @@ const CombinedDashboard = () => {
   // Show loading state if no dashboards are enabled
   if (enabledDashboards.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <Icon icon="solar:settings-outline" height={48} className="text-gray-400" />
+      <div className="flex flex-col items-center justify-center h-64 space-y-4" style={{ fontFamily: "'General Sans', sans-serif" }}>
+        <div className="w-14 h-14 rounded-2xl bg-[#573CFF]/10 flex items-center justify-center">
+          <Icon icon="solar:settings-outline" height={28} className="text-[#573CFF]" />
+        </div>
         <div className="text-center">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          <h3 className="text-lg font-bold text-[#0d0d0d] mb-1">
             No hay dashboards configurados
           </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-gray-400 text-sm mb-5">
             Configura qué dashboards deseas mostrar
           </p>
           <button
             onClick={handleConfigClick}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-5 py-2.5 bg-[#0d0d0d] hover:bg-[#573CFF] text-white text-sm font-semibold rounded-xl transition-colors"
           >
             Configurar Dashboards
           </button>
@@ -183,17 +187,32 @@ const CombinedDashboard = () => {
     );
   }
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Buenos días';
+    if (hour < 18) return 'Buenas tardes';
+    return 'Buenas noches';
+  };
+
   return (
     <div>
-      {/* Tabs con acciones en la misma línea */}
-      <div className="relative mb-4 overflow-hidden">
-        <div className="absolute right-0 top-0 flex gap-2 z-10 xl:z-[20]">
+      {/* Header con saludo + acciones */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-[-0.02em]">
+            {getGreeting()}, {usuarioSaas?.nombre || 'Usuario'}
+          </h1>
+          <p className="text-gray-500 text-sm">
+            {tenant?.branding?.nombre_comercial || tenant?.nombre || 'Tu agencia'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleConfigClick}
+            onClick={() => setTutorialOpen(true)}
             className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
-            title="Configurar Dashboards"
+            title="Ver tutorial"
           >
-            <Icon icon="solar:settings-outline" height={18} className="text-gray-600 dark:text-gray-300" />
+            <Icon icon="solar:play-circle-bold" height={18} className="text-blue-600 dark:text-blue-400" />
           </button>
           <button
             onClick={handleRefreshClick}
@@ -202,42 +221,37 @@ const CombinedDashboard = () => {
             title="Refrescar Dashboards"
           >
             <Icon 
-              icon={isRefreshing ? "solar:loading-outline" : "solar:refresh-outline"} 
+              icon={isRefreshing ? "svg-spinners:ring-resize" : "solar:refresh-outline"} 
               height={18} 
-              className={`text-gray-600 dark:text-gray-300 ${isRefreshing ? 'animate-spin' : ''}`} 
+              className={`text-gray-600 dark:text-gray-300`} 
             />
           </button>
           <button
-            onClick={() => setTutorialOpen(true)}
+            onClick={handleConfigClick}
             className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
-            title="Ver tutorial"
+            title="Configurar Dashboards"
           >
-            <Icon icon="solar:play-circle-bold" height={18} className="text-blue-600 dark:text-blue-400" />
+            <Icon icon="solar:settings-outline" height={18} className="text-gray-600 dark:text-gray-300" />
           </button>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="relative mb-4 overflow-hidden">
         <div className="[&_[role=tablist]]:pr-24">
           <Tabs aria-label="Combined Tabs" variant="underline" onActiveTabChange={(tab) => setActiveTab(enabledDashboards[Number(tab)]?.id || enabledDashboards[0]?.id)}>
-            {enabledDashboards.map((dashboard, index) => {
+            {enabledDashboards.map((dashboard) => {
               const Component = dashboard.component;
               const isActive = activeTab === dashboard.id;
               
               return (
                 <Tabs.Item
                   key={dashboard.id}
-                  active={index === 0}
+                  active={activeTab === dashboard.id}
                   title={dashboard.name}
                   icon={() => <Icon icon={dashboard.icon} height={20} />}
                 >
-                  {/* Solo renderizar el componente si el tab está activo */}
                   {isActive && <Component />}
-                  {!isActive && (
-                    <div className="flex items-center justify-center h-64">
-                      <div className="text-center">
-                        <Icon icon="solar:loading-outline" height={48} className="text-gray-400 animate-spin mx-auto mb-2" />
-                        <p className="text-gray-500 dark:text-gray-400">Cargando {dashboard.name}...</p>
-                      </div>
-                    </div>
-                  )}
                 </Tabs.Item>
               );
             })}

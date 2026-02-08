@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Modal } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { useUnifiedAuth } from '../../context/UnifiedAuthContext';
 import api from '../../config/api';
@@ -96,46 +95,45 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
     }
   };
 
-  // No permitir cerrar el modal - el usuario DEBE completar el formulario
-  const handleModalClose = () => {
-    // No hacer nada - el modal es obligatorio
-  };
+  if (!isOpen) return null;
+
+  const inputClass = "w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#fafafa] focus:bg-white focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition text-sm text-[#0d0d0d] placeholder:text-gray-400";
 
   return (
-    <Modal
-      show={isOpen}
-      onClose={handleModalClose}
-      size="lg"
-      dismissible={false}
-      className="font-['Manrope',sans-serif]"
-    >
-      <Modal.Body className="p-0">
-        <div className="p-6">
-          {/* Header */}
-          <div className="text-center mb-6">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
-              <Icon icon="solar:buildings-3-bold-duotone" className="text-white text-2xl" />
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ fontFamily: "'General Sans', sans-serif" }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+        {/* Header with background image */}
+        <div className="relative overflow-hidden" style={{ minHeight: '160px' }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png?width=2880&height=2190)',
+              backgroundSize: '200%',
+              backgroundPosition: 'center',
+              transform: 'rotate(180deg)',
+            }}
+          />
+          <div className="relative z-10 p-6 pb-5 flex flex-col justify-end h-full" style={{ minHeight: '160px' }}>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm w-fit mb-3">
+              <span className="w-4 h-4 rounded-full bg-white text-[#573CFF] text-[9px] font-bold flex items-center justify-center">3</span>
+              <span className="text-[10px] font-semibold text-white/90 uppercase tracking-wider">Último paso</span>
             </div>
-            <h2 className="text-xl font-bold text-dark dark:text-white mb-2">
-              Completa los datos de tu empresa
+            <h2 className="text-2xl font-bold text-white tracking-[-0.02em] mb-1">
+              Datos de tu empresa
             </h2>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              Esta información es obligatoria para continuar usando la plataforma
+            <p className="text-white/60 text-sm">
+              Completa la información de tu agencia para configurar tu cuenta
             </p>
-            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <Icon icon="solar:info-circle-bold" className="text-amber-600 text-sm" />
-              <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-                No podrás cerrar esta ventana hasta completar los datos
-              </span>
-            </div>
           </div>
+        </div>
 
-          {/* Form */}
+        {/* Form body — white */}
+        <div className="p-6">
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                  Nombre comercial <span className="text-red-500">*</span>
+                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                  Nombre comercial <span className="text-[#573CFF]">*</span>
                 </label>
                 <input
                   type="text"
@@ -143,11 +141,11 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Mi Agencia de Seguros"
-                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-sm text-dark dark:text-white"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
                   Razón social
                 </label>
                 <input
@@ -156,21 +154,21 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                   value={formData.legal_name}
                   onChange={handleChange}
                   placeholder="Mi Agencia S.A.S."
-                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-sm text-dark dark:text-white"
+                  className={inputClass}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
                   Tipo documento
                 </label>
                 <select
                   name="document_type"
                   value={formData.document_type}
                   onChange={handleChange}
-                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-sm text-dark dark:text-white"
+                  className={inputClass}
                 >
                   <option value="NIT">NIT</option>
                   <option value="CC">Cédula</option>
@@ -178,8 +176,8 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                  Número de documento <span className="text-red-500">*</span>
+                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                  Número de documento <span className="text-[#573CFF]">*</span>
                 </label>
                 <input
                   type="text"
@@ -187,15 +185,15 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                   value={formData.document_number}
                   onChange={handleChange}
                   placeholder="900123456-7"
-                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-sm text-dark dark:text-white"
+                  className={inputClass}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                  Teléfono <span className="text-red-500">*</span>
+                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                  Teléfono <span className="text-[#573CFF]">*</span>
                 </label>
                 <input
                   type="tel"
@@ -203,12 +201,12 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                   value={formData.phone}
                   onChange={handleChange}
                   placeholder="+57 300 123 4567"
-                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-sm text-dark dark:text-white"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                  Ciudad <span className="text-red-500">*</span>
+                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                  Ciudad <span className="text-[#573CFF]">*</span>
                 </label>
                 <input
                   type="text"
@@ -216,13 +214,13 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                   value={formData.city}
                   onChange={handleChange}
                   placeholder="Bogotá"
-                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-sm text-dark dark:text-white"
+                  className={inputClass}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+              <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
                 Dirección
               </label>
               <input
@@ -231,42 +229,46 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                 value={formData.address}
                 onChange={handleChange}
                 placeholder="Calle 100 #15-20, Oficina 501"
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-sm text-dark dark:text-white"
+                className={inputClass}
               />
             </div>
           </div>
 
           {/* Error message */}
           {formError && (
-            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex items-center gap-2">
               <Icon icon="solar:danger-triangle-bold" className="text-lg flex-shrink-0" />
               {formError}
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex items-center justify-end mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
+          {/* Submit button — Hero style */}
+          <div className="mt-6">
             <button
               onClick={handleSaveBrokerData}
               disabled={isLoading}
-              className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-medium rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+              className="group relative w-full inline-flex items-center justify-center bg-[#0d0d0d] rounded-2xl h-[48px] overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
-                <>
-                  <Icon icon="svg-spinners:ring-resize" className="text-lg" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <Icon icon="solar:check-circle-bold" className="text-lg" />
-                  Guardar y Continuar
-                </>
-              )}
+              <span className="absolute inset-y-0 left-0 w-[48px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+              <span className="relative z-10 flex items-center justify-center w-[48px] h-full flex-shrink-0">
+                {isLoading ? (
+                  <Icon icon="svg-spinners:ring-resize" className="text-lg text-white" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                )}
+              </span>
+              <span className="relative z-10 pr-5 text-[11px] font-bold text-white uppercase tracking-[0.15em] whitespace-nowrap">
+                {isLoading ? 'Guardando...' : 'Guardar y Continuar'}
+              </span>
             </button>
           </div>
+
+          <p className="text-[11px] text-gray-400 text-center mt-4">
+            Podrás editar esta información después en Configuración → Perfil
+          </p>
         </div>
-      </Modal.Body>
-    </Modal>
+      </div>
+    </div>
   );
 };
 

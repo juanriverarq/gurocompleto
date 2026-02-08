@@ -17,9 +17,10 @@ const config: Config = {
   theme: {
   	fontFamily: {
   		sans: [
+  			'General Sans',
   			'Manrope',
   			'system-ui',
-  			'serif'
+  			'sans-serif'
   		]
   	},
   	extend: {

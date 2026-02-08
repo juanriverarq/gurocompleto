@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useUnifiedAuth } from '../context/UnifiedAuthContext';
+import GuroLoader from './GuroLoader';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -37,49 +38,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Mostrar loading mientras se verifica la autenticación
   if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        backgroundColor: '#f5f7fb', // Fondo suave del sistema
-        fontFamily: 'system-ui, -apple-system, sans-serif'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '16px 24px',
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
-          borderRadius: '12px',
-          border: '1px solid rgba(99, 91, 255, 0.08)', // Borde muy sutil del color primario
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)' // Sombra muy suave
-        }}>
-          <div style={{
-            width: '16px',
-            height: '16px',
-            border: '2px solid rgba(99, 91, 255, 0.12)', // Color primario muy sutil
-            borderTop: '2px solid rgba(99, 91, 255, 0.4)', // Color primario un poco más visible
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
-          }}></div>
-          <span style={{ 
-            color: '#64748b', // Color de texto suave 
-            fontSize: '14px',
-            fontWeight: '500'
-          }}>
-            Verificando acceso...
-          </span>
-        </div>
-        <style>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    );
+    return <GuroLoader fullScreen size={100} />;
   }
 
   // Redirigir al login si no está autenticado

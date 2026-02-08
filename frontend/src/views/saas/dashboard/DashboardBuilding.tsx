@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import SubscriptionPaymentModal from 'src/components/modals/SubscriptionPaymentModal';
+import { Icon } from '@iconify/react';
+import Lottie from 'lottie-react';
+import guroLogoAnimation from 'src/assets/LOTTIE.json';
+import loaderAnimation from 'src/assets/LOTTIE-LOADING-2.json';
+
+const BG_IMAGE = 'https://framerusercontent.com/images/6vqDsl7xtgechRbMSo6yAkGE.png';
 
 const DashboardBuilding: React.FC = () => {
   const {
@@ -10,14 +16,16 @@ const DashboardBuilding: React.FC = () => {
     hasCompleteSaasAccess,
     tenant,
     trialExpired,
+    logout,
+    user,
   } = useUnifiedAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const search = new URLSearchParams(location.search);
   const returnTo = search.get('returnTo') || '';
-  
-  // Estado para detectar si ya pasó tiempo suficiente y no hay conexión
+
   const [showConnectionError, setShowConnectionError] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     if (!saasChecked) {
@@ -32,10 +40,8 @@ const DashboardBuilding: React.FC = () => {
     }
   }, [hasCompleteSaasAccess, navigate, returnTo]);
 
-  // Si después de verificar no hay tenant, mostrar error de conexión
   useEffect(() => {
     if (saasChecked && !tenant && !hasCompleteSaasAccess && !trialExpired) {
-      // Dar un pequeño delay antes de mostrar el error
       const timer = setTimeout(() => {
         setShowConnectionError(true);
       }, 2000);
@@ -43,7 +49,6 @@ const DashboardBuilding: React.FC = () => {
     }
   }, [saasChecked, tenant, hasCompleteSaasAccess, trialExpired]);
 
-  // Si el trial expiró, mostrar el modal de pago
   if (trialExpired) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
@@ -56,62 +61,156 @@ const DashboardBuilding: React.FC = () => {
     );
   }
 
-  const handleReload = () => {
-    window.location.reload();
+  const handleReload = async () => {
+    setRetrying(true);
+    try {
+      await checkSaasStatus();
+    } catch {}
+    setTimeout(() => {
+      if (!hasCompleteSaasAccess) window.location.reload();
+    }, 1500);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {}
     localStorage.clear();
-    window.location.href = '/auth/login';
+    window.location.href = '/';
   };
 
-  // Mostrar error de conexión si ya verificó y no hay tenant
+  const firstName = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || '';
+
+  // Shared background wrapper
+  const PageWrapper = ({ children }: { children: React.ReactNode }) => (
+    <div
+      className="fixed inset-0 flex flex-col items-center justify-center"
+      style={{
+        backgroundImage: `url(${BG_IMAGE})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'bottom center',
+        backgroundRepeat: 'no-repeat',
+        transform: 'rotate(180deg)',
+        fontFamily: "'General Sans', sans-serif",
+      }}
+    >
+      <div className="flex flex-col items-center w-full" style={{ transform: 'rotate(180deg)' }}>
+        {/* Logo */}
+        <div className="mb-8" style={{ width: 160, height: 60, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Lottie
+            animationData={guroLogoAnimation}
+            loop
+            autoplay
+            style={{ width: 380, height: 380, flexShrink: 0 }}
+          />
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+
+  // Connection error state
   if (showConnectionError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="bg-white rounded-2xl shadow-lg border p-8 w-full max-w-md text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
-            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+      <PageWrapper>
+        <div className="bg-white rounded-[28px] shadow-2xl p-8 sm:p-10 w-full max-w-md mx-4 text-center">
+          {/* Error icon */}
+          <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-red-50 flex items-center justify-center">
+            <Icon icon="solar:danger-triangle-bold-duotone" className="w-8 h-8 text-red-500" />
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Problemas de conexión</h1>
-          <p className="text-gray-600 mb-6">
-            No pudimos conectar con la base de datos. Por favor recarga la página o intenta nuevamente en unos minutos.
+
+          <h1
+            className="text-2xl font-bold text-[#0d0d0d] tracking-[-0.02em] mb-2"
+          >
+            Problemas de conexión
+          </h1>
+          <p className="text-gray-500 text-sm leading-relaxed mb-8">
+            No pudimos conectar con el servidor. Recarga la página o intenta en unos minutos.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+
+          {/* Buttons */}
+          <div className="flex flex-col gap-3">
             <button
               onClick={handleReload}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition"
+              disabled={retrying}
+              className="group relative inline-flex items-center justify-center w-full bg-[#0d0d0d] rounded-2xl h-[52px] overflow-hidden transition-all"
             >
-              Recargar página
+              <span className="absolute inset-y-0 left-0 w-[52px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+              <span className="relative z-10 flex items-center gap-2">
+                {retrying ? (
+                  <Icon icon="svg-spinners:ring-resize" className="w-4 h-4 text-white" />
+                ) : (
+                  <Icon icon="solar:refresh-bold" className="w-4 h-4 text-white" />
+                )}
+                <span className="text-[11px] font-bold text-white uppercase tracking-[0.15em]">
+                  {retrying ? 'Reintentando...' : 'Reintentar conexión'}
+                </span>
+              </span>
             </button>
+
             <button
               onClick={handleLogout}
-              className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition"
+              className="inline-flex items-center justify-center gap-2 w-full bg-[#f5f5f5] hover:bg-[#ebebeb] rounded-2xl h-[48px] transition-colors"
             >
-              Cerrar sesión
+              <Icon icon="solar:logout-2-bold" className="w-4 h-4 text-gray-500" />
+              <span className="text-[11px] font-bold text-gray-600 uppercase tracking-[0.15em]">
+                Cerrar sesión
+              </span>
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-4">
-            Si el problema persiste, <a href="https://wa.me/573001009305?text=Hola,%20tengo%20problemas%20para%20conectar%20con%20Guro" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">contacta a soporte por WhatsApp</a>.
-          </p>
+
+          {/* WhatsApp support */}
+          <div className="mt-6 pt-5 border-t border-gray-100">
+            <a
+              href="https://wa.me/573001009305?text=Hola,%20tengo%20problemas%20para%20conectar%20con%20Guro"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-green-600 transition-colors"
+            >
+              <Icon icon="mdi:whatsapp" className="w-4 h-4" />
+              ¿Problemas? Contacta a soporte
+            </a>
+          </div>
         </div>
-      </div>
+      </PageWrapper>
     );
   }
 
-  // Pantalla de carga mientras verifica
+  // Loading state
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-      <div className="bg-white rounded-xl shadow-md border p-8 w-full max-w-md text-center">
-        <div className="mx-auto mb-4 w-12 h-12 rounded-full border-2 border-indigo-200 border-t-indigo-500 animate-spin" />
-        <h1 className="text-xl font-semibold text-gray-900">Preparando tu Dashboard</h1>
-        <p className="text-gray-600 mt-2">
-          Estamos terminando de cargar tu contexto y permisos. Esto puede tardar unos segundos.
+    <PageWrapper>
+      <div className="bg-white rounded-[28px] shadow-2xl p-8 sm:p-10 w-full max-w-md mx-4 text-center">
+        {/* Lottie loader */}
+        <div className="flex justify-center mb-6">
+          <div className="bg-[#f5f5f5] rounded-full p-4">
+            <Lottie
+              animationData={loaderAnimation}
+              loop
+              autoplay
+              style={{ width: 64, height: 64 }}
+            />
+          </div>
+        </div>
+
+        <h1 className="text-2xl font-bold text-[#0d0d0d] tracking-[-0.02em] mb-2">
+          {firstName ? `Hola, ${firstName}` : 'Preparando tu panel'}
+        </h1>
+        <p className="text-gray-500 text-sm leading-relaxed mb-6">
+          Estamos cargando tu espacio de trabajo. Esto solo toma unos segundos.
         </p>
+
+        {/* Progress dots */}
+        <div className="flex justify-center gap-1.5">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="w-2 h-2 rounded-full bg-[#573CFF] animate-pulse"
+              style={{ animationDelay: `${i * 0.2}s` }}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </PageWrapper>
   );
 };
 

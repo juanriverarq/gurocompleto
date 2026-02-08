@@ -1,5 +1,6 @@
 import { Card, Button, Table, Badge, TextInput, Select, Modal, Label, Pagination, Alert } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useState } from 'react';
 
 type EstadoEncuesta = 'Programada' | 'En curso' | 'Cerrada';
@@ -63,7 +64,7 @@ export default function Clima() {
             <p className="text-gray-600 dark:text-gray-400 max-w-2xl">Encuestas de clima, eNPS, pulsos y reconocimiento para medir y mejorar el ambiente laboral.</p>
           </div>
           <div className="flex gap-2">
-            <Button color="primary" onClick={() => setModalOpen(true)}><Icon icon="solar:pen-bold" className="mr-2" width={18} />Nueva Encuesta</Button>
+            <HeroButton icon="solar:pen-bold" onClick={() => setModalOpen(true)}>Nueva Encuesta</HeroButton>
             <Button color="light"><Icon icon="solar:download-minimalistic-bold" className="mr-2" width={18} />Exportar</Button>
           </div>
         </div>

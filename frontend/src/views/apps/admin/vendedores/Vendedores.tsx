@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Alert, Spinner, Table, Modal, TextInput, Label, Tabs, Radio, ToggleSwitch, Badge, Pagination } from 'flowbite-react';
 import { Checkbox } from 'src/components/shadcn-ui/Default-Ui/checkbox';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useVendedores } from 'src/hooks/useAdminCrudApi';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import { useTerminologia } from 'src/context/TerminologiaContext';
@@ -444,10 +445,7 @@ const Vendedores = () => {
             </p>
           </div>
           {activeTab === 'lista' && (
-            <Button onClick={handleCreate} className="flex items-center">
-              <Icon icon="solar:user-plus-bold" className="w-4 h-4 mr-2" />
-              Nuevo {terminologia.vendedor}
-            </Button>
+            <HeroButton icon="solar:user-plus-bold" onClick={handleCreate}>Nuevo {terminologia.vendedor}</HeroButton>
           )}
         </div>
         
@@ -559,10 +557,7 @@ const Vendedores = () => {
               Comienza agregando {terminologia.vendedorPlural.toLowerCase()} a tu equipo comercial.
             </p>
             <div className="flex justify-center">
-              <Button onClick={handleCreate}>
-                <Icon icon="solar:user-plus-bold" className="w-4 h-4 mr-2" />
-                Crear {terminologia.vendedor}
-              </Button>
+              <HeroButton icon="solar:user-plus-bold" onClick={handleCreate} size="lg">Crear {terminologia.vendedor}</HeroButton>
             </div>
           </div>
         </Card>

@@ -4,10 +4,12 @@ const customTheme = {
     fullSized: "w-full",
     color: {
       primary: "bg-primary text-white hover:bg-primaryemphasis hover:text-white",
+      blue: "bg-primary text-white hover:bg-primaryemphasis hover:text-white",
+      default: "bg-primary text-white hover:bg-primaryemphasis hover:text-white",
       secondary: "bg-secondary text-white ",
       error: "bg-error text-white ",
       warning: "bg-warning text-white ",
-      info: "bg-info text-white hover:bg-primaryemphasis",
+      info: "bg-primary text-white hover:bg-primaryemphasis hover:text-white",
       sky: "bg-sky text-white hover:bg-primaryemphasis",
       success: "bg-success text-white ",
       muted: "bg-muted text-dark dark:text-white dark:bg-darkmuted ",
@@ -126,7 +128,7 @@ const customTheme = {
     content: {
       base: "relative h-full w-full p-4 md:h-auto",
       inner:
-        "relative flex max-h-[90dvh] flex-col rounded-lg bg-white dark:bg-darkgray",
+        "relative flex max-h-[90dvh] flex-col rounded-2xl bg-white dark:bg-darkgray overflow-hidden",
     },
     sizes: {
       sm: "max-w-sm",
@@ -139,11 +141,11 @@ const customTheme = {
       popup: "pt-0",
     },
     header: {
-      base: "flex items-center justify-between  p-6",
+      base: "guro-modal-header flex items-center justify-between p-5 relative z-10",
       popup: "border-b-0 p-2",
-      title: "text-xl font-semibold text-dark dark:text-white leading-[normal]",
+      title: "text-lg font-bold text-white leading-[normal] drop-shadow-sm",
       close: {
-        base: "ltr:ml-auto rtl:mr-auto items-center rounded-lg bg-transparent p-1.5 text-sm text-gray-400 hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-600 dark:hover:text-white",
+        base: "ltr:ml-auto rtl:mr-auto items-center rounded-xl bg-white/15 backdrop-blur-sm p-1.5 text-sm text-white/80 hover:bg-white/25 hover:text-white transition-colors",
         icon: "h-5 w-5",
       },
     },
@@ -165,7 +167,7 @@ const customTheme = {
           light: "bg-white",
           auto: "bg-white dark:bg-dark",
         },
-        placement: "-4px",
+        placement: "-18px",
       },
       base: "z-10 min-w-[250px]  items-center focus:outline-none  shadow-md dark:shadow-dark-md text-start rounded-sm overflow-hidden",
       content: "py-2 text-sm text-bodytext focus:outline-none",
@@ -336,7 +338,7 @@ const customTheme = {
           pills: {
             base: "rounded-t-lg",
             active: {
-              on: "rounded-lg bg-cyan-600 text-white",
+              on: "rounded-lg bg-primary text-white",
               off: "rounded-lg hover:bg-lightprimary hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-white",
             },
           },
@@ -577,7 +579,7 @@ const customTheme = {
     content: "z-10 overflow-hidden rounded-[7px]",
     arrow: {
       base: "absolute h-2 w-2 z-0 rotate-45 rounded-md mix-blend-lighten bg-white border border-ld dark:border-gray-600 dark:bg-gray-800 dark:mix-blend-color",
-      placement: "-4px rounded-md",
+      placement: "-18px rounded-md",
     },
   },
 
@@ -648,7 +650,7 @@ const customTheme = {
               "absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full border border-white bg-gray-200 dark:border-gray-900 dark:bg-gray-700",
           },
           icon: {
-            base: "h-3 w-3 text-cyan-600 dark:text-cyan-300",
+            base: "h-3 w-3 text-primary dark:text-primary",
             wrapper:
               "absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full bg-lightprimary ring-8 ring-white dark:bg-primary dark:ring-gray-900",
           },
@@ -667,8 +669,8 @@ const customTheme = {
       link: {
         base: "flex w-full items-center border-b border-gray-200 px-4 py-2 dark:border-gray-600",
         active: {
-          off: "hover:bg-lightprimary  focus:outline-none focus:ring-2 focus:ring-cyan-700 dark:border-gray-600 dark:hover:text-white dark:focus:text-white dark:focus:ring-gray-500",
-          on: "bg-cyan-700 text-white dark:bg-gray-800",
+          off: "hover:bg-lightprimary  focus:outline-none focus:ring-2 focus:ring-primary dark:border-gray-600 dark:hover:text-white dark:focus:text-white dark:focus:ring-gray-500",
+          on: "bg-primary text-white dark:bg-gray-800",
         },
         disabled: {
           off: "",

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Button, Table, TextInput, Label, Spinner, Modal, Select } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import saasApi from 'src/services/saasApi';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PermissionGate from 'src/components/PermissionGate';
@@ -454,14 +455,7 @@ const Automoviles: React.FC = () => {
             </div>
             <div className="flex gap-2">
               {canCreate && (
-                <Button
-                  color="primary"
-                  className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                  onClick={() => setShowCreate(true)}
-                >
-                  <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" /> Nuevo
-                  Automóvil
-                </Button>
+                <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreate(true)}>Nuevo Automóvil</HeroButton>
               )}
             </div>
           </div>

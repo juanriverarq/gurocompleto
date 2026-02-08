@@ -9,6 +9,7 @@ import { Textarea } from '../../../components/shadcn-ui/Default-Ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../components/shadcn-ui/Default-Ui/dialog';
 import { Label } from '../../../components/shadcn-ui/Default-Ui/label';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { IconDots } from '@tabler/icons-react';
 import CampaignWizard from '../../../components/campaign/CampaignWizard';
 import DynamicFieldsConfig from '../../../components/voice-ai/DynamicFieldsConfig';
@@ -599,13 +600,7 @@ const CampaignsManagementWidget: React.FC = () => {
         
         <div className="flex gap-2">
           {/* Botón principal para wizard */}
-          <Button 
-            onClick={() => setShowWizard(true)}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
-          >
-            <Icon icon="solar:magic-stick-3-bold" className="w-4 h-4 mr-2" />
-            Nueva Campaña
-          </Button>
+          <HeroButton icon="solar:magic-stick-3-bold" onClick={() => setShowWizard(true)}>Nueva Campaña</HeroButton>
         </div>
       </div>
 
@@ -820,7 +815,7 @@ const CampaignsManagementWidget: React.FC = () => {
                         <td className="px-4 py-3 w-56">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-600 rounded-full" style={{ width: `${percent}%` }}></div>
+                              <div className="h-full rounded-full" style={{ width: `${percent}%` }}></div>
                             </div>
                             <span className="text-gray-700 dark:text-gray-300 tabular-nums w-10 text-right">{percent}%</span>
                           </div>
@@ -1535,7 +1530,7 @@ const CampaignDetailView: React.FC<{ campaign: VoiceCampaign; onRefresh?: () => 
                           </td>
                           <td className="py-2 text-gray-600 dark:text-gray-400">{formatDuration(c.duration)}</td>
                           <td className="py-2">
-                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => openCallDetail(c)}>
+                            <Button size="sm" className="" onClick={() => openCallDetail(c)}>
                               Ver detalles
                             </Button>
                           </td>
@@ -1843,7 +1838,7 @@ const CampaignEditForm: React.FC<{
         </Button>
         <Button 
           onClick={handleSubmit}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
+          className="text-white"
         >
           <Icon icon="solar:floppy-disk-bold" className="w-4 h-4 mr-2" />
           Guardar Cambios

@@ -12,7 +12,7 @@ import ColorBoxes from "src/components/dashboards/dashboard3/ColorBoxes";
 import EmailVerificationBanner from "src/components/EmailVerificationBanner";
 import { usePageMeta } from "src/hooks/usePageMeta";
 import { getPageMetadata } from "src/config/pageMetadata";
-import { Tooltip } from "flowbite-react";
+// Tooltip removed — using custom UI
 
 const Dashboard3 = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -61,82 +61,75 @@ const Dashboard3 = () => {
       
       {/* Barra de herramientas del dashboard */}
       <div className="flex justify-end items-center gap-2 mb-4">
-        <Tooltip content="Filtrar por fecha" placement="bottom">
-          <button
-            onClick={() => setShowDatePicker(!showDatePicker)}
-            className={`h-10 w-10 hover:text-primary hover:bg-lightprimary dark:hover:bg-darkminisidebar dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer ${
-              startDate || endDate ? 'text-primary bg-lightprimary' : 'text-darklink dark:text-white'
-            }`}
-          >
-            <Icon icon="solar:calendar-linear" height={20} />
-          </button>
-        </Tooltip>
+        <button
+          onClick={() => setShowDatePicker(!showDatePicker)}
+          className={`h-9 px-3 rounded-xl flex items-center gap-2 text-sm font-medium transition-all ${
+            startDate || endDate
+              ? 'bg-[#573CFF]/10 text-[#573CFF]'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          <Icon icon="solar:calendar-linear" height={16} />
+          <span className="hidden sm:inline">{startDate || endDate ? 'Filtro activo' : 'Filtrar'}</span>
+        </button>
       </div>
 
       {/* Selector de fecha desplegable */}
       {showDatePicker && (
-        <div className="mb-4 p-4 bg-white dark:bg-darkgray rounded-md shadow-md">
+        <div className="mb-4 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
           <div className="flex flex-col gap-4">
             {/* Filtros rápidos */}
             <div className="flex gap-2 items-center flex-wrap">
-              <span className="text-sm font-medium text-darklink dark:text-white mr-2">Filtros rápidos:</span>
-              <button
-                onClick={() => handleQuickFilter('today')}
-                className="px-3 py-1 rounded-md text-sm transition-colors bg-muted dark:bg-dark text-ld hover:bg-lightprimary hover:text-primary"
-              >
-                Hoy
-              </button>
-              <button
-                onClick={() => handleQuickFilter('week')}
-                className="px-3 py-1 rounded-md text-sm transition-colors bg-muted dark:bg-dark text-ld hover:bg-lightprimary hover:text-primary"
-              >
-                Última Semana
-              </button>
-              <button
-                onClick={() => handleQuickFilter('month')}
-                className="px-3 py-1 rounded-md text-sm transition-colors bg-muted dark:bg-dark text-ld hover:bg-lightprimary hover:text-primary"
-              >
-                Último Mes
-              </button>
-              <button
-                onClick={() => handleQuickFilter('year')}
-                className="px-3 py-1 rounded-md text-sm transition-colors bg-muted dark:bg-dark text-ld hover:bg-lightprimary hover:text-primary"
-              >
-                Último Año
-              </button>
+              <span className="text-xs font-bold text-[#0d0d0d] uppercase tracking-wider mr-1">Rápido:</span>
+              {[
+                { label: 'Hoy', filter: 'today' as const },
+                { label: 'Semana', filter: 'week' as const },
+                { label: 'Mes', filter: 'month' as const },
+                { label: 'Año', filter: 'year' as const },
+              ].map(({ label, filter }) => (
+                <button
+                  key={filter}
+                  onClick={() => handleQuickFilter(filter)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-[#f5f5f5] text-gray-500 hover:bg-[#573CFF]/10 hover:text-[#573CFF]"
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
             {/* Selector de rango personalizado */}
-            <div className="flex gap-4 items-center flex-wrap">
+            <div className="flex gap-4 items-end flex-wrap">
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-darklink dark:text-white">Fecha inicio:</label>
+                <label className="text-xs font-semibold text-[#0d0d0d]">Desde</label>
                 <input
                   type="date"
                   value={startDate || ''}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-3 py-2 rounded-md text-sm border border-border dark:border-darkborder bg-white dark:bg-dark text-darklink dark:text-white"
+                  className="px-3 py-2 rounded-xl text-sm border border-gray-200 bg-[#fafafa] text-[#0d0d0d] focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-darklink dark:text-white">Fecha fin:</label>
+                <label className="text-xs font-semibold text-[#0d0d0d]">Hasta</label>
                 <input
                   type="date"
                   value={endDate || ''}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-3 py-2 rounded-md text-sm border border-border dark:border-darkborder bg-white dark:bg-dark text-darklink dark:text-white"
+                  className="px-3 py-2 rounded-xl text-sm border border-gray-200 bg-[#fafafa] text-[#0d0d0d] focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none"
                 />
               </div>
-              <button
-                onClick={clearFilter}
-                className="px-4 py-2 rounded-md text-sm transition-colors bg-error text-white hover:bg-red-700 mt-auto"
-              >
-                Limpiar Filtro
-              </button>
+              {(startDate || endDate) && (
+                <button
+                  onClick={clearFilter}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold transition-colors bg-red-50 text-red-500 hover:bg-red-100"
+                >
+                  Limpiar
+                </button>
+              )}
             </div>
 
             {/* Indicador de filtro activo */}
             {(startDate || endDate) && (
-              <div className="text-sm text-primary font-medium">
+              <div className="text-xs text-[#573CFF] font-medium">
                 Filtrando datos {startDate && `desde ${startDate}`} {endDate && `hasta ${endDate}`}
               </div>
             )}
@@ -144,48 +137,44 @@ const Dashboard3 = () => {
         </div>
       )}
       
-      <div className="grid grid-cols-12 gap-30">
+      <div className="grid grid-cols-12 gap-5">
         {/* Primera fila: Métricas principales */}
         <div className="col-span-12">
           <ColorBoxes startDate={startDate} endDate={endDate} />
         </div>
         
         {/* Segunda fila: Primas por Mes y Análisis IA (misma altura) */}
-        <div className="lg:col-span-8 col-span-12 flex">
-          <div className="w-full">
+        <div className="lg:col-span-8 col-span-12">
+          <div className="w-full h-full [&>.card]:h-full [&>.card]:flex [&>.card]:flex-col">
             <RevenueForcastChart startDate={startDate} endDate={endDate} />
           </div>
         </div>
-        <div className="lg:col-span-4 col-span-12 flex">
-          <div className="w-full">
+        <div className="lg:col-span-4 col-span-12">
+          <div className="w-full h-full [&>.card]:h-full [&>.card]:flex [&>.card]:flex-col">
             <AnnualProfit startDate={startDate} endDate={endDate} />
           </div>
         </div>
-
-        
         
         {/* Tercera fila: Rendimiento de Pólizas y gráficos de clientes/ventas */}
-        <div className="lg:col-span-5 col-span-12 flex">
-          <div className="w-full">
+        <div className="lg:col-span-5 col-span-12">
+          <div className="w-full h-full [&>.card]:h-full [&>.card]:flex [&>.card]:flex-col">
             <YourPerformance startDate={startDate} endDate={endDate} />
           </div>
         </div>
         <div className="lg:col-span-7 col-span-12">
-          <div className="grid grid-cols-12 gap-30 h-full">
-            <div className="md:col-span-6 col-span-12 flex">
-              <div className="w-full">
+          <div className="grid grid-cols-12 gap-5 h-full">
+            <div className="md:col-span-6 col-span-12">
+              <div className="w-full h-full [&>.card]:h-full [&>.card]:flex [&>.card]:flex-col">
                 <CustomerChart startDate={startDate} endDate={endDate} />
               </div>
             </div>
-            <div className="md:col-span-6 col-span-12 flex">
-              <div className="w-full">
+            <div className="md:col-span-6 col-span-12">
+              <div className="w-full h-full [&>.card]:h-full [&>.card]:flex [&>.card]:flex-col">
                 <SalesOverview startDate={startDate} endDate={endDate} />
               </div>
             </div>
           </div>
         </div>
-        
-        {/* Cuarta fila eliminada: Rendimiento por Tipo de Seguro y Siniestros Procesados */}
       </div>
     </>
   );

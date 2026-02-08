@@ -32,13 +32,13 @@
 }
 
 [data-color-theme="BLUE_THEME"] {
-    --color-primary: #635BFF;
+    --color-primary: #573CFF;
     --color-secondary: #16CDC7;
-    --color-primary-emphasis: #5249fe;
+    --color-primary-emphasis: #4530d4;
     --color-secondary-emphasis: #1cc3bd;
-    --color-lightprimary: #635BFF40;
+    --color-lightprimary: #573CFF15;
     --color-lightsecondary: #16CDC740;
-    --color-primary-rgb: 99, 91, 255;
+    --color-primary-rgb: 87, 60, 255;
     --color-secondary-rgb: 20, 233, 226;
 }
 

@@ -29,7 +29,7 @@ const MobileHeaderItems = () => {
           {/* Light Mode Button */}
           {activeMode === "light" ? (
             <div
-              className="h-10 w-10 hover:text-primary hover:bg-lightprimary dark:hover:bg-darkminisidebar  dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-darklink  dark:text-white"
+              className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
               onClick={toggleMode}
             >
               <span className="flex items-center">
@@ -39,7 +39,7 @@ const MobileHeaderItems = () => {
           ) : (
             // Dark Mode Button
             <div
-              className="h-10 w-10 hover:text-primary hover:bg-lightprimary dark:hover:bg-darkminisidebar  dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-darklink  dark:text-white"
+              className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
               onClick={toggleMode}
             >
               <span className="flex items-center">

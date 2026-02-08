@@ -2,6 +2,7 @@ import { useState, useContext, useEffect } from 'react';
 import { useReactTable, createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, SortingState } from '@tanstack/react-table';
 import { Badge, Button, Progress, Card, Spinner } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { Link } from 'react-router';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { CustomizerContext } from 'src/context/CustomizerContext';
@@ -244,10 +245,9 @@ const SiniestrosActivos = () => {
               <Icon icon="solar:download-bold" className="mr-2" width={16} />
               Descargar
             </Button>
-            <Button color="blue" as={Link} to="/apps/seguros/siniestros/nuevo">
-              <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
-              Nuevo Siniestro
-            </Button>
+            <Link to="/apps/seguros/siniestros/nuevo">
+              <HeroButton icon="solar:add-circle-bold">Nuevo Siniestro</HeroButton>
+            </Link>
           </div>
         </div>
 

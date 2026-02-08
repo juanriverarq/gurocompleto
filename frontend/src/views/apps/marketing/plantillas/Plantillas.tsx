@@ -11,6 +11,7 @@ import {
 import { CardContent } from 'src/components/shadcn-ui/Default-Ui/card';
 import { Button as ShButton } from 'src/components/shadcn-ui/Default-Ui/button';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import CardBox from 'src/components/shared/CardBox';
 import Chart from 'react-apexcharts';
 import {
@@ -1104,10 +1105,7 @@ const Plantillas = () => {
                   </h2>
                   <div className="flex items-center gap-3">
                     {canCreate && (
-                      <Button size="sm" color="primary" onClick={handleOpenWizard}>
-                        <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
-                        Nueva Campaña
-                      </Button>
+                      <HeroButton icon="solar:add-circle-bold" onClick={handleOpenWizard}>Nueva Campaña</HeroButton>
                     )}
                     <Button
                       size="sm"
@@ -1217,10 +1215,7 @@ const Plantillas = () => {
                       Crea tu primera campaña de email para comenzar a comunicarte con tus clientes
                     </p>
                     {canCreate && (
-                      <Button color="primary" size="lg" onClick={handleOpenWizard}>
-                        <Icon icon="solar:add-circle-bold" className="mr-2" width={20} />
-                        Crear primera campaña
-                      </Button>
+                      <HeroButton icon="solar:add-circle-bold" onClick={handleOpenWizard} size="lg">Crear primera campaña</HeroButton>
                     )}
                   </div>
                 ) : (
@@ -1354,7 +1349,7 @@ const Plantillas = () => {
                                     <div className="flex items-center gap-2">
                                       <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                         <div
-                                          className="h-full bg-blue-600 rounded-full"
+                                          className="h-full rounded-full"
                                           style={{ width: `${percent}%` }}
                                         ></div>
                                       </div>
@@ -1597,10 +1592,7 @@ const Plantillas = () => {
                         : 'Comienza creando tu primera plantilla de email para tus campañas'}
                     </p>
                     {canCreate && (
-                      <Button color="primary" size="lg" onClick={handleOpenVisualEditor}>
-                        <Icon icon="solar:add-circle-bold" className="mr-2" width={20} />
-                        Crear primera plantilla
-                      </Button>
+                      <HeroButton icon="solar:add-circle-bold" onClick={handleOpenVisualEditor} size="lg">Crear primera plantilla</HeroButton>
                     )}
                   </div>
                 ) : (

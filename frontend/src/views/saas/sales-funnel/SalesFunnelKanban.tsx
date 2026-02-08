@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Button, Spinner, Alert, Modal, Badge, Dropdown } from 'flowbite-react';
 import { useNavigate } from 'react-router-dom';
 import { Icon as IconifyIcon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 // @ts-ignore
 import SimpleBar from 'simplebar-react';
@@ -344,14 +345,7 @@ const SalesFunnelKanban: React.FC = () => {
             </div>
 
             {canCreate && (
-              <Button
-                onClick={() => setShowNuevoNegocioModal(true)}
-                color="primary"
-                className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-              >
-                <IconifyIcon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                Nuevo Negocio
-              </Button>
+              <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowNuevoNegocioModal(true)}>Nuevo Negocio</HeroButton>
             )}
           </div>
         </div>
@@ -630,7 +624,7 @@ const SalesFunnelKanban: React.FC = () => {
               color="primary"
               onClick={confirmStateChange}
               disabled={changingState || !newState}
-              className="bg-blue-600 hover:bg-blue-700"
+              className=""
             >
               {changingState ? (
                 <>

@@ -1,4 +1,4 @@
-import { Button, Checkbox, Label, TextInput } from "flowbite-react";
+import { Checkbox, Label, TextInput } from "flowbite-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useState, useEffect } from "react";
 import { useUnifiedAuth } from "src/context/UnifiedAuthContext";
@@ -51,13 +51,13 @@ const AuthLogin = () => {
     <>
       {/* Mensaje de redirección si viene de una página protegida */}
       {searchParams.get('redirect') && (
-        <div className="mb-4 p-3 bg-blue-100 border border-blue-400 text-blue-700 rounded">
-          🔐 Necesitas iniciar sesión para acceder a esa página
+        <div className="mb-4 p-3 bg-[#573CFF]/10 border border-[#573CFF]/20 text-[#573CFF] rounded-xl text-sm">
+          Necesitas iniciar sesión para acceder a esa página
         </div>
       )}
 
       
-      <form className="mt-6" onSubmit={handleLogin}>
+      <form onSubmit={handleLogin}>
         <div className="mb-4">
           <div className="mb-2 block">
             <Label htmlFor="identifier" value="Email o Usuario" />
@@ -90,7 +90,7 @@ const AuthLogin = () => {
         </div>
         
         {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
             {error}
           </div>
         )}
@@ -102,19 +102,28 @@ const AuthLogin = () => {
           </div>
           <Link
             to="/auth/auth1/forgot-password"
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-[#573CFF] hover:underline"
           >
             ¿Olvidaste tu contraseña?
           </Link>
         </div>
-        <div className="my-5">
-          <Button 
-            type="submit" 
-            className="w-full bg-primary hover:bg-primary/90"
+        <div className="mt-6 flex justify-center">
+          <button
+            type="submit"
             disabled={loading}
+            className="group relative inline-flex items-center bg-[#0d0d0d] rounded-2xl h-[52px] overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed w-full justify-center"
           >
-            {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-          </Button>
+            <span className="absolute inset-y-0 left-0 w-[52px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+            <span className="relative z-10 flex items-center justify-center w-[52px] h-full flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </span>
+            <span
+              className="relative z-10 pr-6 text-[11px] font-bold text-white uppercase tracking-[0.15em] whitespace-nowrap"
+              style={{ fontFamily: "'General Sans', sans-serif" }}
+            >
+              {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            </span>
+          </button>
         </div>
       </form>
     </>

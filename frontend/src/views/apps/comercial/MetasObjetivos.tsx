@@ -13,6 +13,7 @@ import {
   Label,
 } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { salesFunnelService } from 'src/services/salesFunnelService';
 import goalsService from 'src/services/goalsService';
 import salesTeamsService from 'src/services/salesTeamsService';
@@ -617,10 +618,7 @@ const MetasObjetivos = () => {
                 </div>
               </div>
               {canCreate && (
-                <Button onClick={() => setShowModalMeta(true)} data-testid="btn-nueva-meta">
-                  <Icon icon="solar:add-circle-bold-duotone" className="mr-2 h-4 w-4" />
-                  Nueva Meta
-                </Button>
+                <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowModalMeta(true)}>Nueva Meta</HeroButton>
               )}
             </div>
           </Card>

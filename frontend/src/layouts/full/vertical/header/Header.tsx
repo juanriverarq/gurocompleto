@@ -128,21 +128,31 @@ const Header = ({ layoutType }: HeaderPropsType) => {
           if (isTrialActive()) {
             const days = getTrialDaysLeft();
             if (typeof days === 'number') {
-              // Colores según urgencia
-              const bgColor = days <= 2 
-                ? 'from-red-600 via-red-500 to-orange-500' 
-                : days <= 5 
-                  ? 'from-amber-600 via-orange-500 to-yellow-500'
-                  : 'from-blue-600 via-indigo-600 to-violet-600';
+              const isUrgent = days <= 2;
               
               return (
-                <div className={`w-full bg-gradient-to-r ${bgColor} text-white relative z-[10]`}>
-                  <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
-                    <span className="hidden sm:inline">
-                      {days <= 2 ? '⚠️ ¡Tu prueba está por terminar!' : 'Estás usando la versión de prueba.'}
+                <div className="w-full relative z-[10] overflow-hidden" style={{ fontFamily: "'General Sans', sans-serif" }}>
+                  {/* Background image */}
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage: isUrgent
+                        ? undefined
+                        : 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png?width=2880&height=2190)',
+                      backgroundSize: '160%',
+                      backgroundPosition: 'center',
+                      transform: 'rotate(180deg)',
+                      backgroundColor: isUrgent ? '#dc2626' : undefined,
+                    }}
+                  />
+                  <div className={`relative z-10 mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-1 flex items-center justify-center gap-3`}>
+                    <span className="text-white/80 text-xs font-medium hidden sm:inline">
+                      {isUrgent ? '¡Tu prueba está por terminar!' : 'Versión de prueba'}
                     </span>
-                    <strong>{days} {days === 1 ? 'día restante' : 'días restantes'}</strong>
-                    <a href="/apps/billing/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
+                    <span className="text-white text-xs font-bold bg-white/15 px-2.5 py-0.5 rounded-full backdrop-blur-sm">
+                      {days} {days === 1 ? 'día' : 'días'}
+                    </span>
+                    <a href="/apps/billing/planes" className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white text-[#0d0d0d] text-[11px] font-bold hover:bg-white/90 transition-all">
                       Activar plan
                     </a>
                   </div>
@@ -151,10 +161,19 @@ const Header = ({ layoutType }: HeaderPropsType) => {
             }
             // Si no pudimos calcular días, igualmente mostrar CTA de trial activo
             return (
-              <div className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white relative z-[10]">
-                <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
-                  <span className="hidden sm:inline">Versión de prueba activa.</span>
-                  <a href="/apps/billing/planes" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
+              <div className="w-full relative z-[10] overflow-hidden" style={{ fontFamily: "'General Sans', sans-serif" }}>
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage: 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png?width=2880&height=2190)',
+                    backgroundSize: '160%',
+                    backgroundPosition: 'center',
+                    transform: 'rotate(180deg)',
+                  }}
+                />
+                <div className={`relative z-10 mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-1 flex items-center justify-center gap-3`}>
+                  <span className="text-white/80 text-xs font-medium hidden sm:inline">Versión de prueba activa</span>
+                  <a href="/apps/billing/planes" className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white text-[#0d0d0d] text-[11px] font-bold hover:bg-white/90 transition-all">
                     Activar plan
                   </a>
                 </div>
@@ -166,24 +185,31 @@ const Header = ({ layoutType }: HeaderPropsType) => {
           if (isSubscriptionActive()) {
             const days = getSubscriptionDaysLeft();
             if (typeof days === 'number' && days <= 5) {
-              // Colores según urgencia
-              const bgColor = days <= 1 
-                ? 'from-red-600 via-red-500 to-orange-500' 
-                : days <= 3 
-                  ? 'from-amber-600 via-orange-500 to-yellow-500'
-                  : 'from-blue-600 via-indigo-600 to-violet-600';
+              const isUrgent = days <= 1;
               
               const message = days === 0 
-                ? '⚠️ Tu suscripción vence hoy'
+                ? '¡Tu suscripción vence hoy!'
                 : days === 1 
-                  ? '⚠️ Tu suscripción vence mañana'
+                  ? 'Tu suscripción vence mañana'
                   : `Tu próximo pago es en ${days} días`;
               
               return (
-                <div className={`w-full bg-gradient-to-r ${bgColor} text-white relative z-[10]`}>
-                  <div className={`mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-0.5 text-center text-xs flex items-center justify-center gap-1`}>
-                    <span>{message}</span>
-                    <a href="/apps/billing/suscripcion" className="ml-2 inline-flex items-center px-2 py-0 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white">
+                <div className="w-full relative z-[10] overflow-hidden" style={{ fontFamily: "'General Sans', sans-serif" }}>
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage: isUrgent
+                        ? undefined
+                        : 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png?width=2880&height=2190)',
+                      backgroundSize: '160%',
+                      backgroundPosition: 'center',
+                      transform: 'rotate(180deg)',
+                      backgroundColor: isUrgent ? '#dc2626' : undefined,
+                    }}
+                  />
+                  <div className={`relative z-10 mx-auto ${isLayout == "full" ? "w-full px-4" : "container"} py-1 flex items-center justify-center gap-3`}>
+                    <span className="text-white text-xs font-medium">{message}</span>
+                    <a href="/apps/billing/suscripcion" className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white text-[#0d0d0d] text-[11px] font-bold hover:bg-white/90 transition-all">
                       Ver detalles
                     </a>
                   </div>
@@ -203,7 +229,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
           {/* Mobile Toggle Icon */}
           <span
             onClick={() => setIsMobileSidebarOpen(true)}
-            className="h-10 w-10 flex text-black dark:text-white text-opacity-65 xl:hidden hover:text-primary hover:bg-lightprimary rounded-full justify-center items-center cursor-pointer"
+            className="h-10 w-10 flex text-gray-500 xl:hidden hover:text-[#573CFF] hover:bg-[#573CFF]/10 rounded-xl justify-center items-center cursor-pointer transition-colors"
           >
             <Icon icon="solar:hamburger-menu-line-duotone" height={21} />
           </span>
@@ -248,7 +274,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
                 <a
                   href="/apps/calendar"
                   title="Calendario"
-                  className="h-10 w-10 hover:text-primary hover:bg-lightprimary dark:hover:bg-darkminisidebar dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-darklink dark:text-white"
+                  className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
                 >
                   <Icon icon="solar:calendar-bold-duotone" width="20" />
                 </a>
@@ -259,7 +285,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
               {/* Light Mode Button */}
               {activeMode === "light" ? (
                 <div
-                  className="h-10 w-10 hover:text-primary hover:bg-lightprimary dark:hover:bg-darkminisidebar  dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-darklink  dark:text-white"
+                  className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
                   onClick={toggleMode}
                 >
                   <span className="flex items-center">
@@ -269,7 +295,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
               ) : (
                 // Dark Mode Button
                 <div
-                  className="h-10 w-10 hover:text-primary hover:bg-lightprimary dark:hover:bg-darkminisidebar  dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-darklink  dark:text-white"
+                  className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
                   onClick={toggleMode}
                 >
                   <span className="flex items-center">
@@ -290,7 +316,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
           </Navbar.Collapse>
           {/* Mobile Toggle Icon */}
           <span
-            className="h-10 w-10 flex xl:hidden hover:text-primary hover:bg-lightprimary rounded-full justify-center items-center cursor-pointer"
+            className="h-10 w-10 flex xl:hidden hover:text-[#573CFF] hover:bg-[#573CFF]/10 rounded-xl justify-center items-center cursor-pointer text-gray-500 transition-colors"
             onClick={handleMobileMenu}
           >
             <Icon icon="tabler:dots" height={21} />

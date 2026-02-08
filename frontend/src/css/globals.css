@@ -180,7 +180,7 @@
   }
 
   .dropdown {
-    @apply shadow-md bg-white dark:bg-dark relative rounded-md dark:shadow-dark-md overflow-hidden;
+    @apply shadow-md bg-white dark:bg-dark relative rounded-xl dark:shadow-dark-md overflow-hidden;
   }
 
   .card-title {
@@ -211,7 +211,7 @@
   }
 
   .form-control input {
-    @apply rounded-md border border-border dark:border-darkborder bg-transparent dark:bg-transparent w-full text-sm;
+    @apply rounded-xl border border-border dark:border-darkborder bg-transparent dark:bg-transparent w-full text-sm;
   }
 
   .form-control-chat input {
@@ -231,7 +231,7 @@
   }
 
   .form-control-textarea {
-    @apply !rounded-md border border-border dark:border-darkborder bg-transparent dark:bg-transparent w-full text-sm p-4;
+    @apply !rounded-xl border border-border dark:border-darkborder bg-transparent dark:bg-transparent w-full text-sm p-4;
   }
 
   .form-control-textarea:focus {
@@ -243,7 +243,7 @@
   }
 
   .form-control-input {
-    @apply rounded-md border border-border dark:border-darkborder bg-transparent dark:bg-transparent w-full text-sm;
+    @apply rounded-xl border border-border dark:border-darkborder bg-transparent dark:bg-transparent w-full text-sm;
   }
 
   .form-control-input:focus {
@@ -251,11 +251,11 @@
   }
 
   .form-control-validation input {
-    @apply rounded-md
+    @apply rounded-xl
   }
 
   .form-rounded-md input {
-    @apply rounded-md
+    @apply rounded-xl
   }
 
   .input-center input {
@@ -275,7 +275,7 @@
   }
 
   .select-md select {
-    @apply border-ld bg-transparent dark:bg-darkgray w-full text-sm rounded-md focus:border-primary dark:focus:border-primary focus:ring-0;
+    @apply border-ld bg-transparent dark:bg-darkgray w-full text-sm rounded-xl focus:border-primary dark:focus:border-primary focus:ring-0;
   }
 
   .checkbox {
@@ -330,15 +330,15 @@
 
   /* Headlessui */
   .ui-button {
-    @apply flex items-stretch justify-between text-center py-2.5 px-5 text-white text-center font-medium rounded-md
+    @apply flex items-stretch justify-between text-center py-2.5 px-5 text-white text-center font-semibold rounded-xl
   }
 
   .ui-button-small {
-    @apply flex items-stretch justify-between text-center py-2 px-6 text-white text-center font-medium rounded-md
+    @apply flex items-stretch justify-between text-center py-2 px-6 text-white text-center font-semibold rounded-xl
   }
 
   .ui-dropdown {
-    @apply text-ld w-full !max-w-56 bg-white dark:bg-dark shadow-md dark:shadow-dark-md text-start rounded-sm py-3
+    @apply text-ld w-full !max-w-56 bg-white dark:bg-dark shadow-md dark:shadow-dark-md text-start rounded-xl py-3
   }
 
   .ui-dropdown-item {
@@ -350,7 +350,7 @@
   }
 
   .ui-form-control {
-    @apply border border-border dark:border-darkborder bg-transparent dark:bg-transparent w-full text-sm;
+    @apply border border-border dark:border-darkborder bg-transparent dark:bg-transparent w-full text-sm rounded-xl;
   }
 
   .ui-form-control:focus {
@@ -367,6 +367,191 @@
 }
 
 
+
+/* ==== GURO GLOBAL DESIGN OVERRIDES ==== */
+
+/* ---- Flowbite Buttons: match hero style ---- */
+/* Flowbite theme already sets bg-primary + hover:bg-primaryemphasis + rounded-md.
+   These overrides catch any residual cyan classes from Flowbite defaults. */
+
+/* Override ALL blue/cyan bg on buttons — catches both Flowbite defaults and hardcoded classNames */
+button.bg-blue-600,
+button.bg-blue-700,
+button .bg-blue-600,
+button .bg-blue-700,
+button.group.bg-blue-600,
+button.group .bg-blue-600,
+button.group.bg-cyan-700,
+button.group .bg-cyan-700,
+.bg-blue-600.group,
+.bg-cyan-700.group,
+.bg-cyan-600.group {
+  background-color: var(--color-primary) !important;
+}
+button.bg-blue-600:hover,
+button.bg-blue-700:hover,
+button .bg-blue-600:hover,
+button .bg-blue-700:hover,
+button.hover\:bg-blue-700:hover,
+button .hover\:bg-blue-700:hover,
+button.hover\:bg-cyan-800:hover,
+button .hover\:bg-cyan-800:hover,
+button.group:hover .bg-blue-600,
+button.group:hover .bg-cyan-700 {
+  background-color: var(--color-primary-emphasis) !important;
+}
+
+/* Override any leftover cyan/blue text/border */
+button .text-cyan-700,
+button .text-cyan-600,
+button .text-blue-700,
+button .text-blue-600,
+.text-cyan-700,
+.text-cyan-600 {
+  color: var(--color-primary) !important;
+}
+button .border-cyan-700,
+button .border-cyan-600,
+button .border-blue-700,
+button .border-blue-600,
+.border-cyan-700,
+.border-cyan-600 {
+  border-color: var(--color-primary) !important;
+}
+
+/* Focus ring: purple instead of cyan/blue */
+button.group:focus,
+button:focus-visible {
+  --tw-ring-color: color-mix(in srgb, var(--color-primary) 40%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent) !important;
+}
+
+/* Ensure Flowbite buttons use font-medium (hero style) */
+button.group,
+button.group > span {
+  font-weight: 500 !important;
+}
+
+/* ---- Flowbite Card: rounded-xl ---- */
+.card,
+[class*="flowbite"] .card,
+div[class*="card"] > div {
+  border-radius: 12px !important;
+}
+
+/* ---- Flowbite inputs/selects/textareas: rounded-xl ---- */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([data-plate-input]),
+select,
+textarea {
+  border-radius: 12px !important;
+}
+
+/* Focus ring for all inputs: purple glow */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent) !important;
+  outline: none !important;
+}
+
+/* ---- Flowbite Modal: rounded-2xl ---- */
+[class*="modal-content"],
+.modal-content,
+[role="dialog"] > div {
+  border-radius: 16px !important;
+}
+
+/* ---- Guro Modal Header: purple gradient background ---- */
+.guro-modal-header {
+  position: relative;
+  overflow: hidden;
+  min-height: 64px;
+}
+.guro-modal-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png?width=2880&height=2190');
+  background-size: 200%;
+  background-position: center;
+  transform: rotate(180deg);
+  z-index: 0;
+}
+.guro-modal-header > * {
+  position: relative;
+  z-index: 1;
+}
+/* Force white text on all modal header titles */
+.guro-modal-header h3,
+.guro-modal-header p,
+.guro-modal-header span,
+.guro-modal-header .text-dark,
+.guro-modal-header .text-gray-900,
+.guro-modal-header [class*="text-dark"],
+.guro-modal-header [class*="text-gray"] {
+  color: white !important;
+}
+/* Dark mode: slightly darker overlay */
+html.dark .guro-modal-header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  z-index: 0;
+}
+/* Ensure Shadcn dialog body/footer siblings of guro-modal-header get padding
+   Only target direct children of Radix DialogContent (data-state attribute) */
+[data-state] > .guro-modal-header ~ div,
+[data-state] > .guro-modal-header ~ form {
+  padding: 1.5rem;
+}
+[data-state] > .guro-modal-header ~ div + div,
+[data-state] > .guro-modal-header ~ form + div {
+  padding-top: 0;
+}
+
+/* ---- Flowbite Tabs underline active: use primary color ---- */
+[role="tab"][aria-selected="true"] {
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary) !important;
+}
+
+/* ---- Flowbite Badge: rounded-full ---- */
+.badge, [class*="badge"] {
+  border-radius: 9999px;
+}
+
+/* ---- Flowbite Alert: rounded-xl ---- */
+[role="alert"] {
+  border-radius: 12px !important;
+}
+
+/* ---- Flowbite Tooltip: rounded-xl ---- */
+[role="tooltip"] > div,
+[data-testid="flowbite-tooltip"] > div {
+  border-radius: 12px !important;
+}
+
+/* ---- Flowbite Toggle/Switch: use primary color ---- */
+button[role="switch"][aria-checked="true"],
+[class*="peer-checked\\:bg-cyan"] {
+  background-color: var(--color-primary) !important;
+}
+
+/* ---- Flowbite Pagination active: use primary ---- */
+[aria-current="page"] > span,
+[aria-current="page"] > button {
+  background-color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: white !important;
+}
+
+/* ---- Flowbite Progress bar: use primary ---- */
+[role="progressbar"] > div {
+  background-color: var(--color-primary) !important;
+}
+/* ==== END GURO GLOBAL DESIGN OVERRIDES ==== */
 
 /* Estilos de máxima prioridad para formularios - fuera de @layer para máxima especificidad */
 html.dark form select,
@@ -727,7 +912,7 @@ input[type='radio']:focus {
 /* ==== Dynamic Primary Color Overrides (bind Tailwind-like utility classes to CSS var) ==== */
 /* Fallback default to avoid undefined var before auth context applies branding */
 :root {
-  --color-primary: #635BFF;
+  --color-primary: #573CFF;
 }
 
 /* Map common utility classes to use --color-primary so changes reflect across the UI */

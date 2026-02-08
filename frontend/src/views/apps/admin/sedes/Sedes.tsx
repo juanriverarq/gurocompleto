@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Button, Alert, Spinner, Table, Modal, TextInput, Label } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useSedes } from 'src/hooks/useAdminCrudApi';
 import type { Sede as SedeType, SedeCreate } from 'src/types/admin';
 import { PermissionGate, PermissionButton } from 'src/components/PermissionGate';
@@ -82,10 +83,7 @@ const Sedes = () => {
             </p>
           </div>
           <PermissionGate route="/apps/admin/sedes" action="crear">
-            <Button onClick={handleCreate} className="flex items-center">
-              <Icon icon="solar:buildings-bold" className="w-4 h-4 mr-2" />
-              Nueva Sede
-            </Button>
+            <HeroButton icon="solar:buildings-bold" onClick={handleCreate}>Nueva Sede</HeroButton>
           </PermissionGate>
         </div>
       </div>
@@ -117,10 +115,7 @@ const Sedes = () => {
             </p>
             <div className="flex justify-center">
               <PermissionGate route="/apps/admin/sedes" action="crear">
-                <Button onClick={handleCreate}>
-                  <Icon icon="solar:buildings-bold" className="w-4 h-4 mr-2" />
-                  Crear Primera Sede
-                </Button>
+                <HeroButton icon="solar:buildings-bold" onClick={handleCreate} size="lg">Crear Primera Sede</HeroButton>
               </PermissionGate>
             </div>
           </div>

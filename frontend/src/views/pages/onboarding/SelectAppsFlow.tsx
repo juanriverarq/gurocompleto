@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useLocation, useNavigate } from 'react-router';
 import { MODULES, ModuleKey, BillingPeriod, calculateTotals, numberFormat } from 'src/components/landingpage/pricing-calculator/modules';
-import Logo from 'src/layouts/full/shared/logo/Logo';
+import LogoSvg from 'src/assets/images/logos/Logo.svg';
 
 // Definir categorías de aplicaciones para el flujo de selección
 type AppCategory = {
@@ -212,18 +212,40 @@ const SelectAppsFlow = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-dark">
+    <div className="min-h-screen bg-[#fafafa]" style={{ fontFamily: "'General Sans', sans-serif" }}>
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white dark:bg-dark border-b border-gray-200 dark:border-darkborder">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Logo />
-          <div className="text-sm text-gray-500 font-medium">
-            Paso 1 de 2
+          <a href="/">
+            <img src={LogoSvg} alt="Guro" className="h-8 w-auto" />
+          </a>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-6 h-6 rounded-full bg-[#573CFF] text-white text-xs font-bold flex items-center justify-center">1</span>
+              <span className="text-xs font-semibold text-[#0d0d0d]">Aplicaciones</span>
+            </div>
+            <div className="w-8 h-px bg-gray-300" />
+            <div className="flex items-center gap-1.5 opacity-40">
+              <span className="w-6 h-6 rounded-full bg-gray-300 text-white text-xs font-bold flex items-center justify-center">2</span>
+              <span className="text-xs font-medium text-gray-400">Registro</span>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-10">
+      {/* Hero gradient banner */}
+      {!isSuraFlow && (
+        <div className="bg-gradient-to-b from-[#573CFF]/[0.04] to-transparent">
+          <div className="max-w-7xl mx-auto px-4 pt-12 pb-2 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm mb-6">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-xs font-medium text-gray-500">Prueba gratuita de 7 días — Sin tarjeta de crédito</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 pb-10 pt-2">
         {/* Banner Sura */}
         {isSuraFlow && (
           <div className="mb-8 rounded-2xl bg-gradient-to-r from-[#0033A0] to-[#00A1E4] p-6 shadow-lg">
@@ -252,39 +274,39 @@ const SelectAppsFlow = () => {
         )}
 
         {/* Título */}
-        <div className="text-center mb-6">
-          <h1 className="text-3xl sm:text-4xl font-bold text-dark dark:text-white mb-3">
-            Elige tus <span className="text-primary">Aplicaciones</span>
+        <div className="text-center mb-8">
+          <h1 className="text-3xl sm:text-[2.75rem] font-bold text-[#0d0d0d] mb-3 tracking-[-0.03em] leading-[1.1]">
+            Arma tu plan <span className="text-[#573CFF]">a la medida</span>
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-base">
-            Acceso gratis e instantáneo. No necesitas tarjeta de crédito.
+          <p className="text-gray-400 text-base max-w-lg mx-auto">
+            Selecciona las aplicaciones que necesitas. Puedes cambiarlas en cualquier momento.
           </p>
           {/* Toggle de periodo */}
           <div className="mt-4 flex items-center justify-center gap-3">
-            <span className={`text-sm ${period === 'monthly' ? 'font-semibold text-primary' : 'text-gray-500'}`}>
-              Mensual
-            </span>
-            <button
-              type="button"
-              onClick={() => setPeriod((p) => (p === 'monthly' ? 'annual' : 'monthly'))}
-              className={`relative inline-flex h-8 w-16 items-center rounded-full transition shadow-sm ${
-                period === 'annual' ? 'bg-primary' : 'bg-gray-300'
-              }`}
-              aria-label="Cambiar periodo de facturación"
-            >
-              <span
-                className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${
-                  period === 'annual' ? 'translate-x-8' : 'translate-x-1'
+            <div className="flex items-center gap-2 bg-[#f0f0f0] rounded-full p-1">
+              <button
+                type="button"
+                onClick={() => setPeriod('monthly' as BillingPeriod)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  period === 'monthly' ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-gray-400'
                 }`}
-              />
-            </button>
-            <span className={`text-sm ${period === 'annual' ? 'font-semibold text-primary' : 'text-gray-500'}`}>
-              Anual
-            </span>
-            <span className={`ml-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+              >
+                Mensual
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriod('annual' as BillingPeriod)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  period === 'annual' ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-gray-400'
+                }`}
+              >
+                Anual
+              </button>
+            </div>
+            <span className={`ml-1 text-xs font-bold px-2.5 py-1 rounded-full ${
               isSuraFlow 
                 ? 'text-[#0033A0] bg-[#00A1E4]/10 border border-[#00A1E4]/30' 
-                : 'text-green-700 bg-green-50 border border-green-200'
+                : 'text-[#573CFF] bg-[#573CFF]/10'
             }`}>
               {isSuraFlow ? '-30%' : '-12%'}
             </span>
@@ -293,148 +315,209 @@ const SelectAppsFlow = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Grid de aplicaciones */}
-          <div className="lg:col-span-3">
-            {categories.map(category => (
-              <div key={category.id} className="mb-8">
-                <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wide">
-                  {category.name}
+          <div className="lg:col-span-3 space-y-10">
+            {/* Included apps — always active, no action needed */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-5 h-5 rounded-md bg-[#573CFF]/10 flex items-center justify-center">
+                  <Icon icon="solar:check-circle-bold" className="text-[#573CFF] text-xs" />
+                </div>
+                <h2 className="text-xs font-bold text-[#0d0d0d] uppercase tracking-[0.1em]">
+                  Incluido en tu plan
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {category.apps.map(app => {
-                    const isSelected = selectedApps.has(app.key);
-                    const isMandatory = !!app.mandatory;
-                    const disabledAnnualOnly = period === 'monthly' && !!app.annualOnly;
-                    
-                    return (
-                      <button
-                        key={app.key}
-                        onClick={() => toggleApp(app.key)}
-                        disabled={isMandatory || disabledAnnualOnly}
-                        className={`
-                          relative flex items-center gap-3 p-4 rounded-xl border transition-all duration-200
-                          ${isSelected 
-                            ? 'border-primary bg-primary/5 shadow-sm' 
-                            : 'border-gray-200 dark:border-darkborder bg-white dark:bg-darkgray hover:border-primary/50 hover:shadow-sm'
-                          }
-                          ${isMandatory ? 'cursor-default' : ''}
-                          ${disabledAnnualOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                        `}
-                      >
-                        {/* Icono */}
-                        <span className={`inline-flex items-center justify-center w-11 h-11 rounded-xl ${app.color}`}>
-                          <Icon icon={app.icon} className="text-xl text-gray-700" />
-                        </span>
-                        
-                        {/* Contenido */}
-                        <div className="flex-1 text-left">
-                          <span className="font-medium text-dark dark:text-white text-sm block">{app.name}</span>
-                          {/* Precio y badge consumo */}
-                          {!isMandatory && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-primary font-semibold">
+                <span className="text-[10px] text-gray-400 font-medium ml-1">— Sin costo adicional</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {MODULES.filter(m => m.mandatory && !m.consumptionBased).map(app => (
+                  <div
+                    key={app.key}
+                    className="flex items-center gap-3 p-4 rounded-xl border border-[#573CFF]/20 bg-[#573CFF]/[0.03]"
+                  >
+                    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${app.color}`}>
+                      <Icon icon={app.icon} className="text-lg text-gray-700" />
+                    </span>
+                    <div className="flex-1">
+                      <span className="font-medium text-[#0d0d0d] text-sm block">{app.name}</span>
+                      <span className="text-[11px] text-gray-400">{app.description}</span>
+                    </div>
+                    <Icon icon="solar:check-circle-bold" className="text-[#573CFF] text-lg flex-shrink-0" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Consumption-based — included but pay per use */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-5 h-5 rounded-md bg-amber-100 flex items-center justify-center">
+                  <Icon icon="solar:bolt-bold" className="text-amber-600 text-xs" />
+                </div>
+                <h2 className="text-xs font-bold text-[#0d0d0d] uppercase tracking-[0.1em]">
+                  Incluido — Pago por uso
+                </h2>
+                <span className="text-[10px] text-gray-400 font-medium ml-1">— Cuota base gratis, pagas solo lo que uses</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {MODULES.filter(m => m.mandatory && m.consumptionBased).map(app => (
+                  <div
+                    key={app.key}
+                    className="flex items-center gap-3 p-4 rounded-xl border border-amber-200/60 bg-amber-50/30"
+                  >
+                    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${app.color}`}>
+                      <Icon icon={app.icon} className="text-lg text-gray-700" />
+                    </span>
+                    <div className="flex-1">
+                      <span className="font-medium text-[#0d0d0d] text-sm block">{app.name}</span>
+                      <span className="text-[11px] text-gray-400">{app.description}</span>
+                    </div>
+                    <div className="flex flex-col items-end flex-shrink-0">
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">Por uso</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Optional apps — user can select/deselect */}
+            {categories.map(category => {
+              const optionalApps = category.apps.filter(a => !a.mandatory);
+              if (optionalApps.length === 0) return null;
+              return (
+                <div key={category.id}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center">
+                      <Icon icon="solar:add-circle-bold" className="text-gray-400 text-xs" />
+                    </div>
+                    <h2 className="text-xs font-bold text-[#0d0d0d] uppercase tracking-[0.1em]">
+                      {category.name}
+                    </h2>
+                    <span className="text-[10px] text-gray-400 font-medium ml-1">— Selecciona los que necesites</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {optionalApps.map(app => {
+                      const isSelected = selectedApps.has(app.key);
+                      const disabledAnnualOnly = period === 'monthly' && !!app.annualOnly;
+                      
+                      return (
+                        <button
+                          key={app.key}
+                          onClick={() => toggleApp(app.key)}
+                          disabled={disabledAnnualOnly}
+                          className={`
+                            relative flex items-start gap-3 p-4 rounded-xl border transition-all duration-200 text-left
+                            ${isSelected 
+                              ? 'border-[#573CFF] bg-[#573CFF]/5 shadow-sm ring-1 ring-[#573CFF]/20' 
+                              : 'border-gray-200 bg-white hover:border-[#573CFF]/40 hover:shadow-sm'
+                            }
+                            ${disabledAnnualOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                          `}
+                        >
+                          {/* Toggle circle */}
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
+                            isSelected ? 'border-[#573CFF] bg-[#573CFF]' : 'border-gray-300'
+                          }`}>
+                            {isSelected && (
+                              <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${app.color}`}>
+                                <Icon icon={app.icon} className="text-base text-gray-700" />
+                              </span>
+                              <div>
+                                <span className="font-semibold text-[#0d0d0d] text-sm block leading-tight">{app.name}</span>
+                                <span className="text-[11px] text-gray-400 leading-tight">{app.description}</span>
+                              </div>
+                            </div>
+                            
+                            {/* Price tag */}
+                            <div className="mt-2.5 flex items-center gap-1.5">
+                              <span className={`text-xs font-bold ${isSelected ? 'text-[#573CFF]' : 'text-gray-500'}`}>
                                 {(() => {
                                   if (app.annualOnly) {
                                     if (period === 'annual' && app.annualPrice && app.annualPrice > 0)
                                       return `${numberFormat(app.annualPrice)}/año`;
-                                    return 'Solo anual';
+                                    return 'Solo plan anual';
                                   }
                                   if (period === 'monthly') return `${numberFormat(app.pricePerUser)}/mes`;
                                   return `${numberFormat(app.pricePerUser * 12)}/año`;
                                 })()}
                               </span>
                               {app.consumptionBased && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Por consumo</span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">+ uso</span>
                               )}
                             </div>
-                          )}
-                          {isMandatory && app.consumptionBased && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Por consumo</span>
-                          )}
-                        </div>
-                        
-                        {/* Badge Incluido */}
-                        {isMandatory && (
-                          <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-primary text-white font-semibold">
-                            Incluido
-                          </span>
-                        )}
-                        
-                        {/* Badge Solo anual */}
-                        {disabledAnnualOnly && (
-                          <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium">
-                            Solo anual
-                          </span>
-                        )}
-                        
-                        {/* Check indicator */}
-                        {isSelected && !isMandatory && (
-                          <div className="absolute top-2 right-2">
-                            <Icon 
-                              icon="solar:check-circle-bold" 
-                              className="text-primary text-lg"
-                            />
                           </div>
-                        )}
-                      </button>
-                    );
-                  })}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Configuración de usuarios y almacenamiento */}
-            <div className="mt-4 p-4 bg-gray-50 dark:bg-darkgray rounded-xl border border-gray-200 dark:border-darkborder">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Configuración</h3>
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-5 bg-white rounded-2xl border border-gray-200 shadow-sm">
+              <div className="flex items-center gap-2 mb-5">
+                <div className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center">
+                  <Icon icon="solar:settings-bold" className="text-gray-400 text-xs" />
+                </div>
+                <h3 className="text-xs font-bold text-[#0d0d0d] uppercase tracking-[0.1em]">Configuración</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-sm font-medium mb-1 block text-gray-600 dark:text-gray-400">Usuarios</label>
+                  <label className="text-sm font-semibold mb-2 block text-[#0d0d0d]">Usuarios</label>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setUsers((v) => Math.max(1, v - 1))}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-darkborder hover:bg-gray-100 dark:hover:bg-dark flex items-center justify-center"
+                      className="w-9 h-9 rounded-xl border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-500 font-medium transition"
                     >
-                      -
+                      <Icon icon="solar:minus-circle-linear" className="text-lg" />
                     </button>
                     <input
                       type="number"
                       min={1}
                       value={users}
                       onChange={(e) => setUsers(Math.max(1, Number(e.target.value) || 1))}
-                      className="w-16 text-center border border-gray-300 dark:border-darkborder rounded py-1 text-sm bg-white dark:bg-dark"
+                      className="w-16 text-center border border-gray-200 rounded-xl py-2 text-sm bg-white text-[#0d0d0d] font-semibold focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none"
                     />
                     <button
                       onClick={() => setUsers((v) => v + 1)}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-darkborder hover:bg-gray-100 dark:hover:bg-dark flex items-center justify-center"
+                      className="w-9 h-9 rounded-xl border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-500 font-medium transition"
                     >
-                      +
+                      <Icon icon="solar:add-circle-linear" className="text-lg" />
                     </button>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1">1er usuario gratis</p>
+                  <p className="text-[11px] text-gray-400 mt-1.5">El primer usuario está incluido sin costo</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block text-gray-600 dark:text-gray-400">Almacenamiento (GB)</label>
+                  <label className="text-sm font-semibold mb-2 block text-[#0d0d0d]">Almacenamiento</label>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setStorageGB((v) => Math.max(10, v - 1))}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-darkborder hover:bg-gray-100 dark:hover:bg-dark flex items-center justify-center"
+                      className="w-9 h-9 rounded-xl border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-500 font-medium transition"
                     >
-                      -
+                      <Icon icon="solar:minus-circle-linear" className="text-lg" />
                     </button>
                     <input
                       type="number"
                       min={10}
                       value={storageGB}
                       onChange={(e) => setStorageGB(Math.max(10, Number(e.target.value) || 10))}
-                      className="w-16 text-center border border-gray-300 dark:border-darkborder rounded py-1 text-sm bg-white dark:bg-dark"
+                      className="w-16 text-center border border-gray-200 rounded-xl py-2 text-sm bg-white text-[#0d0d0d] font-semibold focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none"
                     />
                     <button
                       onClick={() => setStorageGB((v) => v + 1)}
-                      className="w-8 h-8 rounded border border-gray-300 dark:border-darkborder hover:bg-gray-100 dark:hover:bg-dark flex items-center justify-center"
+                      className="w-9 h-9 rounded-xl border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-500 font-medium transition"
                     >
-                      +
+                      <Icon icon="solar:add-circle-linear" className="text-lg" />
                     </button>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1">10 GB incluidos</p>
+                  <p className="text-[11px] text-gray-400 mt-1.5">10 GB incluidos en tu plan</p>
                 </div>
               </div>
             </div>
@@ -442,39 +525,58 @@ const SelectAppsFlow = () => {
 
           {/* Panel lateral - Resumen */}
           <div className="lg:col-span-1">
-            <div className="sticky top-24 bg-white dark:bg-darkgray rounded-xl border border-gray-200 dark:border-darkborder p-5 shadow-sm">
-              <h3 className="text-base font-bold text-dark dark:text-white mb-4">
+            <div className="sticky top-24 bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+              <h3 className="text-base font-bold text-[#0d0d0d] mb-4">
                 Resumen
               </h3>
               
-              {/* Lista de apps seleccionadas */}
-              <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-                {selectedModules.map(app => (
-                  <div key={app.key} className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg ${app.color}`}>
-                        <Icon icon={app.icon} className="text-sm text-gray-700" />
-                      </span>
-                      <span className="text-xs font-medium text-dark dark:text-white">{app.name}</span>
+              {/* Included apps */}
+              <div className="mb-3">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Incluido</p>
+                <div className="space-y-1.5">
+                  {selectedModules.filter(a => a.mandatory).map(app => (
+                    <div key={app.key} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md ${app.color}`}>
+                          <Icon icon={app.icon} className="text-[10px] text-gray-700" />
+                        </span>
+                        <span className="text-[11px] font-medium text-[#0d0d0d]">{app.name}</span>
+                      </div>
+                      <span className="text-[10px] text-[#573CFF] font-semibold">Gratis</span>
                     </div>
-                    {app.mandatory ? (
-                      <span className="text-[10px] text-green-600 font-medium">Incluido</span>
-                    ) : (
-                      <span className="text-[10px] text-gray-500">
-                        {app.annualOnly 
-                          ? (app.annualPrice ? numberFormat(app.annualPrice) : '-')
-                          : (period === 'monthly' ? numberFormat(app.pricePerUser) : numberFormat(app.pricePerUser * 12))
-                        }
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
+              {/* Paid apps */}
+              {selectedModules.filter(a => !a.mandatory).length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Adicionales</p>
+                  <div className="space-y-1.5">
+                    {selectedModules.filter(a => !a.mandatory).map(app => (
+                      <div key={app.key} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md ${app.color}`}>
+                            <Icon icon={app.icon} className="text-[10px] text-gray-700" />
+                          </span>
+                          <span className="text-[11px] font-medium text-[#0d0d0d]">{app.name}</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 font-medium">
+                          {app.annualOnly 
+                            ? (app.annualPrice ? numberFormat(app.annualPrice) : '-')
+                            : (period === 'monthly' ? numberFormat(app.pricePerUser) : numberFormat(app.pricePerUser * 12))
+                          }
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Desglose de precios */}
-              <div className="border-t border-gray-200 dark:border-darkborder pt-3 mb-4 space-y-2 text-xs">
+              <div className="border-t border-gray-100 pt-3 mb-4 space-y-2 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Base plataforma</span>
+                  <span className="text-gray-500">Base plataforma</span>
                   <span className="font-medium">
                     {period === 'monthly' 
                       ? numberFormat((totals as any).baseMonthly)
@@ -484,7 +586,7 @@ const SelectAppsFlow = () => {
                 </div>
                 {(totals as any).users.billableUsers > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">
+                    <span className="text-gray-500">
                       Usuarios ({(totals as any).users.billableUsers} × {numberFormat((totals as any).users.perUserMonthly)})
                     </span>
                     <span className="font-medium">
@@ -497,7 +599,7 @@ const SelectAppsFlow = () => {
                 )}
                 {extraGB > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Almacenamiento extra ({extraGB} GB)</span>
+                    <span className="text-gray-500">Almacenamiento extra ({extraGB} GB)</span>
                     <span className="font-medium">
                       {period === 'monthly' ? numberFormat(storageMonthly) : numberFormat(storageAnnualBefore)}
                     </span>
@@ -515,9 +617,9 @@ const SelectAppsFlow = () => {
                     <span>-{numberFormat(suraDiscountAmount)}</span>
                   </div>
                 )}
-                <div className="border-t border-gray-200 dark:border-darkborder pt-2 flex justify-between font-bold text-sm">
-                  <span>Total {period === 'monthly' ? 'mensual' : 'anual'}</span>
-                  <span className={isSuraFlow && period === 'annual' ? 'text-[#00A1E4]' : 'text-primary'}>
+                <div className="border-t border-gray-100 pt-2 flex justify-between font-bold text-sm">
+                  <span className="text-[#0d0d0d]">Total {period === 'monthly' ? 'mensual' : 'anual'}</span>
+                  <span className={isSuraFlow && period === 'annual' ? 'text-[#00A1E4]' : 'text-[#573CFF]'}>
                     {numberFormat(isSuraFlow && period === 'annual' ? totalWithSuraDiscount : totalFinal)}
                   </span>
                 </div>
@@ -529,11 +631,11 @@ const SelectAppsFlow = () => {
               </div>
 
               {/* Info de prueba */}
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-3 mb-4">
-                <p className="text-sm text-green-700 dark:text-green-400 font-medium">
-                  ✅ Prueba gratuita de 7 días
+              <div className="bg-[#573CFF]/5 border border-[#573CFF]/15 rounded-xl p-3 mb-4">
+                <p className="text-sm text-[#573CFF] font-semibold">
+                  Prueba gratuita de 7 días
                 </p>
-                <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+                <p className="text-xs text-[#573CFF]/70 mt-1">
                   No necesitas tarjeta de crédito.
                 </p>
                 <p className="text-[10px] text-gray-500 mt-2">
@@ -541,12 +643,18 @@ const SelectAppsFlow = () => {
                 </p>
               </div>
 
-              {/* Botón continuar */}
+              {/* Botón continuar — Hero style */}
               <button
                 onClick={handleContinue}
-                className="w-full py-3 px-6 rounded-xl font-semibold text-white transition-all text-sm bg-secondary hover:bg-secondaryemphasis cursor-pointer"
+                className="group relative w-full inline-flex items-center justify-center bg-[#0d0d0d] rounded-2xl h-[52px] overflow-hidden cursor-pointer"
               >
-                Continuar
+                <span className="absolute inset-y-0 left-0 w-[52px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+                <span className="relative z-10 flex items-center justify-center w-[52px] h-full flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </span>
+                <span className="relative z-10 pr-6 text-[11px] font-bold text-white uppercase tracking-[0.15em] whitespace-nowrap">
+                  Continuar
+                </span>
               </button>
 
               <p className="text-[10px] text-gray-500 mt-3 text-center">

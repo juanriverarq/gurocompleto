@@ -104,26 +104,35 @@ const CreateButton = () => {
     <div className="relative" ref={dropdownRef}>
       {/* Botón principal */}
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-[8px] flex items-center gap-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md text-sm font-medium"
+        className="relative overflow-hidden bg-[#573CFF] hover:bg-[#4530d4] text-white px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md text-sm font-semibold"
         title="Crear nuevo elemento"
       >
-        <Icon icon="solar:add-circle-bold-duotone" width="18" />
-        <span className="hidden sm:inline">Crear</span>
+        {/* Noise/grain overlay */}
+        <span
+          className="pointer-events-none absolute inset-0 opacity-[0.18] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+            backgroundSize: '128px 128px',
+          }}
+        />
+        <Icon icon="solar:add-circle-bold-duotone" width="18" className="relative z-[1] text-white/90" />
+        <span className="relative z-[1] hidden sm:inline">Crear</span>
         <Icon
           icon="solar:alt-arrow-down-line-duotone"
           width="14"
-          className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          className={`relative z-[1] text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="fixed sm:absolute top-auto sm:top-full left-1/2 sm:left-0 -translate-x-1/2 sm:translate-x-0 mt-2 w-[calc(100vw-2rem)] sm:w-72 bg-white dark:bg-darkgray rounded-lg shadow-lg border border-ld dark:border-darkborder z-[9999]">
+        <div className="fixed sm:absolute top-auto sm:top-full left-1/2 sm:left-0 -translate-x-1/2 sm:translate-x-0 mt-2 w-[calc(100vw-2rem)] sm:w-72 bg-white dark:bg-darkgray rounded-2xl shadow-lg border border-gray-100 dark:border-darkborder z-[9999]">
           <div className="p-3">
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-ld mb-1">Crear Nuevo</h4>
-              <p className="text-xs text-bodytext">Selecciona qué deseas crear</p>
+            <div className="mb-3 px-1">
+              <h4 className="text-sm font-bold text-[#0d0d0d] dark:text-white mb-0.5">Crear Nuevo</h4>
+              <p className="text-xs text-gray-400">Selecciona qué deseas crear</p>
             </div>
             <div className="space-y-1">
               {availableOptions.length > 0 ? (
@@ -131,10 +140,10 @@ const CreateButton = () => {
                   <div
                     key={index}
                     onClick={() => handleOptionClick(option)}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-all duration-150 group"
+                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-all duration-150 group"
                   >
                     <span
-                      className={`h-10 w-10 flex justify-center items-center rounded-lg ${option.iconBg} flex-shrink-0 group-hover:scale-105 transition-transform duration-150`}
+                      className={`h-10 w-10 flex justify-center items-center rounded-xl ${option.iconBg} flex-shrink-0 group-hover:scale-105 transition-transform duration-150`}
                     >
                       <Icon
                         icon={option.icon}
@@ -144,16 +153,16 @@ const CreateButton = () => {
                       />
                     </span>
                     <div className="flex-1 min-w-0">
-                      <h6 className="font-medium text-sm text-ld group-hover:text-primary truncate">
+                      <h6 className="font-semibold text-sm text-[#0d0d0d] dark:text-white group-hover:text-[#573CFF] truncate">
                         {option.label}
                       </h6>
-                      <p className="text-xs text-bodytext line-clamp-1">{option.description}</p>
+                      <p className="text-xs text-gray-400 line-clamp-1">{option.description}</p>
                     </div>
                   </div>
                 ))
               ) : (
                 <div className="p-3 text-center">
-                  <p className="text-sm text-bodytext">No tienes permisos para crear elementos</p>
+                  <p className="text-sm text-gray-400">No tienes permisos para crear elementos</p>
                 </div>
               )}
             </div>

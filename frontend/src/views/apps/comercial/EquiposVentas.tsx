@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Button, Spinner, Badge, Table, Modal, Avatar } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { Label as ShLabel } from 'src/components/shadcn-ui/Default-Ui/label';
 import {
@@ -715,10 +716,7 @@ const EquiposVentas = () => {
                   Miembros XLS
                 </Button>
                 {canCreate && (
-                  <Button onClick={() => setShowModalEquipo(true)}>
-                    <Icon icon="solar:add-circle-bold-duotone" className="mr-2 h-4 w-4" />
-                    Nuevo Equipo
-                  </Button>
+                  <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowModalEquipo(true)}>Nuevo Equipo</HeroButton>
                 )}
               </div>
             </div>

@@ -27,7 +27,7 @@ const UserInfo: React.FC = () => {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
             onClick={handleReload}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition"
+            className="px-6 py-2.5 text-white font-medium rounded-lg transition"
           >
             Recargar página
           </button>

@@ -383,7 +383,7 @@ const DetalleNegocioModal: React.FC<DetalleNegocioModalProps> = ({
             type="button"
             onClick={onEdit}
             color="primary"
-            className="rounded-[10px] bg-blue-600 hover:bg-blue-700"
+            className="rounded-[10px]"
           >
             <IconifyIcon icon="solar:pen-bold-duotone" className="w-4 h-4 mr-2" />
             Editar
@@ -449,7 +449,7 @@ const DetalleNegocioModal: React.FC<DetalleNegocioModalProps> = ({
             color="primary"
             onClick={confirmStateChange}
             disabled={changingState || !newState}
-            className="bg-blue-600 hover:bg-blue-700"
+            className=""
           >
             {changingState ? (
               <>

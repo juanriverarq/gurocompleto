@@ -1,5 +1,6 @@
 import { Card, Button, Table, Badge, Progress, TextInput, Select, Modal, Label, Pagination } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useState } from 'react';
 
 type Evaluacion = {
@@ -52,8 +53,8 @@ export default function Desempeno() {
             <p className="text-gray-600 dark:text-gray-400 max-w-2xl">Evaluaciones, OKRs y metas, competencias, feedback e IPD.</p>
           </div>
           <div className="flex gap-2">
-            <Button color="primary" onClick={() => setModalEvalOpen(true)}><Icon icon="solar:document-add-bold" className="mr-2" width={18} />Nueva Evaluación</Button>
-            <Button color="light"><Icon icon="solar:target-bold" className="mr-2" width={18} />Nuevo OKR</Button>
+            <HeroButton icon="solar:document-add-bold" onClick={() => setModalEvalOpen(true)}>Nueva Evaluación</HeroButton>
+            <HeroButton icon="solar:target-bold">Nuevo OKR</HeroButton>
           </div>
         </div>
       </Card>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, Badge, Button, Modal, Table } from 'flowbite-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'src/components/shadcn-ui/Default-Ui/select';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useNavigate } from 'react-router-dom';
 import { salesFunnelService } from 'src/services/salesFunnelService';
 
@@ -468,10 +469,7 @@ const Pipeline = () => {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button color="primary" size="sm" onClick={() => navigate('/apps/saas/sales-funnel/nuevo')}>
-                <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
-                Nueva Oportunidad
-              </Button>
+              <HeroButton icon="solar:add-circle-bold" onClick={() => navigate('/apps/saas/sales-funnel/nuevo')} size="sm">Nueva Oportunidad</HeroButton>
               <Button color="gray" size="sm" onClick={exportPipelineCsv}>
                 <Icon icon="solar:export-bold" className="mr-2" width={16} />
                 Exportar CSV
@@ -514,10 +512,7 @@ const Pipeline = () => {
                       <div className="flex flex-col items-center gap-2">
                         <Icon icon="solar:target-bold" width={48} className="text-gray-300" />
                         <p className="text-gray-500">No hay oportunidades en esta vista</p>
-                        <Button color="primary" size="sm">
-                          <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
-                          Nueva Oportunidad
-                        </Button>
+                        <HeroButton icon="solar:add-circle-bold" size="sm">Nueva Oportunidad</HeroButton>
                       </div>
                     </Table.Cell>
                   </Table.Row>

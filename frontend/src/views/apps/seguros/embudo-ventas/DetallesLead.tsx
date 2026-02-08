@@ -269,7 +269,7 @@ const DetallesLead: React.FC = () => {
             <Button
               onClick={() => navigate(`/apps/seguros/embudo-ventas/${lead.id}/edit`)}
               color="blue"
-              className="bg-blue-600 hover:bg-blue-700"
+              className=""
             >
               <Icon icon="solar:pen-bold-duotone" className="w-4 h-4 mr-2" />
               Editar
@@ -399,7 +399,7 @@ const DetallesLead: React.FC = () => {
                 <Button
                   onClick={() => setShowContactModal(true)}
                   color="blue"
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full"
                 >
                   <Icon icon="solar:phone-bold-duotone" className="w-4 h-4 mr-2" />
                   Registrar Contacto

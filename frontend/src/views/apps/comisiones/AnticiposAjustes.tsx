@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Spinner, Badge, Table, TextInput, Select, Modal, Label } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import anticiposAjustesService, { Movimiento, CrearMovimientoInput } from '../../../services/anticiposAjustesService';
 import saasApi from 'src/services/saasApi';
 import { useToast } from 'src/hooks/use-toast';
@@ -393,10 +394,7 @@ const AnticiposAjustes = () => {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-gray-900">Filtros</h3>
-                <Button onClick={() => setShowModal(true)}>
-                  <Icon icon="solar:add-circle-bold-duotone" className="mr-2 h-4 w-4" />
-                  Nuevo Movimiento
-                </Button>
+                <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowModal(true)}>Nuevo Movimiento</HeroButton>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">

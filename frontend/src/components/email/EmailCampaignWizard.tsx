@@ -249,35 +249,38 @@ export const EmailCampaignWizard: React.FC<EmailCampaignWizardProps> = ({
           className="w-full max-w-6xl h-[90vh] bg-white dark:bg-gray-900 rounded-lg shadow-xl flex flex-col overflow-hidden"
         >
           {/* Header */}
-          <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex items-center justify-between">
+          <div className="guro-modal-header flex-shrink-0 p-6">
+            <div className="flex items-center justify-between relative z-[1]">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Crear Campaña de Email</h2>
-                <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                <h2 className="text-xl font-bold text-white drop-shadow-sm">Crear Campaña de Email</h2>
+                <p className="text-white/60 text-sm mt-1">
                   Configura tu campaña de email marketing
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 relative z-[1]">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                  <div className="w-2 h-2 bg-white rounded-full"></div>
+                  <span className="text-sm text-white/70">
                     Paso {currentStep} de {STEPS.length}
                   </span>
                 </div>
                 {onCancel && (
-                  <Button size="sm" color="gray" onClick={onCancel}>
-                    <Icon icon="solar:close-circle-outline" className="w-4 h-4 mr-2" />
+                  <button
+                    onClick={onCancel}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white/80 hover:text-white bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-xl transition-colors"
+                  >
+                    <Icon icon="solar:close-circle-outline" className="w-4 h-4" />
                     Cancelar
-                  </Button>
+                  </button>
                 )}
               </div>
             </div>
             
             {/* Barra de progreso */}
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div className="mt-4 relative z-[1]">
+              <div className="w-full bg-white/20 rounded-full h-1.5">
                 <div 
-                  className="bg-primary h-2 rounded-full transition-all duration-300" 
+                  className="bg-white h-1.5 rounded-full transition-all duration-300" 
                   style={{ width: `${(currentStep / STEPS.length) * 100}%` }}
                 ></div>
               </div>

@@ -4,6 +4,7 @@ import { Tabs, Table, Dropdown } from "flowbite-react";
 import {
   Icon as IconifyIcon
 } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import CardBox from '../../../components/shared/CardBox';
 import { Button } from "../../../components/shadcn-ui/Default-Ui/button";
 import { Badge } from "../../../components/shadcn-ui/Default-Ui/badge";
@@ -2443,7 +2444,7 @@ const ConfiguracionMasiva: React.FC = () => {
                     <Button
                       onClick={() => loadMessageHistory()}
                       disabled={historyLoading}
-                      className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
+                      className="h-10 px-4 rounded-[10px]"
                     >
                       <IconifyIcon icon="solar:magnifer-bold-duotone" className="w-4 h-4 mr-2" />
                       Buscar
@@ -2479,7 +2480,7 @@ const ConfiguracionMasiva: React.FC = () => {
                     <p className="text-gray-600 dark:text-gray-400 mb-6">
                       No hay mensajes en el sistema. Los envíos aparecerán aquí cuando se ejecuten campañas.
                     </p>
-                    <Button onClick={() => loadMessageHistory()} className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={() => loadMessageHistory()} className="">
                       <IconifyIcon icon="solar:refresh-bold-duotone" className="w-4 h-4 mr-2" />
                       Actualizar
                     </Button>
@@ -2601,13 +2602,7 @@ const ConfiguracionMasiva: React.FC = () => {
               </div>
               
               <div className="flex gap-2">
-                <Button 
-                  onClick={() => setShowCampaignManager(true)}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
-                >
-                  <IconifyIcon icon="solar:magic-stick-3-bold" className="w-4 h-4 mr-2" />
-                  Nueva Campaña
-                </Button>
+                <HeroButton icon="solar:magic-stick-3-bold" onClick={() => setShowCampaignManager(true)}>Nueva Campaña</HeroButton>
               </div>
             </div>
 
@@ -2722,18 +2717,12 @@ const ConfiguracionMasiva: React.FC = () => {
                   <p className="text-gray-600 dark:text-gray-400 mb-6">
                     Comienza creando tu primera campaña de mensajería masiva
                   </p>
-                  <Button
-                    onClick={() => {
+                  <HeroButton icon="solar:magic-stick-3-bold" onClick={() => {
                       toast({
                         title: "Próximamente",
                         description: "Funcionalidad de creación de campañas en desarrollo"
                       });
-                    }}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
-                  >
-                    <IconifyIcon icon="solar:magic-stick-3-bold" className="w-4 h-4 mr-2" />
-                    Crear Primera Campaña
-                  </Button>
+                    }} size="lg">Crear Primera Campaña</HeroButton>
                 </CardContent>
               </Card>
             ) : (
@@ -2796,7 +2785,7 @@ const ConfiguracionMasiva: React.FC = () => {
                               <td className="px-4 py-3 w-56">
                                 <div className="flex items-center gap-2">
                                   <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div className="h-full bg-blue-600 rounded-full" style={{ width: `${progress}%` }}></div>
+                                    <div className="h-full rounded-full" style={{ width: `${progress}%` }}></div>
                                   </div>
                                   <span className="text-gray-700 dark:text-gray-300 tabular-nums w-10 text-right">{progress}%</span>
                                 </div>
@@ -3390,7 +3379,7 @@ const ConfiguracionMasiva: React.FC = () => {
             <Button
               onClick={handleCreateInstance}
               disabled={creating || !newInstance.phone_number}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="text-white"
             >
               {creating ? (
                 <>

@@ -459,7 +459,7 @@ const CampaignsManagement: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button 
                 onClick={() => setIsCreateModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700"
+                className=""
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Crear Primera Campaña
@@ -528,7 +528,7 @@ const CampaignsManagement: React.FC = () => {
                         <td className="px-4 py-3 w-56">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-600 rounded-full" style={{ width: `${percent}%` }}></div>
+                              <div className="h-full rounded-full" style={{ width: `${percent}%` }}></div>
                             </div>
                             <span className="text-gray-700 tabular-nums w-10 text-right">{percent}%</span>
                           </div>

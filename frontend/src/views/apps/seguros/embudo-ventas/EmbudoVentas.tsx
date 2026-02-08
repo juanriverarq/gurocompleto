@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from "@iconify/react";
+import HeroButton from 'src/components/HeroButton';
 import { Card, Button, Table, Modal, Dropdown, Spinner, Alert } from 'flowbite-react';
 import { IconDots } from '@tabler/icons-react';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
@@ -285,11 +286,7 @@ const EmbudoVentas: React.FC = () => {
             </h2>
 
             <div className="flex items-center gap-3">
-              <Button onClick={() => navigate('/apps/seguros/embudo-ventas/nuevo')} color="primary" className="h-10 px-4 rounded-[10px] bg-blue-600 hover:bg-blue-700">
-                <Icon icon="solar:user-plus-bold-duotone" className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Nuevo Lead</span>
-                <span className="sm:hidden">Nuevo</span>
-              </Button>
+              <HeroButton icon="solar:user-plus-bold-duotone" onClick={() => navigate('/apps/seguros/embudo-ventas/nuevo')}>Nuevo Lead</HeroButton>
             </div>
           </div>
         </div>
@@ -681,10 +678,7 @@ const EmbudoVentas: React.FC = () => {
               {hasActiveFilters() ? (
                 <Button color="light" onClick={clearFilters} className="rounded-[10px]">Limpiar filtros</Button>
               ) : (
-                <Button onClick={() => navigate('/apps/seguros/embudo-ventas/nuevo')} color="primary" className="rounded-[10px] bg-blue-600 hover:bg-blue-700">
-                  <Icon icon="solar:user-plus-bold-duotone" className="w-4 h-4 mr-2" />
-                  Crear Lead
-                </Button>
+                <HeroButton icon="solar:user-plus-bold-duotone" onClick={() => navigate('/apps/seguros/embudo-ventas/nuevo')} size="lg">Crear Lead</HeroButton>
               )}
             </div>
           </div>

@@ -8,11 +8,11 @@ import {
   Modal,
   TextInput,
   Label,
-  Tabs,
   Badge,
   Checkbox,
 } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useAseguradoras } from 'src/hooks/useAdminCrudApi';
 import type { Aseguradora as AseguradoraType, AseguradoraCreate } from 'src/types/admin';
 import { COLOMBIA_INSURERS } from 'src/data/colombia_insurers';
@@ -325,10 +325,7 @@ const Aseguradoras = () => {
               </PermissionGate>
             )}
             <PermissionGate route="/apps/admin/aseguradoras" action="crear">
-              <Button onClick={handleCreate} className="flex items-center">
-                <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
-                Nueva Aseguradora
-              </Button>
+              <HeroButton icon="solar:shield-plus-bold" onClick={handleCreate}>Nueva Aseguradora</HeroButton>
             </PermissionGate>
           </div>
         </div>
@@ -361,10 +358,7 @@ const Aseguradoras = () => {
             </p>
             <div className="flex justify-center">
               <PermissionGate route="/apps/admin/aseguradoras" action="crear">
-                <Button onClick={handleCreate}>
-                  <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
-                  Crear Primera Aseguradora
-                </Button>
+                <HeroButton icon="solar:shield-plus-bold" onClick={handleCreate} size="lg">Crear Primera Aseguradora</HeroButton>
               </PermissionGate>
             </div>
           </div>
@@ -621,11 +615,16 @@ const Aseguradoras = () => {
               </div>
             )}
 
-            {/* Modo en blanco o edición: formulario existente */}
+            {/* Modo en blanco o edición: formulario en lista única */}
             {(isEditing || creationMode === 'blank') && (
-              <Tabs>
-                <Tabs.Item active title="Datos de la aseguradora">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="space-y-6">
+                {/* Datos de la aseguradora */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Icon icon="solar:shield-check-bold" className="w-5 h-5 text-blue-600" />
+                    Datos de la aseguradora
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="nombre" value="Nombre *" />
                       <TextInput
@@ -694,10 +693,17 @@ const Aseguradoras = () => {
                       )}
                     </div>
                   </div>
-                </Tabs.Item>
+                </div>
 
-                <Tabs.Item title="Contactos">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <hr className="border-gray-200 dark:border-gray-700" />
+
+                {/* Información bancaria y código */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Icon icon="solar:wallet-bold" className="w-5 h-5 text-emerald-600" />
+                    Información bancaria
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="cuenta_bancaria" value="Cuenta Bancaria" />
                       <TextInput
@@ -746,12 +752,19 @@ const Aseguradoras = () => {
                       )}
                     </div>
                   </div>
-                </Tabs.Item>
+                </div>
 
-                <Tabs.Item title="Retenciones">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <hr className="border-gray-200 dark:border-gray-700" />
+
+                {/* Retenciones */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Icon icon="solar:calculator-bold" className="w-5 h-5 text-purple-600" />
+                    Retenciones
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <Label htmlFor="retencion" value="Retención *" />
+                      <Label htmlFor="retencion" value="Retención" />
                       <div className="relative">
                         <TextInput
                           id="retencion"
@@ -759,12 +772,12 @@ const Aseguradoras = () => {
                           step="0.01"
                           min="0"
                           max="100"
-                          placeholder="Porcentaje de retención"
-                          value={formData.retencion || ''}
-                          onChange={(e) =>
-                            setFormData({ ...formData, retencion: parseFloat(e.target.value) || 0 })
-                          }
-                          required
+                          placeholder="0"
+                          value={formData.retencion !== undefined && formData.retencion !== null ? formData.retencion : ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData({ ...formData, retencion: val === '' ? 0 : parseFloat(val) });
+                          }}
                         />
                         <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
                           %
@@ -775,7 +788,7 @@ const Aseguradoras = () => {
                       )}
                     </div>
                     <div>
-                      <Label htmlFor="iva" value="IVA *" />
+                      <Label htmlFor="iva" value="IVA" />
                       <div className="relative">
                         <TextInput
                           id="iva"
@@ -783,12 +796,12 @@ const Aseguradoras = () => {
                           step="0.01"
                           min="0"
                           max="100"
-                          placeholder="Porcentaje de IVA"
-                          value={formData.iva || ''}
-                          onChange={(e) =>
-                            setFormData({ ...formData, iva: parseFloat(e.target.value) || 0 })
-                          }
-                          required
+                          placeholder="0"
+                          value={formData.iva !== undefined && formData.iva !== null ? formData.iva : ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData({ ...formData, iva: val === '' ? 0 : parseFloat(val) });
+                          }}
                         />
                         <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
                           %
@@ -799,7 +812,7 @@ const Aseguradoras = () => {
                       )}
                     </div>
                     <div>
-                      <Label htmlFor="retencion_iva" value="Retención IVA *" />
+                      <Label htmlFor="retencion_iva" value="Retención IVA" />
                       <div className="relative">
                         <TextInput
                           id="retencion_iva"
@@ -807,15 +820,12 @@ const Aseguradoras = () => {
                           step="0.01"
                           min="0"
                           max="100"
-                          placeholder="Porcentaje de retención IVA"
-                          value={formData.retencion_iva || ''}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              retencion_iva: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          required
+                          placeholder="0"
+                          value={formData.retencion_iva !== undefined && formData.retencion_iva !== null ? formData.retencion_iva : ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData({ ...formData, retencion_iva: val === '' ? 0 : parseFloat(val) });
+                          }}
                         />
                         <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
                           %
@@ -828,8 +838,8 @@ const Aseguradoras = () => {
                       )}
                     </div>
                   </div>
-                </Tabs.Item>
-              </Tabs>
+                </div>
+              </div>
             )}
           </Modal.Body>
           <Modal.Footer className="sticky bottom-0 bg-white dark:bg-gray-900 border-t pt-3">

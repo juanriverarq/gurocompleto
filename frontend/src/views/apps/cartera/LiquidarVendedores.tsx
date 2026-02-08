@@ -638,7 +638,7 @@ const LiquidarVendedores = () => {
               color="primary"
               onClick={abrirModalLiquidacionSeleccionadas}
               disabled={polizasSeleccionadas.size === 0}
-              className="h-10 bg-blue-600 hover:bg-blue-700"
+              className="h-10"
             >
               <Icon icon="solar:dollar-minimalistic-bold-duotone" className="w-4 h-4 mr-2" />
               Liquidar Seleccionadas ({polizasSeleccionadas.size})

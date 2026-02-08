@@ -136,7 +136,7 @@ const DashboardConfigModal: React.FC<DashboardConfigModalProps> = ({
                     onChange={() => toggleDashboard(dashboard.id)}
                     className="sr-only peer"
                   />
-                  <div className="w-14 h-7 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 shadow-inner"></div>
+                  <div className="w-14 h-7 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary dark:peer-focus:ring-primary rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-primary shadow-inner"></div>
                 </label>
               </div>
             ))}
@@ -181,7 +181,7 @@ const DashboardConfigModal: React.FC<DashboardConfigModalProps> = ({
           <button
             onClick={handleSave}
             disabled={enabledCount === 0}
-            className="flex-1 sm:flex-none px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 transition-colors shadow-sm"
+            className="flex-1 sm:flex-none px-5 py-2.5 text-sm font-medium text-white rounded-lg hover:bg-primaryemphasis focus:ring-4 focus:outline-none focus:ring-primary dark:bg-primary dark:hover:bg-primaryemphasis dark:focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-colors shadow-sm"
           >
             <span className="flex items-center gap-2">
               <Icon icon="solar:check-circle-bold" height={18} />

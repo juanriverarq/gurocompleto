@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { Label } from 'src/components/shadcn-ui/Default-Ui/label';
 import { Icon as IconifyIcon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 
 const ListaEmpleados: React.FC = () => {
   const navigate = useNavigate();
@@ -84,10 +85,7 @@ const ListaEmpleados: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Empleados</h1>
           <p className="text-gray-600">Gestión de empleados del broker</p>
         </div>
-        <Button onClick={() => navigate('/apps/saas/empleados/nuevo')}>
-          <IconifyIcon icon="solar:user-plus-bold" className="w-4 h-4 mr-2" />
-          Nuevo Empleado
-        </Button>
+        <HeroButton icon="solar:user-plus-bold" onClick={() => navigate('/apps/saas/empleados/nuevo')}>Nuevo Empleado</HeroButton>
       </div>
 
       {error && (
@@ -128,10 +126,7 @@ const ListaEmpleados: React.FC = () => {
                       <div className="flex flex-col items-center justify-center space-y-4">
                         <IconifyIcon icon="solar:user-hands-bold-duotone" className="w-16 h-16 text-gray-300" />
                         <p className="text-gray-500 text-lg font-medium">No hay empleados registrados</p>
-                        <Button onClick={() => navigate('/apps/saas/empleados/nuevo')} className="mt-2">
-                          <IconifyIcon icon="solar:user-plus-bold" className="w-4 h-4 mr-2" />
-                          Crear primer empleado
-                        </Button>
+                        <HeroButton icon="solar:user-plus-bold" onClick={() => navigate('/apps/saas/empleados/nuevo')} size="lg">Crear primer empleado</HeroButton>
                       </div>
                     </td>
                   </tr>

@@ -12,6 +12,7 @@ import {
 } from 'flowbite-react';
 import { Checkbox } from 'src/components/shadcn-ui/Default-Ui/checkbox';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useMotivosEstadosPoliza } from 'src/hooks/useAdminCrudApi';
 import type {
   MotivoEstadoPoliza as MotivoEstadoPolizaType,
@@ -118,10 +119,7 @@ const MotivosEstadosPoliza = () => {
             </p>
           </div>
           <PermissionGate route="/apps/admin/motivos-estados-poliza" action="crear">
-            <Button onClick={handleCreate} className="flex items-center">
-              <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-              Nuevo Motivo
-            </Button>
+            <HeroButton icon="solar:add-circle-bold" onClick={handleCreate}>Nuevo Motivo</HeroButton>
           </PermissionGate>
         </div>
       </div>
@@ -153,10 +151,7 @@ const MotivosEstadosPoliza = () => {
             </p>
             <div className="flex justify-center">
               <PermissionGate route="/apps/admin/motivos-estados-poliza" action="crear">
-                <Button onClick={handleCreate}>
-                  <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                  Crear Primer Motivo
-                </Button>
+                <HeroButton icon="solar:add-circle-bold" onClick={handleCreate} size="lg">Crear Primer Motivo</HeroButton>
               </PermissionGate>
             </div>
           </div>

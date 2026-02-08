@@ -41,6 +41,7 @@ import TitleCard from 'src/components/shared/TitleBorderCard';
 import FormField from 'src/components/shared/FormField';
 
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { IconDots } from '@tabler/icons-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -1223,15 +1224,7 @@ const Seguimiento: React.FC = () => {
               </Button>
 
               {canCreate && (
-                <Button
-                  onClick={() => setModalNuevoOpen(true)}
-                  color="primary"
-                  className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                >
-                  <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                  <span className="hidden sm:inline">Nuevo Seguimiento</span>
-                  <span className="sm:hidden">Nuevo</span>
-                </Button>
+                <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setModalNuevoOpen(true)}>Nuevo Seguimiento</HeroButton>
               )}
             </div>
           </div>
@@ -1249,10 +1242,7 @@ const Seguimiento: React.FC = () => {
               <p className="text-gray-500 text-lg font-medium">No hay seguimientos</p>
               <p className="text-gray-400 text-sm">Comienza creando tu primer seguimiento</p>
               {canCreate && (
-                <Button onClick={() => setModalNuevoOpen(true)} color="primary" className="mt-2">
-                  <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                  Crear primer seguimiento
-                </Button>
+                <HeroButton icon="solar:add-circle-bold" onClick={() => setModalNuevoOpen(true)} size="lg">Crear primer seguimiento</HeroButton>
               )}
             </div>
           </div>
@@ -1696,7 +1686,7 @@ const Seguimiento: React.FC = () => {
         <Modal.Footer>
           <Button
             onClick={handleCreateSeguimiento}
-            className="bg-blue-600 hover:bg-blue-700"
+            className=""
             disabled={saving}
             data-testid="btn-crear-seguimiento"
           >
@@ -1992,7 +1982,7 @@ const Seguimiento: React.FC = () => {
         <Modal.Footer>
           <Button
             onClick={handleUpdateSeguimiento}
-            className="bg-blue-600 hover:bg-blue-700"
+            className=""
             disabled={saving}
           >
             {saving ? <Spinner size="sm" className="mr-2" /> : null}
@@ -2057,7 +2047,7 @@ const Seguimiento: React.FC = () => {
           <Button
             onClick={confirmStateChange}
             disabled={changingState || !newState}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="text-white"
           >
             {changingState ? (
               <>

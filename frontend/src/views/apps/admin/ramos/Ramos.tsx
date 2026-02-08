@@ -16,6 +16,7 @@ import {
 } from 'flowbite-react';
 import { Checkbox } from 'src/components/shadcn-ui/Default-Ui/checkbox';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useRamos, useAseguradoras } from 'src/hooks/useAdminCrudApi';
 import type {
   Ramo as RamoType,
@@ -367,10 +368,7 @@ const Ramos = () => {
               </PermissionGate>
             )}
             <PermissionGate route="/apps/admin/ramos" action="crear">
-              <Button onClick={handleCreate} className="flex items-center">
-                <Icon icon="solar:document-add-bold" className="w-4 h-4 mr-2" />
-                Nuevo Ramo
-              </Button>
+              <HeroButton icon="solar:document-add-bold" onClick={handleCreate}>Nuevo Ramo</HeroButton>
             </PermissionGate>
           </div>
         </div>
@@ -403,10 +401,7 @@ const Ramos = () => {
             </p>
             <div className="flex justify-center">
               <PermissionGate route="/apps/admin/ramos" action="crear">
-                <Button onClick={handleCreate}>
-                  <Icon icon="solar:document-add-bold" className="w-4 h-4 mr-2" />
-                  Crear Primer Ramo
-                </Button>
+                <HeroButton icon="solar:document-add-bold" onClick={handleCreate} size="lg">Crear Primer Ramo</HeroButton>
               </PermissionGate>
             </div>
           </div>

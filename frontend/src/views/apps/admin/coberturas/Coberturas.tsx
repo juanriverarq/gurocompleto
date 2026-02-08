@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Button, Alert, Spinner, Table, Modal, TextInput, Label } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useCoberturas } from 'src/hooks/useAdminCrudApi';
 import type { Cobertura as CoberturaType, CoberturaCreate } from 'src/types/admin';
 import { PermissionGate } from 'src/components/PermissionGate';
@@ -75,10 +76,7 @@ const Coberturas = () => {
             </p>
           </div>
           <PermissionGate route="/apps/admin/coberturas" action="crear">
-            <Button onClick={handleCreate} className="flex items-center">
-              <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
-              Nueva Cobertura
-            </Button>
+            <HeroButton icon="solar:shield-plus-bold" onClick={handleCreate}>Nueva Cobertura</HeroButton>
           </PermissionGate>
         </div>
       </div>
@@ -110,10 +108,7 @@ const Coberturas = () => {
             </p>
             <div className="flex justify-center">
               <PermissionGate route="/apps/admin/coberturas" action="crear">
-                <Button onClick={handleCreate}>
-                  <Icon icon="solar:shield-plus-bold" className="w-4 h-4 mr-2" />
-                  Crear Primera Cobertura
-                </Button>
+                <HeroButton icon="solar:shield-plus-bold" onClick={handleCreate} size="lg">Crear Primera Cobertura</HeroButton>
               </PermissionGate>
             </div>
           </div>

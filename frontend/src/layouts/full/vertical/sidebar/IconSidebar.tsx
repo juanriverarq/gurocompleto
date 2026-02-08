@@ -72,8 +72,8 @@ export const IconSidebar = () => {
           >
             <Icon
               icon="solar:hamburger-menu-line-duotone"
-              height={24}
-              className="text-black dark:text-white dark:hover:text-primary"
+              height={22}
+              className="text-gray-500 hover:text-[#573CFF] transition-colors"
             />
           </Link>
         </div>
@@ -87,23 +87,22 @@ export const IconSidebar = () => {
             >
               <Button
                 key={index}
-                className={`h-12 w-12 hover:text-primary text-darklink dark:text-white/70 hover:bg-lightprimary rounded-tw flex justify-center items-center mx-auto mb-2 ${
+                className={`h-11 w-11 hover:text-[#573CFF] hover:bg-[#573CFF]/10 rounded-xl flex justify-center items-center mx-auto mb-1.5 transition-all duration-200 ${
                   links.id === selectedIconId
-                    ? 'text-white bg-primary hover:bg-primaryemphasis hover:text-white dark:hover:text-white'
-                    : 'text-darklink  bg-transparent'
+                    ? 'text-white !bg-[#573CFF] hover:!bg-[#573CFF] hover:text-white shadow-md shadow-[#573CFF]/25'
+                    : 'text-gray-400 bg-transparent'
                 }`}
                 type="button"
                 onClick={() => handleClick(links.id)}
               >
                 <Icon
                   icon={links.icon}
-                  height={24}
-                  className="iconify iconify--solar dark:bg-blue"
+                  height={22}
                 />
               </Button>
 
               {index > 0 && (index + 1) % 3 === 0 && index + 1 !== visibleIcons.length && (
-                <HR className="my-3"></HR>
+                <HR className="my-2 opacity-50"></HR>
               )}
             </Tooltip>
           ))}

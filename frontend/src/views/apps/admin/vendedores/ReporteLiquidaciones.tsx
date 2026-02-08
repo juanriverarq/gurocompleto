@@ -616,23 +616,23 @@ const ReporteLiquidaciones: React.FC = () => {
         [`Período: ${formatDate(periodoInicio)} al ${formatDate(periodoFin)}`],
         [`Generado: ${new Date().toLocaleDateString('es-CO')}`],
         [], // Fila vacía
-        ['Nº Póliza', 'Cliente', 'Aseguradora', 'Ramo', 'Fecha Póliza', '% Com', 'Prima Neta', '% Agen', 'Comisión Bruta', 'IVA Comisión', 'Ret. Fuente', 'Ret. IVA', 'Comisión Neta'],
+        ['Nº Póliza', 'Cliente', 'Aseguradora', 'Ramo', 'Fecha Póliza', 'PRIMA', 'COMISION %', 'TOTAL PRIMA', 'COM. ASESOR', 'IVA', 'RTE FTRE', 'RTE IVA', 'TOTAL'],
         ...polizasVendedor.map(p => [
           p.numero_poliza,
           p.cliente,
           p.aseguradora,
           p.ramo,
           p.fecha_poliza ? new Date(p.fecha_poliza).toLocaleDateString('es-CO') : '',
-          p.porcentaje_comision_ramo ?? '-',
           round2(p.prima_neta),
-          round2(p.porcentaje_comision),
+          p.porcentaje_comision_ramo ?? '-',
           round2(p.comision_bruta),
+          round2(p.comision_bruta * (p.porcentaje_comision || 0) / 100),
           round2(p.iva_comision || 0),
           round2(p.retencion_fuente),
           round2(p.retencion_iva),
           round2(p.comision_neta)
         ]),
-        ['TOTALES', '', '', '', `${totalesVendedor.cantidad_polizas} pólizas`, '', round2(totalesVendedor.prima_total), '', round2(totalesVendedor.comision_bruta_total), round2(totalesVendedor.iva_comision_total || 0), round2(totalesVendedor.retencion_total), round2(totalesVendedor.reteiva_total), round2(totalesVendedor.comision_neta_total)]
+        ['TOTALES', '', '', '', `${totalesVendedor.cantidad_polizas} pólizas`, round2(totalesVendedor.prima_total), '', round2(totalesVendedor.comision_bruta_total), '', round2(totalesVendedor.iva_comision_total || 0), round2(totalesVendedor.retencion_total), round2(totalesVendedor.reteiva_total), round2(totalesVendedor.comision_neta_total)]
       ];
       
       // Crear workbook y worksheet
@@ -648,7 +648,7 @@ const ReporteLiquidaciones: React.FC = () => {
         { wch: 12 }, // Fecha Póliza
         { wch: 8 },  // % Com
         { wch: 15 }, // Prima Neta
-        { wch: 8 },  // % Agen
+        { wch: 15 }, // Com. Agen
         { wch: 15 }, // Comisión Bruta
         { wch: 15 }, // IVA Comisión
         { wch: 12 }, // Ret. Fuente
@@ -802,14 +802,14 @@ const ReporteLiquidaciones: React.FC = () => {
               <th>Cliente</th>
               <th>Aseguradora</th>
               <th>Ramo</th>
-              <th class="right">% Com</th>
-              <th class="right">Prima</th>
-              <th class="right">% Agen</th>
-              <th class="right">Com. Bruta</th>
-              <th class="right">IVA Com.</th>
-              <th class="right">Ret. Fte</th>
-              <th class="right">Ret. IVA</th>
-              <th class="right">Neto</th>
+              <th class="right">PRIMA</th>
+              <th class="right">COMISION %</th>
+              <th class="right">TOTAL PRIMA</th>
+              <th class="right">COM. ASESOR</th>
+              <th class="right">IVA</th>
+              <th class="right">RTE FTRE</th>
+              <th class="right">RTE IVA</th>
+              <th class="right">TOTAL</th>
             </tr>
           </thead>
           <tbody>
@@ -819,11 +819,11 @@ const ReporteLiquidaciones: React.FC = () => {
                 <td>${p.cliente}</td>
                 <td>${p.aseguradora}</td>
                 <td>${p.ramo}</td>
-                <td class="right">${p.porcentaje_comision_ramo ?? '-'}%</td>
                 <td class="right">$${Math.round(p.prima_neta).toLocaleString('es-CO')}</td>
-                <td class="right">${p.porcentaje_comision}%</td>
-                <td class="right green">$${Math.round(p.comision_bruta).toLocaleString('es-CO')}</td>
-                <td class="right purple">$${Math.round(p.iva_comision || 0).toLocaleString('es-CO')}</td>
+                <td class="right">${p.porcentaje_comision_ramo ?? '-'}%</td>
+                <td class="right purple">$${Math.round(p.comision_bruta).toLocaleString('es-CO')}</td>
+                <td class="right blue">$${Math.round(p.comision_bruta * (p.porcentaje_comision || 0) / 100).toLocaleString('es-CO')}</td>
+                <td class="right blue">$${Math.round(p.iva_comision || 0).toLocaleString('es-CO')}</td>
                 <td class="right red">$${Math.round(p.retencion_fuente).toLocaleString('es-CO')}</td>
                 <td class="right red">$${Math.round(p.retencion_iva).toLocaleString('es-CO')}</td>
                 <td class="right green" style="font-weight: bold;">$${Math.round(p.comision_neta).toLocaleString('es-CO')}</td>
@@ -1167,14 +1167,14 @@ const ReporteLiquidaciones: React.FC = () => {
                     <Table.HeadCell>Cliente</Table.HeadCell>
                     <Table.HeadCell>Aseguradora</Table.HeadCell>
                     <Table.HeadCell>Ramo</Table.HeadCell>
-                    <Table.HeadCell className="text-center">% Com</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Prima</Table.HeadCell>
-                    <Table.HeadCell className="text-center">% Agen</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
-                    <Table.HeadCell className="text-right">IVA Com.</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Ret. Fte</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Ret. IVA</Table.HeadCell>
-                    <Table.HeadCell className="text-right font-bold">Neto</Table.HeadCell>
+                    <Table.HeadCell className="text-right">PRIMA</Table.HeadCell>
+                    <Table.HeadCell className="text-center">COMISION %</Table.HeadCell>
+                    <Table.HeadCell className="text-right">TOTAL PRIMA</Table.HeadCell>
+                    <Table.HeadCell className="text-right">COM. ASESOR</Table.HeadCell>
+                    <Table.HeadCell className="text-right">IVA</Table.HeadCell>
+                    <Table.HeadCell className="text-right">RTE FTRE</Table.HeadCell>
+                    <Table.HeadCell className="text-right">RTE IVA</Table.HeadCell>
+                    <Table.HeadCell className="text-right font-bold">TOTAL</Table.HeadCell>
                   </Table.Head>
                   <Table.Body>
                     {polizasVendedor.map((p, idx) => (
@@ -1187,11 +1187,11 @@ const ReporteLiquidaciones: React.FC = () => {
                         <Table.Cell className="text-xs">
                           <Badge color="purple" size="xs">{p.ramo}</Badge>
                         </Table.Cell>
-                        <Table.Cell className="text-center font-mono text-xs">{p.porcentaje_comision_ramo ?? '-'}%</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs">{formatCurrency(p.prima_neta)}</Table.Cell>
-                        <Table.Cell className="text-center font-mono text-xs">{p.porcentaje_comision}%</Table.Cell>
-                        <Table.Cell className="text-right font-mono text-xs text-blue-600">{formatCurrency(p.comision_bruta)}</Table.Cell>
-                        <Table.Cell className="text-right font-mono text-xs text-purple-600">{formatCurrency(p.iva_comision || 0)}</Table.Cell>
+                        <Table.Cell className="text-center font-mono text-xs">{p.porcentaje_comision_ramo ?? '-'}%</Table.Cell>
+                        <Table.Cell className="text-right font-mono text-xs text-purple-600">{formatCurrency(p.comision_bruta)}</Table.Cell>
+                        <Table.Cell className="text-right font-mono text-xs text-blue-600">{formatCurrency(p.comision_bruta * (p.porcentaje_comision || 0) / 100)}</Table.Cell>
+                        <Table.Cell className="text-right font-mono text-xs text-blue-600">{formatCurrency(p.iva_comision || 0)}</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs text-red-500">-{formatCurrency(p.retencion_fuente)}</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs text-orange-500">-{formatCurrency(p.retencion_iva)}</Table.Cell>
                         <Table.Cell className="text-right font-mono text-xs font-bold text-green-600">{formatCurrency(p.comision_neta)}</Table.Cell>

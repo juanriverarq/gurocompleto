@@ -130,6 +130,8 @@ const ComisionesPoliza: React.FC<Props> = ({
   const [modalStep, setModalStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [liquidacionCreada, setLiquidacionCreada] = useState<LiquidacionGenerada | null>(null);
+  const [editingLiquidacion, setEditingLiquidacion] = useState<LiquidacionGenerada | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   
   // Comisiones temporales en el modal
   const [comisionesTemp, setComisionesTemp] = useState<ComisionTemp[]>([]);
@@ -254,16 +256,82 @@ const ComisionesPoliza: React.FC<Props> = ({
     }
   };
 
-  // Abrir modal
+  // Abrir modal para crear
   const handleOpenModal = () => {
     setPeriodoInicio(new Date().toISOString().slice(0, 10));
     setPeriodoFin(new Date().toISOString().slice(0, 10));
     setObservaciones('');
     setModalStep(1);
     setLiquidacionCreada(null);
+    setEditingLiquidacion(null);
+    setIsEditMode(false);
     setComisionesTemp([]);
     setShowModal(true);
     loadPolizaData();
+  };
+
+  // Abrir modal para editar
+  const handleEditLiquidacion = async (liquidacion: LiquidacionGenerada) => {
+    setEditingLiquidacion(liquidacion);
+    setIsEditMode(true);
+    setModalStep(1);
+    setLiquidacionCreada(null);
+    setShowModal(true);
+    setLoadingPoliza(true);
+    
+    try {
+      const headers = await saasApi.getAuthHeaders();
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
+      const res = await fetch(`${baseUrl}/saas/liquidaciones-vendedores/${liquidacion.id}/detalles`, { headers });
+      const data = await res.json();
+      
+      if (data.success && data.data) {
+        setPeriodoInicio(liquidacion.periodo_inicio?.slice(0, 10) || new Date().toISOString().slice(0, 10));
+        setPeriodoFin(liquidacion.periodo_fin?.slice(0, 10) || new Date().toISOString().slice(0, 10));
+        setObservaciones(data.data.observaciones || '');
+        
+        // Cargar detalles como comisionesTemp
+        const detalles = data.data.detalles || [];
+        const comisiones: ComisionTemp[] = detalles.map((d: any, idx: number) => {
+          // Calcular % Com inversamente: comision_bruta = prima * (%Com/100) * (%Vendedor/100)
+          // %Com = (comision_bruta * 10000) / (prima * %Vendedor)
+          const primaNeta = parseFloat(d.prima_neta) || 0;
+          const porcentajeVendedor = parseFloat(d.porcentaje_comision) || 0;
+          const comisionBruta = parseFloat(d.comision_bruta) || 0;
+          let porcentajeComRamo = 0;
+          if (primaNeta > 0 && porcentajeVendedor > 0) {
+            porcentajeComRamo = Math.round((comisionBruta * 10000) / (primaNeta * porcentajeVendedor) * 100) / 100;
+          }
+          
+          return {
+            id: `edit-${d.id || idx}-${Date.now()}`,
+            vendedor_id: String(liquidacion.vendedor?.id || ''),
+            tipo_movimiento: d.tipo_movimiento || 'CREACIÓN',
+            anexo: d.anexo || '',
+            abono_prima: String(primaNeta),
+            porcentaje_comision: String(porcentajeComRamo),
+            porcentaje_agencia: String(100 - porcentajeVendedor),
+            porcentaje_vendedor: String(porcentajeVendedor),
+            porcentaje_rtf: String(d.porcentaje_retencion || 0),
+            porcentaje_iva: String(d.porcentaje_iva || 0),
+            porcentaje_reteiva: String(d.porcentaje_retencion_iva || 0),
+            porcentaje_reteica: String(d.porcentaje_retencion_ica || 0),
+            esPolizaPrincipal: idx === 0 && !d.anexo,
+            esAnexo: !!d.anexo,
+          };
+        });
+        
+        setComisionesTemp(comisiones.length > 0 ? comisiones : []);
+        if (comisiones.length === 0) {
+          handleAddComisionTemp();
+        }
+      }
+    } catch (e) {
+      console.error('Error loading liquidacion details:', e);
+      toast({ title: 'Error', description: 'Error al cargar los detalles de la liquidación', variant: 'destructive' });
+    } finally {
+      setLoadingPoliza(false);
+    }
   };
 
   // Agregar fila en modal
@@ -353,7 +421,7 @@ const ComisionesPoliza: React.FC<Props> = ({
     return { count: comisionesTemp.length, abono_prima, valor_comision, neto_comision };
   }, [comisionesTemp]);
 
-  // Generar liquidación
+  // Generar o actualizar liquidación
   const handleGenerarLiquidacion = async () => {
     // Permitir valores negativos en abono_prima (ej: cancelaciones, ajustes)
     const comisionesValidas = comisionesTemp.filter(c => 
@@ -395,8 +463,12 @@ const ComisionesPoliza: React.FC<Props> = ({
         })),
       };
 
-      const res = await fetch(`${baseUrl}/saas/liquidaciones-manuales-poliza`, {
-        method: 'POST',
+      const url = isEditMode && editingLiquidacion 
+        ? `${baseUrl}/saas/liquidaciones-manuales-poliza/${editingLiquidacion.id}`
+        : `${baseUrl}/saas/liquidaciones-manuales-poliza`;
+      
+      const res = await fetch(url, {
+        method: isEditMode ? 'PUT' : 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -405,7 +477,7 @@ const ComisionesPoliza: React.FC<Props> = ({
       if (data.success && data.data) {
         setLiquidacionCreada(data.data);
         setModalStep(2);
-        toast({ title: 'Éxito', description: `Liquidación ${data.data.codigo} generada correctamente` });
+        toast({ title: 'Éxito', description: `Liquidación ${data.data.codigo} ${isEditMode ? 'actualizada' : 'generada'} correctamente` });
         loadLiquidaciones();
       } else {
         toast({ title: 'Error', description: data.message || 'Error al generar liquidación', variant: 'destructive' });
@@ -546,6 +618,11 @@ const ComisionesPoliza: React.FC<Props> = ({
                           <Icon icon="solar:download-bold" className="w-4 h-4" />
                         </Button>
                       </Tooltip>
+                      <Tooltip content="Editar">
+                        <Button color="light" size="xs" onClick={() => handleEditLiquidacion(liq)}>
+                          <Icon icon="solar:pen-bold" className="w-4 h-4 text-blue-500" />
+                        </Button>
+                      </Tooltip>
                       <Tooltip content="Eliminar">
                         <Button color="light" size="xs" onClick={() => handleDeleteLiquidacion(liq.id)}>
                           <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 text-red-500" />
@@ -565,7 +642,7 @@ const ComisionesPoliza: React.FC<Props> = ({
         <Modal.Header>
           <div className="flex items-center gap-2">
             <Icon icon="solar:document-add-bold" className="w-5 h-5 text-primary" />
-            Liquidar Comisión - Póliza {numeroPoliza}
+            {isEditMode ? 'Editar' : 'Liquidar'} Comisión - Póliza {numeroPoliza}
           </div>
         </Modal.Header>
         <Modal.Body>
@@ -627,17 +704,20 @@ const ComisionesPoliza: React.FC<Props> = ({
                         <th className="px-3 py-2 text-left" style={{ minWidth: '160px' }}>Vendedor</th>
                         <th className="px-2 py-2 text-left" style={{ minWidth: '100px' }}>Tipo</th>
                         <th className="px-2 py-2 text-left" style={{ minWidth: '70px' }}>Anexo</th>
-                        <th className="px-2 py-2 text-right" style={{ minWidth: '120px' }}>Prima</th>
-                        <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% Com</th>
-                        <th className="px-2 py-2 text-right bg-purple-50 dark:bg-purple-900/30" style={{ minWidth: '110px' }}>VALOR COMISIÓN</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '120px' }}>PRIMA</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '90px' }}>COMISION %</th>
+                        <th className="px-2 py-2 text-right bg-purple-50 dark:bg-purple-900/30" style={{ minWidth: '110px' }}>TOTAL PRIMA</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>% Agencia</th>
-                        <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>% Asesor</th>
-                        <th className="px-2 py-2 text-right bg-blue-50 dark:bg-blue-900/30" style={{ minWidth: '110px' }}>COMISIÓN asesor</th>
-                        <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% RTF</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '90px' }}>% ASESOR</th>
+                        <th className="px-2 py-2 text-right bg-blue-50 dark:bg-blue-900/30" style={{ minWidth: '110px' }}>COM. ASESOR</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% IVA</th>
-                        <th className="px-2 py-2 text-right bg-blue-50 dark:bg-blue-900/30" style={{ minWidth: '100px' }}>IVA</th>
-                        <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>% ReteIVA</th>
-                        <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>% ReteICA</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '100px' }}>IVA</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% RTE FTRE</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '90px' }}>RTE FTRE</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% RTE IVA</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>RTE IVA</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '70px' }}>% RTE ICA</th>
+                        <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>RTE ICA</th>
                         <th className="px-2 py-2 text-right bg-green-50 dark:bg-green-900/30 font-semibold" style={{ minWidth: '120px' }}>TOTAL</th>
                         <th className="px-2 py-2" style={{ minWidth: '40px' }}></th>
                       </tr>
@@ -753,17 +833,6 @@ const ComisionesPoliza: React.FC<Props> = ({
                                 sizing="sm"
                                 type="number"
                                 step="0.01"
-                                value={c.porcentaje_rtf}
-                                onChange={(e) => handleUpdateComisionTemp(c.id, 'porcentaje_rtf', e.target.value)}
-                                placeholder="%"
-                                className="text-right"
-                              />
-                            </td>
-                            <td className="px-1 py-2">
-                              <TextInput
-                                sizing="sm"
-                                type="number"
-                                step="0.01"
                                 value={c.porcentaje_iva}
                                 onChange={(e) => handleUpdateComisionTemp(c.id, 'porcentaje_iva', e.target.value)}
                                 placeholder="%"
@@ -778,11 +847,28 @@ const ComisionesPoliza: React.FC<Props> = ({
                                 sizing="sm"
                                 type="number"
                                 step="0.01"
+                                value={c.porcentaje_rtf}
+                                onChange={(e) => handleUpdateComisionTemp(c.id, 'porcentaje_rtf', e.target.value)}
+                                placeholder="%"
+                                className="text-right"
+                              />
+                            </td>
+                            <td className="px-1 py-2 text-right font-mono text-red-500">
+                              {formatCurrency(calc.rtf_calculada)}
+                            </td>
+                            <td className="px-1 py-2">
+                              <TextInput
+                                sizing="sm"
+                                type="number"
+                                step="0.01"
                                 value={c.porcentaje_reteiva}
                                 onChange={(e) => handleUpdateComisionTemp(c.id, 'porcentaje_reteiva', e.target.value)}
                                 placeholder="%"
                                 className="text-right"
                               />
+                            </td>
+                            <td className="px-1 py-2 text-right font-mono text-red-500">
+                              {formatCurrency(calc.reteiva_calculada)}
                             </td>
                             <td className="px-1 py-2">
                               <TextInput
@@ -794,6 +880,9 @@ const ComisionesPoliza: React.FC<Props> = ({
                                 placeholder="%"
                                 className="text-right"
                               />
+                            </td>
+                            <td className="px-1 py-2 text-right font-mono text-red-500">
+                              {formatCurrency(calc.reteica_calculada)}
                             </td>
                             <td className="px-1 py-2 text-right font-mono font-bold text-green-600">
                               {formatCurrency(calc.neto_comision)}
@@ -817,7 +906,7 @@ const ComisionesPoliza: React.FC<Props> = ({
                         <td className="px-2 py-3 text-right font-mono">{formatCurrency(totalesModal.abono_prima)}</td>
                         <td colSpan={4} className="px-2 py-3"></td>
                         <td className="px-2 py-3 text-right font-mono bg-blue-100 dark:bg-blue-900/50">{formatCurrency(totalesModal.valor_comision)}</td>
-                        <td colSpan={5} className="px-2 py-3 text-center text-xs text-gray-600 dark:text-gray-300">+ IVA − Retenciones</td>
+                        <td colSpan={8} className="px-2 py-3 text-center text-xs text-gray-600 dark:text-gray-300">+ IVA − Retenciones</td>
                         <td className="px-2 py-3 text-right font-mono font-bold text-green-700 bg-green-100 dark:bg-green-900/50">{formatCurrency(totalesModal.neto_comision)}</td>
                         <td className="px-2 py-3"></td>
                       </tr>
@@ -868,7 +957,7 @@ const ComisionesPoliza: React.FC<Props> = ({
                 {saving ? (
                   <><Spinner size="sm" className="mr-2" /> Generando...</>
                 ) : (
-                  <><Icon icon="solar:document-add-bold" className="w-4 h-4 mr-2" /> Generar Liquidación</>
+                  <><Icon icon="solar:document-add-bold" className="w-4 h-4 mr-2" /> {isEditMode ? 'Actualizar' : 'Generar'} Liquidación</>
                 )}
               </Button>
             </>

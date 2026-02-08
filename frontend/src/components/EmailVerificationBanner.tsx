@@ -26,23 +26,38 @@ const EmailVerificationBanner: React.FC = () => {
   };
 
   return (
-    <div className="bg-gradient-to-r from-amber-500 to-amber-600 rounded-xl p-4 mb-5 flex items-center justify-between flex-wrap gap-4 shadow-sm font-['Manrope',sans-serif]">
-      <div className="flex-1 min-w-0">
-        <p className="text-white font-semibold text-sm mb-0.5">
+    <div
+      className="relative rounded-2xl p-5 mb-5 flex items-center justify-between flex-wrap gap-4 overflow-hidden"
+      style={{ fontFamily: "'General Sans', sans-serif" }}
+    >
+      {/* Background image */}
+      <div
+        className="absolute inset-0 z-0"
+        style={{
+          backgroundImage: 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png?width=2880&height=2190)',
+          backgroundSize: '160%',
+          backgroundPosition: 'center',
+          transform: 'rotate(180deg)',
+        }}
+      />
+
+      {/* Content */}
+      <div className="relative z-10 flex-1 min-w-0">
+        <p className="text-white font-bold text-sm mb-0.5 tracking-[-0.01em]">
           Verifica tu email para acceder a todas las funciones
         </p>
-        <p className="text-white/80 text-xs truncate">
+        <p className="text-white/60 text-xs truncate">
           {user?.email}
         </p>
       </div>
       
-      <div className="flex gap-2 items-center">
+      <div className="relative z-10 flex gap-2 items-center">
         <button
           onClick={handleResendEmail}
           disabled={isResending}
           className={`
-            bg-white/20 hover:bg-white/30 text-white text-xs font-medium
-            px-3 py-1.5 rounded-md border border-white/30
+            bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-xs font-semibold
+            px-4 py-2 rounded-xl border border-white/20
             transition-all duration-200
             ${isResending ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}
           `}
@@ -52,14 +67,14 @@ const EmailVerificationBanner: React.FC = () => {
         
         <button
           onClick={() => window.location.reload()}
-          className="bg-white text-amber-600 text-xs font-medium px-3 py-1.5 rounded-md hover:bg-white/90 transition-all duration-200"
+          className="bg-white text-[#0d0d0d] text-xs font-semibold px-4 py-2 rounded-xl hover:bg-white/90 transition-all duration-200"
         >
           Ya verifiqué
         </button>
         
         <button
           onClick={() => setIsDismissed(true)}
-          className="text-white/70 hover:text-white p-1 transition-colors duration-200"
+          className="text-white/50 hover:text-white p-1 transition-colors duration-200"
           title="Ocultar este mensaje"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

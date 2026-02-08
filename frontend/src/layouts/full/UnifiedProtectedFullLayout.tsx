@@ -10,6 +10,7 @@ import api from 'src/config/api';
 import ScrollToTop from 'src/components/shared/ScrollToTop';
 import FirstTimeOnboardingModal from 'src/components/modals/FirstTimeOnboardingModal';
 import SubscriptionPaymentModal from 'src/components/modals/SubscriptionPaymentModal';
+import GuroLoader from 'src/components/GuroLoader';
 
 const UnifiedProtectedFullLayout: React.FC = () => {
   const { activeLayout, isLayout } = useContext(CustomizerContext);
@@ -225,16 +226,7 @@ const UnifiedProtectedFullLayout: React.FC = () => {
 
   // Mostrar loading mientras verifica autenticación
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="flex items-center gap-3 p-4 bg-white rounded-lg shadow-sm border">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-          <span className="text-gray-600">
-            {isEmpleado ? 'Verificando acceso de empleado...' : 'Verificando autenticación...'}
-          </span>
-        </div>
-      </div>
-    );
+    return <GuroLoader fullScreen size={100} />;
   }
 
   if (!isAuthenticated) {
@@ -257,23 +249,23 @@ const UnifiedProtectedFullLayout: React.FC = () => {
   // Mostrar error de conexión si no se puede cargar el broker
   if (connectionError) {
     return (
-      <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
-        <div className="text-center max-w-md mx-4 p-8 bg-white rounded-2xl shadow-lg border">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
-            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="fixed inset-0 bg-[#fafafa] flex items-center justify-center z-50" style={{ fontFamily: "'General Sans', sans-serif" }}>
+        <div className="text-center max-w-md mx-4 p-8 bg-white rounded-2xl shadow-lg border border-gray-100">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-red-50 flex items-center justify-center">
+            <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">
+          <h2 className="text-xl font-bold text-[#0d0d0d] mb-2 tracking-[-0.02em]">
             Problemas de conexión
           </h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-500 text-sm mb-6">
             No pudimos conectar con la base de datos. Por favor recarga la página o intenta nuevamente en unos minutos.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-2.5 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition"
+              className="px-6 py-2.5 bg-[#0d0d0d] hover:bg-[#1a1a2e] text-white text-sm font-semibold rounded-xl transition"
             >
               Recargar página
             </button>
@@ -282,13 +274,13 @@ const UnifiedProtectedFullLayout: React.FC = () => {
                 localStorage.clear();
                 window.location.href = '/auth/login';
               }}
-              className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition"
+              className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-xl transition"
             >
               Cerrar sesión
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-4">
-            Si el problema persiste, <a href="https://wa.me/573001009305?text=Hola,%20tengo%20problemas%20para%20conectar%20con%20Guro" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">contacta a soporte por WhatsApp</a>.
+            Si el problema persiste, <a href="https://wa.me/573001009305?text=Hola,%20tengo%20problemas%20para%20conectar%20con%20Guro" target="_blank" rel="noopener noreferrer" className="text-[#573CFF] hover:underline">contacta a soporte por WhatsApp</a>.
           </p>
         </div>
       </div>
@@ -300,10 +292,12 @@ const UnifiedProtectedFullLayout: React.FC = () => {
       typeof window !== 'undefined' && !!localStorage.getItem('empleado_data');
     if (hasSavedEmpleado) {
       return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-50">
-          <div className="flex items-center gap-3 p-4 bg-white rounded-lg shadow-sm border">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-            <span className="text-gray-600">Cargando contexto de empleado...</span>
+        <div className="flex items-center justify-center min-h-screen bg-[#fafafa]" style={{ fontFamily: "'General Sans', sans-serif" }}>
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-[#573CFF]/10 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-[#573CFF] border-t-transparent"></div>
+            </div>
+            <span className="text-gray-500 text-sm font-medium">Cargando contexto de empleado...</span>
           </div>
         </div>
       );

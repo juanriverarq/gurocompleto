@@ -3,6 +3,7 @@ import { Card, Button, Table, Dropdown, Spinner, Alert, Modal, Badge } from 'flo
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { useNavigate } from 'react-router-dom';
 import { Icon as IconifyIcon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { IconDots } from '@tabler/icons-react';
 import salesFunnelService, { SalesFunnelFilters, SalesFunnelLead, STAGES } from 'src/services/salesFunnelService';
 import NuevoNegocioModal from 'src/components/saas/sales-funnel/NuevoNegocioModal';
@@ -304,11 +305,7 @@ const ListaLeads: React.FC = () => {
                 <IconifyIcon icon="solar:refresh-bold-duotone" className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
               
-              <Button onClick={() => setShowNuevoNegocioModal(true)} color="primary" className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]">
-                <IconifyIcon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Nuevo Negocio</span>
-                <span className="sm:hidden">Nuevo</span>
-              </Button>
+              <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowNuevoNegocioModal(true)}>Nuevo Negocio</HeroButton>
             </div>
           </div>
         </div>
@@ -322,10 +319,7 @@ const ListaLeads: React.FC = () => {
               <IconifyIcon icon="solar:target-bold-duotone" className="w-16 h-16 text-gray-300" />
               <p className="text-gray-500 text-lg font-medium">No hay negocios</p>
               <p className="text-gray-400 text-sm">Comienza creando tu primer negocio</p>
-              <Button onClick={() => setShowNuevoNegocioModal(true)} color="primary" className="mt-2">
-                <IconifyIcon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                Crear primer negocio
-              </Button>
+              <HeroButton icon="solar:add-circle-bold" onClick={() => setShowNuevoNegocioModal(true)} size="lg">Crear primer negocio</HeroButton>
             </div>
           </div>
         ) : (
@@ -554,7 +548,7 @@ const ListaLeads: React.FC = () => {
             color="primary" 
             onClick={confirmStateChange} 
             disabled={changingState || !newState}
-            className="bg-blue-600 hover:bg-blue-700"
+            className=""
           >
             {changingState ? (
               <>

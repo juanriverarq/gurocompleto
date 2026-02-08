@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Badge, Button, Spinner, Modal, Alert, Table, Tooltip } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import whatsappInstanceService, { CreateInstanceRequest, ConnectionType } from 'src/services/whatsappInstanceService';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import { useToast } from 'src/hooks/use-toast';
@@ -427,14 +428,7 @@ const WhatsAppConexiones: React.FC = () => {
               <Icon icon="solar:list-bold" width={18} />
             </button>
           </div>
-          <Button 
-            color="light" 
-            onClick={handleOpenCreateModal}
-            disabled={creatingInstance}
-          >
-            <Icon icon="solar:add-circle-bold" className="mr-2" width={18} />
-            Nueva Conexión
-          </Button>
+          <HeroButton icon="solar:add-circle-bold" onClick={handleOpenCreateModal} disabled={creatingInstance}>Nueva Conexión</HeroButton>
         </div>
       </div>
 
@@ -507,14 +501,7 @@ const WhatsAppConexiones: React.FC = () => {
               Crea una nueva conexión para empezar a usar WhatsApp Business y enviar mensajes a tus clientes.
             </p>
             <div className="flex justify-center mt-6">
-              <Button 
-                color="light"
-                onClick={handleOpenCreateModal}
-                disabled={creatingInstance}
-              >
-                <Icon icon="solar:add-circle-bold" className="mr-2" width={18} />
-                Crear Primera Conexión
-              </Button>
+              <HeroButton icon="solar:add-circle-bold" onClick={handleOpenCreateModal} disabled={creatingInstance} size="lg">Crear Primera Conexión</HeroButton>
             </div>
           </div>
         </Card>

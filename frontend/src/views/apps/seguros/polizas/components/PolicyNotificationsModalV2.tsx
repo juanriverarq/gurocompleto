@@ -405,7 +405,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                     activeTab === tab.id
-                      ? 'bg-blue-600 text-white shadow-md'
+                      ? 'bg-primary text-white shadow-md'
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
@@ -671,7 +671,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                           <Switch
                             checked={config.notify_renewal}
                             onChange={(checked) => updateConfig({ notify_renewal: checked })}
-                            className="group inline-flex h-6 w-11 items-center rounded-full bg-gray-300 transition data-[checked]:bg-blue-500"
+                            className="group inline-flex h-6 w-11 items-center rounded-full bg-gray-300 transition data-[checked]:bg-primary"
                           >
                             <span className="size-4 translate-x-1 rounded-full bg-white transition group-data-[checked]:translate-x-6" />
                           </Switch>
@@ -752,7 +752,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                                 }}
                                 className={`w-10 h-10 rounded-lg font-medium text-sm transition ${
                                   (config.send_days || []).includes(d.v)
-                                    ? 'bg-blue-600 text-white'
+                                    ? 'bg-primary text-white'
                                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
                                 }`}
                               >

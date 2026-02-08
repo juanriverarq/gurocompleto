@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Badge, Button, Alert, Modal, Table, TextInput, ToggleSwitch } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 
 const BCrumb = [
@@ -549,10 +550,7 @@ const ServiciosTerceros = () => {
             </div>
             
             <div className="flex gap-2">
-              <Button color="primary" size="sm">
-                <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
-                Nuevo Servicio
-              </Button>
+              <HeroButton icon="solar:add-circle-bold" size="sm">Nuevo Servicio</HeroButton>
               <Button color="gray" size="sm" onClick={() => setMostrarLogs(true)}>
                 <Icon icon="solar:document-text-bold" className="mr-2" width={16} />
                 Ver Logs
@@ -630,7 +628,7 @@ const ServiciosTerceros = () => {
                         <p className="text-gray-500">de {servicio.limites.requests_diarios.toLocaleString()}</p>
                         <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
                           <div 
-                            className="bg-blue-600 h-1 rounded-full" 
+                            className="bg-primary h-1 rounded-full" 
                             style={{ width: `${(servicio.limites.requests_utilizados / servicio.limites.requests_diarios) * 100}%` }}
                           ></div>
                         </div>

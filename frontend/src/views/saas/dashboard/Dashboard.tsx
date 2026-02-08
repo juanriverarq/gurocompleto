@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import Lottie from 'lottie-react';
+import guroLogoAnimation from '../../../assets/LOTTIE.json';
 import { useUnifiedAuth } from '../../../context/UnifiedAuthContext';
 import { saasApi } from '../../../services/saasApi';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/shadcn-ui/Default-Ui/card';
@@ -184,13 +186,23 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            {getGreeting()}, {usuarioSaas?.nombre}
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Bienvenido a {tenant?.branding.nombre_comercial || tenant?.nombre}
-          </p>
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 flex-shrink-0">
+            <Lottie
+              animationData={guroLogoAnimation}
+              loop
+              autoplay
+              style={{ width: 64, height: 64 }}
+            />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {getGreeting()}, {usuarioSaas?.nombre}
+            </h1>
+            <p className="text-gray-600 mt-1">
+              Bienvenido a {tenant?.branding.nombre_comercial || tenant?.nombre}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Select value={chartPeriod} onValueChange={(value: any) => setChartPeriod(value)}>

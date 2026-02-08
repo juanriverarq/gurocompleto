@@ -95,7 +95,7 @@ const VoiceAISummaryDashboard = () => {
           <div className="bg-white dark:bg-darkgray rounded-lg border border-gray-200 dark:border-gray-700 p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Acciones Rápidas</h3>
             <div className="space-y-3">
-              <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+              <button className="w-full flex items-center justify-center gap-2 px-4 py-2 text-white rounded-lg transition-colors">
                 <span className="text-sm font-medium">Iniciar Nueva Campaña</span>
               </button>
               

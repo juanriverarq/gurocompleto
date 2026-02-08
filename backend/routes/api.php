@@ -1130,6 +1130,8 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
         // Liquidaciones Manuales (desde comisiones manuales de pólizas)
         Route::post('liquidaciones-manuales', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'crearDesdeComisionesManuales']);
         Route::post('liquidaciones-manuales-poliza', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'crearDesdePoliza']);
+        Route::put('liquidaciones-manuales-poliza/{id}', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'actualizarDesdePoliza'])->whereNumber('id');
+        Route::get('liquidaciones-vendedores/{id}/detalles', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'obtenerDetalles'])->whereNumber('id');
         Route::get('polizas/{polizaId}/comisiones-manuales/liquidaciones', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'liquidacionesPorPoliza']);
         Route::get('polizas/{polizaId}/datos-liquidacion', [App\Http\Controllers\SaaS\LiquidacionesVendedoresController::class, 'datosLiquidacionPoliza']);
         

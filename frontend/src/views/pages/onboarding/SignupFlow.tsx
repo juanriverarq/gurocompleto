@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useNavigate, Link, useLocation } from 'react-router';
 import { ModuleKey } from 'src/components/landingpage/pricing-calculator/modules';
-import Logo from 'src/layouts/full/shared/logo/Logo';
+import LogoSvg from 'src/assets/images/logos/Logo.svg';
 
 const SURA_LOGO_URL =
   'https://www.sura.co/documents/43501/0/Logo-SURA-blanco+1.svg/8937a328-d03b-7aa7-79bd-a5308a3931b3?version=1.0&t=1704405886717';
@@ -212,13 +212,23 @@ const SignupFlow = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-dark">
+    <div className="min-h-screen bg-[#fafafa]" style={{ fontFamily: "'General Sans', sans-serif" }}>
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white dark:bg-dark border-b border-gray-200 dark:border-darkborder">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Logo />
-          <div className="text-sm text-gray-500 font-medium">
-            Paso 2 de 2
+          <a href="/">
+            <img src={LogoSvg} alt="Guro" className="h-8 w-auto" />
+          </a>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 opacity-40">
+              <span className="w-6 h-6 rounded-full bg-[#573CFF] text-white text-xs font-bold flex items-center justify-center">✓</span>
+              <span className="text-xs font-medium text-gray-400">Aplicaciones</span>
+            </div>
+            <div className="w-8 h-px bg-gray-300" />
+            <div className="flex items-center gap-1.5">
+              <span className="w-6 h-6 rounded-full bg-[#573CFF] text-white text-xs font-bold flex items-center justify-center">2</span>
+              <span className="text-xs font-semibold text-[#0d0d0d]">Registro</span>
+            </div>
           </div>
         </div>
       </header>
@@ -250,24 +260,24 @@ const SignupFlow = () => {
 
         {/* Título */}
         <div className="text-center mb-10">
-          <h1 className="text-3xl sm:text-4xl font-bold text-dark dark:text-white mb-3">
-            Comienza a usar <span className="text-primary">Guro</span>
+          <h1 className="text-3xl sm:text-4xl font-bold text-[#0d0d0d] mb-3 tracking-[-0.02em]">
+            Comienza a usar <span className="text-[#573CFF]">Guro</span>
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-base">
+          <p className="text-gray-500 text-base">
             Acceso gratis e instantáneo. No necesitas tarjeta de crédito.
           </p>
         </div>
 
         {/* Apps seleccionadas */}
-        <div className="bg-gray-50 dark:bg-darkgray rounded-xl p-4 mb-6 flex items-center justify-between">
-          <span className="font-semibold text-dark dark:text-white text-sm">
+        <div className="bg-white rounded-xl p-4 mb-6 flex items-center justify-between border border-gray-200 shadow-sm">
+          <span className="font-semibold text-[#0d0d0d] text-sm">
             {selectedApps?.length || 0} aplicaciones seleccionadas
           </span>
           <button
             onClick={handleChangeApps}
-            className="text-primary hover:text-primaryemphasis font-medium text-sm transition"
+            className="text-[#573CFF] hover:underline font-medium text-sm transition"
           >
-            Cambiar las aplicaciones seleccionadas
+            Cambiar
           </button>
         </div>
 
@@ -282,7 +292,7 @@ const SignupFlow = () => {
               onChange={handleChange}
               placeholder="Nombre y apellidos"
               required
-              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 dark:border-darkborder bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-dark dark:text-white placeholder:text-gray-400"
+              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition text-[#0d0d0d] placeholder:text-gray-400"
             />
           </div>
 
@@ -295,7 +305,7 @@ const SignupFlow = () => {
               onChange={handleChange}
               placeholder="Correo electrónico"
               required
-              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 dark:border-darkborder bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-dark dark:text-white placeholder:text-gray-400"
+              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition text-[#0d0d0d] placeholder:text-gray-400"
             />
           </div>
 
@@ -308,7 +318,7 @@ const SignupFlow = () => {
               onChange={handleChange}
               placeholder="Teléfono (ej: +57 300 123 4567)"
               required
-              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 dark:border-darkborder bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-dark dark:text-white placeholder:text-gray-400"
+              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition text-[#0d0d0d] placeholder:text-gray-400"
             />
           </div>
 
@@ -321,7 +331,7 @@ const SignupFlow = () => {
               onChange={handleChange}
               placeholder="Contraseña (mínimo 6 caracteres)"
               required
-              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 dark:border-darkborder bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition pr-12 text-dark dark:text-white placeholder:text-gray-400"
+              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition pr-12 text-[#0d0d0d] placeholder:text-gray-400"
             />
             <button
               type="button"
@@ -339,7 +349,7 @@ const SignupFlow = () => {
               value={formData.employeeCount}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 dark:border-darkborder bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-dark dark:text-white"
+              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition text-[#0d0d0d]"
             >
               <option value="" className="text-gray-400">Cantidad de empleados</option>
               {EMPLOYEE_RANGES.map(range => (
@@ -357,7 +367,7 @@ const SignupFlow = () => {
               value={formData.businessType}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 dark:border-darkborder bg-gray-50 dark:bg-darkgray focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition text-dark dark:text-white"
+              className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition text-[#0d0d0d]"
             >
               <option value="" className="text-gray-400">Tipo de negocio</option>
               {BUSINESS_TYPES.map(type => (
@@ -370,7 +380,7 @@ const SignupFlow = () => {
 
           {/* Error */}
           {error && (
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 text-sm">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
               {error}
             </div>
           )}
@@ -382,46 +392,45 @@ const SignupFlow = () => {
               id="terms"
               checked={termsAccepted}
               onChange={(e) => setTermsAccepted(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+              className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#573CFF] focus:ring-[#573CFF]"
             />
-            <label htmlFor="terms" className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              Al hacer clic en <strong className="text-dark dark:text-white">Comienza ahora</strong>, aceptas nuestro{' '}
-              <Link to="/terminos-condiciones" className="text-primary hover:underline">
+            <label htmlFor="terms" className="text-sm text-gray-500 leading-relaxed">
+              Al hacer clic en <strong className="text-[#0d0d0d]">Comienza ahora</strong>, aceptas nuestro{' '}
+              <Link to="/terminos-condiciones" className="text-[#573CFF] hover:underline">
                 Contrato de suscripción
               </Link>{' '}
               y{' '}
-              <Link to="/politica-privacidad" className="text-primary hover:underline">
+              <Link to="/politica-privacidad" className="text-[#573CFF] hover:underline">
                 Política de privacidad
               </Link>
             </label>
           </div>
 
-          {/* Submit */}
+          {/* Submit — Hero style */}
           <button
             type="submit"
             disabled={loading}
-            className={`
-              w-full py-3.5 px-6 rounded-xl font-semibold text-white transition-all
-              ${loading 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-primary hover:bg-primaryemphasis cursor-pointer'
-              }
-            `}
+            className="group relative w-full inline-flex items-center justify-center bg-[#0d0d0d] rounded-2xl h-[52px] overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <Icon icon="svg-spinners:ring-resize" className="text-lg" />
-                Creando cuenta...
-              </span>
-            ) : (
-              'Comienza ahora'
-            )}
+            <span className="absolute inset-y-0 left-0 w-[52px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+            <span className="relative z-10 flex items-center justify-center w-[52px] h-full flex-shrink-0">
+              {loading ? (
+                <Icon icon="svg-spinners:ring-resize" className="text-lg text-white" />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              )}
+            </span>
+            <span
+              className="relative z-10 pr-6 text-[11px] font-bold text-white uppercase tracking-[0.15em] whitespace-nowrap"
+            >
+              {loading ? 'Creando cuenta...' : 'Comienza ahora'}
+            </span>
           </button>
 
           {/* Login link */}
-          <p className="text-center text-gray-600 dark:text-gray-400 text-sm">
+          <p className="text-center text-gray-500 text-sm">
             ¿Ya tienes una cuenta?{' '}
-            <Link to="/auth/login" className="text-primary hover:underline font-medium">
+            <Link to="/auth/login" className="text-[#573CFF] hover:underline font-semibold">
               Iniciar sesión
             </Link>
           </p>

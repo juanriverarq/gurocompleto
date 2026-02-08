@@ -40,6 +40,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useToast } from 'src/hooks/use-toast';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import {
   Select,
   SelectContent,
@@ -737,14 +738,7 @@ const Siniestros: React.FC = () => {
 
                 {canCreate && (
                   <Link to="/apps/seguros/siniestros/nuevo">
-                    <Button
-                      color="primary"
-                      className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                    >
-                      <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                      <span className="hidden sm:inline">Nuevo Siniestro</span>
-                      <span className="sm:hidden">Nuevo</span>
-                    </Button>
+                    <HeroButton icon="solar:add-circle-bold-duotone">Nuevo Siniestro</HeroButton>
                   </Link>
                 )}
               </div>
@@ -766,10 +760,7 @@ const Siniestros: React.FC = () => {
               <div className="flex justify-center">
                 {canCreate && (
                   <Link to="/apps/seguros/siniestros/nuevo">
-                    <Button color="primary">
-                      <HiPlus className="w-4 h-4 mr-2" />
-                      Crear primer siniestro
-                    </Button>
+                    <HeroButton icon="solar:add-circle-bold" size="lg">Crear primer siniestro</HeroButton>
                   </Link>
                 )}
               </div>

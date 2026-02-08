@@ -427,7 +427,7 @@ const AgentsManagement: React.FC = () => {
                     <div className="mt-4 flex justify-center">
             <Button
                           variant={playingVoiceCode === v.code ? 'default' : 'outline'}
-                          className={playingVoiceCode === v.code ? 'bg-blue-600 text-white' : ''}
+                          className={playingVoiceCode === v.code ? 'bg-primary text-white' : ''}
               size="sm"
                           onClick={() => handlePlaySample(v)}
                           disabled={!v.voice_id || loadingVoiceCode === v.code}
@@ -675,7 +675,7 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({ agent, isOpen, on
                         </label>
                         <div className="w-full bg-gray-200 rounded-full h-3">
                           <div 
-                            className="bg-blue-500 h-3 rounded-full transition-all duration-300" 
+                            className="bg-primary h-3 rounded-full transition-all duration-300" 
                             style={{ width: `${agent.voiceSettings.stability * 100}%` }}
                           />
                         </div>

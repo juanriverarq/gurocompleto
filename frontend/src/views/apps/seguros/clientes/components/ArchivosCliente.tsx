@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, Button, Spinner, Badge, Tooltip, Modal, Select, Table, TextInput, Dropdown } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useDropzone } from 'react-dropzone';
 import { clienteDocumentsService } from 'src/services/clienteDocumentsService';
 
@@ -125,12 +126,7 @@ const ArchivosCliente: React.FC<Props> = ({ clienteId }) => {
                 <Icon icon="solar:refresh-bold" className="w-5 h-5" />
               </Button>
             </Tooltip>
-            <Button color="primary" onClick={() => { setSelectedFiles([]); setShowModal(true); }}>
-              <span className="flex items-center gap-1">
-                <Icon icon="solar:cloud-upload-bold" className="w-4 h-4" />
-                <span>Subir archivos</span>
-              </span>
-            </Button>
+            <HeroButton icon="solar:cloud-upload-bold" onClick={() => { setSelectedFiles([]); setShowModal(true); }} size="sm">Subir archivos</HeroButton>
           </div>
         </div>
 

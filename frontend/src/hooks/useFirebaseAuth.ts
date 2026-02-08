@@ -116,17 +116,18 @@ export const useFirebaseAuth = (): FirebaseAuthHook => {
 
   // Escuchar cambios en el estado de autenticación
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Sincronizar usuario con Laravel cuando se autentica
-        await syncUserWithLaravel(user, false);
-      }
-
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      // Set auth state immediately — don't block on network calls
       setAuthState((prev) => ({
         ...prev,
         user,
         loading: false,
       }));
+
+      if (user) {
+        // Sincronizar usuario con Laravel en background (no bloquea UI)
+        syncUserWithLaravel(user, false).catch(() => {});
+      }
     });
 
     return () => unsubscribe();

@@ -6,6 +6,7 @@ import { Label } from 'src/components/shadcn-ui/Default-Ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'src/components/shadcn-ui/Default-Ui/select';
 import { useNavigate } from 'react-router-dom';
 import { Icon as IconifyIcon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { commercialTasksService, TASK_TYPES, TASK_STATUSES, TASK_PRIORITIES } from 'src/services/commercialTasksService';
 
 const ListaTareas: React.FC = () => {
@@ -49,10 +50,7 @@ const ListaTareas: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Tareas Comerciales</h1>
           <p className="text-gray-600">Planifica y gestiona tus actividades</p>
         </div>
-        <Button onClick={() => navigate('/apps/saas/commercial-tasks/nueva')}>
-          <IconifyIcon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-          Nueva Tarea
-        </Button>
+        <HeroButton icon="solar:add-circle-bold" onClick={() => navigate('/apps/saas/commercial-tasks/nueva')}>Nueva Tarea</HeroButton>
       </div>
 
       <Card>
@@ -127,10 +125,7 @@ const ListaTareas: React.FC = () => {
                       <div className="flex flex-col items-center justify-center space-y-4">
                         <IconifyIcon icon="solar:clipboard-check-bold-duotone" className="w-16 h-16 text-gray-300" />
                         <p className="text-gray-500 text-lg font-medium">No hay tareas</p>
-                        <Button onClick={() => navigate('/apps/saas/commercial-tasks/nueva')} className="mt-2">
-                          <IconifyIcon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                          Crear primera tarea
-                        </Button>
+                        <HeroButton icon="solar:add-circle-bold" onClick={() => navigate('/apps/saas/commercial-tasks/nueva')} size="lg">Crear primera tarea</HeroButton>
                       </div>
                     </td>
                   </tr>

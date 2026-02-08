@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Badge, Button, Alert, Modal, Table, TextInput, Dropdown } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import contratosService from 'src/services/contratosService';
 
@@ -362,10 +363,7 @@ const Contratos = () => {
             </div>
 
             <div className="flex gap-2">
-              <Button color="primary" size="sm" onClick={() => setMostrarCrear(true)}>
-                <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
-                Nuevo Contrato
-              </Button>
+              <HeroButton icon="solar:add-circle-bold" onClick={() => setMostrarCrear(true)}>Nuevo Contrato</HeroButton>
               <Button color="gray" size="sm" onClick={() => setMostrarPlantillas(true)}>
                 <Icon icon="solar:document-add-bold" className="mr-2" width={16} />
                 Plantillas

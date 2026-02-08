@@ -83,6 +83,7 @@ const SignupFlow = Loadable(lazy(() => import('../views/pages/onboarding/SignupF
 
 // Landing Page
 const LandingPages = Loadable(lazy(() => import('../views/pages/landingpages/LandingPages')));
+const FramerLandingPage = Loadable(lazy(() => import('../views/pages/landingpages/FramerLandingPage')));
 
 const Error = Loadable(lazy(() => import('../views/authentication/Error')));
 const BlogSegurosSEO = Loadable(
@@ -278,7 +279,8 @@ const Router = [
     path: '/',
     element: <BlankLayout />,
     children: [
-      { path: '/', element: <LandingPages /> },
+      { path: '/', element: <FramerLandingPage /> },
+      { path: '/landing-old', element: <LandingPages /> },
       { path: '/blog', element: <BlogIndex /> },
       { path: '/blog/software-seguros-colombia', element: <BlogSegurosSEO /> },
       { path: '/blog/:slug', element: <BlogArticle /> },
@@ -474,7 +476,7 @@ const Router = [
       { path: '/empleados', element: <Navigate to="/empleados/login" /> },
       { path: '/empleados/login', element: <EmpleadoLogin /> },
       { path: '/auth/login', element: <Login /> },
-      { path: '/auth/register', element: <Register /> },
+      { path: '/auth/register', element: <Navigate to="/comenzar" replace /> },
       { path: '/auth/forgot-password', element: <ForgotPassword /> },
       { path: '/auth/two-steps', element: <TwoSteps /> },
       { path: '/auth/email-verification', element: <EmailVerification /> },
@@ -501,7 +503,7 @@ const Router = [
     element: <BlankLayout />,
     children: [
       { path: 'login', element: <Login /> },
-      { path: 'register', element: <Register /> },
+      { path: 'register', element: <Navigate to="/comenzar" replace /> },
       { path: 'forgot-password', element: <ForgotPassword /> },
       { path: 'two-steps', element: <TwoSteps /> },
       { path: 'email-verification', element: <EmailVerification /> },

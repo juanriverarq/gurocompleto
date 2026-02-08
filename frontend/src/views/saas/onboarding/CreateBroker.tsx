@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useUnifiedAuth } from '../../../context/UnifiedAuthContext';
+import GuroLoader from '../../../components/GuroLoader';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../../components/shadcn-ui/Default-Ui/button';
 import { useToast } from 'src/hooks/use-toast';
@@ -52,18 +53,7 @@ const CreateBroker: React.FC = () => {
 
   // Mostrar loading mientras verifica autenticación
   if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Verificando autenticación...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <GuroLoader fullScreen size={100} />;
   }
 
   // No mostrar nada si no está autenticado (se redirigirá)

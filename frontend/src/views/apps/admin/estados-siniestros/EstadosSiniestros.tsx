@@ -11,6 +11,7 @@ import {
   Badge,
 } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useEstadosSiniestros } from 'src/hooks/useAdminCrudApi';
 import type {
   EstadoSiniestro as EstadoSiniestroType,
@@ -94,10 +95,7 @@ const EstadosSiniestros = () => {
             </p>
           </div>
           <PermissionGate route="/apps/admin/estados-siniestros" action="crear">
-            <Button onClick={handleCreate} className="flex items-center">
-              <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-              Nuevo Estado
-            </Button>
+            <HeroButton icon="solar:add-circle-bold" onClick={handleCreate}>Nuevo Estado</HeroButton>
           </PermissionGate>
         </div>
       </div>
@@ -129,10 +127,7 @@ const EstadosSiniestros = () => {
             </p>
             <div className="flex justify-center">
               <PermissionGate route="/apps/admin/estados-siniestros" action="crear">
-                <Button onClick={handleCreate}>
-                  <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
-                  Crear Primer Estado
-                </Button>
+                <HeroButton icon="solar:add-circle-bold" onClick={handleCreate} size="lg">Crear Primer Estado</HeroButton>
               </PermissionGate>
             </div>
           </div>

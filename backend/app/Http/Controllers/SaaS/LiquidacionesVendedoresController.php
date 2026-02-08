@@ -778,8 +778,32 @@ class LiquidacionesVendedoresController extends Controller
                     $porcentajeRamo = null;
                     if ($detalle->poliza_id) {
                         $poliza = \App\Models\Poliza::find($detalle->poliza_id);
-                        if ($poliza && $poliza->commission_percentage) {
-                            $porcentajeRamo = (float) $poliza->commission_percentage;
+                        if ($poliza) {
+                            // Primero intentar desde commission_percentage de la póliza (solo si es > 0)
+                            $commissionPct = (float) $poliza->commission_percentage;
+                            if ($commissionPct > 0) {
+                                $porcentajeRamo = $commissionPct;
+                            }
+                            // Si no existe, intentar calcular desde comisiones_aseguradoras
+                            if (!$porcentajeRamo && $poliza->aseguradora_id && $poliza->ramo_id) {
+                                $comisionAseg = \App\Models\ComisionAseguradora::where('aseguradora_id', $poliza->aseguradora_id)
+                                    ->where('ramo_id', $poliza->ramo_id)
+                                    ->first();
+                                if ($comisionAseg && (float) $comisionAseg->porcentaje_comision > 0) {
+                                    $porcentajeRamo = (float) $comisionAseg->porcentaje_comision;
+                                }
+                            }
+                            // Si aún no hay, calcular desde la comisión bruta y prima neta
+                            $primaNeta = (float) $detalle->prima_neta;
+                            $comisionBruta = (float) $detalle->comision_bruta;
+                            if (!$porcentajeRamo && $primaNeta > 0 && $comisionBruta > 0) {
+                                // Calcular el porcentaje inverso: comision_bruta = prima * (% ramo) * (% vendedor) / 10000
+                                // Si conocemos % vendedor, podemos calcular % ramo
+                                $porcentajeVendedor = (float) $detalle->porcentaje_comision;
+                                if ($porcentajeVendedor > 0) {
+                                    $porcentajeRamo = round(($comisionBruta * 100) / ($primaNeta * $porcentajeVendedor / 100), 2);
+                                }
+                            }
                         }
                     }
 
@@ -1382,6 +1406,198 @@ class LiquidacionesVendedoresController extends Controller
     }
 
     /**
+     * Obtener detalles de una liquidación para edición
+     */
+    public function obtenerDetalles($id, Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            
+            $liquidacion = LiquidacionVendedor::where('broker_id', $brokerId)
+                ->with(['vendedor', 'detalles'])
+                ->findOrFail($id);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'liquidacion' => $liquidacion,
+                    'detalles' => $liquidacion->detalles,
+                    'observaciones' => $liquidacion->observaciones,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener detalles: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualizar liquidación desde póliza
+     */
+    public function actualizarDesdePoliza($id, Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $userId = $this->getUserId($request);
+            
+            $validator = Validator::make($request->all(), [
+                'poliza_id' => 'required|exists:polizas,id',
+                'periodo_inicio' => 'required|date',
+                'periodo_fin' => 'required|date|after_or_equal:periodo_inicio',
+                'comisiones' => 'required|array|min:1',
+                'comisiones.*.vendedor_id' => 'required|exists:vendedores,id',
+                'comisiones.*.tipo_movimiento' => 'required|string',
+                'comisiones.*.abono_prima' => 'required|numeric',
+                'comisiones.*.porcentaje_comision' => 'required|numeric|min:0',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            DB::beginTransaction();
+
+            $liquidacion = LiquidacionVendedor::where('broker_id', $brokerId)->findOrFail($id);
+            $poliza = Poliza::findOrFail($request->poliza_id);
+            
+            // Eliminar detalles anteriores
+            LiquidacionVendedorDetalle::where('liquidacion_id', $liquidacion->id)->delete();
+            
+            // Eliminar comisiones manuales anteriores asociadas
+            ComisionManualPoliza::where('liquidacion_id', $liquidacion->id)->delete();
+
+            // Calcular nuevos totales
+            $totales = [
+                'prima_total' => 0,
+                'monto_bruto_total' => 0,
+                'monto_retencion_total' => 0,
+                'monto_retencion_ica_total' => 0,
+                'monto_iva_total' => 0,
+                'monto_neto_total' => 0,
+            ];
+
+            $detalles = [];
+            $vendedorId = $request->comisiones[0]['vendedor_id'] ?? $liquidacion->vendedor_id;
+
+            foreach ($request->comisiones as $index => $com) {
+                $abonoPrima = (float) $com['abono_prima'];
+                $porcentajeComision = (float) ($com['porcentaje_comision'] ?? 0);
+                $porcentajeVendedor = (float) ($com['porcentaje_vendedor'] ?? 100);
+                $porcentajeRtf = (float) ($com['porcentaje_rtf'] ?? 0);
+                $porcentajeIva = (float) ($com['porcentaje_iva'] ?? 0);
+                $porcentajeReteiva = (float) ($com['porcentaje_reteiva'] ?? 0);
+                $porcentajeReteica = (float) ($com['porcentaje_reteica'] ?? 0);
+                
+                $comisionTotalRamo = $abonoPrima * ($porcentajeComision / 100);
+                $valorComision = $comisionTotalRamo * ($porcentajeVendedor / 100);
+                $ivaCalculado = $valorComision * ($porcentajeIva / 100);
+                $rtfCalculada = $valorComision * ($porcentajeRtf / 100);
+                $reteivaCalculada = $ivaCalculado * ($porcentajeReteiva / 100);
+                $reteicaCalculada = $valorComision * ($porcentajeReteica / 100);
+                $netoComision = $valorComision + $ivaCalculado - $rtfCalculada - $reteivaCalculada - $reteicaCalculada;
+
+                // Crear comisión manual
+                ComisionManualPoliza::create([
+                    'broker_id' => $brokerId,
+                    'poliza_id' => $poliza->id,
+                    'vendedor_id' => $vendedorId,
+                    'liquidacion_id' => $liquidacion->id,
+                    'aseguradora_id' => $poliza->aseguradora_id,
+                    'numero_poliza' => $poliza->policy_number,
+                    'anexo' => $com['anexo'] ?? null,
+                    'tipo_movimiento' => $com['tipo_movimiento'],
+                    'asegurado_nombre' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'N/A',
+                    'ramo' => $poliza->ramo?->nombre ?? $poliza->type ?? 'N/A',
+                    'saldo' => 0,
+                    'abono_prima' => $abonoPrima,
+                    'porcentaje_comision' => $porcentajeVendedor,
+                    'porcentaje_agencia' => (float) ($com['porcentaje_agencia'] ?? 0),
+                    'valor_comision' => $valorComision,
+                    'porcentaje_rtf' => $porcentajeRtf,
+                    'rtf_calculada' => $rtfCalculada,
+                    'iva_19' => $ivaCalculado,
+                    'reteiva' => $reteivaCalculada,
+                    'ica' => $reteicaCalculada,
+                    'cree' => 0,
+                    'neto_comision' => $netoComision,
+                    'estado' => 'liquidada',
+                    'creado_por' => $userId,
+                ]);
+
+                $esPrimeraFila = count($detalles) === 0;
+                $detalles[] = [
+                    'poliza_id' => $esPrimeraFila ? $poliza->id : null,
+                    'numero_poliza' => $poliza->policy_number . ($com['anexo'] ? ' - Anexo ' . $com['anexo'] : ''),
+                    'cliente_nombre' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'N/A',
+                    'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company ?? 'N/A',
+                    'ramo' => $poliza->ramo?->nombre ?? $poliza->type ?? 'N/A',
+                    'fecha_poliza' => $poliza->start_date?->format('Y-m-d'),
+                    'prima_neta' => $abonoPrima,
+                    'porcentaje_comision' => $porcentajeVendedor,
+                    'comision_bruta' => $valorComision,
+                    'porcentaje_retencion' => $porcentajeRtf,
+                    'monto_retencion' => $rtfCalculada,
+                    'porcentaje_retencion_ica' => $porcentajeReteica,
+                    'monto_retencion_ica' => $reteicaCalculada,
+                    'porcentaje_iva' => $porcentajeReteiva,
+                    'monto_iva' => $reteivaCalculada,
+                    'comision_neta' => $netoComision,
+                ];
+
+                $totales['prima_total'] += $abonoPrima;
+                $totales['monto_bruto_total'] += $valorComision;
+                $totales['monto_retencion_total'] += $rtfCalculada;
+                $totales['monto_retencion_ica_total'] += $reteicaCalculada;
+                $totales['monto_iva_total'] += $reteivaCalculada;
+                $totales['monto_neto_total'] += $netoComision;
+            }
+
+            // Crear nuevos detalles
+            foreach ($detalles as $detalle) {
+                LiquidacionVendedorDetalle::create([
+                    'liquidacion_id' => $liquidacion->id,
+                    ...$detalle
+                ]);
+            }
+
+            // Actualizar liquidación
+            $liquidacion->update([
+                'periodo_inicio' => $request->periodo_inicio,
+                'periodo_fin' => $request->periodo_fin,
+                'prima_total' => $totales['prima_total'],
+                'monto_bruto_total' => $totales['monto_bruto_total'],
+                'monto_retencion_total' => $totales['monto_retencion_total'],
+                'monto_retencion_ica_total' => $totales['monto_retencion_ica_total'],
+                'monto_iva_total' => $totales['monto_iva_total'],
+                'monto_neto_total' => $totales['monto_neto_total'],
+                'cantidad_polizas' => count($detalles),
+                'observaciones' => $request->observaciones,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Liquidación actualizada exitosamente',
+                'data' => $liquidacion->fresh()->load(['vendedor']),
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar liquidación: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Obtener liquidaciones de una póliza específica
      */
     public function liquidacionesPorPoliza($polizaId, Request $request)
@@ -1425,7 +1641,19 @@ class LiquidacionesVendedoresController extends Controller
             
             $poliza = Poliza::where('broker_id', $brokerId)
                 ->with(['aseguradora', 'ramo', 'client'])
-                ->findOrFail($polizaId);
+                ->find($polizaId);
+            
+            if (!$poliza) {
+                // Intentar sin filtro de broker para pólizas compartidas
+                $poliza = Poliza::with(['aseguradora', 'ramo', 'client'])->find($polizaId);
+            }
+            
+            if (!$poliza) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Póliza no encontrada',
+                ], 404);
+            }
 
             // Obtener anexos de la póliza
             $anexos = \App\Models\Anexo::where('broker_id', $brokerId)
@@ -1438,7 +1666,6 @@ class LiquidacionesVendedoresController extends Controller
             $porcentajeComisionRamo = 0;
             if ($poliza->ramo_id && $poliza->aseguradora_id) {
                 $comisionAseguradora = \DB::table('comisiones_aseguradoras')
-                    ->where('broker_id', $brokerId)
                     ->where('ramo_id', $poliza->ramo_id)
                     ->where('aseguradora_id', $poliza->aseguradora_id)
                     ->first();
@@ -1473,7 +1700,7 @@ class LiquidacionesVendedoresController extends Controller
                     'poliza' => [
                         'id' => $poliza->id,
                         'policy_number' => $poliza->policy_number,
-                        'premium_amount' => $poliza->premium_amount,
+                        'premium_amount' => (int) $poliza->premium_amount,
                         'commission_percentage' => $poliza->commission_percentage,
                         'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company,
                         'ramo' => $poliza->ramo?->nombre ?? $poliza->type,

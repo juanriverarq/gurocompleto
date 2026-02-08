@@ -117,12 +117,12 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
       } else {
         // Forzar registro antes de continuar - irá al dashboard después
         const redirect = encodeURIComponent('/apps');
-        window.location.href = `/auth/register?redirect=${redirect}`;
+        window.location.href = `/comenzar?redirect=${redirect}`;
       }
     } catch (e) {
       // Si falla por auth o red, enviar a registro como fallback
       const redirect = encodeURIComponent('/apps');
-      window.location.href = `/auth/register?redirect=${redirect}`;
+      window.location.href = `/comenzar?redirect=${redirect}`;
     }
   };
 
@@ -617,7 +617,7 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                     period,
                   };
                   localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
-                  window.location.href = '/auth/register';
+                  window.location.href = '/comenzar';
                 }}
                 className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-semibold flex items-center justify-center gap-2"
               >
@@ -743,7 +743,7 @@ const PricingCalculator = ({ defaultUsers = 1, onCheckout }: Props) => {
                     period,
                   };
                   localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
-                  window.location.href = '/auth/register';
+                  window.location.href = '/comenzar';
                 }}
                 className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition font-semibold flex items-center justify-center gap-2"
               >

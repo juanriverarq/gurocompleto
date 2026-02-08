@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import { Badge, Button, Card, Progress, Alert, Modal, TextInput, Textarea, Select } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { CustomizerContext } from 'src/context/CustomizerContext';
 
@@ -340,10 +341,7 @@ const ModelosIA = () => {
             <Icon icon="solar:upload-bold" className="mr-2" width={16} />
             Importar Modelo
           </Button>
-          <Button color="primary" size="sm" onClick={() => setShowModal(true)}>
-            <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
-            Nuevo Modelo
-          </Button>
+          <HeroButton icon="solar:add-circle-bold" onClick={() => setShowModal(true)} size="sm">Nuevo Modelo</HeroButton>
         </div>
       </div>
 

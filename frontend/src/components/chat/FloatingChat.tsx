@@ -446,7 +446,7 @@ const FloatingChat = () => {
                   <div
                     className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
                       msg.tipo === 'usuario'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-primary text-white'
                         : msg.tipo === 'error'
                         ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
                         : 'bg-white dark:bg-darkgray text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700'

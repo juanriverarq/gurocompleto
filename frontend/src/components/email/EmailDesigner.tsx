@@ -218,18 +218,18 @@ const EmailDesigner: React.FC<EmailDesignerProps> = ({ initialHtml, height = 600
           {/* CABECERA */}
           <div className="border-2 border-blue-300 dark:border-blue-700 rounded-lg p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">1</div>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold">1</div>
               <h3 className="font-bold text-blue-900 dark:text-blue-100 text-lg">Cabecera</h3>
             </div>
             <div className="space-y-3">
               <div className="flex gap-1 mb-3" title="Alineación de la cabecera">
-                <button onClick={() => updateHeader('align', 'left')} className={`px-2 py-1 text-xs rounded ${sections.header.align === 'left' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`} title="Alinear a la izquierda">
+                <button onClick={() => updateHeader('align', 'left')} className={`px-2 py-1 text-xs rounded ${sections.header.align === 'left' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700'}`} title="Alinear a la izquierda">
                   <Icon icon="solar:align-left-bold" width={12} />
                 </button>
-                <button onClick={() => updateHeader('align', 'center')} className={`px-2 py-1 text-xs rounded ${sections.header.align === 'center' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`} title="Centrar">
+                <button onClick={() => updateHeader('align', 'center')} className={`px-2 py-1 text-xs rounded ${sections.header.align === 'center' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700'}`} title="Centrar">
                   <Icon icon="solar:align-center-bold" width={12} />
                 </button>
-                <button onClick={() => updateHeader('align', 'right')} className={`px-2 py-1 text-xs rounded ${sections.header.align === 'right' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`} title="Alinear a la derecha">
+                <button onClick={() => updateHeader('align', 'right')} className={`px-2 py-1 text-xs rounded ${sections.header.align === 'right' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700'}`} title="Alinear a la derecha">
                   <Icon icon="solar:align-right-bold" width={12} />
                 </button>
               </div>

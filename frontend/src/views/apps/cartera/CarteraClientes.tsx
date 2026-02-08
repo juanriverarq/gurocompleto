@@ -9,6 +9,7 @@ import {
   Modal,
   Dropdown,
 } from 'flowbite-react';
+import GuroLoader from 'src/components/GuroLoader';
 import { Icon } from '@iconify/react';
 import { IconDots } from '@tabler/icons-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -1132,12 +1133,7 @@ const CarteraClientes = () => {
 
   // Mostrar spinner mientras se verifica la autenticación
   if (authLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Spinner size="xl" />
-        <span className="ml-3">Verificando autenticación...</span>
-      </div>
-    );
+    return <GuroLoader size={80} />;
   }
 
   // Mostrar mensaje si el usuario no está autenticado

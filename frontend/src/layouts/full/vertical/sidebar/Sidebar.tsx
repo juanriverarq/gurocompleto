@@ -134,7 +134,7 @@ const filteredMenuitems = getFilteredMenuItems(hasPermission, canAccessModule, t
           <IconSidebar />
         </div>
         <Sidebar
-          className="fixed menu-sidebar  bg-white dark:bg-darkgray rtl:pe-4 rtl:ps-0 "
+          className="fixed menu-sidebar bg-white dark:bg-darkgray rtl:pe-4 rtl:ps-0"
           aria-label="Sidebar with multi-level dropdown example"
         >
           <div className="px-6 py-4 flex items-center sidebarlogo">
@@ -146,7 +146,7 @@ const filteredMenuitems = getFilteredMenuItems(hasPermission, canAccessModule, t
                 {groupedItems.map((section: any, index: number) => (
                   <div className="caption" key={section.heading + index}>
                     <React.Fragment key={index}>
-                      <h5 className="text-link dark:text-white/70 font-semibold caption font-semibold leading-6 tracking-widest text-xs text-sm  pb-2 uppercase">
+                      <h5 className="text-[10px] font-bold text-gray-400 dark:text-white/40 uppercase tracking-[0.1em] pb-2 pt-1">
                         {section.heading}
                       </h5>
                       {section.children?.map((child: any, childIndex: number) => (

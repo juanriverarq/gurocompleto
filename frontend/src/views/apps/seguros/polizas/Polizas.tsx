@@ -17,6 +17,7 @@ import RenovacionesPoliza from './components/RenovacionesPoliza';
 import { IconDots } from '@tabler/icons-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 
 import {
   polizaService,
@@ -927,15 +928,7 @@ const Polizas: React.FC = () => {
                   </Button>
 
                   {canCreatePolicy && (
-                    <Button
-                      color="primary"
-                      className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                      onClick={() => setShowCreateTypeModal(true)}
-                    >
-                      <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                      <span className="hidden sm:inline">Nueva Póliza</span>
-                      <span className="sm:hidden">Nueva</span>
-                    </Button>
+                    <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreateTypeModal(true)}>Nueva Póliza</HeroButton>
                   )}
                 </div>
               </div>
@@ -958,10 +951,7 @@ const Polizas: React.FC = () => {
                 <p className="text-gray-500 mb-4">No se encontraron pólizas</p>
                 <div className="flex justify-center">
                   {canCreatePolicy && (
-                    <Button color="primary" onClick={() => setShowCreateTypeModal(true)}>
-                      <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                      Crear primera póliza
-                    </Button>
+                    <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreateTypeModal(true)} size="lg">Crear primera póliza</HeroButton>
                   )}
                 </div>
               </div>

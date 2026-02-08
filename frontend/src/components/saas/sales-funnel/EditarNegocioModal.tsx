@@ -296,7 +296,7 @@ const EditarNegocioModal: React.FC<EditarNegocioModalProps> = ({ show, onClose, 
             onClick={onSubmit}
             disabled={saving || loading} 
             color="primary" 
-            className="rounded-[10px] bg-blue-600 hover:bg-blue-700"
+            className="rounded-[10px]"
           >
             {saving ? (
               <>

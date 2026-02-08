@@ -430,7 +430,7 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
             onClick={onSubmit}
             disabled={loading || !selectedClient}
             color="primary"
-            className="rounded-[10px] bg-blue-600 hover:bg-blue-700"
+            className="rounded-[10px]"
             title={!selectedClient ? 'Selecciona un cliente para continuar' : ''}
           >
             {loading ? 'Guardando...' : 'Crear Negocio'}

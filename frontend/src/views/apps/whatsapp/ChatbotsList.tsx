@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Badge, Button, Spinner, Modal, TextInput, Textarea, Alert, Select } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { Link } from 'react-router-dom';
 import chatbotService, { Chatbot, CreateChatbotRequest } from 'src/services/chatbotService';
 import whatsappInstanceService from 'src/services/whatsappInstanceService';
@@ -207,10 +208,7 @@ const ChatbotsList: React.FC = () => {
               Crea tu primer chatbot para automatizar respuestas en WhatsApp
             </p>
             <div className="flex justify-center mt-6">
-              <Button color="light" onClick={() => setShowCreateModal(true)}>
-                <Icon icon="solar:add-circle-bold" className="mr-2" width={18} />
-                Crear Primer Chatbot
-              </Button>
+              <HeroButton icon="solar:add-circle-bold" onClick={() => setShowCreateModal(true)} size="lg">Crear Primer Chatbot</HeroButton>
             </div>
           </div>
         </Card>

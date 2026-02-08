@@ -12,6 +12,7 @@ import {
   Tabs,
 } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import enlacesService from 'src/services/enlacesCotizacionService';
 import { miniWebService } from 'src/services/miniWebService';
 import { INSURANCE_PRODUCTS, FIELDS_BY_TIPO } from 'src/data/insuranceProducts';
@@ -254,10 +255,7 @@ const EnlacesCotizacion = () => {
                   </Badge>
                 </div>
                 {canCreate && (
-                  <Button color="primary" onClick={() => setShowModal(true)}>
-                    <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />
-                    Nuevo Enlace
-                  </Button>
+                  <HeroButton icon="solar:add-circle-bold" onClick={() => setShowModal(true)}>Nuevo Enlace</HeroButton>
                 )}
               </div>
             </div>

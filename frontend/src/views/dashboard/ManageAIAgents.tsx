@@ -1195,7 +1195,7 @@ const ManageAIAgents = () => {
                     </Button>
                     <div className="flex-1">
                       <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: '45%' }}></div>
+                        <div className="bg-primary h-2 rounded-full" style={{ width: '45%' }}></div>
                       </div>
                     </div>
                     <span className="text-sm text-gray-600 dark:text-gray-400">2:04 / {selectedCall.duration}</span>

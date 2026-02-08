@@ -14,6 +14,7 @@ import {
   Badge,
 } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useMensajeros } from 'src/hooks/useAdminCrudApi';
 import type { Mensajero as MensajeroType, MensajeroCreate } from 'src/types/admin';
 import { PermissionGate } from 'src/components/PermissionGate';
@@ -199,10 +200,7 @@ const Mensajeros = () => {
             </p>
           </div>
           <PermissionGate route="/apps/admin/mensajeros" action="crear">
-            <Button onClick={handleCreate} className="bg-primary hover:bg-primary/90">
-              <Icon icon="solar:add-circle-bold-duotone" className="mr-2" width={20} />
-              Nuevo Mensajero
-            </Button>
+            <HeroButton icon="solar:add-circle-bold-duotone" onClick={handleCreate}>Nuevo Mensajero</HeroButton>
           </PermissionGate>
         </div>
 

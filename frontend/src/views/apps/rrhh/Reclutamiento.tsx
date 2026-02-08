@@ -1,5 +1,6 @@
 import { Card, Button, Table, Badge, TextInput, Select, Modal, Label, Pagination } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { useState } from 'react';
 
 type Vacante = {
@@ -47,7 +48,7 @@ export default function Reclutamiento() {
               <Icon icon={vista === 'tabla' ? 'solar:kanban-bold' : 'solar:table-bold'} className="mr-2" width={18} />
               {vista === 'tabla' ? 'Ver Kanban' : 'Ver Tabla'}
             </Button>
-            <Button color="primary" onClick={() => setModalOpen(true)}><Icon icon="solar:add-square-bold" className="mr-2" width={18} />Nueva Vacante</Button>
+            <HeroButton icon="solar:add-square-bold" onClick={() => setModalOpen(true)}>Nueva Vacante</HeroButton>
             <Button color="light"><Icon icon="solar:download-minimalistic-bold" className="mr-2" width={18} />Exportar</Button>
           </div>
         </div>

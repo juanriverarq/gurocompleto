@@ -1,5 +1,6 @@
 import { Card, Badge, Button, Progress, Alert, Table, Tabs } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { useNavigate } from 'react-router-dom';
@@ -275,9 +276,7 @@ export default function RecursosHumanos() {
               <Button color="light" onClick={() => navigate('/apps/recursos-humanos/personas')}>
                 <Icon icon="solar:widget-2-bold" className="mr-2" width={16} />Panel
               </Button>
-              <Button color="primary" onClick={() => navigate('/apps/recursos-humanos/personas')}>
-                <Icon icon="solar:add-square-bold" className="mr-2" width={16} />Nueva Tarea
-              </Button>
+              <HeroButton icon="solar:add-square-bold" onClick={() => navigate('/apps/recursos-humanos/personas')}>Nueva Tarea</HeroButton>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

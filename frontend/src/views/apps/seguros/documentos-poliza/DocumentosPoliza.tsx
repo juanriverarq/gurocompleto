@@ -10,6 +10,7 @@ import {
   Modal,
   Pagination,
 } from 'flowbite-react';
+import HeroButton from 'src/components/HeroButton';
 import { polizaService, type Poliza } from 'src/services/polizaService';
 import {
   IconDotsVertical,
@@ -272,18 +273,11 @@ const DocumentosPoliza: React.FC = () => {
               Actualizar
             </Button>
             {canCreate && (
-              <Button
-                color="blue"
-                size="sm"
-                onClick={() => {
+              <HeroButton icon="solar:cloud-upload-bold" onClick={() => {
                   setUploadPolizaId(selectedPolizaId || '');
                   setSelectedFiles([]);
                   setShowUpload(true);
-                }}
-              >
-                <IconCloudUpload className="w-4 h-4 mr-2" />
-                Subir archivos
-              </Button>
+                }} size="sm">Subir archivos</HeroButton>
             )}
           </div>
         </div>

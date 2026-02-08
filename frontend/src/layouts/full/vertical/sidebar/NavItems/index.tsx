@@ -50,8 +50,8 @@ const NavItems: React.FC<NavItemsProps> = ({ item }) => {
           isDisabled
             ? "text-gray-400 bg-transparent cursor-not-allowed opacity-60"
             : item.href == pathname
-              ? "text-white bg-primary rounded-xl hover:text-white hover:bg-primary dark:hover:text-white shadow-btnshdw active"
-              : "text-link bg-transparent group/link"
+              ? "text-white !bg-[#573CFF] rounded-xl hover:text-white hover:!bg-[#573CFF] dark:hover:text-white shadow-md shadow-[#573CFF]/20 active"
+              : "text-gray-600 dark:text-gray-300 bg-transparent hover:bg-gray-50 dark:hover:bg-white/5 rounded-xl group/link"
         } `}
       >
         <span className="flex gap-3 align-center items-center w-full">

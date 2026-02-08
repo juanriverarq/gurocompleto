@@ -341,7 +341,7 @@ const CampaignTemplatesManager: React.FC<CampaignTemplatesManagerProps> = ({
         </div>
         <Button
           onClick={() => setIsCreateModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
+          className="text-white"
         >
           <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
           Nueva Plantilla
@@ -588,7 +588,7 @@ const CampaignTemplatesManager: React.FC<CampaignTemplatesManagerProps> = ({
               </Button>
               <Button
                 onClick={handleCreateTemplate}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="text-white"
               >
                 Crear Plantilla
               </Button>
@@ -733,7 +733,7 @@ const CampaignTemplatesManager: React.FC<CampaignTemplatesManagerProps> = ({
               </Button>
               <Button
                 onClick={handleEditTemplate}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="text-white"
               >
                 Actualizar Plantilla
               </Button>
@@ -799,7 +799,7 @@ const CampaignTemplatesManager: React.FC<CampaignTemplatesManagerProps> = ({
                   setIsPreviewModalOpen(false);
                   setPreviewData(null);
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="text-white"
               >
                 Cerrar
               </Button>

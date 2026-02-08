@@ -87,7 +87,7 @@ const Login: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         {/* Logo y Header */}
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center">
+          <div className="mx-auto h-16 w-16 rounded-full flex items-center justify-center">
             <span className="text-white font-bold text-xl">G</span>
           </div>
           <h2 className="mt-6 text-3xl font-bold text-gray-900">
@@ -203,7 +203,7 @@ const Login: React.FC = () => {
         <div className="text-center">
           <p className="text-sm text-gray-600">
             ¿No tienes una cuenta?{' '}
-            <Link to="/register" className="text-blue-600 hover:text-blue-500 font-medium">
+            <Link to="/comenzar" className="text-blue-600 hover:text-blue-500 font-medium">
               Solicitar Demo
             </Link>
           </p>

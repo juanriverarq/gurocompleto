@@ -51,7 +51,7 @@ SOLUCIÓN:
   return (
     <button
       onClick={testAgentConfig}
-      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors"
+      className="bg-primary hover:bg-primary text-white px-4 py-2 rounded transition-colors"
     >
       🧪 Test Configuración Agente
     </button>

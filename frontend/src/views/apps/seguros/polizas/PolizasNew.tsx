@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Modal, Table, Dropdown, TextInput, Label, Spinner, Badge } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import HeroButton from 'src/components/HeroButton';
 import { IconDots } from '@tabler/icons-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from 'src/hooks/use-toast';
@@ -445,7 +446,7 @@ const PolizasNew: React.FC = () => {
               size="sm"
               color={p === current ? 'primary' : 'light'}
               onClick={() => goToPage(p)}
-              className={`rounded-[10px] ${p === current ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
+              className={`rounded-[10px] ${p === current ? 'text-white' : ''}`}
             >
               {p}
             </Button>
@@ -581,15 +582,7 @@ const PolizasNew: React.FC = () => {
                 <span className="text-xs hidden sm:inline">Exportar</span>
               </Button>
               
-              <Button
-                color="primary"
-                className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                onClick={() => setShowCreateTypeModal(true)}
-              >
-                <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Nueva Póliza</span>
-                <span className="sm:hidden">Nueva</span>
-              </Button>
+              <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreateTypeModal(true)}>Nueva Póliza</HeroButton>
             </div>
           </div>
         </div>
@@ -609,10 +602,7 @@ const PolizasNew: React.FC = () => {
             <Icon icon="solar:document-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 mb-4">No se encontraron pólizas</p>
             <div className="flex justify-center">
-              <Button color="primary" onClick={() => setShowCreateTypeModal(true)}>
-                <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                Crear primera póliza
-              </Button>
+              <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreateTypeModal(true)} size="lg">Crear primera póliza</HeroButton>
             </div>
           </div>
         ) : (

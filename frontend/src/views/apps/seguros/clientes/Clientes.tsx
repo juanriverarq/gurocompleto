@@ -1462,14 +1462,14 @@ const Clientes: React.FC = () => {
 
               {canCreateClient && (
                 <Link to="/apps/seguros/clientes/nuevo">
-                  <Button
-                    color="primary"
-                    className="h-10 px-4 bg-blue-600 hover:bg-blue-700 rounded-[10px]"
-                  >
-                    <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-2" />
-                    <span className="hidden sm:inline">Nuevo Cliente</span>
-                    <span className="sm:hidden">Nuevo</span>
-                  </Button>
+                  <span className="group relative inline-flex items-center bg-[#0d0d0d] rounded-2xl h-10 shadow-lg shadow-black/10 overflow-hidden cursor-pointer">
+                    <span className="absolute inset-y-0 left-0 w-10 group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+                    <span className="relative z-10 flex items-center justify-center w-10 h-full flex-shrink-0">
+                      <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 text-white" />
+                    </span>
+                    <span className="relative z-10 pr-4 text-[11px] font-bold text-white uppercase tracking-[0.12em] whitespace-nowrap hidden sm:inline">Nuevo Cliente</span>
+                    <span className="relative z-10 pr-4 text-[11px] font-bold text-white uppercase tracking-[0.12em] whitespace-nowrap sm:hidden">Nuevo</span>
+                  </span>
                 </Link>
               )}
             </div>
@@ -1493,11 +1493,14 @@ const Clientes: React.FC = () => {
               </p>
               <p className="text-gray-400 text-sm">Comienza creando tu primer cliente</p>
               {canCreateClient && (
-                <Link to="/apps/seguros/clientes/nuevo">
-                  <Button color="primary" className="mt-2">
-                    <Icon icon="solar:user-plus-bold" className="w-4 h-4 mr-2" />
-                    Crear primer cliente
-                  </Button>
+                <Link to="/apps/seguros/clientes/nuevo" className="mt-2">
+                  <span className="group relative inline-flex items-center bg-[#0d0d0d] rounded-2xl h-[48px] shadow-lg shadow-black/10 overflow-hidden cursor-pointer">
+                    <span className="absolute inset-y-0 left-0 w-[48px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+                    <span className="relative z-10 flex items-center justify-center w-[48px] h-full flex-shrink-0">
+                      <Icon icon="solar:user-plus-bold" className="w-5 h-5 text-white" />
+                    </span>
+                    <span className="relative z-10 pr-5 text-[11px] font-bold text-white uppercase tracking-[0.15em] whitespace-nowrap">Crear primer cliente</span>
+                  </span>
                 </Link>
               )}
             </div>

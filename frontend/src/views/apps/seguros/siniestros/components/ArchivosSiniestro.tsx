@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, Button, Spinner, Badge, Modal, Select, Table, TextInput } from 'flowbite-react';
 import { IconEye, IconTrash, IconCloudUpload, IconRefresh } from '@tabler/icons-react';
+import HeroButton from 'src/components/HeroButton';
 import { useDropzone } from 'react-dropzone';
 import { siniestroDocumentsService } from 'src/services/siniestroDocumentsService';
 
@@ -113,14 +114,7 @@ const ArchivosSiniestro: React.FC<Props> = ({ siniestroId }) => {
             <IconRefresh className="w-4 h-4 mr-2" />
             Actualizar
           </Button>
-          <Button 
-            color="blue" 
-            size="sm" 
-            onClick={() => { setSelectedFiles([]); setShowModal(true); }}
-          >
-            <IconCloudUpload className="w-4 h-4 mr-2" />
-            Subir archivos
-          </Button>
+          <HeroButton icon="solar:cloud-upload-bold" onClick={() => { setSelectedFiles([]); setShowModal(true); }} size="sm">Subir archivos</HeroButton>
         </div>
       </div>
 
