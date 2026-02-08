@@ -227,14 +227,23 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onComplete, onCa
   const [loadingClients, setLoadingClients] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
   const [clientSearchInput, setClientSearchInput] = useState(''); // Input local para debounce
+  const [visibleClientCount, setVisibleClientCount] = useState(50); // Progressive rendering
+  const clientListRef = useRef<HTMLDivElement>(null);
   
   // Debounce para búsqueda de clientes (150ms - más rápido)
   useEffect(() => {
     const timer = setTimeout(() => {
       setClientSearch(clientSearchInput);
+      setVisibleClientCount(50); // Reset visible count on new search
     }, 150);
     return () => clearTimeout(timer);
   }, [clientSearchInput]);
+
+  // Memoized Set for O(1) selection lookups
+  const selectedContactIds = React.useMemo(
+    () => new Set(campaignData.selectedContacts.map(c => c.id)),
+    [campaignData.selectedContacts]
+  );
   
   // Estados para voces de ElevenLabs
   const [elevenLabsVoices, setElevenLabsVoices] = useState<ElevenLabsVoice[]>([]);
@@ -1269,10 +1278,13 @@ const brokerClientsFiltered = React.useMemo(() => {
   const renderClientSelection = () => {
     // Lista filtrada (memoizada a nivel de componente con null-safety)
     const filteredClients = brokerClientsFiltered;
+    // Progressive rendering: only show visibleClientCount items
+    const visibleClients = filteredClients.slice(0, visibleClientCount);
+    const hasMore = visibleClientCount < filteredClients.length;
 
     const handleClientToggle = (client: Cliente) => {
       setCampaignData(prev => {
-        const isSelected = prev.selectedContacts.some(c => c.id === client.id);
+        const isSelected = selectedContactIds.has(client.id);
         if (isSelected) {
           return {
             ...prev,
@@ -1392,7 +1404,16 @@ const brokerClientsFiltered = React.useMemo(() => {
                   </p>
                 </div>
                 <div className="p-4">
-                  <div className="max-h-64 overflow-y-auto">
+                  <div
+                    ref={clientListRef}
+                    className="max-h-64 overflow-y-auto"
+                    onScroll={(e) => {
+                      const el = e.currentTarget;
+                      if (hasMore && el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+                        setVisibleClientCount(prev => Math.min(prev + 50, filteredClients.length));
+                      }
+                    }}
+                  >
                     {filteredClients.length === 0 && clientSearch.trim() ? (
                       <div className="text-center py-8">
                         <Icon icon="solar:magnifer-outline" className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -1416,8 +1437,8 @@ const brokerClientsFiltered = React.useMemo(() => {
                           <div className="col-span-1 text-right">Estado</div>
                         </div>
                         <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {filteredClients.map((client) => {
-                        const isSelected = campaignData.selectedContacts.some(c => c.id === client.id);
+                        {visibleClients.map((client) => {
+                        const isSelected = selectedContactIds.has(client.id);
                             const firstInitial = (client.nombre || '').charAt(0).toUpperCase();
                             const secondInitial = (client.apellidos || '').charAt(0).toUpperCase();
                             const initials = `${firstInitial}${secondInitial || ''}`;
@@ -1463,6 +1484,17 @@ const brokerClientsFiltered = React.useMemo(() => {
                         );
                       })}
                         </div>
+                        {hasMore && (
+                          <div className="px-3 py-2 text-center border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                            <button
+                              type="button"
+                              onClick={() => setVisibleClientCount(prev => Math.min(prev + 50, filteredClients.length))}
+                              className="text-xs text-primary hover:underline font-medium"
+                            >
+                              Mostrar más ({filteredClients.length - visibleClientCount} restantes)
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

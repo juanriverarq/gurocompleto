@@ -4,7 +4,7 @@ import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import SubscriptionPaymentModal from 'src/components/modals/SubscriptionPaymentModal';
 import { Icon } from '@iconify/react';
 import Lottie from 'lottie-react';
-import guroLogoAnimation from 'src/assets/LOTTIE.json';
+
 import loaderAnimation from 'src/assets/LOTTIE-LOADING-2.json';
 
 const BG_IMAGE = 'https://framerusercontent.com/images/6vqDsl7xtgechRbMSo6yAkGE.png';
@@ -95,15 +95,6 @@ const DashboardBuilding: React.FC = () => {
       }}
     >
       <div className="flex flex-col items-center w-full" style={{ transform: 'rotate(180deg)' }}>
-        {/* Logo */}
-        <div className="mb-8" style={{ width: 160, height: 60, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Lottie
-            animationData={guroLogoAnimation}
-            loop
-            autoplay
-            style={{ width: 380, height: 380, flexShrink: 0 }}
-          />
-        </div>
         {children}
       </div>
     </div>
