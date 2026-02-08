@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class WhatsAppConversation extends Model
 {
@@ -97,6 +98,11 @@ class WhatsAppConversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(WhatsAppConversationMessage::class, 'conversation_id');
+    }
+
+    public function latestMessage(): HasOne
+    {
+        return $this->hasOne(WhatsAppConversationMessage::class, 'conversation_id')->latestOfMany();
     }
 
     public function assignments(): HasMany

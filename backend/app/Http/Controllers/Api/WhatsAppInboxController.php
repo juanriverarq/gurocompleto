@@ -162,7 +162,7 @@ class WhatsAppInboxController extends Controller
         }
 
         $query = WhatsAppConversation::where('broker_id', $broker->id)
-            ->with(['department', 'assignedAgent', 'instance'])
+            ->with(['department', 'assignedAgent', 'instance', 'latestMessage'])
             ->withCount('messages');
 
         // Filtros
@@ -439,15 +439,32 @@ class WhatsAppInboxController extends Controller
         try {
             // Subir archivo a storage público
             $path = $file->store('whatsapp-media', 'public');
-            $mediaUrl = url('storage/' . $path);
+            // Usar URL pública de ngrok para que WhatsApp pueda acceder al archivo
+            // TODO: En producción, usar config('app.url') con un dominio público
+            $ngrokUrl = env('NGROK_URL', 'https://hookless-kaylynn-greasily.ngrok-free.dev');
+            $mediaUrl = rtrim($ngrokUrl, '/') . '/storage/' . $path;
+            
+            \Log::info('📤 [MEDIA] Enviando archivo multimedia', [
+                'type' => $messageType,
+                'path' => $path,
+                'mediaUrl' => $mediaUrl,
+                'phone' => $conversation->phone,
+            ]);
 
             // Usar WhatsAppBridgeService para enviar
             $bridge = app(\App\Services\WhatsAppBridgeService::class);
             
             $result = null;
+            \Log::info("📤 [MEDIA] Enviando {$messageType} a WhatsApp", [
+                'instance_id' => $instance->instance_id,
+                'phone' => $conversation->phone,
+                'mediaUrl' => $mediaUrl,
+            ]);
+            
             switch ($messageType) {
                 case 'image':
                     $result = $bridge->sendImage($instance->instance_id, $conversation->phone, $mediaUrl, $caption ?: null);
+                    \Log::info('📤 [MEDIA] Resultado envío imagen', ['result' => $result]);
                     break;
                 case 'video':
                     $result = $bridge->sendVideo($instance->instance_id, $conversation->phone, $mediaUrl, $caption ?: null);
