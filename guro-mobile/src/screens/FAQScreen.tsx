@@ -119,7 +119,7 @@ const FAQScreen: React.FC = () => {
     <View style={styles.container}>
       {/* Header */}
       <ImageBackground
-        source={require('../../assets/backgrounds/hero-gradient.png')}
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
         style={styles.header}
         imageStyle={{ transform: [{ scale: 2 }] }}
         resizeMode="cover"

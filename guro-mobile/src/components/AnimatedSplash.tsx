@@ -19,7 +19,7 @@ const AnimatedSplash: React.FC<AnimatedSplashProps> = ({ onAnimationFinish }) =>
 
   return (
     <ImageBackground
-      source={require('../../assets/backgrounds/hero-gradient.png')}
+      source={require('../../assets/backgrounds/hero-gradient.webp')}
       style={styles.container}
       resizeMode="cover"
     >

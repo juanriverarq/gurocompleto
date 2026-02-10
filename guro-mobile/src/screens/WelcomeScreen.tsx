@@ -100,7 +100,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
 
   return (
     <ImageBackground
-      source={require('../../assets/backgrounds/hero-gradient.png')}
+      source={require('../../assets/backgrounds/hero-gradient.webp')}
       style={styles.container}
       resizeMode="cover"
     >

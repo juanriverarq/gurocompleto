@@ -79,7 +79,7 @@ const quickActions = [
   { id: '3', icon: 'account-tie-outline' as const, label: 'NUEVO EMPLEADO', screen: 'CreateEmpleado' },
 ];
 
-const insights = [
+const consejos = [
   { id: '1', icon: 'chart-bar' as const, text: 'El 70% de los clientes renuevan si los contactas 30 días antes.', color: '#573CFF' },
   { id: '2', icon: 'lightbulb-on-outline' as const, text: 'Clientes con +2 pólizas tienen 90% de retención.', color: '#22C55E' },
   { id: '3', icon: 'trophy-outline' as const, text: 'Los corredores top dedican 40% a seguimiento post-venta.', color: '#F59E0B' },
@@ -194,7 +194,7 @@ const HomeScreen: React.FC = () => {
     <View style={s.container}>
       {/* ─── HEADER ─── */}
       <ImageBackground
-        source={require('../../assets/backgrounds/hero-gradient.png')}
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
         style={s.header}
         imageStyle={{ transform: [{ scale: 2 }] }}
         resizeMode="cover"
@@ -257,9 +257,9 @@ const HomeScreen: React.FC = () => {
           ))}
         </ScrollView>
 
-        {/* ─── INSIGHTS (horizontal snap cards) ─── */}
+        {/* ─── CONSEJOS (horizontal snap cards) ─── */}
         <View style={s.sec}>
-          <Text style={s.badge}>INSIGHTS</Text>
+          <Text style={s.badge}>CONSEJOS</Text>
         </View>
         <ScrollView
           horizontal showsHorizontalScrollIndicator={false}
@@ -267,7 +267,7 @@ const HomeScreen: React.FC = () => {
           decelerationRate="fast"
           snapToInterval={SW * 0.78 + 12}
         >
-          {insights.map((item) => (
+          {consejos.map((item) => (
             <View key={item.id} style={s.insightCard}>
               <View style={[s.insightIcon, { backgroundColor: item.color + '15' }]}>
                 <MaterialCommunityIcons name={item.icon} size={22} color={item.color} />

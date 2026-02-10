@@ -89,7 +89,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
       {/* Header with aurora background */}
       <ImageBackground
-        source={require('../../assets/backgrounds/hero-gradient.png')}
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
         style={styles.header}
         imageStyle={{ transform: [{ scale: 2 }] }}
         resizeMode="cover"

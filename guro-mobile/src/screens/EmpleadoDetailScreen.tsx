@@ -197,7 +197,7 @@ const EmpleadoDetailScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <ImageBackground
-          source={require('../../assets/backgrounds/hero-gradient.png')}
+          source={require('../../assets/backgrounds/hero-gradient.webp')}
           style={styles.header}
           imageStyle={{ transform: [{ scale: 2 }] }}
           resizeMode="cover"
@@ -222,7 +222,7 @@ const EmpleadoDetailScreen: React.FC = () => {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ImageBackground
-        source={require('../../assets/backgrounds/hero-gradient.png')}
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
         style={styles.header}
         imageStyle={{ transform: [{ scale: 2 }] }}
         resizeMode="cover"

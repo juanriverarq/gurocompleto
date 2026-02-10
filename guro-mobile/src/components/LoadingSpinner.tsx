@@ -17,7 +17,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   if (fullScreen) {
     return (
       <ImageBackground
-        source={require('../../assets/backgrounds/hero-gradient.png')}
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
         style={styles.fullScreenContainer}
         resizeMode="cover"
       >
