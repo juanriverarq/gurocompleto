@@ -763,7 +763,22 @@ Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/whatsapp-inbo
     // Respuestas rápidas
     Route::get('quick-replies', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getQuickReplies']);
     Route::post('quick-replies', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'createQuickReply']);
+    
+    // Contactos (Cloud API - Meta registered contacts tracking)
+    Route::get('contacts', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getContacts']);
+    Route::get('contacts/{phone}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getContact']);
+    Route::put('contacts/{phone}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'updateContact']);
+    
+    // Plantillas de mensaje (Meta Cloud API templates)
+    Route::get('templates', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'index']);
+    Route::post('templates', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'store']);
+    Route::delete('templates/{templateName}', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'destroy']);
+    Route::post('templates/send', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'send']);
 });
+
+// Media streaming endpoint (público, sin auth - necesario para iOS AVFoundation)
+Route::get('media/{filename}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'serveMedia'])
+    ->where('filename', '.*');
 
 // =============================================================================
 // RUTAS SAAS: CHATBOTS WHATSAPP (PROTEGIDAS)
@@ -1444,6 +1459,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::prefix('whatsapp-instances')->group(function () {
         Route::get('/', [WhatsAppInstanceController::class, 'index']);
         Route::post('/', [WhatsAppInstanceController::class, 'store']);
+        Route::post('/embedded-signup', [WhatsAppInstanceController::class, 'embeddedSignup']);
         Route::get('/{whatsAppInstance}', [WhatsAppInstanceController::class, 'show']);
         Route::put('/{whatsAppInstance}', [WhatsAppInstanceController::class, 'update']);
         Route::delete('/{whatsAppInstance}', [WhatsAppInstanceController::class, 'destroy']);

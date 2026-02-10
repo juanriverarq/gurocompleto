@@ -244,9 +244,9 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
               <Ionicons 
                 name={iconName} 
                 size={22} 
-                color={isFocused ? '#6172FD' : '#9CA3AF'} 
+                color={isFocused ? '#573CFF' : '#9CA3AF'} 
               />
-              <Text style={[styles.tabLabel, { color: isFocused ? '#6172FD' : '#9CA3AF' }]}>
+              <Text style={[styles.tabLabel, { color: isFocused ? '#573CFF' : '#9CA3AF' }]}>
                 {label}
               </Text>
             </TouchableOpacity>
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -388,10 +388,10 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,

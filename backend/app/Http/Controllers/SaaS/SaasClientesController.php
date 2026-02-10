@@ -75,7 +75,7 @@ class SaasClientesController extends Controller
                 ])
                 ->orderBy('first_name')
                 ->orderBy('last_name')
-                ->limit(10000)
+                ->limit(50000)
                 ->get();
             
             // Transform data with minimal fields (no heavy processing)

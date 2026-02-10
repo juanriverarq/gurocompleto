@@ -1,17 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Icon } from '@iconify/react';
 import Lottie from 'lottie-react';
 import guroLogoAnimation from 'src/assets/LOTTIE.json';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from 'src/config/firebase';
-import CalendlyModal from './CalendlyModal';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [showCalendly, setShowCalendly] = useState(false);
+  const location = useLocation();
+  const isHome = location.pathname === '/';
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -27,13 +28,16 @@ const Navbar = () => {
   const displayName = user?.displayName || user?.email?.split('@')[0] || '';
   const firstName = displayName.split(' ')[0];
 
-  const navLinks = [
-    { name: 'Producto', href: '#caracteristicas' },
-    { name: 'Herramientas', href: '#herramientas' },
-    { name: 'Resultados', href: '#resultados' },
-    { name: 'Precios', href: '#precios' },
-    { name: 'Testimonios', href: '#testimonios' },
-  ];
+  const navLinks = useMemo(() => {
+    const prefix = isHome ? '' : '/';
+    return [
+      { name: 'Producto', href: `${prefix}#caracteristicas` },
+      { name: 'Herramientas', href: `${prefix}#herramientas` },
+      { name: 'Resultados', href: `${prefix}#resultados` },
+      { name: 'Precios', href: `${prefix}#precios` },
+      { name: 'Testimonios', href: `${prefix}#testimonios` },
+    ];
+  }, [isHome]);
 
   return (
     <>
@@ -76,12 +80,14 @@ const Navbar = () => {
 
             {/* Right side — auth-aware */}
             <div className="hidden lg:flex items-center gap-4">
-              <button
-                onClick={() => setShowCalendly(true)}
+              <a
+                href="https://wa.me/573105360658?text=Hola%2C%20me%20interesa%20Guro"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-[11px] font-bold text-white/70 hover:text-white uppercase tracking-[0.15em] transition-colors"
               >
                 Contacto con ventas
-              </button>
+              </a>
 
               {user ? (
                 <a
@@ -198,8 +204,6 @@ const Navbar = () => {
         )}
       </AnimatePresence>
 
-      {/* Calendly Modal */}
-      <CalendlyModal isOpen={showCalendly} onClose={() => setShowCalendly(false)} />
     </>
   );
 };

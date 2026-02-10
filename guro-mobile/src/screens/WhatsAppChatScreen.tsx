@@ -13,6 +13,8 @@ import {
   Image,
   Alert,
   Pressable,
+  ImageBackground,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -245,6 +247,12 @@ const WhatsAppChatScreen: React.FC = () => {
       setIsRecording(false);
       setRecordingDuration(0);
 
+      // Resetear modo de audio para que el playback funcione después de grabar
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+
       if (uri) {
         await sendMedia(uri, 'audio');
       }
@@ -266,6 +274,11 @@ const WhatsAppChatScreen: React.FC = () => {
       setRecording(null);
       setIsRecording(false);
       setRecordingDuration(0);
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
     } catch (err) {
       console.error('Error canceling recording:', err);
     }
@@ -278,6 +291,7 @@ const WhatsAppChatScreen: React.FC = () => {
   };
 
   const sendMedia = async (uri: string, type: 'image' | 'audio' | 'document', filename?: string) => {
+    console.log('📤 [sendMedia] Called with:', { uri, type, filename, conversationId });
     setSending(true);
     
     const optimisticMessage: WhatsAppMessage = {
@@ -296,14 +310,16 @@ const WhatsAppChatScreen: React.FC = () => {
     setMessages(prev => [...prev, optimisticMessage]);
     
     try {
+      console.log('📤 [sendMedia] Calling sendMediaMessage...');
       await sendMediaMessage(conversationId, uri, type, filename);
+      console.log('📤 [sendMedia] Success! Fetching messages...');
       fetchMessages();
     } catch (err: any) {
-      console.error('Error sending media:', err);
+      console.error('📤 [sendMedia] ERROR:', err?.message, err?.response?.status, err?.response?.data);
       setMessages(prev => prev.map(m => 
         m.id === optimisticMessage.id ? { ...m, status: 'failed' } : m
       ));
-      Alert.alert('Error', 'No se pudo enviar el archivo');
+      Alert.alert('Error', `No se pudo enviar el archivo: ${err?.message || 'Error desconocido'}`);
     } finally {
       setSending(false);
     }
@@ -345,7 +361,7 @@ const WhatsAppChatScreen: React.FC = () => {
       case 'delivered':
         return <Ionicons name="checkmark-done" size={14} color="#9CA3AF" />;
       case 'read':
-        return <Ionicons name="checkmark-done" size={14} color="#6172FD" />;
+        return <Ionicons name="checkmark-done" size={14} color="#573CFF" />;
       case 'sending':
         return <Ionicons name="time-outline" size={14} color="#9CA3AF" />;
       case 'failed':
@@ -436,32 +452,43 @@ const WhatsAppChatScreen: React.FC = () => {
     };
   }, []);
 
-  const getAccessibleMediaUrl = (url: string | null | undefined): string | null => {
+  const getAccessibleMediaUrl = (url: string | null | undefined, forAudio: boolean = false): string | null => {
     if (!url) return null;
     
-    const NGROK_URL = 'https://hookless-kaylynn-greasily.ngrok-free.dev';
+    // Base URL del backend local (misma que usa api.ts)
+    const BACKEND_BASE = 'http://192.168.1.80:8001';
     
-    // Extraer el nombre del archivo de la URL
+    // Extraer filename de la URL para usar el endpoint de streaming
     const extractFilename = (mediaUrl: string): string | null => {
       const match = mediaUrl.match(/whatsapp-media\/([^?]+)/);
       return match ? match[1] : null;
     };
-    
-    const filename = extractFilename(url);
-    if (filename) {
-      // Usar el endpoint de API que sirve los archivos directamente
-      return `${NGROK_URL}/api/media/${filename}`;
+
+    // Para audio/video, usar el endpoint de streaming API que soporta Range requests (iOS AVFoundation)
+    if (forAudio) {
+      const filename = extractFilename(url);
+      if (filename) {
+        return `${BACKEND_BASE}/api/media/${filename}`;
+      }
     }
     
-    // Fallback: Si es una URL relativa, agregar el dominio
+    // Si es URL relativa (/storage/...), agregar base del backend
+    if (url.startsWith('/storage/')) {
+      return `${BACKEND_BASE}${url}`;
+    }
+    
+    // Si es URL de ngrok con /storage/, convertir a URL local del backend
+    if (url.includes('ngrok') && url.includes('/storage/')) {
+      const storagePath = url.substring(url.indexOf('/storage/'));
+      return `${BACKEND_BASE}${storagePath}`;
+    }
+    
+    // Si es URL relativa sin /storage/
     if (url.startsWith('/')) {
-      return NGROK_URL + url;
+      return `${BACKEND_BASE}${url}`;
     }
     
-    // Fallback: Reemplazar URL local por ngrok
-    if (url.includes('192.168.') || url.includes('localhost') || url.includes('127.0.0.1')) {
-      return url.replace(/https?:\/\/(192\.168\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?/, NGROK_URL);
-    }
+    // Si ya es URL absoluta (ej: media de Meta), usarla directamente
     return url;
   };
 
@@ -483,7 +510,8 @@ const WhatsAppChatScreen: React.FC = () => {
   const renderMessageContent = (item: WhatsAppMessage) => {
     const messageType = item.type || item.media_type;
     const rawMediaUrl = item.media_url || (item as any).media?.url;
-    const mediaUrl = getAccessibleMediaUrl(rawMediaUrl);
+    const isAudioOrVideo = messageType === 'audio' || messageType === 'video';
+    const mediaUrl = getAccessibleMediaUrl(rawMediaUrl, isAudioOrVideo);
 
     if (messageType === 'audio' && mediaUrl) {
       const isPlaying = playingAudioId === item.id;
@@ -502,7 +530,7 @@ const WhatsAppChatScreen: React.FC = () => {
             <Ionicons 
               name={isPlaying ? "pause" : "play"} 
               size={20} 
-              color={outgoing ? "#6172FD" : "#FFFFFF"} 
+              color={outgoing ? "#573CFF" : "#FFFFFF"} 
             />
           </TouchableOpacity>
           <View style={styles.audioRight}>
@@ -523,14 +551,14 @@ const WhatsAppChatScreen: React.FC = () => {
                   styles.audioSliderFill, 
                   { 
                     width: `${progress * 100}%`,
-                    backgroundColor: outgoing ? '#FFFFFF' : '#6172FD',
+                    backgroundColor: outgoing ? '#FFFFFF' : '#573CFF',
                   }
                 ]} />
                 <View style={[
                   styles.audioSliderThumb,
                   { 
                     left: `${progress * 100}%`,
-                    backgroundColor: outgoing ? '#FFFFFF' : '#6172FD',
+                    backgroundColor: outgoing ? '#FFFFFF' : '#573CFF',
                   }
                 ]} />
               </View>
@@ -542,7 +570,7 @@ const WhatsAppChatScreen: React.FC = () => {
               </Text>
               {isPlaying && (
                 <TouchableOpacity style={[styles.audioSpeedButton, { backgroundColor: outgoing ? 'rgba(255,255,255,0.25)' : 'rgba(97,114,253,0.15)' }]} onPress={toggleSpeed}>
-                  <Text style={[styles.audioSpeedText, { color: outgoing ? '#FFFFFF' : '#6172FD' }]}>
+                  <Text style={[styles.audioSpeedText, { color: outgoing ? '#FFFFFF' : '#573CFF' }]}>
                     {speed}x
                   </Text>
                 </TouchableOpacity>
@@ -565,16 +593,42 @@ const WhatsAppChatScreen: React.FC = () => {
       );
     }
 
-    if (messageType === 'document') {
+    if (messageType === 'video' && mediaUrl) {
       return (
-        <TouchableOpacity style={styles.documentContainer}>
-          <Ionicons name="document-outline" size={32} color={item.from_me ? "#FFFFFF" : "#6172FD"} />
+        <TouchableOpacity 
+          style={styles.documentContainer} 
+          onPress={() => Linking.openURL(mediaUrl)}
+        >
+          <View style={[styles.videoPlayOverlay, { backgroundColor: item.from_me ? 'rgba(255,255,255,0.2)' : 'rgba(87,60,255,0.1)' }]}>
+            <Ionicons name="play-circle" size={40} color={item.from_me ? "#FFFFFF" : "#573CFF"} />
+          </View>
           <Text style={[
             styles.documentName,
             item.from_me ? styles.messageTextRight : styles.messageTextLeft
           ]} numberOfLines={2}>
-            {item.body || 'Documento'}
+            Reproducir video
           </Text>
+        </TouchableOpacity>
+      );
+    }
+
+    if (messageType === 'document') {
+      const docUrl = getAccessibleMediaUrl(rawMediaUrl);
+      return (
+        <TouchableOpacity 
+          style={styles.documentContainer}
+          onPress={() => {
+            if (docUrl) Linking.openURL(docUrl);
+          }}
+        >
+          <Ionicons name="document-outline" size={32} color={item.from_me ? "#FFFFFF" : "#573CFF"} />
+          <Text style={[
+            styles.documentName,
+            item.from_me ? styles.messageTextRight : styles.messageTextLeft
+          ]} numberOfLines={2}>
+            {(item as any).media?.filename || item.body || 'Documento'}
+          </Text>
+          <Ionicons name="download-outline" size={18} color={item.from_me ? "rgba(255,255,255,0.7)" : "#9CA3AF"} />
         </TouchableOpacity>
       );
     }
@@ -599,7 +653,7 @@ const WhatsAppChatScreen: React.FC = () => {
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const showDate = shouldShowDate(item, prevMessage);
     const messageType = item.type || item.media_type || 'text';
-    const isMedia = ['audio', 'image', 'document'].includes(messageType);
+    const isMedia = ['audio', 'image', 'document', 'video'].includes(messageType);
     const isHighlighted = highlightedMsgId === item.id;
     
     return (
@@ -633,11 +687,7 @@ const WhatsAppChatScreen: React.FC = () => {
         </View>
       </View>
     );
-  }, [messages, playingAudioId, audioProgress, audioDurationMs, audioPositionMs, audioSpeed, highlightedMsgId]);
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  }, [messages, highlightedMsgId, searchQuery, showSearch, playingAudioId, audioProgress, audioPositionMs, audioDurationMs, audioSpeed]);
 
   return (
     <KeyboardAvoidingView 
@@ -645,7 +695,12 @@ const WhatsAppChatScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         {showSearch ? (
           <>
             <TouchableOpacity style={styles.backButton} onPress={() => { setShowSearch(false); setSearchQuery(''); }}>
@@ -695,7 +750,7 @@ const WhatsAppChatScreen: React.FC = () => {
             </TouchableOpacity>
           </>
         )}
-      </View>
+      </ImageBackground>
 
       {showSearch && searchQuery.trim().length > 0 && searchResults.length > 0 && (
         <View style={styles.searchResultsBar}>
@@ -734,13 +789,14 @@ const WhatsAppChatScreen: React.FC = () => {
             data={messages}
             renderItem={renderMessage}
             keyExtractor={(item) => item.id.toString()}
+            extraData={`${playingAudioId}-${Math.floor(audioProgress * 20)}-${audioSpeed}-${highlightedMsgId}`}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
             initialNumToRender={20}
             maxToRenderPerBatch={15}
             windowSize={10}
-            removeClippedSubviews={Platform.OS === 'android'}
+            removeClippedSubviews={false}
             getItemLayout={undefined}
             onScrollToIndexFailed={(info) => {
               flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
@@ -771,7 +827,7 @@ const WhatsAppChatScreen: React.FC = () => {
       ) : (
         <View style={styles.inputContainer}>
           <TouchableOpacity style={styles.attachButton} onPress={() => setShowAttachMenu(true)}>
-            <Ionicons name="add-circle-outline" size={28} color="#6172FD" />
+            <Ionicons name="add-circle-outline" size={28} color="#573CFF" />
           </TouchableOpacity>
           <View style={styles.inputWrapper}>
             <TextInput
@@ -836,7 +892,7 @@ const WhatsAppChatScreen: React.FC = () => {
                   takePhoto();
                 }}
               >
-                <View style={[styles.attachIconContainer, { backgroundColor: '#6172FD' }]}>
+                <View style={[styles.attachIconContainer, { backgroundColor: '#573CFF' }]}>
                   <Ionicons name="camera" size={24} color="#FFFFFF" />
                 </View>
                 <Text style={styles.attachOptionText}>Cámara</Text>
@@ -879,22 +935,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F2F5',
   },
   header: {
-    height: 110,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    shadowColor: '#6172FD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -958,7 +1010,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -1020,7 +1072,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 3,
   },
   messageBubbleRight: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     borderTopRightRadius: 3,
   },
   messageText: {
@@ -1095,10 +1147,10 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 4,
@@ -1118,10 +1170,10 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 4,
@@ -1162,7 +1214,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1228,7 +1280,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
   audioPlayButtonIncoming: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   audioRight: {
     flex: 1,
@@ -1288,12 +1340,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minWidth: 180,
+    gap: 8,
   },
   documentName: {
     flex: 1,
     fontSize: 14,
     fontFamily: 'Montserrat_500Medium',
-    marginLeft: 10,
+    marginLeft: 2,
+  },
+  videoPlayOverlay: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mediaBubble: {
     padding: 5,

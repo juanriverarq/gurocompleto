@@ -5,6 +5,7 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   ScrollView,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,7 +16,7 @@ const menuOptions = [
     title: 'Empleados',
     description: 'Gestiona tu equipo de trabajo',
     icon: 'people',
-    color: '#6172FD',
+    color: '#573CFF',
     screen: 'EmpleadosList',
   },
   {
@@ -33,13 +34,18 @@ const EmpleadosMenuScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Equipo</Text>
         <View style={styles.headerPlaceholder} />
-      </View>
+      </ImageBackground>
 
       <ScrollView 
         style={styles.content}
@@ -75,30 +81,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 38,
   },
   content: {
     flex: 1,

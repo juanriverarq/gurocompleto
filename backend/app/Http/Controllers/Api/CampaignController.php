@@ -212,6 +212,10 @@ class CampaignController extends Controller
                 'message_template' => 'required|string',
                 'select_all_clients' => 'nullable|boolean',
                 'whatsapp_instance_id' => 'nullable|integer|exists:whatsapp_instances,id',
+                // Template fields for Cloud API template-based campaigns
+                'template_name' => 'nullable|string|max:255',
+                'template_language' => 'nullable|string|max:10',
+                'variable_mapping' => 'nullable|array',
                 // Media opcional (si ya se subió por /media-upload)
                 'media_url' => 'nullable|url',
                 'media_type' => 'nullable|in:image'
@@ -262,6 +266,7 @@ class CampaignController extends Controller
             // Determinar los contactos finales
             $finalContacts = $request->contacts;
             $totalTargets = 0;
+            $variableMapping = $request->input('variable_mapping', []);
 
             if ($request->boolean('select_all_clients')) {
                 // Cargar todos los clientes activos del broker
@@ -270,8 +275,8 @@ class CampaignController extends Controller
                     ->whereNotNull('celular_principal')
                     ->get();
 
-                $finalContacts = $clients->map(function($client) {
-                    return [
+                $finalContacts = $clients->map(function($client) use ($variableMapping) {
+                    $contact = [
                         'id' => $client->id,
                         'name' => $client->nombre . ' ' . $client->apellidos,
                         'phone' => $client->celular_principal,
@@ -288,6 +293,41 @@ class CampaignController extends Controller
                         'estado' => $client->estado,
                         'tipo_documento' => $client->tipo_documento
                     ];
+
+                    // Build custom_data from variable_mapping for template campaigns
+                    if (!empty($variableMapping)) {
+                        $customData = [];
+                        foreach ($variableMapping as $varName => $mapping) {
+                            $source = $mapping['source'] ?? 'fixed';
+                            $fixedValue = $mapping['fixedValue'] ?? '';
+                            if ($source === 'fixed') {
+                                $customData[$varName] = $fixedValue;
+                            } elseif ($source === 'nombre_completo') {
+                                $customData[$varName] = trim($client->nombre . ' ' . $client->apellidos);
+                            } elseif (in_array($source, ['poliza_numero', 'poliza_producto', 'poliza_aseguradora', 'poliza_vigencia'])) {
+                                $poliza = $client->polizas()->first();
+                                $fieldMap = [
+                                    'poliza_numero' => ['numero_poliza', 'policy_number'],
+                                    'poliza_producto' => ['producto', 'product_name'],
+                                    'poliza_aseguradora' => ['aseguradora', 'insurer_name'],
+                                    'poliza_vigencia' => ['fecha_vencimiento', 'end_date'],
+                                ];
+                                $fields = $fieldMap[$source] ?? [];
+                                $val = '';
+                                if ($poliza) {
+                                    foreach ($fields as $f) {
+                                        if (!empty($poliza->{$f})) { $val = $poliza->{$f}; break; }
+                                    }
+                                }
+                                $customData[$varName] = $val;
+                            } else {
+                                $customData[$varName] = $client->{$source} ?? '';
+                            }
+                        }
+                        $contact['custom_data'] = $customData;
+                    }
+
+                    return $contact;
                 })->toArray();
 
                 $totalTargets = count($finalContacts);
@@ -344,7 +384,9 @@ class CampaignController extends Controller
                 'status' => 'draft',
                 'total_targets' => $totalTargets,
                 'created_by' => auth()->id() ?? null,
-                'whatsapp_instance_id' => $whatsappInstanceId
+                'whatsapp_instance_id' => $whatsappInstanceId,
+                'template_name' => $request->template_name,
+                'template_language' => $request->template_language ?? 'es',
             ]);
 
             // Guardar media (si viene) para soportar envíos con imagen
@@ -1359,592 +1401,194 @@ class CampaignController extends Controller
             'input' => func_get_args()[0] ?? 'N/A',
             'output' => $phone
         ]);
-        
         return $phone;
     }
 
     /**
-     * Enviar mensajes masivos al microservicio de WhatsApp usando el endpoint bulk
+     * Enviar mensajes masivos vía WhatsApp Cloud API (templates o texto)
      */
     private function sendBulkWhatsAppMessagesToMicroservice(array $contacts, string $messageTemplate, int $campaignId, int $executionId): array
     {
         try {
-            // Obtener la campaña para verificar si tiene una instancia asignada
             $campaign = Campaign::find($campaignId);
-            $instanceId = null;
+            if (!$campaign) {
+                return ['success' => false, 'error' => 'Campaña no encontrada'];
+            }
+
+            // Buscar instancia Cloud API
             $whatsappInstance = null;
-
-            if ($campaign && $campaign->whatsapp_instance_id) {
-                // Obtener el instance_id de la instancia de WhatsApp asignada a la campaña
-                $whatsappInstance = $campaign->whatsappInstance;
-                if ($whatsappInstance) {
-                    $instanceId = $whatsappInstance->instance_id;
-                    Log::info('✅ [CAMPAIGN SEND] Usando instancia específica para campaña', [
-                        'campaign_id' => $campaignId,
-                        'whatsapp_instance_id' => $campaign->whatsapp_instance_id,
-                        'instance_id' => $instanceId,
-                        'status' => $whatsappInstance->status
-                    ]);
-                    
-                    // 🔄 SINCRONIZACIÓN AUTOMÁTICA: Verificar que la instancia existe en el microservicio
-                    $this->ensureInstanceExistsInMicroservice($whatsappInstance);
-                    
-                } else {
-                    Log::warning('⚠️ [CAMPAIGN SEND] Instancia WhatsApp asignada no encontrada', [
-                        'campaign_id' => $campaignId,
-                        'whatsapp_instance_id' => $campaign->whatsapp_instance_id
-                    ]);
-                }
+            if ($campaign->whatsapp_instance_id) {
+                $whatsappInstance = \App\Models\WhatsAppInstance::find($campaign->whatsapp_instance_id);
             }
-
-            // Si no hay instancia específica válida, intentar usar una instancia conectada del broker
-            if (!$instanceId && $campaign) {
-                Log::info('🔍 [CAMPAIGN SEND] Buscando instancia automática para broker', [
-                    'broker_id' => $campaign->broker_id,
-                    'campaign_id' => $campaignId
-                ]);
-                
-                $autoInstance = \App\Models\WhatsAppInstance::query()
-                    ->where('broker_id', $campaign->broker_id)
-                    ->whereNotNull('instance_id')
+            if (!$whatsappInstance) {
+                $whatsappInstance = \App\Models\WhatsAppInstance::where('broker_id', $campaign->broker_id)
+                    ->where('connection_type', 'cloud_api')
                     ->where('is_active', true)
-                    ->orderByDesc('updated_at')
                     ->first();
-
-                if ($autoInstance) {
-                    $instanceId = $autoInstance->instance_id;
-                    $whatsappInstance = $autoInstance;
-                    
-                    Log::info('✅ [CAMPAIGN SEND] Instancia encontrada en BD', [
-                        'campaign_id' => $campaignId,
-                        'broker_id' => $campaign->broker_id,
-                        'auto_instance_id' => $autoInstance->id,
-                        'instance_id' => $instanceId,
-                        'db_status' => $autoInstance->status
-                    ]);
-                    
-                    // 🔄 ASIGNACIÓN AUTOMÁTICA: Guardar la instancia en la campaña para futuras ejecuciones
-                    if (!$campaign->whatsapp_instance_id) {
-                        Log::info('💾 [CAMPAIGN SEND] Asignando instancia automáticamente a la campaña', [
-                            'campaign_id' => $campaignId,
-                            'whatsapp_instance_id' => $autoInstance->id
-                        ]);
-                        
-                        $campaign->update(['whatsapp_instance_id' => $autoInstance->id]);
-                    }
-                    
-                    // 🔄 SINCRONIZACIÓN AUTOMÁTICA: Asegurar que existe en microservicio
-                    $syncResult = $this->ensureInstanceExistsInMicroservice($autoInstance);
-                    
-                    if (!$syncResult) {
-                        Log::warning('⚠️ [CAMPAIGN SEND] No se pudo sincronizar instancia automática', [
-                            'instance_id' => $instanceId
-                        ]);
-                    }
-                    
-                } else {
-                    Log::error('❌ [CAMPAIGN SEND] No se encontró ninguna instancia para el broker', [
-                        'campaign_id' => $campaignId,
-                        'broker_id' => $campaign->broker_id
-                    ]);
-
-                    return [
-                        'success' => false,
-                        'error' => 'No hay instancias de WhatsApp disponibles. Por favor, crea una instancia antes de enviar mensajes.'
-                    ];
-                }
+            }
+            if (!$whatsappInstance) {
+                return ['success' => false, 'error' => 'No hay instancias de WhatsApp Cloud API disponibles.'];
             }
 
-            // Validar que tenemos una instancia
-            if (!$instanceId) {
-                Log::error('❌ [CAMPAIGN SEND] No se pudo determinar instance_id', [
-                    'campaign_id' => $campaignId
-                ]);
-
-                return [
-                    'success' => false,
-                    'error' => 'No se pudo determinar la instancia de WhatsApp para enviar mensajes.'
-                ];
+            // Asignar instancia a la campaña si no tenía
+            if (!$campaign->whatsapp_instance_id) {
+                $campaign->update(['whatsapp_instance_id' => $whatsappInstance->id]);
             }
 
-            // Verificar estado de la instancia en el microservicio antes de enviar
-            try {
-                $serviceUrl = env('WHATSAPP_SERVICE_URL', 'http://127.0.0.1:3000/api/v1');
-                $statusCheck = Http::timeout(5)->get("{$serviceUrl}/instances/{$instanceId}/status");
+            $cloudApi = new \App\Services\WhatsAppCloudApiService();
+            $successCount = 0;
+            $failedCount = 0;
+            $totalContacts = count($contacts);
 
-                if (!$statusCheck->successful()) {
-                    Log::warning('⚠️ [CAMPAIGN SEND] Instancia no disponible en microservicio, intentando fallback', [
-                        'instance_id' => $instanceId,
-                        'status_code' => $statusCheck->status()
-                    ]);
+            // Determinar si es envío de plantilla o texto libre
+            $isTemplateSend = !empty($campaign->template_name);
+            $templateName = $campaign->template_name ?? null;
+            $templateLanguage = $campaign->template_language ?? 'es';
 
-                    // Intentar fallback a otra instancia conectada del mismo broker
-                    if ($campaign) {
-                        $fallback = $this->findConnectedInstanceForBroker($campaign->broker_id);
-                        if ($fallback) {
-                            $campaign->update(['whatsapp_instance_id' => $fallback->id]);
-                            $whatsappInstance = $fallback;
-                            $instanceId = $fallback->instance_id;
-
-                            Log::info('✅ [CAMPAIGN SEND] Fallback a instancia conectada', [
-                                'campaign_id' => $campaignId,
-                                'new_instance_db_id' => $fallback->id,
-                                'instance_id' => $instanceId
-                            ]);
-                        } else {
-                            return [
-                                'success' => false,
-                                'error' => 'No se encontró ninguna instancia conectada para este broker.'
-                            ];
-                        }
-                    }
-                } else {
-                    $statusData = $statusCheck->json();
-                    if (!($statusData['connected'] ?? false) && !in_array($statusData['status'] ?? '', ['connected', 'authenticated'])) {
-                        Log::warning('⚠️ [CAMPAIGN SEND] Instancia no conectada, intentando fallback', [
-                            'instance_id' => $instanceId,
-                            'status' => $statusData['status'] ?? 'unknown'
-                        ]);
-
-                        // Intentar fallback a otra instancia conectada del mismo broker
-                        $fallback = $this->findConnectedInstanceForBroker($campaign->broker_id);
-                        if ($fallback) {
-                            $campaign->update(['whatsapp_instance_id' => $fallback->id]);
-                            $whatsappInstance = $fallback;
-                            $instanceId = $fallback->instance_id;
-
-                            Log::info('✅ [CAMPAIGN SEND] Fallback a instancia conectada', [
-                                'campaign_id' => $campaignId,
-                                'new_instance_db_id' => $fallback->id,
-                                'instance_id' => $instanceId
-                            ]);
-                        } else {
-                            return [
-                                'success' => false,
-                                'error' => 'No hay instancias de WhatsApp conectadas. Por favor, conecta una instancia (escanea el QR).'
-                            ];
-                        }
-                    } else {
-                        Log::info('✅ [CAMPAIGN SEND] Instancia verificada y conectada', [
-                            'instance_id' => $instanceId,
-                            'status' => $statusData['status'] ?? 'connected'
-                        ]);
-                    }
-                }
-
-            } catch (\Exception $statusError) {
-                Log::error('❌ [CAMPAIGN SEND] Error verificando estado de instancia', [
-                    'instance_id' => $instanceId,
-                    'error' => $statusError->getMessage()
-                ]);
-
-                return [
-                    'success' => false,
-                    'error' => 'No se pudo verificar el estado de la instancia de WhatsApp. Verifica que el microservicio esté funcionando.'
-                ];
-            }
-
-            // Preparar contactos para envío masivo (con mensaje personalizado por contacto)
-            $bulkContacts = [];
-            foreach ($contacts as $contact) {
-                $formattedPhone = $this->formatPhoneNumber($contact['phone'] ?? '');
-                // Usar mensaje ya calculado si viene, o procesar variables con datos del contacto
-                $baseMessage = (isset($contact['message']) && is_string($contact['message']) && trim($contact['message']) !== '')
-                    ? $contact['message']
-                    : $messageTemplate;
-                $personalized = $this->processMessageVariables($baseMessage, is_array($contact) ? $contact : []);
-                $bulkContacts[] = [
-                    'phone' => $formattedPhone,
-                    'message' => $personalized,
-                ];
-            }
-
-            // Preview del primer mensaje para logging
-            $firstPreview = $bulkContacts[0]['message'] ?? '';
-
-            // Construir URL del microservicio para envío masivo
-            $serviceUrl = isset($serviceUrl) ? $serviceUrl : env('WHATSAPP_SERVICE_URL', 'http://127.0.0.1:3000/api/v1');
-            $microserviceUrl = "{$serviceUrl}/instances/{$instanceId}/send-bulk";
-            $totalContacts = count($bulkContacts);
-
-            // Si no hay contactos, no llamar al microservicio; cerrar ejecución/campaña
-            if ($totalContacts === 0) {
-                Log::info('ℹ️ [WHATSAPP BULK SEND] Sin contactos. Finalizando ejecución sin envío', [
-                    'campaign_id' => $campaignId,
-                    'execution_id' => $executionId
-                ]);
-
-                try {
-                    CampaignExecution::where('id', $executionId)->update([
-                        'status' => 'completed',
-                        'messages_sent' => 0,
-                        'messages_failed' => 0,
-                        'completed_at' => now()
-                    ]);
-
-                    Campaign::where('id', $campaignId)->update([
-                        'status' => 'completed'
-                    ]);
-                } catch (\Throwable $e) {
-                    Log::warning('⚠️ [WHATSAPP BULK SEND] Error cerrando ejecución/campaña sin contactos', [
-                        'campaign_id' => $campaignId,
-                        'execution_id' => $executionId,
-                        'error' => $e->getMessage()
-                    ]);
-                }
-
-                return [
-                    'success' => true,
-                    'queued' => false,
-                    'message' => 'Sin contactos para enviar; campaña marcada como completada',
-                    'data' => [
-                        'total_contacts' => 0,
-                        'status' => 'completed'
-                    ]
-                ];
-            }
-
-            Log::info('🚀 [WHATSAPP BULK SEND] ========== INICIANDO ENVÍO MASIVO ==========');
-            Log::info('🚀 [WHATSAPP BULK SEND] Configuración:', [
-                'url' => $microserviceUrl,
+            Log::info('🚀 [CLOUD API BULK SEND] Iniciando envío masivo', [
+                'campaign_id' => $campaignId,
+                'execution_id' => $executionId,
                 'total_contacts' => $totalContacts,
-                'campaign_id' => $campaignId,
-                'execution_id' => $executionId,
-                'instance_id' => $instanceId,
-                'whatsapp_instance_db_id' => $campaign->whatsapp_instance_id ?? 'auto',
-                'message_preview' => substr($firstPreview, 0, 100) . '...'
+                'is_template' => $isTemplateSend,
+                'template_name' => $templateName,
+                'instance_id' => $whatsappInstance->id,
             ]);
 
-            // Enviar todos los mensajes en una sola petición bulk
-            $options = [
-                'minDelay' => 8000,  // 8 segundos mínimo entre mensajes
-                'maxDelay' => 15000, // 15 segundos máximo entre mensajes
-                'maxPerSession' => 50 // máximo 50 mensajes por sesión
-            ];
+            foreach ($contacts as $index => $contact) {
+                $phone = $this->formatPhoneNumber($contact['phone'] ?? '');
+                $contactName = $contact['name'] ?? 'Cliente';
 
-            // Adjuntar media si la campaña tiene media_url definida (normalizar URL absoluta para Baileys)
-            if ($campaign && !empty($campaign->media_url)) {
-                $mediaUrl = $campaign->media_url;
-
-                // Normalizar a URL absoluta si viene relativa o sin esquema
-                if (!(is_string($mediaUrl) && preg_match('#^https?://#i', $mediaUrl))) {
-                    $base = rtrim(env('APP_URL', ''), '/');
-                    if (empty($base)) {
-                        try {
-                            $base = rtrim(request()->getSchemeAndHttpHost(), '/');
-                        } catch (\Throwable $e) {
-                            // Fallback explícito en desarrollo si no hay request()
-                            $base = 'http://127.0.0.1:8001';
-                        }
-                    }
-                    $mediaUrl = $base . '/' . ltrim($mediaUrl, '/');
-                }
-
-                // Preflight ligero para detectar URLs inalcanzables (solo logging, no bloquear)
                 try {
-                    $probe = Http::timeout(3)->get($mediaUrl, ['_ping' => '1']);
-                    if (!$probe->successful()) {
-                        Log::warning('⚠️ [WHATSAPP BULK SEND] Media URL no alcanzable en preflight', [
-                            'media_url' => $mediaUrl,
-                            'status' => $probe->status(),
-                        ]);
-                    }
-                } catch (\Throwable $e) {
-                    Log::warning('⚠️ [WHATSAPP BULK SEND] Error accediendo a media_url en preflight', [
-                        'media_url' => $mediaUrl,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-
-                $options['media'] = [
-                    'type' => $campaign->media_type ?: 'image',
-                    'url' => $mediaUrl,
-                ];
-            }
-
-            // Determinar base para webhook del microservicio -> Laravel
-            $webhookBaseUrl = rtrim(env('WHATSAPP_WEBHOOK_BASE_URL', ''), '/');
-            if (empty($webhookBaseUrl)) {
-                if (app()->environment('local', 'development', 'testing')) {
-                    $webhookBaseUrl = 'http://127.0.0.1:8001';
-                } else {
-                    $webhookBaseUrl = rtrim(config('app.url') ?: env('APP_URL', ''), '/');
-                    if (empty($webhookBaseUrl)) {
-                        try {
-                            $webhookBaseUrl = rtrim(request()->getSchemeAndHttpHost(), '/');
-                        } catch (\Throwable $e) {
-                            $webhookBaseUrl = 'http://127.0.0.1:8001';
-                        }
-                    }
-                }
-            }
-
-            $payload = [
-                'contacts' => $bulkContacts,
-                // Compatibilidad: algunos despliegues del microservicio exigen un "message" global no vacío.
-                // Usamos el preview del primer contacto como fallback; si no existe, un espacio.
-                'message' => $firstPreview !== '' ? $firstPreview : ' ',
-                'options' => array_merge($options, [
-                    'campaign_id' => $campaignId,
-                    'execution_id' => $executionId,
-                    'webhook_url' => $webhookBaseUrl . '/api/saas/whatsapp/webhook/bulk-send-complete'
-                ])
-            ];
-
-            Log::info('📤 [WHATSAPP BULK SEND] Payload preparado:', [
-                'contacts_count' => count($payload['contacts']),
-                'first_contact' => $payload['contacts'][0] ?? null,
-                'message_length' => strlen($payload['message']),
-                'options' => $payload['options']
-            ]);
-
-            Log::info('🌐 [WHATSAPP BULK SEND] Enviando petición HTTP POST...');
-            // Timeout corto: solo esperamos confirmación de que el microservicio recibió la solicitud
-            // El envío real se hace en background y se trackea vía stats
-            $httpTimeout = (int) env('WHATSAPP_BULK_TIMEOUT', 10);
-            $connectTimeout = (int) env('WHATSAPP_BULK_CONNECT_TIMEOUT', 5);
-            
-            try {
-                $response = Http::timeout($httpTimeout)->connectTimeout($connectTimeout)->post($microserviceUrl, $payload);
-            } catch (\Illuminate\Http\Client\ConnectionException $timeoutEx) {
-                // Si hay timeout, asumir que el microservicio está procesando en background
-                Log::warning('⏱️ [WHATSAPP BULK SEND] Timeout esperando respuesta (normal con media), asumiendo procesamiento en background', [
-                    'campaign_id' => $campaignId,
-                    'execution_id' => $executionId,
-                    'timeout' => $httpTimeout
-                ]);
-                
-                // Marcar como en proceso y retornar éxito
-                return [
-                    'success' => true,
-                    'queued' => true,
-                    'message' => 'Envío delegado al microservicio (procesando en background)',
-                    'data' => [
-                        'total_contacts' => $totalContacts,
-                        'status' => 'processing'
-                    ]
-                ];
-            }
-            
-            Log::info('📨 [WHATSAPP BULK SEND] Respuesta recibida:', [
-                'status_code' => $response->status(),
-                'successful' => $response->successful(),
-                'body_preview' => substr($response->body(), 0, 200)
-            ]);
-
-            if ($response->successful()) {
-                $responseData = $response->json();
-
-                if ($responseData['success'] ?? false) {
-                    $results = $responseData['results'] ?? [];
-                    $stats = $responseData['stats'] ?? ['successful' => 0, 'failed' => 0, 'total' => 0];
-
-                    Log::info('✅ [WHATSAPP BULK SEND] Envío masivo exitoso', [
-                        'campaign_id' => $campaignId,
-                        'execution_id' => $executionId,
-                        'total_contacts' => $totalContacts,
-                        'successful' => $stats['successful'] ?? 0,
-                        'failed' => $stats['failed'] ?? 0,
-                        'results_count' => count($results)
-                    ]);
-
-                    // Actualizar mensajes en la base de datos según los resultados detallados
-                    if (!empty($results)) {
-                        foreach ($results as $result) {
-                            // Normalizar teléfono del resultado para que coincida con lo que guardamos en DB
-                            $phoneRaw = (string)($result['phone'] ?? '');
-                            $phoneNormalized = $this->formatPhoneNumber($phoneRaw);
-                            $status = $result['success'] ? CampaignMessage::STATUS_SENT : CampaignMessage::STATUS_FAILED;
-
-                            // Considerar equivalentes con y sin '+' para evitar desajustes con el microservicio
-                            $candidates = [$phoneNormalized];
-                            if (substr($phoneNormalized, 0, 1) === '+') {
-                                $candidates[] = ltrim($phoneNormalized, '+');
+                    if ($isTemplateSend && $templateName) {
+                        // Enviar plantilla aprobada por Meta
+                        $components = [];
+                        // Build body parameters from custom_data (variable mapping from frontend)
+                        $customData = $contact['custom_data'] ?? [];
+                        if (!empty($customData)) {
+                            $bodyParams = [];
+                            // Sort by key to maintain variable order ({{1}}, {{2}}, etc.)
+                            ksort($customData);
+                            foreach ($customData as $varName => $varValue) {
+                                $bodyParams[] = ['type' => 'text', 'text' => $varValue ?: $contactName];
                             }
-
-                            CampaignMessage::where('campaign_id', $campaignId)
-                                ->where('campaign_execution_id', $executionId)
-                                ->whereIn('recipient_phone', $candidates)
-                                ->where('status', CampaignMessage::STATUS_PENDING)
-                                ->update([
-                                    'status' => $status,
-                                    'sent_at' => $result['success'] ? now() : null,
-                                    'failed_at' => !$result['success'] ? now() : null,
-                                    'whatsapp_message_id' => $result['messageId'] ?? null,
-                                    'error_message' => $result['error'] ?? null
-                                ]);
+                            if (!empty($bodyParams)) {
+                                $components[] = [
+                                    'type' => 'body',
+                                    'parameters' => $bodyParams
+                                ];
+                            }
+                        } elseif (!empty($contactName)) {
+                            // Fallback: send contact name as first variable
+                            $components[] = [
+                                'type' => 'body',
+                                'parameters' => [
+                                    ['type' => 'text', 'text' => $contactName]
+                                ]
+                            ];
                         }
-                    }
 
-                    // SIEMPRE aplicar fallback basado en stats para cerrar estados correctamente
-                    // Esto es especialmente importante cuando hay media, ya que results puede venir vacío
-                    $successFromStats = (int)($stats['successful'] ?? 0);
-                    $failedFromStats = (int)($stats['failed'] ?? 0);
-                    
-                    if ($successFromStats > 0 || $failedFromStats > 0) {
-                        Log::info('🔄 [WHATSAPP BULK SEND] Aplicando actualización basada en stats', [
-                            'campaign_id' => $campaignId,
-                            'execution_id' => $executionId,
-                            'success_from_stats' => $successFromStats,
-                            'failed_from_stats' => $failedFromStats,
-                            'total_contacts' => $totalContacts,
-                            'had_results' => !empty($results)
-                        ]);
-                        
-                        // Actualizar mensajes exitosos si stats lo indica
-                        if ($successFromStats > 0) {
-                            $updated = CampaignMessage::where('campaign_id', $campaignId)
-                                ->where('campaign_execution_id', $executionId)
-                                ->where('status', CampaignMessage::STATUS_PENDING)
-                                ->limit($successFromStats)
-                                ->update([
-                                    'status' => CampaignMessage::STATUS_SENT,
-                                    'sent_at' => now()
-                                ]);
-                            
-                            Log::info('✅ [WHATSAPP BULK SEND] Mensajes marcados como enviados desde stats', [
-                                'updated_count' => $updated,
-                                'expected' => $successFromStats
-                            ]);
-                        }
-                        
-                        // Actualizar mensajes fallidos si stats lo indica
-                        if ($failedFromStats > 0) {
-                            $updatedFailed = CampaignMessage::where('campaign_id', $campaignId)
-                                ->where('campaign_execution_id', $executionId)
-                                ->where('status', CampaignMessage::STATUS_PENDING)
-                                ->limit($failedFromStats)
-                                ->update([
-                                    'status' => CampaignMessage::STATUS_FAILED,
-                                    'failed_at' => now(),
-                                    'error_message' => 'Error reportado por microservicio'
-                                ]);
-                            
-                            Log::info('❌ [WHATSAPP BULK SEND] Mensajes marcados como fallidos desde stats', [
-                                'updated_count' => $updatedFailed,
-                                'expected' => $failedFromStats
-                            ]);
-                        }
-                    }
-
-                    // Actualizar contadores finales
-                    $this->updateCampaignCounters($campaignId, $executionId);
-
-                    // Verificar si todos los mensajes han sido procesados
-                    // Importante: contar pendientes SOLO de esta ejecución para no quedar bloqueados por ejecuciones anteriores
-                    $pendingMessages = CampaignMessage::where('campaign_id', $campaignId)
-                        ->where('campaign_execution_id', $executionId)
-                        ->where('status', CampaignMessage::STATUS_PENDING)
-                        ->count();
-
-                    $sentMessages = CampaignMessage::where('campaign_id', $campaignId)
-                        ->where('campaign_execution_id', $executionId)
-                        ->where('status', CampaignMessage::STATUS_SENT)
-                        ->count();
-
-                    $failedMessages = CampaignMessage::where('campaign_id', $campaignId)
-                        ->where('campaign_execution_id', $executionId)
-                        ->where('status', CampaignMessage::STATUS_FAILED)
-                        ->count();
-
-                    $totalProcessed = $sentMessages + $failedMessages;
-
-                    Log::info('📊 [CAMPAIGN] Estado de mensajes después de actualización', [
-                        'campaign_id' => $campaignId,
-                        'execution_id' => $executionId,
-                        'pending' => $pendingMessages,
-                        'sent' => $sentMessages,
-                        'failed' => $failedMessages,
-                        'total_processed' => $totalProcessed,
-                        'total_expected' => $totalContacts
-                    ]);
-
-                    // Marcar como completada si no hay pendientes O si todos fueron procesados según stats
-                    if ($pendingMessages === 0 || $totalProcessed >= $totalContacts) {
-                        CampaignExecution::where('id', $executionId)->update([
-                            'status' => 'completed',
-                            'completed_at' => now()
-                        ]);
-
-                        Campaign::where('id', $campaignId)->update([
-                            'status' => 'completed'
-                        ]);
-
-                        Log::info('🎯 [CAMPAIGN] Campaña completada - todos los mensajes procesados', [
-                            'campaign_id' => $campaignId,
-                            'execution_id' => $executionId,
-                            'final_sent' => $sentMessages,
-                            'final_failed' => $failedMessages
-                        ]);
+                        $result = $cloudApi->sendTemplateMessage(
+                            $whatsappInstance,
+                            $phone,
+                            $templateName,
+                            $templateLanguage,
+                            $components
+                        );
                     } else {
-                        CampaignExecution::where('id', $executionId)->update([
-                            'status' => 'running'
+                        // Enviar texto libre (personalizado)
+                        $personalizedMessage = $this->processMessageVariables($messageTemplate, $contact);
+                        $result = $cloudApi->sendTextMessage($whatsappInstance, $phone, $personalizedMessage);
+                    }
+
+                    $messageStatus = $result['success'] ? CampaignMessage::STATUS_SENT : CampaignMessage::STATUS_FAILED;
+
+                    // Actualizar registro del mensaje
+                    CampaignMessage::where('campaign_id', $campaignId)
+                        ->where('campaign_execution_id', $executionId)
+                        ->where('recipient_phone', $phone)
+                        ->where('status', CampaignMessage::STATUS_PENDING)
+                        ->update([
+                            'status' => $messageStatus,
+                            'sent_at' => $result['success'] ? now() : null,
+                            'failed_at' => !$result['success'] ? now() : null,
+                            'whatsapp_message_id' => $result['message_id'] ?? null,
+                            'error_message' => $result['error'] ?? null,
                         ]);
 
-                        Campaign::where('id', $campaignId)->update([
-                            'status' => 'sending'
-                        ]);
-
-                        Log::info('📋 [CAMPAIGN] Campaña en proceso - mensajes pendientes', [
-                            'campaign_id' => $campaignId,
-                            'execution_id' => $executionId,
-                            'pending' => $pendingMessages,
-                            'processed' => $totalProcessed,
-                            'expected' => $totalContacts
+                    if ($result['success']) {
+                        $successCount++;
+                    } else {
+                        $failedCount++;
+                        Log::warning('⚠️ [CLOUD API BULK SEND] Mensaje fallido', [
+                            'phone' => $phone,
+                            'error' => $result['error'] ?? 'Unknown',
                         ]);
                     }
 
-                    return [
-                        'success' => true,
-                        'data' => [
-                            'total_contacts' => $totalContacts,
-                            'success_count' => $stats['successful'] ?? 0,
-                            'failed_count' => $stats['failed'] ?? 0,
-                            'results' => $results
-                        ]
-                    ];
-                } else {
-                    Log::error('❌ [WHATSAPP BULK SEND] Microservicio devolvió error', [
-                        'campaign_id' => $campaignId,
-                        'error' => $responseData['error'] ?? 'Error desconocido'
+                    // Rate limiting: 80 msgs/sec is Meta's limit, but we add a small delay
+                    if ($index < $totalContacts - 1) {
+                        usleep(100000); // 100ms between messages
+                    }
+
+                } catch (\Exception $msgError) {
+                    $failedCount++;
+                    Log::error('❌ [CLOUD API BULK SEND] Error enviando mensaje', [
+                        'phone' => $phone,
+                        'error' => $msgError->getMessage(),
                     ]);
 
-                    return [
-                        'success' => false,
-                        'error' => $responseData['error'] ?? 'Error en el envío masivo'
-                    ];
+                    CampaignMessage::where('campaign_id', $campaignId)
+                        ->where('campaign_execution_id', $executionId)
+                        ->where('recipient_phone', $phone)
+                        ->where('status', CampaignMessage::STATUS_PENDING)
+                        ->update([
+                            'status' => CampaignMessage::STATUS_FAILED,
+                            'failed_at' => now(),
+                            'error_message' => $msgError->getMessage(),
+                        ]);
                 }
-            } else {
-                $errorMsg = 'HTTP ' . $response->status() . ': ' . $response->body();
-                Log::warning('⚠️ [WHATSAPP BULK SEND] Microservicio no confirmó, se mantiene ejecución en curso', [
-                    'campaign_id' => $campaignId,
-                    'status' => $response->status(),
-                    'error' => $errorMsg
-                ]);
-
-                // No forzamos cambios de estado ni marcamos mensajes como enviados.
-                // Dejamos la ejecución y campaña en curso para que el microservicio complete el envío.
-                return [
-                    'success' => true,
-                    'queued' => true,
-                    'message' => 'Microservicio no confirmó a tiempo; envío en proceso',
-                    'http_status' => $response->status()
-                ];
             }
 
-        } catch (\Exception $e) {
-            Log::warning('⚠️ [WHATSAPP BULK SEND] Error general en envío masivo (delegado como en proceso)', [
-                'error' => $e->getMessage(),
-                'campaign_id' => $campaignId,
-                'execution_id' => $executionId,
-                'trace' => $e->getTraceAsString()
+            // Update execution and campaign status
+            $this->updateCampaignCounters($campaignId, $executionId);
+
+            $finalStatus = ($failedCount === $totalContacts) ? 'failed' : 'completed';
+
+            CampaignExecution::where('id', $executionId)->update([
+                'status' => $finalStatus,
+                'messages_sent' => $successCount,
+                'messages_failed' => $failedCount,
+                'completed_at' => now(),
             ]);
 
-            // No forzamos cambios en DB. Dejamos ejecución/campaña en curso.
+            $campaign->update(['status' => $finalStatus]);
+
+            Log::info('✅ [CLOUD API BULK SEND] Envío masivo completado', [
+                'campaign_id' => $campaignId,
+                'success' => $successCount,
+                'failed' => $failedCount,
+                'total' => $totalContacts,
+            ]);
+
             return [
                 'success' => true,
-                'queued' => true,
-                'message' => 'Envío delegado (no se obtuvo confirmación inmediata): ' . $e->getMessage()
+                'data' => [
+                    'total_contacts' => $totalContacts,
+                    'success_count' => $successCount,
+                    'failed_count' => $failedCount,
+                ]
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('❌ [CLOUD API BULK SEND] Error general', [
+                'campaign_id' => $campaignId,
+                'execution_id' => $executionId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
             ];
         }
     }

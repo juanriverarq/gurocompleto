@@ -11,6 +11,9 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ImageBackground,
+  Modal,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -18,7 +21,7 @@ import { getPolizaById, updatePoliza, UpdatePolizaData, getPolizaDocuments, getD
 import LoadingSpinner from '../components/LoadingSpinner';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Linking } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type PolizaDetailRouteParams = {
   PolizaDetail: {
@@ -38,6 +41,9 @@ const PolizaDetailScreen: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState<UpdatePolizaData>({});
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerField, setDatePickerField] = useState<'fecha_inicio' | 'fecha_fin' | 'fecha_expedicion' | 'fecha_recepcion'>('fecha_inicio');
+  const [tempDate, setTempDate] = useState(new Date());
   const [documents, setDocuments] = useState<PolizaDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [openingDoc, setOpeningDoc] = useState<string | null>(null);
@@ -210,6 +216,37 @@ const PolizaDetailScreen: React.FC = () => {
 
   const updateField = (field: keyof UpdatePolizaData, value: string | number) => {
     setEditData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const formatDateStr = (date: Date) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const openDatePicker = (field: 'fecha_inicio' | 'fecha_fin' | 'fecha_expedicion' | 'fecha_recepcion') => {
+    setDatePickerField(field);
+    const currentVal = editData[field] as string;
+    if (currentVal) {
+      const parts = currentVal.split('-');
+      if (parts.length === 3) setTempDate(new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+      else setTempDate(new Date());
+    } else {
+      setTempDate(new Date());
+    }
+    setShowDatePicker(true);
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (event.type === 'dismissed') { setShowDatePicker(false); return; }
+    const date = selectedDate || tempDate;
+    setTempDate(date);
+    updateField(datePickerField, formatDateStr(date));
+    if (Platform.OS === 'android') setShowDatePicker(false);
+  };
+
+  const confirmIOSDate = () => {
+    updateField(datePickerField, formatDateStr(tempDate));
+    setShowDatePicker(false);
   };
 
   const generatePdfResumen = async () => {
@@ -498,13 +535,18 @@ const PolizaDetailScreen: React.FC = () => {
   if (error) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <ImageBackground
+          source={require('../../assets/backgrounds/hero-gradient.png')}
+          style={styles.header}
+          imageStyle={{ transform: [{ scale: 2 }] }}
+          resizeMode="cover"
+        >
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Detalle de Póliza</Text>
           <View style={styles.headerPlaceholder} />
-        </View>
+        </ImageBackground>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
           <Text style={styles.errorText}>{error}</Text>
@@ -521,12 +563,17 @@ const PolizaDetailScreen: React.FC = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={isEditing ? cancelEditing : () => navigation.goBack()}
         >
-          <Ionicons name={isEditing ? "close" : "arrow-back"} size={24} color="#FFFFFF" />
+          <Ionicons name={isEditing ? "close" : "chevron-back"} size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isEditing ? 'Editar Póliza' : 'Detalle de Póliza'}</Text>
         {isEditing ? (
@@ -542,14 +589,14 @@ const PolizaDetailScreen: React.FC = () => {
             <Ionicons name="create-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         )}
-      </View>
+      </ImageBackground>
 
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          !isEditing ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} /> : undefined
+          !isEditing ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} /> : undefined
         }
       >
         {isEditing ? (
@@ -573,43 +620,39 @@ const PolizaDetailScreen: React.FC = () => {
             <View style={styles.editFormCard}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Fecha Inicio</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editData.fecha_inicio}
-                  onChangeText={(text) => updateField('fecha_inicio', text)}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9CA3AF"
-                />
+                <TouchableOpacity style={styles.dateField} onPress={() => openDatePicker('fecha_inicio')}>
+                  <Text style={editData.fecha_inicio ? styles.dateFieldText : styles.dateFieldPlaceholder}>
+                    {editData.fecha_inicio || 'Seleccionar fecha'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
               </View>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Fecha Fin</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editData.fecha_fin}
-                  onChangeText={(text) => updateField('fecha_fin', text)}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9CA3AF"
-                />
+                <TouchableOpacity style={styles.dateField} onPress={() => openDatePicker('fecha_fin')}>
+                  <Text style={editData.fecha_fin ? styles.dateFieldText : styles.dateFieldPlaceholder}>
+                    {editData.fecha_fin || 'Seleccionar fecha'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
               </View>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Fecha Expedición</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editData.fecha_expedicion}
-                  onChangeText={(text) => updateField('fecha_expedicion', text)}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9CA3AF"
-                />
+                <TouchableOpacity style={styles.dateField} onPress={() => openDatePicker('fecha_expedicion')}>
+                  <Text style={editData.fecha_expedicion ? styles.dateFieldText : styles.dateFieldPlaceholder}>
+                    {editData.fecha_expedicion || 'Seleccionar fecha'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
               </View>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Fecha Recepción</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editData.fecha_recepcion}
-                  onChangeText={(text) => updateField('fecha_recepcion', text)}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9CA3AF"
-                />
+                <TouchableOpacity style={styles.dateField} onPress={() => openDatePicker('fecha_recepcion')}>
+                  <Text style={editData.fecha_recepcion ? styles.dateFieldText : styles.dateFieldPlaceholder}>
+                    {editData.fecha_recepcion || 'Seleccionar fecha'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -827,7 +870,7 @@ const PolizaDetailScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>Documentos</Text>
         {loadingDocs ? (
           <View style={styles.docsLoading}>
-            <ActivityIndicator size="small" color="#6172FD" />
+            <ActivityIndicator size="small" color="#573CFF" />
             <Text style={styles.docsLoadingText}>Cargando documentos...</Text>
           </View>
         ) : documents.length > 0 ? (
@@ -856,7 +899,7 @@ const PolizaDetailScreen: React.FC = () => {
                     </Text>
                   </View>
                   {isOpening ? (
-                    <ActivityIndicator size="small" color="#6172FD" />
+                    <ActivityIndicator size="small" color="#573CFF" />
                   ) : (
                     <Ionicons name="open-outline" size={18} color="#9CA3AF" />
                   )}
@@ -890,6 +933,42 @@ const PolizaDetailScreen: React.FC = () => {
         )}
 
       </ScrollView>
+
+      {/* Date Picker */}
+      {showDatePicker && Platform.OS === 'ios' && (
+        <Modal transparent animationType="slide">
+          <View style={styles.datePickerOverlay}>
+            <View style={styles.datePickerContainer}>
+              <View style={styles.datePickerHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.datePickerAction}>Cancelar</Text>
+                </TouchableOpacity>
+                <Text style={styles.datePickerTitle}>
+                  {datePickerField === 'fecha_inicio' ? 'Fecha Inicio' : datePickerField === 'fecha_fin' ? 'Fecha Fin' : datePickerField === 'fecha_expedicion' ? 'Fecha Expedición' : 'Fecha Recepción'}
+                </Text>
+                <TouchableOpacity onPress={confirmIOSDate}>
+                  <Text style={styles.datePickerAction}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={onDateChange}
+                style={{ height: 200 }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showDatePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -900,30 +979,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 38,
   },
   loadingContainer: {
     flex: 1,
@@ -951,7 +1032,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -988,7 +1069,7 @@ const styles = StyleSheet.create({
   polizaNumber: {
     fontSize: 20,
     fontFamily: 'Montserrat_700Bold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -1049,7 +1130,7 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   valueHighlight: {
-    color: '#6172FD',
+    color: '#573CFF',
   },
   valueSuccess: {
     color: '#10B981',
@@ -1082,7 +1163,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#6172FD15',
+    backgroundColor: '#573CFF15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1136,13 +1217,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 16,
     marginTop: 20,
     marginBottom: 20,
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1209,6 +1290,57 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  dateField: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  dateFieldText: {
+    fontSize: 15,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#374151',
+  },
+  dateFieldPlaceholder: {
+    fontSize: 15,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#9CA3AF',
+  },
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  datePickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontFamily: 'Montserrat_700Bold',
+    color: '#1F2937',
+  },
+  datePickerAction: {
+    fontSize: 16,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#573CFF',
   },
 });
 

@@ -12,10 +12,12 @@ import {
   ActivityIndicator,
   Modal,
   Switch,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { createEmpleado, CreateEmpleadoData, getRolesBroker } from '../services/empleadosService';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const TIPOS_DOCUMENTO = [
   { key: 'cedula', label: 'Cédula de Ciudadanía' },
@@ -82,11 +84,49 @@ const CreateEmpleadoScreen: React.FC = () => {
   const [estado, setEstado] = useState('activo');
   const [rolId, setRolId] = useState<number | undefined>(undefined);
   const [fechaIngreso, setFechaIngreso] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerField, setDatePickerField] = useState<'ingreso' | 'nacimiento'>('ingreso');
+  const [tempDate, setTempDate] = useState(new Date());
 
   // Step 3 - Información Adicional
   const [direccion, setDireccion] = useState('');
   const [ciudad, setCiudad] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
+
+  const formatDateStr = (date: Date) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const openDatePicker = (field: 'ingreso' | 'nacimiento') => {
+    setDatePickerField(field);
+    const currentVal = field === 'ingreso' ? fechaIngreso : fechaNacimiento;
+    if (currentVal) {
+      const parts = currentVal.split('-');
+      if (parts.length === 3) setTempDate(new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+      else setTempDate(new Date());
+    } else {
+      setTempDate(new Date());
+    }
+    setShowDatePicker(true);
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (event.type === 'dismissed') { setShowDatePicker(false); return; }
+    const date = selectedDate || tempDate;
+    setTempDate(date);
+    const str = formatDateStr(date);
+    if (datePickerField === 'ingreso') setFechaIngreso(str);
+    else setFechaNacimiento(str);
+    if (Platform.OS === 'android') setShowDatePicker(false);
+  };
+
+  const confirmIOSDate = () => {
+    const str = formatDateStr(tempDate);
+    if (datePickerField === 'ingreso') setFechaIngreso(str);
+    else setFechaNacimiento(str);
+    setShowDatePicker(false);
+  };
   const [salario, setSalario] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [accesoActivo, setAccesoActivo] = useState(true);
@@ -316,7 +356,12 @@ const CreateEmpleadoScreen: React.FC = () => {
       )}
 
       <Text style={styles.inputLabel}>Fecha de Ingreso</Text>
-      <TextInput style={styles.input} value={fechaIngreso} onChangeText={setFechaIngreso} placeholder="YYYY-MM-DD" placeholderTextColor="#C4C4C4" />
+      <TouchableOpacity style={styles.dateField} onPress={() => openDatePicker('ingreso')}>
+        <Text style={fechaIngreso ? styles.dateFieldText : styles.dateFieldPlaceholder}>
+          {fechaIngreso || 'Seleccionar fecha'}
+        </Text>
+        <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+      </TouchableOpacity>
     </View>
   );
 
@@ -332,7 +377,12 @@ const CreateEmpleadoScreen: React.FC = () => {
       <TextInput style={styles.input} value={ciudad} onChangeText={setCiudad} placeholder="Ej: Bogotá" placeholderTextColor="#C4C4C4" />
 
       <Text style={styles.inputLabel}>Fecha de Nacimiento</Text>
-      <TextInput style={styles.input} value={fechaNacimiento} onChangeText={setFechaNacimiento} placeholder="YYYY-MM-DD" placeholderTextColor="#C4C4C4" />
+      <TouchableOpacity style={styles.dateField} onPress={() => openDatePicker('nacimiento')}>
+        <Text style={fechaNacimiento ? styles.dateFieldText : styles.dateFieldPlaceholder}>
+          {fechaNacimiento || 'Seleccionar fecha'}
+        </Text>
+        <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+      </TouchableOpacity>
 
       <Text style={styles.inputLabel}>Salario</Text>
       <TextInput style={styles.input} value={salario} onChangeText={setSalario} placeholder="Ej: 2500000" placeholderTextColor="#C4C4C4" keyboardType="numeric" />
@@ -351,7 +401,7 @@ const CreateEmpleadoScreen: React.FC = () => {
         <Switch
           value={accesoActivo}
           onValueChange={setAccesoActivo}
-          trackColor={{ false: '#E5E7EB', true: '#6172FD' }}
+          trackColor={{ false: '#E5E7EB', true: '#573CFF' }}
           thumbColor="#FFFFFF"
         />
       </View>
@@ -370,18 +420,23 @@ const CreateEmpleadoScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Nuevo Empleado</Text>
           <Text style={styles.headerSubtitle}>{STEPS[step]}</Text>
         </View>
         <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={24} color="#FFFFFF" />
+          <Ionicons name="close" size={22} color="#FFFFFF" />
         </TouchableOpacity>
-      </View>
+      </ImageBackground>
 
       {renderStepIndicator()}
 
@@ -452,6 +507,42 @@ const CreateEmpleadoScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Date Picker */}
+      {showDatePicker && Platform.OS === 'ios' && (
+        <Modal transparent animationType="slide">
+          <View style={styles.pickerOverlay}>
+            <View style={styles.pickerModal}>
+              <View style={styles.pickerHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={{ fontSize: 16, fontFamily: 'Montserrat_600SemiBold', color: '#573CFF' }}>Cancelar</Text>
+                </TouchableOpacity>
+                <Text style={styles.pickerTitle}>
+                  {datePickerField === 'ingreso' ? 'Fecha de Ingreso' : 'Fecha de Nacimiento'}
+                </Text>
+                <TouchableOpacity onPress={confirmIOSDate}>
+                  <Text style={{ fontSize: 16, fontFamily: 'Montserrat_600SemiBold', color: '#573CFF' }}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={onDateChange}
+                style={{ height: 200 }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showDatePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+        />
+      )}
     </View>
   );
 };
@@ -462,18 +553,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 110,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 50,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -520,7 +614,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepDotActive: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   stepDotText: {
     fontSize: 11,
@@ -537,7 +631,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   stepLineActive: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   scrollView: {
     flex: 1,
@@ -650,13 +744,13 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     borderRadius: 2,
   },
   nextButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
@@ -709,6 +803,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Montserrat_500Medium',
     color: '#374151',
+  },
+  dateField: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
+  },
+  dateFieldText: {
+    fontSize: 15,
+    fontFamily: 'Montserrat_400Regular',
+    color: '#1F2937',
+  },
+  dateFieldPlaceholder: {
+    fontSize: 15,
+    fontFamily: 'Montserrat_400Regular',
+    color: '#C4C4C4',
   },
 });
 

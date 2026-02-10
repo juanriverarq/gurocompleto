@@ -105,3 +105,8 @@ export const createCliente = async (data: CreateClienteData) => {
   const response = await api.post('/saas/clientes', data);
   return response.data;
 };
+
+export const deleteCliente = async (id: number) => {
+  const response = await api.delete(`/saas/clientes/${id}`);
+  return response.data;
+};

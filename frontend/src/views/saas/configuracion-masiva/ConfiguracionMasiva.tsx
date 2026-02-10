@@ -27,7 +27,7 @@ import { auth } from "../../../config/firebase";
 import HeroMetricCard from "../../../components/campaigns/HeroMetricCard";
 import SecondaryMetricCard from "../../../components/campaigns/SecondaryMetricCard";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useWhatsAppSocket } from "../../../hooks/useWhatsAppSocket";
+// useWhatsAppSocket removed - Cloud API only, no Baileys microservice
 
 // Tipos locales mínimos para TS
 type Contact = { phone: string; name: string; email?: string };
@@ -128,122 +128,7 @@ const ConfiguracionMasiva: React.FC = () => {
   const [totalCostCOPState, setTotalCostCOP] = useState(0);
   const [avgCostCOPState, setAvgCostCOP] = useState(0);
   
-  // ========== WEBSOCKET PARA DETECCIÓN AUTOMÁTICA DE CONEXIÓN ==========
-  // Refs para acceder a estado actual sin causar re-renders
-  const selectedInstanceRef = useRef(selectedInstance);
-  const isQRModalOpenRef = useRef(isQRModalOpen);
-  
-  // Mantener refs actualizados
-  useEffect(() => {
-    selectedInstanceRef.current = selectedInstance;
-    isQRModalOpenRef.current = isQRModalOpen;
-  }, [selectedInstance, isQRModalOpen]);
-
-  // Inicializar WebSocket - callbacks estables usando refs
-  const { isConnected: socketConnected, subscribeToInstance, unsubscribeFromInstance } = useWhatsAppSocket({
-    autoConnect: true,
-    events: {
-      onConnected: (data) => {
-        console.log('🎉 [WebSocket] Instancia conectada:', data.instanceId);
-        
-        // Actualizar estado local de la instancia
-        setInstances(prev => prev.map(instance => 
-          instance.instance_id === data.instanceId 
-            ? { ...instance, status: 'connected' }
-            : instance
-        ));
-        
-        // Si el modal QR está abierto para esta instancia, mostrar animación de éxito
-        if (selectedInstanceRef.current?.instance_id === data.instanceId && isQRModalOpenRef.current) {
-          console.log('🎉 [WebSocket] Mostrando animación de conexión exitosa');
-          setShowConnectionSuccess(true);
-          setQrCode(null);
-          
-          // Esperar 2 segundos mostrando la animación, luego cerrar
-          setTimeout(() => {
-            setIsQRModalOpen(false);
-            setShowConnectionSuccess(false);
-            
-            // Restaurar z-index del header
-            const header = document.querySelector('header');
-            if (header) {
-              (header as HTMLElement).style.zIndex = '';
-            }
-            
-            // Mostrar toast de éxito
-            toast({
-              title: "🎉 ¡WhatsApp Conectado!",
-              description: `La instancia se ha conectado exitosamente. Ya puedes enviar mensajes.`,
-              duration: 5000,
-            });
-          }, 2000);
-        } else {
-          // Si el modal no está abierto, solo mostrar toast
-          toast({
-            title: "🎉 ¡WhatsApp Conectado!",
-            description: `La instancia ${data.instanceId} se ha conectado exitosamente.`,
-            duration: 5000,
-          });
-        }
-        
-        loadInstances();
-        loadInstanceStats();
-      },
-      onDisconnected: (data) => {
-        console.log('❌ [WebSocket] Instancia desconectada:', data.instanceId);
-        setInstances(prev => prev.map(instance => 
-          instance.instance_id === data.instanceId 
-            ? { ...instance, status: 'disconnected' }
-            : instance
-        ));
-        loadInstanceStats();
-      },
-      onQRCode: (data) => {
-        console.log('📱 [WebSocket] QR recibido para:', data.instanceId);
-        if (selectedInstanceRef.current?.instance_id === data.instanceId && isQRModalOpenRef.current) {
-          setQrCode(data.qrCode);
-        }
-      },
-      onInstanceUpdate: (data) => {
-        console.log('📡 [WebSocket] Actualización de instancia:', data);
-        if (data.event === 'connected') {
-          setInstances(prev => prev.map(instance => 
-            instance.instance_id === data.instanceId 
-              ? { ...instance, status: 'connected' }
-              : instance
-          ));
-          
-          if (selectedInstanceRef.current?.instance_id === data.instanceId && isQRModalOpenRef.current) {
-            setIsQRModalOpen(false);
-            setQrCode(null);
-            toast({
-              title: "🎉 ¡Conectado!",
-              description: "La instancia de WhatsApp se conectó exitosamente.",
-            });
-            loadInstances();
-          }
-        }
-      },
-    }
-  });
-
-  // Suscribirse a instancias cuando cambian (solo cuando hay cambios reales)
-  const instanceIdsRef = useRef<string[]>([]);
-  useEffect(() => {
-    if (!socketConnected) return;
-    
-    const currentIds = instances.map(i => i.instance_id).filter(Boolean);
-    const prevIds = instanceIdsRef.current;
-    
-    // Solo suscribirse a nuevas instancias
-    const newIds = currentIds.filter(id => !prevIds.includes(id));
-    const removedIds = prevIds.filter(id => !currentIds.includes(id));
-    
-    newIds.forEach(id => subscribeToInstance(id));
-    removedIds.forEach(id => unsubscribeFromInstance(id));
-    
-    instanceIdsRef.current = currentIds;
-  }, [socketConnected, instances, subscribeToInstance, unsubscribeFromInstance]);
+  // WebSocket removed - Cloud API only, no Baileys microservice needed
 
   // Deep-link desde buscador global: abrir detalles de campaña WhatsApp por ID
   const location = useLocation();
@@ -537,27 +422,15 @@ const ConfiguracionMasiva: React.FC = () => {
   };
 
 
-  // Funciones auxiliares para cargar datos
+  // Funciones auxiliares para cargar datos (Cloud API only - contacts/automations managed via Laravel)
   const loadContacts = async () => {
-    try {
-      const contactsData = await whatsappMicroservice.getContacts();
-      if (contactsData.success) {
-        setContacts(contactsData.contacts || []);
-      }
-    } catch (error) {
-      console.error('Error loading contacts:', error);
-    }
+    // Contacts now managed via Laravel backend, not Baileys microservice
+    setContacts([]);
   };
 
   const loadAutomations = async () => {
-    try {
-      const automationsData = await whatsappMicroservice.getAutomations();
-      if (automationsData.success) {
-        setAutomations(automationsData.automations || []);
-      }
-    } catch (error) {
-      console.error('Error loading automations:', error);
-    }
+    // Automations now managed via Laravel backend, not Baileys microservice
+    setAutomations([]);
   };
 
   // Cargar historial de mensajes con paginación y búsqueda
@@ -747,250 +620,27 @@ const ConfiguracionMasiva: React.FC = () => {
 
   const totalPages = Math.ceil(totalMessages / messagesPerPage);
 
-  // Handlers para la conexión de WhatsApp
+  // Baileys microservice handlers removed - Cloud API only
   const handleReconnect = async () => {
-    try {
-      setLoading(true);
-      const result = await whatsappMicroservice.reconnect();
-      
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message
-        });
-        setTimeout(() => loadConnectionStatus(), 2000);
-      } else {
-        toast({
-          title: "Error",
-          description: result.message || "Error al reconectar",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al reconectar WhatsApp",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    toast({ title: "Info", description: "La reconexión se gestiona desde Cloud API de Meta." });
   };
-
   const handleDisconnect = async () => {
-    try {
-      setLoading(true);
-      const result = await whatsappMicroservice.disconnect();
-      
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: "WhatsApp desconectado exitosamente"
-        });
-        setConnectionStatus(null);
-        setQrCode(null);
-      } else {
-        toast({
-          title: "Error",
-          description: result.message || "Error al desconectar",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al desconectar WhatsApp",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    toast({ title: "Info", description: "La desconexión se gestiona desde Cloud API de Meta." });
   };
-
   const handleResetConnection = async () => {
-    try {
-      setLoading(true);
-      const result = await whatsappMicroservice.resetConnection();
-      
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: "Conexión reiniciada exitosamente"
-        });
-        setTimeout(() => loadConnectionStatus(), 2000);
-      } else {
-        toast({
-          title: "Error",
-          description: result.message || "Error al reiniciar conexión",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al reiniciar conexión",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    toast({ title: "Info", description: "El reinicio se gestiona desde Cloud API de Meta." });
   };
-
-  // Handlers para contactos
   const handleAddContact = async () => {
-    if (!newContact.phone || !newContact.name) {
-      toast({
-        title: "Error",
-        description: "Teléfono y nombre son requeridos",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const result = await whatsappMicroservice.saveContact(newContact as Contact);
-      
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: "Contacto agregado exitosamente"
-        });
-        setNewContact({ phone: '', name: '', email: '' });
-        loadContacts();
-      } else {
-        toast({
-          title: "Error",
-          description: "Error al agregar contacto",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al agregar contacto",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    toast({ title: "Info", description: "Los contactos se gestionan desde la sección de Contactos Cloud API." });
   };
-
-  // Handlers para mensajes masivos
   const handleSendBulkMessage = async () => {
-    if (!bulkMessage.message || bulkMessage.selectedContacts.length === 0) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar contactos y escribir un mensaje",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const contactsToSend = bulkMessage.selectedContacts.map(phone => ({ phone }));
-      
-      const result = await whatsappMicroservice.sendBulkMessages({
-        contacts: contactsToSend,
-        message: bulkMessage.message
-      });
-      
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message
-        });
-        setBulkMessage({ message: '', selectedContacts: [] });
-      } else {
-        toast({
-          title: "Error",
-          description: "Error al enviar mensajes",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al enviar mensajes masivos",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    toast({ title: "Info", description: "Los envíos masivos se realizan mediante campañas con plantillas aprobadas por Meta." });
   };
-
-
-  // Handlers para automatizaciones
   const handleCreateAutomation = async () => {
-    if (!newAutomation.name || !newAutomation.message_template) {
-      toast({
-        title: "Error",
-        description: "Nombre y mensaje son requeridos",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const result = await whatsappMicroservice.createAutomation({
-        name: newAutomation.name,
-        trigger_type: newAutomation.trigger_type,
-        trigger_value: newAutomation.trigger_value,
-        message_template: newAutomation.message_template,
-        active: newAutomation.active,
-      });
-      
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: "Automatización creada exitosamente"
-        });
-        setNewAutomation({
-          name: '',
-          trigger_type: 'keyword',
-          trigger_value: '',
-          message_template: '',
-          active: true
-        });
-        loadAutomations();
-      } else {
-        toast({
-          title: "Error",
-          description: "Error al crear automatización",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al crear automatización",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    toast({ title: "Info", description: "Las automatizaciones se gestionan desde el backend." });
   };
-
-  const handleToggleAutomation = async (id: number) => {
-    try {
-      const result = await whatsappMicroservice.toggleAutomation(id);
-      
-      if (result.success) {
-        toast({
-          title: "Éxito",
-          description: result.message
-        });
-        loadAutomations();
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al cambiar estado de automatización",
-        variant: "destructive"
-      });
-    }
+  const handleToggleAutomation = async (_id: number) => {
+    toast({ title: "Info", description: "Las automatizaciones se gestionan desde el backend." });
   };
 
   // Función para cargar campañas desde Laravel
@@ -1405,209 +1055,7 @@ const ConfiguracionMasiva: React.FC = () => {
     }
   };
 
-  // Función para mostrar QR de una instancia específica
-  const handleShowQR = async (instance: any) => {
-    if (!instance.id) return;
-
-    // Forzar header detrás de la modal antes de abrir
-    const header = document.querySelector('header');
-    if (header) {
-      header.style.zIndex = '0';
-    }
-
-    console.log('🔲 Obteniendo QR para instancia:', instance.id, instance.phone_number);
-
-    setSelectedInstance(instance);
-    setQrCode('');
-    setIsQRModalOpen(true);
-
-    try {
-      // Usar el servicio específico de instancias de Laravel (NO el microservicio directo)
-      const response = await whatsappInstanceService.getQRCode(instance.id);
-      console.log('🔲 Respuesta QR de Laravel:', response);
-
-      if (response.success && response.qr) {
-        setQrCode(response.qr);
-        setQrExpiry(response.expires_at || '');
-
-        toast({
-          title: "QR Generado",
-          description: `QR código disponible para ${instance.phone_number}`,
-        });
-      } else if (!response.success && response.message) {
-        // Caso específico: instancia ya conectada u otro error del microservicio
-        console.log('ℹ️ Instancia no puede generar QR:', response.message);
-
-        // Cerrar el modal de QR ya que no se puede mostrar
-        setIsQRModalOpen(false);
-
-        toast({
-          title: "Información",
-          description: response.message,
-          variant: "default" // Usar variante default en lugar de destructive para mensajes informativos
-        });
-
-        // Actualizar el estado de la instancia por si cambió
-        await handleRefreshStatus(instance.id);
-      } else {
-        console.error('❌ Error obteniendo QR:', response);
-        toast({
-          title: "Error",
-          description: response.message || 'Error al obtener código QR de la instancia',
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('❌ Error getting QR:', error);
-      toast({
-        title: "Error de Conexión",
-        description: 'No se pudo conectar para obtener el código QR',
-        variant: "destructive"
-      });
-    }
-
-    // Iniciar polling para detectar cuando se conecte
-    if (!qrPollingInterval && instance.id) {
-      startQRPolling(instance.id);
-    }
-  };
-
-  // Función para iniciar el polling de estado mientras el QR está abierto
-  const startQRPolling = (instanceId: number) => {
-    console.log('🔄 Iniciando polling MEJORADO para detectar conexión de instancia:', instanceId);
-    
-    // Encontrar el instance_id real para consultar directamente al microservicio
-    const instanceData = instances.find(i => i.id === instanceId);
-    const microserviceInstanceId = instanceData?.instance_id;
-    
-    let pollCount = 0;
-    const maxPolls = 60; // Máximo 2 minutos de polling (60 * 2s)
-    
-    const interval = setInterval(async () => {
-      pollCount++;
-      
-      // Usar refs para obtener valores actuales (evitar closure stale)
-      if (!isQRModalOpenRef.current || !selectedInstanceRef.current) {
-        console.log('🛑 Modal cerrado, deteniendo polling');
-        stopQRPolling();
-        return;
-      }
-      
-      if (pollCount > maxPolls) {
-        console.log('⏰ Tiempo máximo de polling alcanzado');
-        stopQRPolling();
-        toast({
-          title: "Tiempo agotado",
-          description: "El QR ha expirado. Por favor, solicita uno nuevo.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      try {
-        console.log(`🔍 [Poll ${pollCount}/${maxPolls}] Verificando estado de instancia...`);
-        
-        // ESTRATEGIA DUAL: Consultar tanto Laravel como microservicio directamente
-        let isConnected = false;
-        
-        // 1. Primero intentar consultar directamente al microservicio (más rápido)
-        if (microserviceInstanceId) {
-          try {
-            const microserviceResponse = await fetch(`http://localhost:3000/api/v1/instances/${microserviceInstanceId}/status`);
-            if (microserviceResponse.ok) {
-              const microData = await microserviceResponse.json();
-              console.log(`📡 [Microservicio] Estado:`, microData);
-              
-              if (microData.success && microData.connected === true) {
-                isConnected = true;
-                console.log('🎉 [Microservicio] ¡Detectó conexión exitosa!');
-              }
-            }
-          } catch (microError) {
-            console.warn('⚠️ Error consultando microservicio directamente:', microError);
-          }
-        }
-        
-        // 2. Si no detectamos conexión, verificar via Laravel como fallback
-        if (!isConnected) {
-          const response = await whatsappInstanceService.getStatus(instanceId);
-          console.log(`📡 [Laravel] Estado:`, response);
-          
-          if (response.success && (response.status === 'connected' || response.status === 'authenticated' || response.status === 'ready')) {
-            isConnected = true;
-            console.log('🎉 [Laravel] ¡Detectó conexión exitosa!');
-          }
-        }
-        
-        // Si detectamos conexión por cualquier método
-        if (isConnected) {
-          console.log('🎉 ¡Instancia conectada! Mostrando animación de éxito');
-          
-          // Detener polling
-          stopQRPolling();
-          
-          // Mostrar animación de éxito en el modal
-          setShowConnectionSuccess(true);
-          setQrCode(null);
-          
-          // Actualizar estado local inmediatamente
-          setInstances(prev => prev.map(instance => 
-            instance.id === instanceId 
-              ? { ...instance, status: 'connected' }
-              : instance
-          ));
-          
-          // Esperar 2 segundos mostrando la animación de éxito, luego cerrar
-          setTimeout(() => {
-            setIsQRModalOpen(false);
-            setShowConnectionSuccess(false);
-            
-            // Restaurar z-index del header
-            const header = document.querySelector('header');
-            if (header) {
-              header.style.zIndex = '';
-            }
-            
-            // Mostrar toast de éxito
-            toast({
-              title: "🎉 ¡Conectado Exitosamente!",
-              description: "WhatsApp se ha conectado correctamente.",
-              duration: 5000,
-            });
-          }, 2000);
-          
-          // Recargar instancias para obtener datos actualizados
-          await loadInstances();
-          await loadInstanceStats();
-        }
-      } catch (error) {
-        console.warn('⚠️ Error en polling QR (continuando...):', error);
-      }
-    }, 2000); // Verificar cada 2 segundos (más agresivo)
-
-    setQrPollingInterval(interval);
-  };
-
-  // Función para detener el polling
-  const stopQRPolling = () => {
-    if (qrPollingInterval) {
-      console.log('🛑 Deteniendo polling de QR');
-      clearInterval(qrPollingInterval);
-      setQrPollingInterval(null);
-    }
-  };
-
-  // Efecto para limpiar polling cuando se cierre el modal
-  useEffect(() => {
-    if (!isQRModalOpen) {
-      stopQRPolling();
-    }
-    
-    // Cleanup cuando se desmonte el componente
-    return () => {
-      stopQRPolling();
-    };
-  }, [isQRModalOpen]);
+  // QR/Baileys functions removed - Cloud API only, no QR scanning needed
 
   // Cargar instancias cuando el usuario/broker cambie
   useEffect(() => {
@@ -3159,7 +2607,6 @@ const ConfiguracionMasiva: React.FC = () => {
             <Button
               onClick={() => {
                 setIsQRModalOpen(false);
-                stopQRPolling();
               }}
               variant="outline"
             >

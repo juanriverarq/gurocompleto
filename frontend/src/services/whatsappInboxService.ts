@@ -254,8 +254,11 @@ class WhatsAppInboxService {
   }
 
   async sendMediaMessage(conversationId: number, file: File, caption?: string): Promise<WhatsAppMessage> {
+    console.log('📤 [sendMediaMessage] Starting', { conversationId, fileName: file.name, fileType: file.type, fileSize: file.size, caption });
+    
     const token = await getAuthToken();
     if (!token) {
+      console.error('📤 [sendMediaMessage] No auth token');
       throw new Error('No autenticado');
     }
 
@@ -276,21 +279,31 @@ class WhatsAppInboxService {
     }
     formData.append('message_type', messageType);
 
-    const response = await fetch(`${API_BASE_URL}/saas/whatsapp-inbox/conversations/${conversationId}/media`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formData,
-    });
+    const url = `${API_BASE_URL}/saas/whatsapp-inbox/conversations/${conversationId}/media`;
+    console.log('📤 [sendMediaMessage] Sending to:', url, 'type:', messageType);
 
-    const responseData = await response.json();
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
-    if (!response.ok) {
-      throw new Error(responseData.error || responseData.message || 'Error al enviar archivo');
+      console.log('📤 [sendMediaMessage] Response status:', response.status);
+      const responseData = await response.json();
+      console.log('📤 [sendMediaMessage] Response data:', responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.error || responseData.message || 'Error al enviar archivo');
+      }
+
+      return responseData.data;
+    } catch (err: any) {
+      console.error('📤 [sendMediaMessage] Error:', err.message, err);
+      throw err;
     }
-
-    return responseData.data;
   }
 
   async assignConversation(conversationId: number, userId: number, reason?: string): Promise<WhatsAppConversation> {

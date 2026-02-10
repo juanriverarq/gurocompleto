@@ -7,6 +7,7 @@ const CTASection = () => {
   const isInView = useInView(ref, { once: true, margin: '-100px' });
 
   return (
+    <>
     <section ref={ref} className="py-28 relative overflow-hidden bg-[#fafafa]">
       <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
 
@@ -49,12 +50,14 @@ const CTASection = () => {
               </span>
             </motion.a>
             <motion.a
-              href="/contacto"
+              href="https://wa.me/573105360658?text=Hola%2C%20me%20interesa%20una%20demo%20de%20Guro"
+              target="_blank"
+              rel="noopener noreferrer"
               className="group px-8 py-4 text-gray-700 hover:text-gray-900 font-medium rounded-full border border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50 transition-all flex items-center gap-2"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Icon icon="solar:calendar-bold" className="w-5 h-5 text-[#635BFF]" />
+              <Icon icon="mdi:whatsapp" className="w-5 h-5 text-[#25D366]" />
               Agendar demo personalizada
             </motion.a>
           </div>
@@ -76,6 +79,8 @@ const CTASection = () => {
         </motion.div>
       </div>
     </section>
+
+    </>
   );
 };
 

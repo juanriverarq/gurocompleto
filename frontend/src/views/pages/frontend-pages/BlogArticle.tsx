@@ -1,8 +1,12 @@
 import { Helmet } from 'react-helmet';
 import { Link, useParams } from 'react-router';
-import LpHeader from 'src/components/landingpage/header/Header';
-import Footer from 'src/components/landingpage/footer/Footer';
+import { motion } from 'framer-motion';
+import { Icon } from '@iconify/react';
+import Navbar from 'src/components/landingpage/framer-landing/Navbar';
+import Footer from 'src/components/landingpage/framer-landing/Footer';
 import { segurosArticles } from 'src/data/blog/segurosFaq';
+
+const tagStyle = 'bg-white/[0.05] text-white/50 border-white/[0.08]';
 
 const BlogArticle = () => {
   const { slug } = useParams();
@@ -10,19 +14,23 @@ const BlogArticle = () => {
 
   if (!article) {
     return (
-      <>
-        <LpHeader />
-        <section className="py-16 bg-white dark:bg-slate-950">
+      <div className="min-h-screen bg-[#0a0a0f]" style={{ fontFamily: "'General Sans', sans-serif" }}>
+        <Navbar />
+        <section className="pt-40 pb-20">
           <div className="max-w-4xl mx-auto px-4 text-center">
-            <h1 className="text-3xl font-semibold text-slate-900 dark:text-white mb-3">Artículo no encontrado</h1>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">El enlace que buscas no existe o fue movido.</p>
-            <Link to="/blog" className="text-primary font-semibold hover:underline">
+            <Icon icon="solar:document-text-broken" className="w-16 h-16 text-white/20 mx-auto mb-6" />
+            <h1 className="text-3xl font-bold text-white mb-3">Artículo no encontrado</h1>
+            <p className="text-white/50 mb-8">El enlace que buscas no existe o fue movido.</p>
+            <Link
+              to="/blog"
+              className="inline-flex items-center gap-2 bg-[#573CFF] text-white px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#4530cc] transition-colors"
+            >
+              <Icon icon="solar:arrow-left-linear" className="w-4 h-4" />
               Volver al blog
             </Link>
           </div>
         </section>
-        <Footer />
-      </>
+      </div>
     );
   }
 
@@ -101,7 +109,7 @@ const BlogArticle = () => {
   } : null;
 
   return (
-    <>
+    <div className="min-h-screen bg-[#0a0a0f]" style={{ fontFamily: "'General Sans', sans-serif" }}>
       <Helmet>
         <title>{article.title} | Blog Guro</title>
         <meta name="description" content={article.excerpt} />
@@ -126,135 +134,235 @@ const BlogArticle = () => {
         {faqSchema && <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>}
       </Helmet>
 
-      <LpHeader />
+      <Navbar />
 
-      <section className="bg-gradient-to-br from-primary to-primaryemphasis text-white py-16 md:py-20">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:gap-10">
-            <div className="flex-1">
-              <p className="text-sm uppercase tracking-[0.2em] text-white/80 mb-3">Blog · Guía SEO</p>
-              <h1 className="text-3xl md:text-4xl font-semibold leading-tight text-white">{article.title}</h1>
-              <p className="mt-4 text-lg text-white/90 max-w-2xl">{article.excerpt}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {article.tags?.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-3 py-1 rounded-full text-xs bg-white/15 border border-white/25 text-white"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
+      {/* Hero */}
+      <section
+        className="relative pt-32 pb-16 sm:pt-40 sm:pb-24 overflow-hidden"
+        style={{
+          backgroundImage: 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: '200px 200px',
+            opacity: 0.18,
+          }}
+        />
+        <div className="max-w-[900px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 30, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-2 text-white/40 text-sm mb-8">
+              <Link to="/" className="hover:text-white transition-colors">Inicio</Link>
+              <Icon icon="solar:alt-arrow-right-linear" className="w-3 h-3" />
+              <Link to="/blog" className="hover:text-white transition-colors">Blog</Link>
+              <Icon icon="solar:alt-arrow-right-linear" className="w-3 h-3" />
+              <span className="text-white/60 truncate max-w-[200px]">Artículo</span>
             </div>
-            {article.image && (
-              <div className="mt-6 lg:mt-0 lg:w-80 flex-shrink-0">
-                <img
-                  src={article.image}
-                  alt={article.title}
-                  className="rounded-2xl shadow-xl w-full h-48 lg:h-56 object-cover"
-                />
+
+            {/* Tags */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              {article.tags?.map((tag) => (
+                <span
+                  key={tag}
+                  className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${tagStyle}`}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-[1.15] tracking-[-0.02em] mb-6">
+              {article.title}
+            </h1>
+            <p className="text-lg sm:text-xl text-white/50 font-light leading-relaxed max-w-3xl">
+              {article.excerpt}
+            </p>
+
+            {/* Meta */}
+            <div className="mt-8 flex items-center gap-4 text-white/30 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#635BFF] to-[#16CDC7] flex items-center justify-center text-white text-xs font-bold">G</div>
+                <span className="text-white/50">Guro</span>
               </div>
-            )}
-          </div>
+              <span>·</span>
+              <span>Enero 2026</span>
+              {article.body && (
+                <>
+                  <span>·</span>
+                  <span>{Math.max(3, Math.ceil(article.body.length * 1.5))} min lectura</span>
+                </>
+              )}
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      <section className="bg-white dark:bg-slate-950 py-12 md:py-16">
-        <div className="max-w-5xl mx-auto px-4">
+      {/* Content */}
+      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1100px] mx-auto">
           <div className="flex flex-col lg:flex-row gap-10">
+            {/* Sidebar TOC */}
             {article.body && article.body.length > 0 && (
-              <aside className="lg:w-64 flex-shrink-0 order-2 lg:order-1">
-                <div className="sticky top-24 bg-slate-50 dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800">
-                  <p className="text-xs uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400 mb-3">Índice</p>
-                  <nav className="space-y-2">
+              <motion.aside
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="lg:w-[260px] flex-shrink-0 order-2 lg:order-1"
+              >
+                <div className="sticky top-24 bg-[#12121a] rounded-2xl p-5 border border-white/[0.06]">
+                  <p className="text-[10px] uppercase tracking-[0.15em] text-white/30 font-bold mb-4">Índice</p>
+                  <nav className="space-y-1">
                     {article.body.map((section, idx) => (
                       <a
                         key={idx}
                         href={`#section-${idx}`}
-                        className="block text-sm text-slate-700 dark:text-slate-300 hover:text-primary transition"
+                        className="block text-sm text-white/40 hover:text-[#573CFF] py-1.5 transition-colors leading-snug"
                       >
                         {section.title}
                       </a>
                     ))}
-                    <a href="#cta" className="block text-sm text-primary font-semibold">
-                      → Prueba gratis
+                    <div className="h-px bg-white/[0.06] my-3" />
+                    <a href="#cta" className="flex items-center gap-2 text-sm text-[#573CFF] font-bold py-1.5">
+                      <Icon icon="solar:arrow-right-linear" className="w-3 h-3" />
+                      Prueba gratis
                     </a>
                   </nav>
                 </div>
-              </aside>
+              </motion.aside>
             )}
 
-            <article className="flex-1 order-1 lg:order-2 prose prose-lg max-w-none dark:prose-invert prose-headings:scroll-mt-24">
+            {/* Article Body */}
+            <motion.article
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="flex-1 order-1 lg:order-2"
+            >
               {article.body ? (
                 article.body.map((section, idx) => (
-                  <section key={idx} id={`section-${idx}`} className="mb-10">
-                    <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">{section.title}</h2>
+                  <section key={idx} id={`section-${idx}`} className="mb-12 scroll-mt-24">
+                    <h2 className="text-2xl font-bold text-white tracking-[-0.01em] mb-4">{section.title}</h2>
                     {section.paragraphs?.map((p, i) => (
-                      <p key={i}>{p}</p>
+                      <p key={i} className="text-white/50 text-[15px] leading-[1.8] mb-4">{p}</p>
                     ))}
                     {section.bullets && (
-                      <ul className="list-disc list-inside space-y-1">
+                      <ul className="space-y-2 mt-4 mb-4">
                         {section.bullets.map((b, i) => (
-                          <li key={i}>{b}</li>
+                          <li key={i} className="flex items-start gap-3 text-white/50 text-[15px] leading-relaxed">
+                            <Icon icon="solar:check-circle-bold" className="w-5 h-5 text-[#573CFF] flex-shrink-0 mt-0.5" />
+                            <span>{b}</span>
+                          </li>
                         ))}
                       </ul>
                     )}
                   </section>
                 ))
               ) : (
-                <p>{article.answer}</p>
+                <p className="text-white/50 text-[15px] leading-[1.8]">{article.answer}</p>
               )}
 
+              {/* Keywords */}
               {article.keywords && (
-                <div className="mt-8 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-xs uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400 mb-2">Palabras clave</p>
+                <div className="mt-10 p-5 bg-[#12121a] rounded-2xl border border-white/[0.06]">
+                  <p className="text-[10px] uppercase tracking-[0.15em] text-white/30 font-bold mb-3">Palabras clave</p>
                   <div className="flex flex-wrap gap-2">
                     {article.keywords.map((kw) => (
-                      <span key={kw} className="px-2 py-1 rounded-full text-xs bg-primary/10 text-primary">
+                      <span key={kw} className="px-3 py-1.5 rounded-full text-xs font-medium bg-white/[0.05] text-white/50 border border-white/[0.08]">
                         {kw}
                       </span>
                     ))}
                   </div>
                 </div>
               )}
-            </article>
+            </motion.article>
           </div>
 
+          {/* CTA */}
           {article.cta && (
-            <div
+            <motion.div
               id="cta"
-              className="mt-12 p-6 md:p-8 border border-white/20 rounded-2xl bg-gradient-to-br from-primary to-primaryemphasis text-white flex flex-col md:flex-row md:items-center md:justify-between gap-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="mt-16 p-6 sm:p-8 rounded-2xl border border-white/10 scroll-mt-24"
+              style={{
+                backgroundImage: 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
             >
-              <div>
-                <p className="text-sm uppercase tracking-[0.2em] text-white/80 mb-1">Siguiente paso</p>
-                <h3 className="text-2xl font-semibold text-white">{article.cta.title}</h3>
-                <p className="text-white/90 mt-2 max-w-2xl">{article.cta.text}</p>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                <div>
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold bg-white/10 border border-white/20 text-white/80 uppercase tracking-[0.15em] mb-3">
+                    <Icon icon="solar:rocket-bold" className="w-3 h-3" />
+                    Siguiente paso
+                  </span>
+                  <h3 className="text-2xl font-bold text-white tracking-[-0.02em]">{article.cta.title}</h3>
+                  <p className="text-white/50 mt-2 max-w-2xl text-[15px] leading-relaxed">{article.cta.text}</p>
+                </div>
+                <Link
+                  to="/comenzar"
+                  className="group relative inline-flex items-center bg-white rounded-2xl h-[48px] overflow-hidden flex-shrink-0"
+                >
+                  <span className="absolute inset-y-0 left-0 w-[48px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+                  <span className="relative z-10 flex items-center justify-center w-[48px] h-full flex-shrink-0">
+                    <Icon icon="solar:arrow-right-linear" className="w-4 h-4 text-[#0d0d0d] group-hover:text-white transition-colors" />
+                  </span>
+                  <span className="relative z-10 pl-2 pr-5 text-[10px] sm:text-[11px] font-bold text-[#0d0d0d] group-hover:text-white uppercase tracking-[0.15em] whitespace-nowrap transition-colors">
+                    {article.cta.buttonLabel || 'Comenzar gratis'}
+                  </span>
+                </Link>
               </div>
-              <Link
-                to="/comenzar"
-                className="bg-white text-slate-900 px-6 py-3 rounded-xl font-semibold shadow-md hover:shadow-lg transition whitespace-nowrap"
-              >
-                {article.cta.buttonLabel || 'Comenzar prueba gratis'}
-              </Link>
-            </div>
+            </motion.div>
           )}
 
-          <div className="mt-10 flex flex-wrap gap-4 items-center">
-            <Link to="/blog" className="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-              ← Volver al blog
-            </Link>
+          {/* Navigation */}
+          <div className="mt-12 flex flex-wrap gap-6 items-center">
             <Link
-              to="/comenzar"
-              className="text-slate-900 dark:text-white font-semibold inline-flex items-center gap-1"
+              to="/blog"
+              className="inline-flex items-center gap-2 text-white/40 hover:text-white font-medium text-sm transition-colors"
             >
-              Agenda una demo →
+              <Icon icon="solar:arrow-left-linear" className="w-4 h-4" />
+              Volver al blog
             </Link>
+            <a
+              href="https://wa.me/573105360658?text=Hola%2C%20me%20interesa%20Guro"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-white/40 hover:text-white font-medium text-sm transition-colors"
+            >
+              <Icon icon="mdi:whatsapp" className="w-4 h-4 text-[#25D366]" />
+              Hablar con ventas
+            </a>
           </div>
         </div>
       </section>
 
-      <Footer />
-    </>
+      {/* Footer */}
+      <div
+        style={{
+          backgroundImage: 'url(https://framerusercontent.com/images/hwuS8TidtTCFW9uCzecWzF4NiU.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center center',
+          backgroundRepeat: 'no-repeat',
+          transform: 'scaleY(-1)',
+        }}
+      >
+        <div style={{ transform: 'scaleY(-1)' }}>
+          <Footer />
+        </div>
+      </div>
+    </div>
   );
 };
 

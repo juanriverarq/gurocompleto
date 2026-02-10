@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold, Montserrat_700Bold } from '@expo-google-fonts/montserrat';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from './src/context/AuthContext';
@@ -23,7 +22,6 @@ export default function App() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      // Ocultar splash nativo cuando las fuentes estén listas
       SplashScreen.hideAsync();
       setAppIsReady(true);
     }

@@ -31,13 +31,18 @@ const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, m
   // Helper para construir URL de media del backend
   const getMediaUrl = (url: string | undefined | null): string | null => {
     if (!url) return null;
+    const backendUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
+    const baseUrl = backendUrl.replace('/api', '');
     // Si es URL relativa, agregar base URL del backend
     if (url.startsWith('/storage/')) {
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
-      const baseUrl = backendUrl.replace('/api', '');
       return `${baseUrl}${url}`;
     }
-    // Si ya es URL absoluta, usarla directamente
+    // Si es URL de ngrok con /storage/, convertir a URL local del backend
+    if (url.includes('ngrok') && url.includes('/storage/')) {
+      const storagePath = url.substring(url.indexOf('/storage/'));
+      return `${baseUrl}${storagePath}`;
+    }
+    // Si ya es URL absoluta (ej: media de Meta), usarla directamente
     return url;
   };
 

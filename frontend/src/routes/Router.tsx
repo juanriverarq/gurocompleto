@@ -254,6 +254,8 @@ const WhatsAppInbox = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAp
 const ChatbotsList = Loadable(lazy(() => import('../views/apps/whatsapp/ChatbotsList')));
 const ChatbotsAnalytics = Loadable(lazy(() => import('../views/apps/whatsapp/ChatbotsAnalytics')));
 const ChatbotFlowEditor = Loadable(lazy(() => import('../views/apps/whatsapp/chatbot-editor/FlowEditorSimple')));
+const WhatsAppContactos = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppContactos')));
+const WhatsAppPlantillas = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppPlantillas')));
 
 // Test Components
 const TestWelcomeModal = Loadable(lazy(() => import('../components/TestWelcomeModal')));
@@ -436,12 +438,13 @@ const Router = [
       { path: '/apps/whatsapp/campanas', element: <ConfiguracionMasiva /> },
       { path: '/apps/whatsapp/campanas/nueva', element: <ConfiguracionMasiva /> },
       { path: '/apps/whatsapp/programados', element: <ConfiguracionMasiva /> },
-      { path: '/apps/whatsapp/plantillas', element: <ConfiguracionMasiva /> },
+      { path: '/apps/whatsapp/plantillas', element: <WhatsAppPlantillas /> },
       { path: '/apps/whatsapp/chatbots', element: <ChatbotsList /> },
       { path: '/apps/whatsapp/chatbots/nuevo', element: <ChatbotsList /> },
       { path: '/apps/whatsapp/chatbots/flujos', element: <ChatbotFlowEditor /> },
       { path: '/apps/whatsapp/chatbots/analisis', element: <ChatbotsAnalytics /> },
       { path: '/apps/whatsapp/chatbots/respuestas', element: <ChatbotsList /> },
+      { path: '/apps/whatsapp/contactos', element: <WhatsAppContactos /> },
             { path: '/apps/whatsapp/reportes', element: <WhatsAppDashboard /> },
 
       { path: '*', element: <Navigate to="/auth/404" /> },

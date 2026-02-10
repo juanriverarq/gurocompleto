@@ -135,3 +135,13 @@ export const createEmpleado = async (data: CreateEmpleadoData): Promise<Empleado
   const response = await api.post('/saas/empleados', data);
   return response.data;
 };
+
+export const updateEmpleado = async (id: number, data: Partial<CreateEmpleadoData>): Promise<EmpleadoDetailResponse> => {
+  const response = await api.put(`/saas/empleados/${id}`, data);
+  return response.data;
+};
+
+export const deleteEmpleado = async (id: number) => {
+  const response = await api.delete(`/saas/empleados/${id}`);
+  return response.data;
+};

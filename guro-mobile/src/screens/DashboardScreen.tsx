@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Dimensions,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -16,7 +17,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const DashboardScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -192,35 +193,39 @@ const DashboardScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Dashboard</Text>
-          {data?.broker?.name && (
-            <Text style={styles.headerSubtitle}>{data.broker.name}</Text>
-          )}
+          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+            <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-          <Ionicons name="refresh-outline" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
+      </ImageBackground>
 
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} />
         }
       >
         {/* Resumen de Pólizas */}
-        <Text style={styles.sectionTitle}>Pólizas</Text>
+        <View style={styles.sectionBadge}>
+          <Text style={styles.sectionBadgeText}>PÓLIZAS</Text>
+        </View>
         <View style={styles.polizasGrid}>
           <View style={styles.polizaCard}>
             <View style={[styles.polizaIconBg, { backgroundColor: '#EEF2FF' }]}>
-              <Ionicons name="document-text" size={20} color="#6172FD" />
+              <Ionicons name="document-text" size={20} color="#573CFF" />
             </View>
             <Text style={styles.polizaNumber}>{data?.resumen_polizas.total || 0}</Text>
             <Text style={styles.polizaLabel}>Total</Text>
@@ -249,11 +254,13 @@ const DashboardScreen: React.FC = () => {
         </View>
 
         {/* Finanzas */}
-        <Text style={styles.sectionTitle}>Finanzas</Text>
+        <View style={styles.sectionBadge}>
+          <Text style={styles.sectionBadgeText}>FINANZAS</Text>
+        </View>
         <View style={styles.financeCard}>
           <View style={styles.financeItem}>
             <View style={styles.financeLeft}>
-              <View style={[styles.financeDot, { backgroundColor: '#6172FD' }]} />
+              <View style={[styles.financeDot, { backgroundColor: '#573CFF' }]} />
               <Text style={styles.financeLabel}>Primas Totales</Text>
             </View>
             <Text style={styles.financeValue}>
@@ -285,7 +292,9 @@ const DashboardScreen: React.FC = () => {
         {/* Recaudos */}
         {data?.recaudos && (
           <>
-            <Text style={styles.sectionTitle}>Recaudos y Cartera</Text>
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeText}>RECAUDOS Y CARTERA</Text>
+            </View>
             <View style={styles.recaudosCard}>
               <View style={styles.recaudoRow}>
                 <View style={styles.recaudoItem}>
@@ -315,11 +324,11 @@ const DashboardScreen: React.FC = () => {
               <View style={styles.recaudoRow}>
                 <View style={styles.recaudoItem}>
                   <View style={[styles.recaudoIconBg, { backgroundColor: '#EEF2FF' }]}>
-                    <Ionicons name="wallet" size={18} color="#6172FD" />
+                    <Ionicons name="wallet" size={18} color="#573CFF" />
                   </View>
                   <View>
                     <Text style={styles.recaudoLabel}>Comisiones Cobradas</Text>
-                    <Text style={[styles.recaudoValue, { color: '#6172FD' }]}>
+                    <Text style={[styles.recaudoValue, { color: '#573CFF' }]}>
                       {formatCurrency(data.recaudos.comisiones_cobradas)}
                     </Text>
                   </View>
@@ -341,11 +350,13 @@ const DashboardScreen: React.FC = () => {
         )}
 
         {/* Ventas + Clientes Row */}
-        <Text style={styles.sectionTitle}>Ventas y Clientes</Text>
+        <View style={styles.sectionBadge}>
+          <Text style={styles.sectionBadgeText}>VENTAS Y CLIENTES</Text>
+        </View>
         <View style={styles.dualCardRow}>
           <View style={styles.ventasCard}>
             <View style={styles.ventasHeader}>
-              <Ionicons name="trending-up" size={18} color="#6172FD" />
+              <Ionicons name="trending-up" size={18} color="#573CFF" />
               <Text style={styles.ventasHeaderText}>Este Mes</Text>
             </View>
             <Text style={styles.ventasBigNumber}>{data?.ventas.del_mes || 0}</Text>
@@ -381,11 +392,13 @@ const DashboardScreen: React.FC = () => {
         </View>
 
         {/* Siniestros + Tareas */}
-        <Text style={styles.sectionTitle}>Siniestros</Text>
+        <View style={styles.sectionBadge}>
+          <Text style={styles.sectionBadgeText}>SINIESTROS</Text>
+        </View>
         <View style={styles.siniestrosCard}>
           <View style={styles.siniestroItem}>
             <View style={[styles.siniestroIconBg, { backgroundColor: '#EEF2FF' }]}>
-              <Ionicons name="shield" size={20} color="#6172FD" />
+              <Ionicons name="shield" size={20} color="#573CFF" />
             </View>
             <View style={styles.siniestroInfo}>
               <Text style={styles.siniestroNumber}>{data?.siniestros.total || 0}</Text>
@@ -430,7 +443,9 @@ const DashboardScreen: React.FC = () => {
         {/* Pólizas por Tipo */}
         {Object.keys(polizasTipo).length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Distribución por Tipo</Text>
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeText}>DISTRIBUCIÓN POR TIPO</Text>
+            </View>
             <View style={styles.tipoCard}>
               {Object.entries(polizasTipo).map(([tipo, count]) => (
                 <View key={tipo} style={styles.tipoRow}>
@@ -457,7 +472,9 @@ const DashboardScreen: React.FC = () => {
 
         {/* Charts */}
         <View style={styles.chartPeriodRow}>
-          <Text style={styles.sectionTitle}>Tendencias</Text>
+          <View style={styles.sectionBadge}>
+            <Text style={styles.sectionBadgeText}>TENDENCIAS</Text>
+          </View>
           <View style={styles.periodSelector}>
             {(['week', 'month', 'year'] as const).map((p) => (
               <TouchableOpacity
@@ -473,16 +490,18 @@ const DashboardScreen: React.FC = () => {
           </View>
         </View>
 
-        {renderMiniChart(primasChart, '#6172FD', 'Primas')}
+        {renderMiniChart(primasChart, '#573CFF', 'Primas')}
         {renderMiniChart(polizasChart, '#22C55E', 'Pólizas Nuevas')}
         {renderMiniChart(clientesChart, '#3B82F6', 'Clientes Nuevos')}
 
         {/* Pólizas Recientes */}
         {polizasRecientes.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Pólizas Recientes</Text>
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeText}>PÓLIZAS RECIENTES</Text>
+            </View>
             {polizasRecientes.map((poliza) => (
-              <View key={poliza.id} style={styles.recentCard}>
+              <TouchableOpacity key={poliza.id} style={styles.recentCard} activeOpacity={0.7} onPress={() => navigation.navigate('PolizaDetail', { polizaId: poliza.id })}>
                 <View style={styles.recentLeft}>
                   <View style={[styles.recentStatusDot, { backgroundColor: getStatusColor(poliza.status) }]} />
                   <View style={{ flex: 1 }}>
@@ -498,7 +517,7 @@ const DashboardScreen: React.FC = () => {
                     {getStatusLabel(poliza.status)}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </>
         )}
@@ -529,7 +548,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
@@ -540,45 +559,44 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_600SemiBold',
   },
   header: {
-    height: 110,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 50,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    shadowColor: '#6172FD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerCenter: {
-    alignItems: 'center',
-  },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
+    letterSpacing: -0.3,
   },
   headerSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'Montserrat_400Regular',
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+    marginTop: 6,
   },
   refreshButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -589,12 +607,16 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 120,
   },
-  sectionTitle: {
-    fontSize: 17,
+  sectionBadge: {
+    marginTop: 24,
+    marginBottom: 14,
+  },
+  sectionBadgeText: {
+    fontSize: 11,
     fontFamily: 'Montserrat_700Bold',
-    color: '#1F2937',
-    marginBottom: 12,
-    marginTop: 20,
+    color: '#573CFF',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
   // Pólizas Grid
   polizasGrid: {
@@ -605,15 +627,15 @@ const styles = StyleSheet.create({
   polizaCard: {
     width: '48%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
     alignItems: 'center',
     marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   polizaIconBg: {
     width: 42,
@@ -637,13 +659,13 @@ const styles = StyleSheet.create({
   // Finance Card
   financeCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 18,
+    borderRadius: 20,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   financeItem: {
     flexDirection: 'row',
@@ -678,13 +700,13 @@ const styles = StyleSheet.create({
   // Recaudos
   recaudosCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   recaudoRow: {
     flexDirection: 'row',
@@ -726,24 +748,24 @@ const styles = StyleSheet.create({
   ventasCard: {
     width: '48%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   clientesCard: {
     width: '48%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   ventasHeader: {
     flexDirection: 'row',
@@ -754,7 +776,7 @@ const styles = StyleSheet.create({
   ventasHeaderText: {
     fontSize: 12,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   ventasBigNumber: {
     fontSize: 28,
@@ -797,15 +819,15 @@ const styles = StyleSheet.create({
   // Siniestros
   siniestrosCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   siniestroItem: {
     flex: 1,
@@ -842,17 +864,17 @@ const styles = StyleSheet.create({
   // Tareas
   tareasCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 10,
+    gap: 14,
+    marginTop: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   tareasIconBg: {
     width: 42,
@@ -875,13 +897,13 @@ const styles = StyleSheet.create({
   // Pólizas por Tipo
   tipoCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   tipoRow: {
     flexDirection: 'row',
@@ -942,17 +964,17 @@ const styles = StyleSheet.create({
   },
   periodSelector: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 2,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 14,
+    padding: 3,
   },
   periodBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 11,
   },
   periodBtnActive: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   periodBtnText: {
     fontSize: 12,
@@ -964,14 +986,14 @@ const styles = StyleSheet.create({
   },
   chartCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   chartTitle: {
     fontSize: 13,
@@ -991,7 +1013,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chartBar: {
-    borderRadius: 3,
+    borderRadius: 6,
     minHeight: 4,
   },
   chartBarLabel: {
@@ -1003,17 +1025,17 @@ const styles = StyleSheet.create({
   // Pólizas Recientes
   recentCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   recentLeft: {
     flexDirection: 'row',

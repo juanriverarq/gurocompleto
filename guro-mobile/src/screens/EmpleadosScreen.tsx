@@ -10,6 +10,7 @@ import {
   Modal,
   ActivityIndicator,
   TextInput,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -145,7 +146,7 @@ const EmpleadosScreen: React.FC = () => {
     if (action.includes('delete') || action.includes('destroy')) return '#EF4444';
     if (action.includes('login')) return '#3B82F6';
     if (action.includes('logout')) return '#6B7280';
-    return '#6172FD';
+    return '#573CFF';
   };
 
   const getModuleLabel = (module: string) => {
@@ -196,21 +197,26 @@ const EmpleadosScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Trazabilidad</Text>
         <TouchableOpacity style={styles.filterButton} onPress={() => setShowEmployeeModal(true)}>
-          <Ionicons name="filter-outline" size={22} color="#FFFFFF" />
+          <Ionicons name="filter-outline" size={18} color="#FFFFFF" />
         </TouchableOpacity>
-      </View>
+      </ImageBackground>
 
       {/* Filtro de empleado activo */}
       {selectedEmployee && (
         <View style={styles.activeFilterContainer}>
           <View style={styles.activeFilter}>
-            <Ionicons name="person" size={16} color="#6172FD" />
+            <Ionicons name="person" size={16} color="#573CFF" />
             <Text style={styles.activeFilterText}>{selectedEmployee.user_name}</Text>
             <TouchableOpacity onPress={() => handleSelectEmployee(null)}>
               <Ionicons name="close-circle" size={20} color="#6B7280" />
@@ -256,20 +262,20 @@ const EmpleadosScreen: React.FC = () => {
               onPress={() => handleSelectEmployee(null)}
             >
               <View style={styles.employeeIcon}>
-                <Ionicons name="people" size={20} color="#6172FD" />
+                <Ionicons name="people" size={20} color="#573CFF" />
               </View>
               <View style={styles.employeeInfo}>
                 <Text style={styles.employeeName}>Todos los empleados</Text>
                 <Text style={styles.employeeEmail}>Ver actividad de todos</Text>
               </View>
               {!selectedEmployee && (
-                <Ionicons name="checkmark-circle" size={22} color="#6172FD" />
+                <Ionicons name="checkmark-circle" size={22} color="#573CFF" />
               )}
             </TouchableOpacity>
 
             {loadingEmpleados ? (
               <View style={{ padding: 20, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color="#6172FD" />
+                <ActivityIndicator size="small" color="#573CFF" />
               </View>
             ) : (
               <ScrollView style={styles.employeeList}>
@@ -318,7 +324,7 @@ const EmpleadosScreen: React.FC = () => {
                               <Text style={styles.employeeActions}>{auditUser.total_actions} acciones</Text>
                             )}
                             {selectedEmployee?.user_id === (auditUser?.user_id || emp.id) && (
-                              <Ionicons name="checkmark-circle" size={22} color="#6172FD" style={{ marginTop: 4 }} />
+                              <Ionicons name="checkmark-circle" size={22} color="#573CFF" style={{ marginTop: 4 }} />
                             )}
                           </View>
                         </TouchableOpacity>
@@ -344,7 +350,7 @@ const EmpleadosScreen: React.FC = () => {
                       onPress={() => handleSelectEmployee(employee)}
                     >
                       <View style={styles.employeeIcon}>
-                        <Ionicons name="person" size={20} color="#6172FD" />
+                        <Ionicons name="person" size={20} color="#573CFF" />
                       </View>
                       <View style={styles.employeeInfo}>
                         <Text style={styles.employeeName}>{employee.user_name}</Text>
@@ -352,7 +358,7 @@ const EmpleadosScreen: React.FC = () => {
                         <Text style={styles.employeeActions}>{employee.total_actions} acciones</Text>
                       </View>
                       {selectedEmployee?.user_id === employee.user_id && (
-                        <Ionicons name="checkmark-circle" size={22} color="#6172FD" />
+                        <Ionicons name="checkmark-circle" size={22} color="#573CFF" />
                       )}
                     </TouchableOpacity>
                   ));
@@ -379,7 +385,7 @@ const EmpleadosScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} />
           }
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
@@ -404,7 +410,7 @@ const EmpleadosScreen: React.FC = () => {
           ListFooterComponent={
             loadingMore ? (
               <View style={styles.loadingMore}>
-                <ActivityIndicator size="small" color="#6172FD" />
+                <ActivityIndicator size="small" color="#573CFF" />
               </View>
             ) : null
           }
@@ -426,27 +432,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
     width: 40,
@@ -477,7 +485,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -522,7 +530,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 28,
     fontFamily: 'Montserrat_700Bold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   statLabel: {
     fontSize: 12,
@@ -613,8 +621,10 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   filterButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -636,7 +646,7 @@ const styles = StyleSheet.create({
   activeFilterText: {
     fontSize: 13,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   modalOverlay: {
     flex: 1,
@@ -678,7 +688,7 @@ const styles = StyleSheet.create({
   employeeItemActive: {
     backgroundColor: '#EEF2FF',
     borderWidth: 1,
-    borderColor: '#6172FD',
+    borderColor: '#573CFF',
   },
   employeeIcon: {
     width: 44,
@@ -706,7 +716,7 @@ const styles = StyleSheet.create({
   employeeActions: {
     fontSize: 11,
     fontFamily: 'Montserrat_500Medium',
-    color: '#6172FD',
+    color: '#573CFF',
     marginTop: 4,
   },
   employeeCargo: {

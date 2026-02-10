@@ -469,6 +469,131 @@ class WhatsAppCloudApiService
         }
     }
 
+    // ==========================================
+    // MESSAGE TEMPLATES MANAGEMENT (Meta Graph API)
+    // ==========================================
+
+    /**
+     * Listar plantillas de mensaje del WABA
+     */
+    public function getMessageTemplates(WhatsAppInstance $instance, ?string $status = null, ?int $limit = 50): array
+    {
+        try {
+            $wabaId = $instance->cloud_api_business_id;
+            if (!$wabaId) {
+                return ['success' => false, 'error' => 'WABA ID (cloud_api_business_id) no configurado en la instancia'];
+            }
+
+            $params = [
+                'fields' => 'id,name,status,category,language,components,quality_score,rejected_reason',
+                'limit' => $limit,
+            ];
+            if ($status) {
+                $params['status'] = $status;
+            }
+
+            $response = Http::withToken($instance->cloud_api_token)
+                ->get("{$this->baseUrl}/{$this->apiVersion}/{$wabaId}/message_templates", $params);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json('data', []),
+                    'paging' => $response->json('paging', []),
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response->json('error.message', 'Error al obtener plantillas'),
+            ];
+        } catch (\Exception $e) {
+            Log::error('WhatsApp Cloud API - Error getting templates', ['error' => $e->getMessage()]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Crear una plantilla de mensaje (enviar a revisión de Meta)
+     */
+    public function createMessageTemplate(WhatsAppInstance $instance, array $templateData): array
+    {
+        try {
+            $wabaId = $instance->cloud_api_business_id;
+            if (!$wabaId) {
+                return ['success' => false, 'error' => 'WABA ID no configurado'];
+            }
+
+            $payload = [
+                'name' => $templateData['name'],
+                'language' => $templateData['language'] ?? 'es',
+                'category' => $templateData['category'] ?? 'MARKETING',
+                'components' => $templateData['components'] ?? [],
+            ];
+
+            if (!empty($templateData['allow_category_change'])) {
+                $payload['allow_category_change'] = true;
+            }
+
+            Log::info('WhatsApp Cloud API - Creating template', [
+                'waba_id' => $wabaId,
+                'name' => $payload['name'],
+                'category' => $payload['category'],
+            ]);
+
+            $response = Http::withToken($instance->cloud_api_token)
+                ->post("{$this->baseUrl}/{$this->apiVersion}/{$wabaId}/message_templates", $payload);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json(),
+                ];
+            }
+
+            $error = $response->json('error', []);
+            return [
+                'success' => false,
+                'error' => $error['message'] ?? 'Error al crear plantilla',
+                'error_code' => $error['code'] ?? null,
+                'error_details' => $error,
+            ];
+        } catch (\Exception $e) {
+            Log::error('WhatsApp Cloud API - Error creating template', ['error' => $e->getMessage()]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Eliminar una plantilla de mensaje
+     */
+    public function deleteMessageTemplate(WhatsAppInstance $instance, string $templateName): array
+    {
+        try {
+            $wabaId = $instance->cloud_api_business_id;
+            if (!$wabaId) {
+                return ['success' => false, 'error' => 'WABA ID no configurado'];
+            }
+
+            $response = Http::withToken($instance->cloud_api_token)
+                ->delete("{$this->baseUrl}/{$this->apiVersion}/{$wabaId}/message_templates", [
+                    'name' => $templateName,
+                ]);
+
+            if ($response->successful()) {
+                return ['success' => true];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response->json('error.message', 'Error al eliminar plantilla'),
+            ];
+        } catch (\Exception $e) {
+            Log::error('WhatsApp Cloud API - Error deleting template', ['error' => $e->getMessage()]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     /**
      * Formatear número de teléfono
      */

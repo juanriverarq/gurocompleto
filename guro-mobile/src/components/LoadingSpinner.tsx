@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, ImageBackground } from 'react-native';
 import LottieView from 'lottie-react-native';
 
 const { width } = Dimensions.get('window');
+const LOTTIE_SIZE = width * 1.5;
 
 interface LoadingSpinnerProps {
   size?: number;
@@ -10,27 +11,32 @@ interface LoadingSpinnerProps {
 }
 
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
-  size = 150, 
+  size, 
   fullScreen = true 
 }) => {
   if (fullScreen) {
     return (
-      <View style={styles.fullScreenContainer}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.fullScreenContainer}
+        resizeMode="cover"
+      >
         <LottieView
-          source={require('../../LOTTIE-LOADING-2.json')}
-          style={{ width: size, height: size }}
+          source={require('../../LOTTIE.json')}
+          style={styles.animation}
           autoPlay
           loop
         />
-      </View>
+      </ImageBackground>
     );
   }
 
+  const inlineSize = size || 150;
   return (
     <View style={styles.inlineContainer}>
       <LottieView
         source={require('../../LOTTIE-LOADING-2.json')}
-        style={{ width: size, height: size }}
+        style={{ width: inlineSize, height: inlineSize }}
         autoPlay
         loop
       />
@@ -41,9 +47,13 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 const styles = StyleSheet.create({
   fullScreenContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  animation: {
+    width: LOTTIE_SIZE,
+    height: LOTTIE_SIZE,
+    backgroundColor: 'transparent',
   },
   inlineContainer: {
     justifyContent: 'center',

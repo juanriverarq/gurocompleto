@@ -12,11 +12,14 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ImageBackground,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { getClienteById, updateCliente, UpdateClienteData } from '../services/clientesService';
+import { getClienteById, updateCliente, deleteCliente, UpdateClienteData } from '../services/clientesService';
 import LoadingSpinner from '../components/LoadingSpinner';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type ClienteDetailRouteParams = {
   ClienteDetail: {
@@ -54,6 +57,8 @@ const ClienteDetailScreen: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editData, setEditData] = useState<UpdateClienteData>({});
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
 
   const fetchCliente = async () => {
     try {
@@ -149,6 +154,62 @@ const ClienteDetailScreen: React.FC = () => {
     setEditData(prev => ({ ...prev, [field]: value }));
   };
 
+  const formatDateStr = (date: Date) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const openDatePicker = () => {
+    if (editData.fecha_nacimiento) {
+      const parts = editData.fecha_nacimiento.split('-');
+      if (parts.length === 3) setTempDate(new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+      else setTempDate(new Date());
+    } else {
+      setTempDate(new Date());
+    }
+    setShowDatePicker(true);
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (event.type === 'dismissed') { setShowDatePicker(false); return; }
+    const date = selectedDate || tempDate;
+    setTempDate(date);
+    updateField('fecha_nacimiento', formatDateStr(date));
+    if (Platform.OS === 'android') setShowDatePicker(false);
+  };
+
+  const confirmIOSDate = () => {
+    updateField('fecha_nacimiento', formatDateStr(tempDate));
+    setShowDatePicker(false);
+  };
+
+  const handleDelete = () => {
+    if (!cliente) return;
+    Alert.alert(
+      'Eliminar Cliente',
+      `¿Estás seguro de eliminar a ${getClienteName()}? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar', style: 'destructive', onPress: async () => {
+            try {
+              const response = await deleteCliente(cliente.id);
+              if (response.success) {
+                Alert.alert('Éxito', 'Cliente eliminado correctamente', [
+                  { text: 'OK', onPress: () => navigation.goBack() }
+                ]);
+              } else {
+                Alert.alert('Error', response.message || 'No se pudo eliminar');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.message || err.message || 'Error de conexión');
+            }
+          }
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -156,13 +217,18 @@ const ClienteDetailScreen: React.FC = () => {
   if (error) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <ImageBackground
+          source={require('../../assets/backgrounds/hero-gradient.png')}
+          style={styles.header}
+          imageStyle={{ transform: [{ scale: 2 }] }}
+          resizeMode="cover"
+        >
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Detalle Cliente</Text>
           <View style={styles.headerPlaceholder} />
-        </View>
+        </ImageBackground>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
           <Text style={styles.errorText}>{error}</Text>
@@ -179,12 +245,17 @@ const ClienteDetailScreen: React.FC = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={isEditing ? cancelEditing : () => navigation.goBack()}
         >
-          <Ionicons name={isEditing ? "close" : "arrow-back"} size={24} color="#FFFFFF" />
+          <Ionicons name={isEditing ? "close" : "chevron-back"} size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isEditing ? 'Editar Cliente' : 'Detalle Cliente'}</Text>
         {isEditing ? (
@@ -197,17 +268,17 @@ const ClienteDetailScreen: React.FC = () => {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.editButton} onPress={startEditing}>
-            <Ionicons name="create-outline" size={24} color="#FFFFFF" />
+            <Ionicons name="create-outline" size={22} color="#FFFFFF" />
           </TouchableOpacity>
         )}
-      </View>
+      </ImageBackground>
 
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          !isEditing ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} /> : undefined
+          !isEditing ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} /> : undefined
         }
       >
         {isEditing ? (
@@ -253,13 +324,12 @@ const ClienteDetailScreen: React.FC = () => {
               )}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Fecha de Nacimiento</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editData.fecha_nacimiento}
-                  onChangeText={(text) => updateField('fecha_nacimiento', text)}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9CA3AF"
-                />
+                <TouchableOpacity style={styles.dateField} onPress={openDatePicker}>
+                  <Text style={editData.fecha_nacimiento ? styles.dateFieldText : styles.dateFieldPlaceholder}>
+                    {editData.fecha_nacimiento || 'Seleccionar fecha'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -345,12 +415,12 @@ const ClienteDetailScreen: React.FC = () => {
         {/* Header Card */}
         <View style={styles.profileCard}>
           <View style={[styles.avatarLarge, { 
-            backgroundColor: cliente?.client_type === 'empresa' ? '#8B5CF620' : '#6172FD20' 
+            backgroundColor: cliente?.client_type === 'empresa' ? '#8B5CF620' : '#573CFF20' 
           }]}>
             <Ionicons 
               name={cliente?.client_type === 'empresa' ? 'business' : 'person'} 
               size={50} 
-              color={cliente?.client_type === 'empresa' ? '#8B5CF6' : '#6172FD'} 
+              color={cliente?.client_type === 'empresa' ? '#8B5CF6' : '#573CFF'} 
             />
           </View>
           <Text style={styles.clienteName}>{getClienteName()}</Text>
@@ -408,7 +478,7 @@ const ClienteDetailScreen: React.FC = () => {
           {cliente?.email_principal && (
             <View style={styles.infoRow}>
               <View style={styles.infoIconContainer}>
-                <Ionicons name="mail-outline" size={20} color="#6172FD" />
+                <Ionicons name="mail-outline" size={20} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Email</Text>
@@ -419,7 +489,7 @@ const ClienteDetailScreen: React.FC = () => {
           {cliente?.celular_principal && (
             <View style={styles.infoRow}>
               <View style={styles.infoIconContainer}>
-                <Ionicons name="phone-portrait-outline" size={20} color="#6172FD" />
+                <Ionicons name="phone-portrait-outline" size={20} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Celular</Text>
@@ -430,7 +500,7 @@ const ClienteDetailScreen: React.FC = () => {
           {cliente?.telefono && (
             <View style={styles.infoRow}>
               <View style={styles.infoIconContainer}>
-                <Ionicons name="call-outline" size={20} color="#6172FD" />
+                <Ionicons name="call-outline" size={20} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Teléfono</Text>
@@ -441,7 +511,7 @@ const ClienteDetailScreen: React.FC = () => {
           {cliente?.domicilio_principal && (
             <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
               <View style={styles.infoIconContainer}>
-                <Ionicons name="location-outline" size={20} color="#6172FD" />
+                <Ionicons name="location-outline" size={20} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Dirección</Text>
@@ -457,7 +527,7 @@ const ClienteDetailScreen: React.FC = () => {
           {cliente?.cuit && (
             <View style={styles.infoRow}>
               <View style={styles.infoIconContainer}>
-                <Ionicons name="card-outline" size={20} color="#6172FD" />
+                <Ionicons name="card-outline" size={20} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>{cliente.tipo_documento || 'Documento'}</Text>
@@ -468,7 +538,7 @@ const ClienteDetailScreen: React.FC = () => {
           {cliente?.ciudad && (
             <View style={styles.infoRow}>
               <View style={styles.infoIconContainer}>
-                <Ionicons name="business-outline" size={20} color="#6172FD" />
+                <Ionicons name="business-outline" size={20} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Ciudad</Text>
@@ -479,7 +549,7 @@ const ClienteDetailScreen: React.FC = () => {
           {cliente?.fecha_nacimiento && (
             <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
               <View style={styles.infoIconContainer}>
-                <Ionicons name="calendar-outline" size={20} color="#6172FD" />
+                <Ionicons name="calendar-outline" size={20} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Fecha de Nacimiento</Text>
@@ -498,10 +568,50 @@ const ClienteDetailScreen: React.FC = () => {
             </View>
           </>
         )}
+
+        {/* Eliminar */}
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+          <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          <Text style={styles.deleteButtonText}>Eliminar cliente</Text>
+        </TouchableOpacity>
           </>
         )}
 
       </ScrollView>
+
+      {/* Date Picker */}
+      {showDatePicker && Platform.OS === 'ios' && (
+        <Modal transparent animationType="slide">
+          <View style={styles.datePickerOverlay}>
+            <View style={styles.datePickerContainer}>
+              <View style={styles.datePickerHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.datePickerAction}>Cancelar</Text>
+                </TouchableOpacity>
+                <Text style={styles.datePickerTitle}>Fecha de Nacimiento</Text>
+                <TouchableOpacity onPress={confirmIOSDate}>
+                  <Text style={styles.datePickerAction}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={onDateChange}
+                style={{ height: 200 }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showDatePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -512,30 +622,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 38,
   },
   loadingContainer: {
     flex: 1,
@@ -563,7 +675,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -670,7 +782,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#6172FD10',
+    backgroundColor: '#573CFF10',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -751,6 +863,75 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    marginTop: 12,
+    marginBottom: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#EF4444',
+  },
+  dateField: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  dateFieldText: {
+    fontSize: 15,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#374151',
+  },
+  dateFieldPlaceholder: {
+    fontSize: 15,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#9CA3AF',
+  },
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  datePickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontFamily: 'Montserrat_700Bold',
+    color: '#1F2937',
+  },
+  datePickerAction: {
+    fontSize: 16,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#573CFF',
   },
 });
 

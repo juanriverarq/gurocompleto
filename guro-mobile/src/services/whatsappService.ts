@@ -123,6 +123,8 @@ export const sendMediaMessage = async (
   messageType: 'image' | 'audio' | 'document',
   filename?: string
 ) => {
+  console.log('📤 [sendMediaMessage] Starting', { conversationId, uri, messageType, filename });
+  
   const formData = new FormData();
   
   const uriParts = uri.split('.');
@@ -137,24 +139,39 @@ export const sendMediaMessage = async (
     mimeType = 'application/octet-stream';
   }
 
-  formData.append('file', {
+  const fileObj = {
     uri,
     name: filename || `file_${Date.now()}.${fileExtension}`,
     type: mimeType,
-  } as any);
+  };
+  
+  console.log('📤 [sendMediaMessage] File object', fileObj);
+
+  formData.append('file', fileObj as any);
   formData.append('message_type', messageType);
   if (filename) {
     formData.append('caption', filename);
   }
 
-  const response = await api.post(
-    `/saas/whatsapp-inbox/conversations/${conversationId}/media`,
-    formData,
-    {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    }
-  );
-  return response.data;
+  try {
+    const response = await api.post(
+      `/saas/whatsapp-inbox/conversations/${conversationId}/media`,
+      formData,
+      {
+        // No pasar Content-Type - el interceptor lo elimina para FormData
+        // y React Native/Axios genera automáticamente multipart/form-data con boundary
+        timeout: 60000,
+      }
+    );
+    console.log('📤 [sendMediaMessage] Success', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('📤 [sendMediaMessage] Error', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      code: error.code,
+    });
+    throw error;
+  }
 };

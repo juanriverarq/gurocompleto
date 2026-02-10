@@ -8,6 +8,7 @@ import {
   RefreshControl,
   TextInput,
   ActivityIndicator,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -118,7 +119,7 @@ const WhatsAppScreen: React.FC = () => {
       case 'resolved':
         return '#6B7280';
       default:
-        return '#6172FD';
+        return '#573CFF';
     }
   };
 
@@ -138,7 +139,7 @@ const WhatsAppScreen: React.FC = () => {
     <TouchableOpacity style={styles.conversationCard} onPress={() => handleConversationPress(item)}>
       <View style={styles.avatarContainer}>
         <View style={styles.avatar}>
-          <Ionicons name="person" size={24} color="#6172FD" />
+          <Ionicons name="person" size={24} color="#573CFF" />
         </View>
         {item.unread_count > 0 && (
           <View style={styles.unreadBadge}>
@@ -213,8 +214,8 @@ const WhatsAppScreen: React.FC = () => {
         
         <View style={styles.conversationMeta}>
           {item.department && (
-            <View style={[styles.departmentBadge, { backgroundColor: (item.department.color || '#6172FD') + '20' }]}>
-              <Text style={[styles.departmentText, { color: item.department.color || '#6172FD' }]}>
+            <View style={[styles.departmentBadge, { backgroundColor: (item.department.color || '#573CFF') + '20' }]}>
+              <Text style={[styles.departmentText, { color: item.department.color || '#573CFF' }]}>
                 {item.department.name}
               </Text>
             </View>
@@ -231,13 +232,18 @@ const WhatsAppScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.png')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>WhatsApp Inbox</Text>
         <View style={styles.headerPlaceholder} />
-      </View>
+      </ImageBackground>
 
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
@@ -275,14 +281,14 @@ const WhatsAppScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} />
           }
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
             loadingMore ? (
               <View style={styles.loadingMore}>
-                <ActivityIndicator size="small" color="#6172FD" />
+                <ActivityIndicator size="small" color="#573CFF" />
               </View>
             ) : null
           }
@@ -305,30 +311,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 38,
   },
   searchContainer: {
     paddingHorizontal: 20,
@@ -380,7 +388,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -414,7 +422,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#6172FD15',
+    backgroundColor: '#573CFF15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -422,7 +430,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     borderRadius: 10,
     minWidth: 20,
     height: 20,

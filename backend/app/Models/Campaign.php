@@ -31,7 +31,9 @@ class Campaign extends Model
         'last_execution',
         'next_execution',
         'created_by',
-        'whatsapp_instance_id'
+        'whatsapp_instance_id',
+        'template_name',
+        'template_language',
     ];
 
     protected $casts = [
