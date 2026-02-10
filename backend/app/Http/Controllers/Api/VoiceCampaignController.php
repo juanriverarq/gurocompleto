@@ -2708,7 +2708,7 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
                 'assistant' => [
                     'name' => $agentDisplayName,
                     'firstMessage' => $personalizedFirstMessage,
-                    'firstMessageMode' => 'assistant-waits-for-user', //Hacemos que el agente espere a que el usuario hable primero
+                    'firstMessageMode' => 'assistant-speaks-first', //Hacemos que el agente hable primero
                     'model' => [
                         'provider' => 'openai',
                         'model' => 'gpt-4o-mini',
