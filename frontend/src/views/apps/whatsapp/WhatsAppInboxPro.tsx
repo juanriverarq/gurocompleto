@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Badge, Button, Spinner, Alert, Dropdown, Textarea, Tooltip, Modal } from 'flowbite-react';
+import { Badge, Button, Spinner, Alert, Dropdown, Textarea, Modal } from 'flowbite-react';
 import { Icon } from '@iconify/react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import whatsappInboxService, { 
   WhatsAppConversation, 
   WhatsAppMessage, 
@@ -10,6 +10,9 @@ import whatsappInboxService, {
 } from 'src/services/whatsappInboxService';
 import MessageContent from 'src/components/whatsapp/MessageContent';
 import { ConversationUpdateEvent } from 'src/hooks/useWhatsAppSocket';
+import { auth } from 'src/config/firebase';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
 
 interface QuickReply {
   id: number;
@@ -22,6 +25,7 @@ interface QuickReply {
 const WhatsAppInboxPro: React.FC = () => {
   // Parámetros de URL para abrir conversación directamente
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const conversationIdFromUrl = searchParams.get('conversation');
 
   // Estados principales
@@ -49,14 +53,28 @@ const WhatsAppInboxPro: React.FC = () => {
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState<number | null>(null);
-  const [, setSelectedFile] = useState<File | null>(null);
-  const [, setFilePreview] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null);
+  const [pendingFileCaption, setPendingFileCaption] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const selectedConversationRef = useRef<WhatsAppConversation | null>(null);
 
   // Mantener ref actualizada de la conversación seleccionada para los callbacks de WebSocket
@@ -278,6 +296,119 @@ const WhatsAppInboxPro: React.FC = () => {
     }
   };
 
+  // ========== TEMPLATE SENDING (Meta Cloud API) ==========
+  const loadApprovedTemplates = async () => {
+    try {
+      setLoadingTemplates(true);
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(`${API_BASE_URL}/saas/whatsapp-inbox/templates?status=APPROVED`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAvailableTemplates(data.templates || []);
+      }
+    } catch (err) {
+      console.error('Error loading templates:', err);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleOpenTemplateModal = () => {
+    loadApprovedTemplates();
+    setTemplateParams({});
+    setShowTemplateModal(true);
+  };
+
+  const extractTemplateVars = (body: string): string[] => {
+    const matches = body.match(/\{\{([a-z0-9_]+)\}\}/g);
+    return matches ? matches.map(m => m.replace(/[{}]/g, '')) : [];
+  };
+
+  const handleSendTemplate = async (template: any) => {
+    console.log('📤 [sendTemplate] CALLED with template:', template?.name, 'conversation:', selectedConversation?.id, selectedConversation?.phone);
+    if (!selectedConversation) {
+      console.error('📤 [sendTemplate] No selectedConversation!');
+      return;
+    }
+    try {
+      setSendingTemplate(true);
+      const user = auth.currentUser;
+      if (!user) {
+        console.error('📤 [sendTemplate] No auth user!');
+        setError('No estás autenticado');
+        return;
+      }
+      const token = await user.getIdToken();
+      console.log('📤 [sendTemplate] Got token, length:', token?.length);
+
+      // Build components with parameter values
+      const bodyText = template.parsed?.body || '';
+      const vars = extractTemplateVars(bodyText);
+      const components: any[] = [];
+
+      if (vars.length > 0) {
+        const parameters = vars.map(v => ({
+          type: 'text',
+          text: templateParams[v] || v,
+        }));
+        components.push({ type: 'body', parameters });
+      }
+
+      const payload = {
+        phone: selectedConversation.phone,
+        template_name: template.name,
+        language: template.language || 'es',
+        components,
+        template_body: bodyText || `[Plantilla: ${template.name}]`,
+      };
+      const url = `${API_BASE_URL}/saas/whatsapp-inbox/templates/send`;
+      console.log('📤 [sendTemplate] POST', url, JSON.stringify(payload));
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      
+      const text = await res.text();
+      console.log('📤 [sendTemplate] Response status:', res.status, 'body:', text);
+      
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      
+      if (res.ok) {
+        setShowTemplateModal(false);
+        // Add optimistic message to chat
+        const templateBody = template.parsed?.body || `[Plantilla: ${template.name}]`;
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          conversation_id: selectedConversation.id,
+          message_id: data.message_id || `tpl-${Date.now()}`,
+          direction: 'outgoing',
+          sender_type: 'agent',
+          message_type: 'template',
+          content: templateBody,
+          status: 'sent',
+          created_at: new Date().toISOString(),
+        }]);
+        loadMessages(selectedConversation.id);
+        loadConversations(true);
+      } else {
+        console.error('📤 [sendTemplate] Error:', data);
+        setError(data.error || `Error ${res.status}: ${text.substring(0, 200)}`);
+      }
+    } catch (err: any) {
+      console.error('📤 [sendTemplate] Exception:', err);
+      setError('Error de conexión: ' + (err.message || 'desconocido'));
+    } finally {
+      setSendingTemplate(false);
+    }
+  };
+
   const handleQuickReply = (reply: QuickReply) => {
     setNewMessage(reply.message);
     setShowQuickReplies(false);
@@ -362,30 +493,172 @@ const WhatsAppInboxPro: React.FC = () => {
       return;
     }
 
-    setSelectedFile(file);
+    // Mostrar preview para imágenes, enviar directo para otros
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setPendingFilePreview(ev.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+      setPendingFile(file);
+      setPendingFileCaption('');
+      e.target.value = '';
+      return;
+    }
+
+    // Para documentos, audio, video: enviar directo
+    await sendFileDirectly(file);
+    e.target.value = '';
+  };
+
+  const sendFileDirectly = async (file: File, caption?: string) => {
+    console.log('📤 [sendFileDirectly] Called', { file: file?.name, type: file?.type, size: file?.size, caption, conversationId: selectedConversation?.id });
+    if (!selectedConversation) {
+      console.error('📤 [sendFileDirectly] No selectedConversation!');
+      return;
+    }
     setSendingMessage(true);
-    
     try {
-      // Enviar archivo multimedia
       const message = await whatsappInboxService.sendMediaMessage(
         selectedConversation.id,
         file,
-        '' // Sin caption por ahora
+        caption || ''
       );
-      
+      console.log('📤 [sendFileDirectly] Success, message:', message);
       setMessages(prev => [...prev, message]);
       loadConversations(true);
-      
-      // Limpiar
-      setSelectedFile(null);
-      setFilePreview(null);
     } catch (err: any) {
+      console.error('📤 [sendFileDirectly] Error:', err.message, err);
       setError(err.message || 'Error al enviar archivo');
     } finally {
       setSendingMessage(false);
-      e.target.value = '';
     }
   };
+
+  const sendPendingFile = async () => {
+    if (!pendingFile) return;
+    await sendFileDirectly(pendingFile, pendingFileCaption);
+    setPendingFile(null);
+    setPendingFilePreview(null);
+    setPendingFileCaption('');
+  };
+
+  const cancelPendingFile = () => {
+    setPendingFile(null);
+    setPendingFilePreview(null);
+    setPendingFileCaption('');
+  };
+
+  // Audio recording with MediaRecorder API
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Meta Cloud API soporta: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg (opus)
+      // Intentar ogg/opus primero, luego webm/opus como fallback
+      let mimeType = 'audio/ogg;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm;codecs=opus';
+      }
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const isOgg = mimeType.includes('ogg');
+        const blobType = isOgg ? 'audio/ogg' : 'audio/webm';
+        const ext = isOgg ? 'ogg' : 'webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
+        const audioFile = new File([audioBlob], `audio_${Date.now()}.${ext}`, { type: blobType });
+        await sendFileDirectly(audioFile);
+      };
+
+      mediaRecorder.start(250);
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      setError('No se pudo acceder al micrófono. Verifica los permisos.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordingDuration(0);
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = null; // Prevent sending
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+    }
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordingDuration(0);
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // ========== META CLOUD API: 24h Conversation Window Validation ==========
+  // Per Meta's policy, businesses can only send free-form messages within 24h
+  // of the customer's last message. After that, only approved templates are allowed.
+  const getConversationWindowStatus = useCallback(() => {
+    if (!selectedConversation || !messages.length) {
+      return { isOpen: false, hoursRemaining: 0, lastClientMessageAt: null };
+    }
+
+    // Find the last incoming (client) message
+    const lastClientMessage = [...messages]
+      .reverse()
+      .find(m => m.direction === 'incoming');
+
+    if (!lastClientMessage) {
+      return { isOpen: false, hoursRemaining: 0, lastClientMessageAt: null };
+    }
+
+    const lastClientTime = new Date(lastClientMessage.created_at).getTime();
+    const now = Date.now();
+    const diffMs = now - lastClientTime;
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const hoursRemaining = Math.max(0, 24 - diffHours);
+
+    return {
+      isOpen: diffHours < 24,
+      hoursRemaining: Math.round(hoursRemaining * 10) / 10,
+      lastClientMessageAt: lastClientMessage.created_at,
+    };
+  }, [selectedConversation, messages]);
+
+  const conversationWindow = getConversationWindowStatus();
+
+  // Check if the WhatsApp instance linked to this conversation is connected
+  const isInstanceConnected = useCallback(() => {
+    if (!selectedConversation?.instance) return false;
+    return selectedConversation.instance.status === 'connected' || selectedConversation.instance.status === 'authenticated' || selectedConversation.instance.status === 'ready';
+  }, [selectedConversation]);
+
+  const instanceConnected = isInstanceConnected();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -523,24 +796,18 @@ const WhatsAppInboxPro: React.FC = () => {
         <div className="flex items-center gap-2">
           {stats && (
             <>
-              <Tooltip content="Mis conversaciones" trigger="hover">
-                <div className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-                  <Icon icon="solar:user-bold" width={16} className="text-primary" />
-                  <span className="font-semibold text-sm">{stats.my_conversations}</span>
-                </div>
-              </Tooltip>
-              <Tooltip content="Sin leer" trigger="hover">
-                <div className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-                  <Icon icon="solar:letter-unread-bold" width={16} className="text-orange-500" />
-                  <span className="font-semibold text-sm">{stats.my_unread}</span>
-                </div>
-              </Tooltip>
-              <Tooltip content="Sin asignar" trigger="hover">
-                <div className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-                  <Icon icon="solar:user-cross-bold" width={16} className="text-red-500" />
-                  <span className="font-semibold text-sm">{stats.unassigned}</span>
-                </div>
-              </Tooltip>
+              <div title="Mis conversaciones" className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                <Icon icon="solar:user-bold" width={16} className="text-primary" />
+                <span className="font-semibold text-sm">{stats.my_conversations}</span>
+              </div>
+              <div title="Sin leer" className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                <Icon icon="solar:letter-unread-bold" width={16} className="text-orange-500" />
+                <span className="font-semibold text-sm">{stats.my_unread}</span>
+              </div>
+              <div title="Sin asignar" className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                <Icon icon="solar:user-cross-bold" width={16} className="text-red-500" />
+                <span className="font-semibold text-sm">{stats.unassigned}</span>
+              </div>
             </>
           )}
           <Button color="light" size="sm" onClick={() => loadInitialData()}>
@@ -569,18 +836,18 @@ const WhatsAppInboxPro: React.FC = () => {
                 { key: 'pending', label: 'Pendientes', icon: 'solar:clock-circle-bold' },
                 { key: 'urgent', label: 'Urgentes', icon: 'solar:danger-triangle-bold' },
               ].map(f => (
-                <Tooltip key={f.key} content={f.label} trigger="hover">
-                  <button
-                    onClick={() => setFilter(f.key as any)}
-                    className={`p-2 rounded-lg transition-all ${
-                      filter === f.key
-                        ? 'bg-primary text-white shadow-md'
-                        : 'bg-gray-50 dark:bg-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    <Icon icon={f.icon} width={18} />
-                  </button>
-                </Tooltip>
+                <button
+                  key={f.key}
+                  title={f.label}
+                  onClick={() => setFilter(f.key as any)}
+                  className={`p-2 rounded-lg transition-all ${
+                    filter === f.key
+                      ? 'bg-primary text-white shadow-md'
+                      : 'bg-gray-50 dark:bg-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  <Icon icon={f.icon} width={18} />
+                </button>
               ))}
             </div>
             <div className="relative">
@@ -673,46 +940,45 @@ const WhatsAppInboxPro: React.FC = () => {
             <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 <span className="text-xs text-gray-500 font-medium whitespace-nowrap mr-1">Filtrar por:</span>
-                <Tooltip content="Todas las conversaciones" trigger="hover">
+                <button
+                  title="Todas las conversaciones"
+                  onClick={() => setSelectedAgentFilter(null)}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-all ${
+                    selectedAgentFilter === null
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                  }`}
+                >
+                  <Icon icon="solar:users-group-rounded-bold" width={16} />
+                  <span className="text-xs font-medium">Todos</span>
+                </button>
+                {assignedAgents.map(agent => (
                   <button
-                    onClick={() => setSelectedAgentFilter(null)}
+                    key={agent.id}
+                    title={`${agent.name} (${agent.count} conversaciones)`}
+                    onClick={() => setSelectedAgentFilter(selectedAgentFilter === agent.id ? null : agent.id)}
                     className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-all ${
-                      selectedAgentFilter === null
+                      selectedAgentFilter === agent.id
                         ? 'bg-primary text-white shadow-sm'
                         : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
                     }`}
                   >
-                    <Icon icon="solar:users-group-rounded-bold" width={16} />
-                    <span className="text-xs font-medium">Todos</span>
-                  </button>
-                </Tooltip>
-                {assignedAgents.map(agent => (
-                  <Tooltip key={agent.id} content={`${agent.name} (${agent.count} conversaciones)`} trigger="hover">
-                    <button
-                      onClick={() => setSelectedAgentFilter(selectedAgentFilter === agent.id ? null : agent.id)}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-all ${
-                        selectedAgentFilter === agent.id
-                          ? 'bg-primary text-white shadow-sm'
-                          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
-                      }`}
-                    >
-                      {agent.avatar ? (
-                        <img src={agent.avatar} alt={agent.name} className="w-5 h-5 rounded-full object-cover" />
-                      ) : (
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                          selectedAgentFilter === agent.id ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
-                        }`}>
-                          {agent.name?.charAt(0).toUpperCase() || '?'}
-                        </div>
-                      )}
-                      <span className="text-xs font-medium whitespace-nowrap">{agent.name?.split(' ')[0]}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                        selectedAgentFilter === agent.id ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-600'
+                    {agent.avatar ? (
+                      <img src={agent.avatar} alt={agent.name} className="w-5 h-5 rounded-full object-cover" />
+                    ) : (
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        selectedAgentFilter === agent.id ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
                       }`}>
-                        {agent.count}
-                      </span>
-                    </button>
-                  </Tooltip>
+                        {agent.name?.charAt(0).toUpperCase() || '?'}
+                      </div>
+                    )}
+                    <span className="text-xs font-medium whitespace-nowrap">{agent.name?.split(' ')[0]}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      selectedAgentFilter === agent.id ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-600'
+                    }`}>
+                      {agent.count}
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -747,26 +1013,18 @@ const WhatsAppInboxPro: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Tooltip content="Asignarme" trigger="hover">
-                    <button onClick={handleAssignToMe} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                      <Icon icon="solar:user-plus-bold" width={18} className="text-gray-500" />
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="Agregar nota" trigger="hover">
-                    <button onClick={() => setShowNoteModal(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                      <Icon icon="solar:document-add-bold" width={18} className="text-gray-500" />
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="Transferir" trigger="hover">
-                    <button onClick={() => setShowAssignModal(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                      <Icon icon="solar:transfer-horizontal-bold" width={18} className="text-gray-500" />
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="Resolver" trigger="hover">
-                    <button onClick={handleResolve} className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition-colors">
-                      <Icon icon="solar:check-circle-bold" width={18} className="text-green-500" />
-                    </button>
-                  </Tooltip>
+                  <button title="Asignarme" onClick={handleAssignToMe} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <Icon icon="solar:user-plus-bold" width={18} className="text-gray-500" />
+                  </button>
+                  <button title="Agregar nota" onClick={() => setShowNoteModal(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <Icon icon="solar:document-add-bold" width={18} className="text-gray-500" />
+                  </button>
+                  <button title="Transferir" onClick={() => setShowAssignModal(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <Icon icon="solar:transfer-horizontal-bold" width={18} className="text-gray-500" />
+                  </button>
+                  <button title="Resolver" onClick={handleResolve} className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition-colors">
+                    <Icon icon="solar:check-circle-bold" width={18} className="text-green-500" />
+                  </button>
                   <Dropdown
                     label=""
                     dismissOnClick
@@ -896,6 +1154,43 @@ const WhatsAppInboxPro: React.FC = () => {
 
               {/* Input de mensaje mejorado */}
               <div className="p-3 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                {/* Preview de archivo pendiente */}
+                {pendingFile && pendingFilePreview && (
+                  <div className="mb-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <img src={pendingFilePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg" />
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-1">{pendingFile.name}</p>
+                        <input
+                          type="text"
+                          value={pendingFileCaption}
+                          onChange={(e) => setPendingFileCaption(e.target.value)}
+                          placeholder="Agregar descripción..."
+                          className="w-full text-sm bg-white dark:bg-gray-600 border-0 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              sendPendingFile();
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="flex gap-1">
+                        <button onClick={cancelPendingFile} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors">
+                          <Icon icon="solar:close-circle-bold" width={18} className="text-gray-400" />
+                        </button>
+                        <button
+                          onClick={sendPendingFile}
+                          disabled={sendingMessage}
+                          className="p-1.5 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-sm hover:shadow-md transition-all"
+                        >
+                          {sendingMessage ? <Spinner size="sm" /> : <Icon icon="solar:plain-bold" width={18} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Quick replies */}
                 {showQuickReplies && quickReplies.length > 0 && (
                   <div className="mb-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg max-h-40 overflow-y-auto">
@@ -951,115 +1246,178 @@ const WhatsAppInboxPro: React.FC = () => {
                   </div>
                 )}
 
-                <div className="flex items-end gap-2">
-                  <div className="flex gap-1">
-                    <Tooltip content="Respuestas rápidas" trigger="hover">
-                      <button 
-                        onClick={() => { setShowQuickReplies(!showQuickReplies); setShowEmojiPicker(false); }}
-                        className={`p-2 rounded-lg transition-colors ${showQuickReplies ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'}`}
-                      >
-                        <Icon icon="solar:lightning-bold" width={18} />
-                      </button>
-                    </Tooltip>
-                    <Tooltip content="Emojis" trigger="hover">
-                      <button 
-                        onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowQuickReplies(false); }}
-                        className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'}`}
-                      >
-                        <Icon icon="solar:emoji-funny-circle-bold" width={18} />
-                      </button>
-                    </Tooltip>
-                    <Dropdown
-                      label=""
-                      dismissOnClick
-                      renderTrigger={() => (
-                        <Tooltip content="Adjuntar archivo" trigger="hover">
-                          <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">
-                            <Icon icon="solar:paperclip-bold" width={18} />
-                          </button>
-                        </Tooltip>
-                      )}
+                {/* Instance disconnected check */}
+                {!instanceConnected ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                      <Icon icon="solar:link-broken-bold" width={20} className="text-red-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-red-700 dark:text-red-400">
+                          Línea de WhatsApp no conectada
+                        </p>
+                        <p className="text-[11px] text-red-600 dark:text-red-500">
+                          Debes conectar primero tu línea de WhatsApp Cloud API para poder enviar y recibir mensajes.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors text-sm font-medium"
+                      onClick={() => navigate('/apps/whatsapp/conexiones')}
                     >
-                      <Dropdown.Item onClick={() => fileInputRef.current?.click()}>
-                        <Icon icon="solar:gallery-bold" className="mr-2 text-blue-500" width={16} />
-                        Imagen
-                      </Dropdown.Item>
-                      <Dropdown.Item onClick={() => {
-                        if (fileInputRef.current) {
-                          fileInputRef.current.accept = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
-                          fileInputRef.current.click();
-                        }
-                      }}>
-                        <Icon icon="solar:document-bold" className="mr-2 text-red-500" width={16} />
-                        Documento
-                      </Dropdown.Item>
-                      <Dropdown.Item onClick={() => {
-                        if (fileInputRef.current) {
-                          fileInputRef.current.accept = 'audio/*';
-                          fileInputRef.current.click();
-                        }
-                      }}>
-                        <Icon icon="solar:microphone-bold" className="mr-2 text-purple-500" width={16} />
-                        Audio
-                      </Dropdown.Item>
-                      <Dropdown.Item onClick={() => {
-                        if (fileInputRef.current) {
-                          fileInputRef.current.accept = 'video/*';
-                          fileInputRef.current.click();
-                        }
-                      }}>
-                        <Icon icon="solar:video-frame-bold" className="mr-2 text-green-500" width={16} />
-                        Video
-                      </Dropdown.Item>
-                    </Dropdown>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                    />
+                      <Icon icon="solar:plug-circle-bold" width={16} />
+                      Ir a Conexiones WhatsApp
+                    </button>
                   </div>
-                  
-                  <div className="flex-1 relative">
-                    <textarea
-                      ref={inputRef}
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Escribe un mensaje..."
-                      rows={1}
-                      className="w-full px-4 py-2.5 text-sm bg-gray-50 dark:bg-gray-700 border-0 rounded-xl focus:ring-2 focus:ring-primary resize-none"
-                      style={{ minHeight: '42px', maxHeight: '120px' }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          sendMessage();
-                        }
-                      }}
-                      onInput={(e) => {
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = 'auto';
-                        target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-                      }}
-                    />
-                  </div>
-                  
-                  <button
-                    onClick={sendMessage}
-                    disabled={!newMessage.trim() || sendingMessage}
-                    className={`p-2.5 rounded-xl transition-all ${
-                      newMessage.trim() 
-                        ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md hover:shadow-lg' 
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
-                    }`}
-                  >
-                    {sendingMessage ? (
-                      <Spinner size="sm" />
-                    ) : (
+                ) : isRecording ? (
+                  <div className="flex items-center gap-3 py-1">
+                    <button onClick={cancelRecording} title="Cancelar grabación" className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                      <Icon icon="solar:trash-bin-trash-bold" width={20} className="text-red-500" />
+                    </button>
+                    <div className="flex-1 flex items-center gap-3 px-4 py-2.5 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                      <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                      <span className="text-sm font-medium text-red-600 dark:text-red-400">
+                        Grabando {formatRecordingTime(recordingDuration)}
+                      </span>
+                      <div className="flex-1 flex items-center gap-0.5">
+                        {Array.from({ length: 20 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="flex-1 bg-red-300 dark:bg-red-600 rounded-full animate-pulse"
+                            style={{ height: `${Math.random() * 16 + 4}px`, animationDelay: `${i * 50}ms` }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={stopRecording}
+                      title="Enviar nota de voz"
+                      className="p-2.5 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                    >
                       <Icon icon="solar:plain-bold" width={20} />
+                    </button>
+                  </div>
+                ) : !conversationWindow.isOpen ? (
+                  /* 24h Window Closed - Meta Cloud API restriction */
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                      <Icon icon="solar:clock-circle-bold" width={18} className="text-amber-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                          Ventana de conversación cerrada (24h)
+                        </p>
+                        <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                          Según las directrices de Meta, solo puedes enviar plantillas aprobadas fuera de la ventana de 24 horas.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-sm font-medium"
+                        onClick={handleOpenTemplateModal}
+                      >
+                        <Icon icon="solar:document-text-bold" width={16} />
+                        Enviar plantilla aprobada
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 24h Window Open - Free-form messaging allowed */
+                  <div className="space-y-1">
+                    {/* Window status indicator */}
+                    {conversationWindow.hoursRemaining <= 4 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-900/10 rounded-lg">
+                        <Icon icon="solar:clock-circle-bold" width={12} className="text-amber-500" />
+                        <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                          Ventana de conversación: {conversationWindow.hoursRemaining}h restantes
+                        </span>
+                      </div>
                     )}
-                  </button>
-                </div>
+                    <div className="flex items-end gap-2">
+                      <div className="flex gap-1">
+                        <button 
+                          title="Respuestas rápidas"
+                          onClick={() => { setShowQuickReplies(!showQuickReplies); setShowEmojiPicker(false); }}
+                          className={`p-2 rounded-lg transition-colors ${showQuickReplies ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'}`}
+                        >
+                          <Icon icon="solar:lightning-bold" width={18} />
+                        </button>
+                        <button 
+                          title="Emojis"
+                          onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowQuickReplies(false); }}
+                          className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'}`}
+                        >
+                          <Icon icon="solar:emoji-funny-circle-bold" width={18} />
+                        </button>
+                        <Dropdown
+                          label=""
+                          dismissOnClick
+                          renderTrigger={() => (
+                            <button title="Adjuntar archivo" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">
+                              <Icon icon="solar:paperclip-bold" width={18} />
+                            </button>
+                          )}
+                        >
+                          <Dropdown.Item onClick={() => imageInputRef.current?.click()}>
+                            <Icon icon="solar:gallery-bold" className="mr-2 text-blue-500" width={16} />
+                            Imagen
+                          </Dropdown.Item>
+                          <Dropdown.Item onClick={() => docInputRef.current?.click()}>
+                            <Icon icon="solar:document-bold" className="mr-2 text-red-500" width={16} />
+                            Documento
+                          </Dropdown.Item>
+                          <Dropdown.Item onClick={() => audioInputRef.current?.click()}>
+                            <Icon icon="solar:music-note-bold" className="mr-2 text-purple-500" width={16} />
+                            Audio
+                          </Dropdown.Item>
+                          <Dropdown.Item onClick={() => videoInputRef.current?.click()}>
+                            <Icon icon="solar:video-frame-bold" className="mr-2 text-green-500" width={16} />
+                            Video
+                          </Dropdown.Item>
+                        </Dropdown>
+                        {/* Hidden file inputs with correct accept types */}
+                        <input type="file" ref={imageInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
+                        <input type="file" ref={docInputRef} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar" onChange={handleFileSelect} />
+                        <input type="file" ref={audioInputRef} className="hidden" accept="audio/*" onChange={handleFileSelect} />
+                        <input type="file" ref={videoInputRef} className="hidden" accept="video/*" onChange={handleFileSelect} />
+                      </div>
+                      
+                      <div className="flex-1 relative">
+                        <textarea
+                          ref={inputRef}
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="Escribe un mensaje..."
+                          rows={1}
+                          className="w-full px-4 py-2.5 text-sm bg-gray-50 dark:bg-gray-700 border-0 rounded-xl focus:ring-2 focus:ring-primary resize-none"
+                          style={{ minHeight: '42px', maxHeight: '120px' }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              sendMessage();
+                            }
+                          }}
+                          onInput={(e) => {
+                            const target = e.target as HTMLTextAreaElement;
+                            target.style.height = 'auto';
+                            target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Send or Mic button (like mobile app) */}
+                      <button
+                        onClick={newMessage.trim() ? sendMessage : startRecording}
+                        disabled={newMessage.trim() ? sendingMessage : isRecording}
+                        className="p-2.5 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                        title={newMessage.trim() ? 'Enviar mensaje' : 'Grabar nota de voz'}
+                      >
+                        {sendingMessage ? <Spinner size="sm" /> : (
+                          <Icon icon={newMessage.trim() ? "solar:plain-bold" : "solar:microphone-bold"} width={20} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -1282,6 +1640,120 @@ const WhatsAppInboxPro: React.FC = () => {
             Guardar nota
           </Button>
         </Modal.Footer>
+      </Modal>
+
+      {/* ========== TEMPLATE PICKER MODAL ========== */}
+      <Modal show={showTemplateModal} onClose={() => setShowTemplateModal(false)} size="lg">
+        <Modal.Header>
+          <div className="flex items-center gap-2">
+            <Icon icon="solar:document-text-bold" width={20} className="text-blue-500" />
+            <span>Enviar plantilla aprobada</span>
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-3">
+            {loadingTemplates ? (
+              <div className="flex items-center justify-center py-12">
+                <Spinner size="lg" />
+              </div>
+            ) : availableTemplates.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-14 h-14 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Icon icon="solar:document-text-bold-duotone" width={28} className="text-gray-400" />
+                </div>
+                <h3 className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Sin plantillas aprobadas</h3>
+                <p className="text-xs text-gray-500 mt-1">Crea plantillas desde el apartado de Plantillas y espera la aprobación de Meta.</p>
+                <Button color="light" size="sm" className="mt-3 mx-auto" onClick={() => { setShowTemplateModal(false); navigate('/apps/whatsapp/plantillas'); }}>
+                  <Icon icon="solar:arrow-right-bold" className="mr-1" width={14} />
+                  Ir a Plantillas
+                </Button>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-gray-500">Selecciona una plantilla aprobada por Meta para enviar a <span className="font-medium text-gray-700 dark:text-gray-300">{selectedConversation?.contact_first_name || selectedConversation?.contact_push_name || selectedConversation?.phone}</span>:</p>
+                {availableTemplates.map((tpl) => {
+                  const bodyText = tpl.parsed?.body || '';
+                  const vars = extractTemplateVars(bodyText);
+                  const contactName = selectedConversation?.contact_first_name || selectedConversation?.contact_push_name || '';
+
+                  return (
+                    <div key={tpl.id} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">{tpl.name}</span>
+                          <div className="flex gap-1.5 mt-1">
+                            <Badge color={tpl.category === 'MARKETING' ? 'purple' : tpl.category === 'UTILITY' ? 'info' : 'gray'} size="xs">
+                              {tpl.category === 'MARKETING' ? 'Marketing' : tpl.category === 'UTILITY' ? 'Utilidad' : tpl.category}
+                            </Badge>
+                            <Badge color="gray" size="xs">{tpl.language === 'es' ? 'Español' : tpl.language}</Badge>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Preview */}
+                      <div className="bg-[#e5ddd5] dark:bg-gray-900 rounded-lg p-3 mb-3">
+                        <div className="max-w-[280px] bg-white dark:bg-gray-800 rounded-lg shadow-sm p-2.5">
+                          {tpl.parsed?.header?.text && (
+                            <p className="font-bold text-xs text-gray-900 dark:text-white mb-1">{tpl.parsed.header.text}</p>
+                          )}
+                          <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{bodyText}</p>
+                          {tpl.parsed?.footer && (
+                            <p className="text-[10px] text-gray-400 mt-1">{tpl.parsed.footer}</p>
+                          )}
+                          {tpl.parsed?.buttons?.length > 0 && (
+                            <div className="border-t border-gray-100 dark:border-gray-700 mt-2 pt-1.5 space-y-1">
+                              {tpl.parsed.buttons.map((btn: any, i: number) => (
+                                <div key={i} className="text-center py-1 text-[11px] text-blue-500 font-medium border border-blue-50 dark:border-blue-900 rounded">
+                                  {btn.text}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Variable inputs */}
+                      {vars.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Variables</p>
+                          {vars.map((v) => (
+                            <div key={v} className="flex items-center gap-2">
+                              <span className="text-xs font-mono text-blue-500 w-36 flex-shrink-0">{`{{${v}}}`}</span>
+                              <input
+                                type="text"
+                                value={templateParams[v] ?? (v === 'customer_name' ? contactName : '')}
+                                onChange={(e) => setTemplateParams(p => ({ ...p, [v]: e.target.value }))}
+                                placeholder={v === 'customer_name' ? contactName || 'Nombre' : v}
+                                className="flex-1 px-2.5 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <Button
+                        color="primary"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          // Auto-fill customer_name if not set
+                          if (vars.includes('customer_name') && !templateParams['customer_name']) {
+                            setTemplateParams(p => ({ ...p, customer_name: contactName }));
+                          }
+                          handleSendTemplate(tpl);
+                        }}
+                        disabled={sendingTemplate}
+                      >
+                        {sendingTemplate ? <Spinner size="sm" className="mr-1.5" /> : <Icon icon="solar:plain-bold" className="mr-1.5" width={14} />}
+                        Enviar plantilla
+                      </Button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        </Modal.Body>
       </Modal>
     </div>
   );

@@ -5,6 +5,7 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   ScrollView,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,13 +16,18 @@ const PrivacyScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Políticas de Privacidad</Text>
         <View style={styles.headerPlaceholder} />
-      </View>
+      </ImageBackground>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Última actualización */}
@@ -33,8 +39,8 @@ const PrivacyScreen: React.FC = () => {
         {/* Introducción */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={[styles.iconContainer, { backgroundColor: '#6172FD20' }]}>
-              <Ionicons name="lock-closed-outline" size={24} color="#6172FD" />
+            <View style={[styles.iconContainer, { backgroundColor: '#573CFF20' }]}>
+              <Ionicons name="lock-closed-outline" size={24} color="#573CFF" />
             </View>
             <Text style={styles.sectionTitle}>Tu Privacidad es Importante</Text>
           </View>
@@ -53,33 +59,33 @@ const PrivacyScreen: React.FC = () => {
           </View>
           <Text style={styles.subTitle}>Información de Cuenta</Text>
           <View style={styles.listItem}>
-            <Ionicons name="person-outline" size={16} color="#6172FD" />
+            <Ionicons name="person-outline" size={16} color="#573CFF" />
             <Text style={styles.listText}>Nombre completo y datos de contacto</Text>
           </View>
           <View style={styles.listItem}>
-            <Ionicons name="mail-outline" size={16} color="#6172FD" />
+            <Ionicons name="mail-outline" size={16} color="#573CFF" />
             <Text style={styles.listText}>Correo electrónico</Text>
           </View>
           <View style={styles.listItem}>
-            <Ionicons name="call-outline" size={16} color="#6172FD" />
+            <Ionicons name="call-outline" size={16} color="#573CFF" />
             <Text style={styles.listText}>Número de teléfono</Text>
           </View>
           <View style={styles.listItem}>
-            <Ionicons name="business-outline" size={16} color="#6172FD" />
+            <Ionicons name="business-outline" size={16} color="#573CFF" />
             <Text style={styles.listText}>Información de la agencia o correduría</Text>
           </View>
 
           <Text style={[styles.subTitle, { marginTop: 16 }]}>Información de Uso</Text>
           <View style={styles.listItem}>
-            <Ionicons name="analytics-outline" size={16} color="#6172FD" />
+            <Ionicons name="analytics-outline" size={16} color="#573CFF" />
             <Text style={styles.listText}>Datos de navegación y uso de la aplicación</Text>
           </View>
           <View style={styles.listItem}>
-            <Ionicons name="phone-portrait-outline" size={16} color="#6172FD" />
+            <Ionicons name="phone-portrait-outline" size={16} color="#573CFF" />
             <Text style={styles.listText}>Información del dispositivo</Text>
           </View>
           <View style={styles.listItem}>
-            <Ionicons name="location-outline" size={16} color="#6172FD" />
+            <Ionicons name="location-outline" size={16} color="#573CFF" />
             <Text style={styles.listText}>Ubicación aproximada (si lo autorizas)</Text>
           </View>
         </View>
@@ -206,7 +212,7 @@ const PrivacyScreen: React.FC = () => {
 
         {/* Contacto */}
         <View style={styles.contactCard}>
-          <Ionicons name="shield-outline" size={28} color="#6172FD" />
+          <Ionicons name="shield-outline" size={28} color="#573CFF" />
           <Text style={styles.contactTitle}>Oficial de Protección de Datos</Text>
           <Text style={styles.contactText}>
             Para ejercer tus derechos o consultas sobre privacidad:
@@ -224,19 +230,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -244,10 +252,10 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 38,
   },
   scrollView: {
     flex: 1,
@@ -400,7 +408,7 @@ const styles = StyleSheet.create({
   contactEmail: {
     fontSize: 15,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
     marginTop: 8,
   },
 });

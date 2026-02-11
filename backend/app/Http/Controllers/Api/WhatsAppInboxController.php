@@ -439,48 +439,62 @@ class WhatsAppInboxController extends Controller
         try {
             // Subir archivo a storage público
             $path = $file->store('whatsapp-media', 'public');
-            // Usar URL pública de ngrok para que WhatsApp pueda acceder al archivo
-            // TODO: En producción, usar config('app.url') con un dominio público
-            $ngrokUrl = env('NGROK_URL', 'https://hookless-kaylynn-greasily.ngrok-free.dev');
-            $mediaUrl = rtrim($ngrokUrl, '/') . '/storage/' . $path;
             
-            \Log::info('📤 [MEDIA] Enviando archivo multimedia', [
+            // URL relativa para guardar en DB (el frontend la resuelve)
+            $localRelativeUrl = '/storage/' . $path;
+            
+            // URL pública para enviar a Meta Cloud API
+            $publicMediaUrl = rtrim(config('app.url') ?: env('APP_URL', ''), '/') . $localRelativeUrl;
+            if (app()->environment('local', 'development', 'testing')) {
+                $ngrokUrl = env('NGROK_URL', '');
+                if ($ngrokUrl) {
+                    $publicMediaUrl = rtrim($ngrokUrl, '/') . $localRelativeUrl;
+                }
+            }
+
+            // Corregir mime_type para audio (PHP detecta .webm como video/webm)
+            $mimeType = $file->getMimeType();
+            if ($messageType === 'audio' && str_contains($mimeType, 'video/')) {
+                $mimeType = str_replace('video/', 'audio/', $mimeType);
+            }
+            
+            \Log::info('📤 [MEDIA] Enviando archivo multimedia via Cloud API', [
                 'type' => $messageType,
                 'path' => $path,
-                'mediaUrl' => $mediaUrl,
+                'publicMediaUrl' => $publicMediaUrl,
+                'localRelativeUrl' => $localRelativeUrl,
                 'phone' => $conversation->phone,
+                'mimeType' => $mimeType,
             ]);
 
-            // Usar WhatsAppBridgeService para enviar
-            $bridge = app(\App\Services\WhatsAppBridgeService::class);
+            // Usar WhatsAppCloudApiService para enviar (con URL pública para Meta)
+            $cloudApi = app(\App\Services\WhatsAppCloudApiService::class);
             
             $result = null;
-            \Log::info("📤 [MEDIA] Enviando {$messageType} a WhatsApp", [
-                'instance_id' => $instance->instance_id,
-                'phone' => $conversation->phone,
-                'mediaUrl' => $mediaUrl,
-            ]);
-            
             switch ($messageType) {
                 case 'image':
-                    $result = $bridge->sendImage($instance->instance_id, $conversation->phone, $mediaUrl, $caption ?: null);
-                    \Log::info('📤 [MEDIA] Resultado envío imagen', ['result' => $result]);
+                    $result = $cloudApi->sendImageMessage($instance, $conversation->phone, $publicMediaUrl, $caption ?: null);
                     break;
                 case 'video':
-                    $result = $bridge->sendVideo($instance->instance_id, $conversation->phone, $mediaUrl, $caption ?: null);
+                    $result = $cloudApi->sendVideo($instance, $conversation->phone, $publicMediaUrl, $caption ?: null);
                     break;
                 case 'audio':
-                    $result = $bridge->sendAudio($instance->instance_id, $conversation->phone, $mediaUrl);
+                    $result = $cloudApi->sendAudio($instance, $conversation->phone, $publicMediaUrl);
                     break;
                 case 'document':
-                    $result = $bridge->sendDocument($instance->instance_id, $conversation->phone, $mediaUrl, $file->getClientOriginalName(), $caption ?: null);
+                    $result = $cloudApi->sendDocumentMessage($instance, $conversation->phone, $publicMediaUrl, $file->getClientOriginalName(), $caption ?: null);
                     break;
             }
 
-            if ($result && $result['success']) {
-                // Guardar mensaje en la conversación
+            \Log::info('📤 [MEDIA] Resultado Cloud API', ['result' => $result]);
+
+            $messageId = $result['message_id'] ?? ($result['messages'][0]['id'] ?? null);
+            $success = ($result['success'] ?? false) || isset($result['messages']);
+
+            if ($success) {
+                // Guardar mensaje con URL relativa (el frontend la resuelve)
                 $message = $conversation->addMessage([
-                    'message_id' => $result['messageId'] ?? null,
+                    'message_id' => $messageId,
                     'direction' => 'outgoing',
                     'sender_type' => 'agent',
                     'sender_user_id' => $user->id,
@@ -488,9 +502,9 @@ class WhatsAppInboxController extends Controller
                     'content' => $caption ?: "[{$messageType}]",
                     'media' => [
                         'type' => $messageType,
-                        'url' => $mediaUrl,
+                        'url' => $localRelativeUrl,
                         'filename' => $file->getClientOriginalName(),
-                        'mime_type' => $file->getMimeType(),
+                        'mime_type' => $mimeType,
                         'size' => $file->getSize(),
                     ],
                     'status' => 'sent',
@@ -503,8 +517,8 @@ class WhatsAppInboxController extends Controller
             }
 
             return response([
-                'error' => 'Error al enviar archivo',
-                'details' => $result['error'] ?? 'Error desconocido',
+                'error' => 'Error al enviar archivo via Cloud API',
+                'details' => $result['error']['message'] ?? json_encode($result),
             ], 400);
 
         } catch (\Exception $e) {
@@ -695,5 +709,260 @@ class WhatsAppInboxController extends Controller
         ];
 
         return response(['stats' => $stats], 200);
+    }
+
+    // ==========================================
+    // CONTACTOS (Cloud API - Meta registered contacts)
+    // ==========================================
+
+    /**
+     * Obtener lista de contactos únicos extraídos de conversaciones.
+     * Cada contacto representa un número de teléfono único que ha interactuado
+     * con la instancia de WhatsApp Cloud API.
+     */
+    public function getContacts(Request $request): Response
+    {
+        $user = $request->user();
+        $broker = $user->getPrimaryBroker();
+
+        if (!$broker) {
+            return response(['error' => 'Broker no encontrado'], 403);
+        }
+
+        $search = $request->query('search');
+        $perPage = min((int) $request->query('per_page', 25), 100);
+
+        $query = WhatsAppConversation::where('broker_id', $broker->id)
+            ->select([
+                'phone',
+                \DB::raw('MAX(id) as latest_conversation_id'),
+                \DB::raw("MAX(contact_push_name) as contact_push_name"),
+                \DB::raw("MAX(contact_first_name) as contact_first_name"),
+                \DB::raw("MAX(contact_last_name) as contact_last_name"),
+                \DB::raw("MAX(contact_email) as contact_email"),
+                \DB::raw("MAX(contact_company) as contact_company"),
+                \DB::raw("MAX(contact_city) as contact_city"),
+                \DB::raw("MAX(contact_document_id) as contact_document_id"),
+                \DB::raw("MAX(contact_notes) as contact_notes"),
+                \DB::raw('COUNT(DISTINCT id) as total_conversations'),
+                \DB::raw('SUM(message_count) as total_messages'),
+                \DB::raw('MAX(last_message_at) as last_interaction_at'),
+                \DB::raw('MIN(first_message_at) as first_interaction_at'),
+                \DB::raw("SUM(CASE WHEN status NOT IN ('closed','resolved') THEN 1 ELSE 0 END) as open_conversations"),
+            ])
+            ->groupBy('phone');
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('phone', 'LIKE', "%{$search}%")
+                  ->orWhere('contact_push_name', 'LIKE', "%{$search}%")
+                  ->orWhere('contact_first_name', 'LIKE', "%{$search}%")
+                  ->orWhere('contact_last_name', 'LIKE', "%{$search}%")
+                  ->orWhere('contact_email', 'LIKE', "%{$search}%")
+                  ->orWhere('contact_company', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $contacts = $query->orderByDesc('last_interaction_at')
+            ->paginate($perPage);
+
+        // Enrich with 24h window status
+        $contacts->getCollection()->transform(function ($contact) {
+            $lastInteraction = $contact->last_interaction_at 
+                ? \Carbon\Carbon::parse($contact->last_interaction_at) 
+                : null;
+
+            $contact->conversation_window_open = $lastInteraction 
+                ? $lastInteraction->diffInHours(now()) < 24 
+                : false;
+
+            $contact->display_name = $contact->contact_first_name 
+                ? trim("{$contact->contact_first_name} {$contact->contact_last_name}")
+                : ($contact->contact_push_name ?: $contact->phone);
+
+            return $contact;
+        });
+
+        // Summary stats
+        $totalContacts = WhatsAppConversation::where('broker_id', $broker->id)
+            ->distinct('phone')
+            ->count('phone');
+
+        $activeContacts = WhatsAppConversation::where('broker_id', $broker->id)
+            ->where('last_message_at', '>=', now()->subHours(24))
+            ->distinct('phone')
+            ->count('phone');
+
+        $newContactsThisMonth = WhatsAppConversation::where('broker_id', $broker->id)
+            ->where('first_message_at', '>=', now()->startOfMonth())
+            ->distinct('phone')
+            ->count('phone');
+
+        return response([
+            'contacts' => $contacts->items(),
+            'pagination' => [
+                'current_page' => $contacts->currentPage(),
+                'last_page' => $contacts->lastPage(),
+                'per_page' => $contacts->perPage(),
+                'total' => $contacts->total(),
+            ],
+            'stats' => [
+                'total_contacts' => $totalContacts,
+                'active_contacts_24h' => $activeContacts,
+                'new_contacts_this_month' => $newContactsThisMonth,
+            ],
+        ], 200);
+    }
+
+    /**
+     * Obtener detalle de un contacto específico por teléfono.
+     */
+    public function getContact(Request $request, string $phone): Response
+    {
+        $user = $request->user();
+        $broker = $user->getPrimaryBroker();
+
+        if (!$broker) {
+            return response(['error' => 'Broker no encontrado'], 403);
+        }
+
+        $conversations = WhatsAppConversation::where('broker_id', $broker->id)
+            ->where('phone', $phone)
+            ->orderByDesc('last_message_at')
+            ->get();
+
+        if ($conversations->isEmpty()) {
+            return response(['error' => 'Contacto no encontrado'], 404);
+        }
+
+        $latest = $conversations->first();
+
+        $contact = [
+            'phone' => $phone,
+            'display_name' => $latest->contact_first_name 
+                ? trim("{$latest->contact_first_name} {$latest->contact_last_name}")
+                : ($latest->contact_push_name ?: $phone),
+            'contact_push_name' => $latest->contact_push_name,
+            'contact_first_name' => $latest->contact_first_name,
+            'contact_last_name' => $latest->contact_last_name,
+            'contact_email' => $latest->contact_email,
+            'contact_company' => $latest->contact_company,
+            'contact_city' => $latest->contact_city,
+            'contact_document_id' => $latest->contact_document_id,
+            'contact_notes' => $latest->contact_notes,
+            'total_conversations' => $conversations->count(),
+            'total_messages' => $conversations->sum('message_count'),
+            'first_interaction_at' => $conversations->min('first_message_at'),
+            'last_interaction_at' => $conversations->max('last_message_at'),
+            'open_conversations' => $conversations->whereNotIn('status', ['closed', 'resolved'])->count(),
+            'conversation_window_open' => $latest->last_message_at 
+                ? \Carbon\Carbon::parse($latest->last_message_at)->diffInHours(now()) < 24 
+                : false,
+            'conversations' => $conversations->map(fn($c) => [
+                'id' => $c->id,
+                'status' => $c->status,
+                'priority' => $c->priority,
+                'message_count' => $c->message_count,
+                'last_message_at' => $c->last_message_at,
+                'created_at' => $c->created_at,
+            ]),
+        ];
+
+        return response(['contact' => $contact], 200);
+    }
+
+    /**
+     * Actualizar datos de contacto (actualiza la conversación más reciente).
+     */
+    public function updateContact(Request $request, string $phone): Response
+    {
+        $user = $request->user();
+        $broker = $user->getPrimaryBroker();
+
+        if (!$broker) {
+            return response(['error' => 'Broker no encontrado'], 403);
+        }
+
+        $validated = $request->validate([
+            'contact_first_name' => 'nullable|string|max:255',
+            'contact_last_name' => 'nullable|string|max:255',
+            'contact_email' => 'nullable|email|max:255',
+            'contact_company' => 'nullable|string|max:255',
+            'contact_city' => 'nullable|string|max:255',
+            'contact_document_id' => 'nullable|string|max:50',
+            'contact_notes' => 'nullable|string|max:2000',
+        ]);
+
+        // Update all conversations for this phone number
+        $updated = WhatsAppConversation::where('broker_id', $broker->id)
+            ->where('phone', $phone)
+            ->update($validated);
+
+        if (!$updated) {
+            return response(['error' => 'Contacto no encontrado'], 404);
+        }
+
+        return response(['success' => true, 'message' => 'Contacto actualizado'], 200);
+    }
+
+    /**
+     * Servir archivos multimedia con headers correctos para streaming (iOS AVFoundation)
+     */
+    public function serveMedia(string $filename)
+    {
+        $path = storage_path('app/public/whatsapp-media/' . $filename);
+        
+        if (!file_exists($path)) {
+            return response(['error' => 'Archivo no encontrado'], 404);
+        }
+
+        $mimeTypes = [
+            'webm' => 'audio/webm',
+            'ogg' => 'audio/ogg',
+            'm4a' => 'audio/mp4',
+            'mp3' => 'audio/mpeg',
+            'aac' => 'audio/aac',
+            'mp4' => 'video/mp4',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'pdf' => 'application/pdf',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ];
+
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        $mime = $mimeTypes[$ext] ?? mime_content_type($path);
+        $size = filesize($path);
+
+        // Handle range requests (required for iOS AVFoundation audio/video playback)
+        $headers = [
+            'Content-Type' => $mime,
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'public, max-age=86400',
+            'Access-Control-Allow-Origin' => '*',
+        ];
+
+        if (request()->hasHeader('Range')) {
+            $range = request()->header('Range');
+            preg_match('/bytes=(\d+)-(\d*)/', $range, $matches);
+            $start = intval($matches[1]);
+            $end = !empty($matches[2]) ? intval($matches[2]) : $size - 1;
+            $length = $end - $start + 1;
+
+            $headers['Content-Range'] = "bytes {$start}-{$end}/{$size}";
+            $headers['Content-Length'] = $length;
+
+            $stream = fopen($path, 'rb');
+            fseek($stream, $start);
+            $data = fread($stream, $length);
+            fclose($stream);
+
+            return response($data, 206, $headers);
+        }
+
+        $headers['Content-Length'] = $size;
+        return response()->file($path, $headers);
     }
 }

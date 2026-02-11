@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { StyleSheet, Dimensions, ImageBackground } from 'react-native';
 import LottieView from 'lottie-react-native';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 interface AnimatedSplashProps {
   onAnimationFinish: () => void;
@@ -18,7 +18,11 @@ const AnimatedSplash: React.FC<AnimatedSplashProps> = ({ onAnimationFinish }) =>
   }, []);
 
   return (
-    <View style={styles.container}>
+    <ImageBackground
+      source={require('../../assets/backgrounds/hero-gradient.webp')}
+      style={styles.container}
+      resizeMode="cover"
+    >
       <LottieView
         ref={animationRef}
         source={require('../../LOTTIE.json')}
@@ -27,14 +31,13 @@ const AnimatedSplash: React.FC<AnimatedSplashProps> = ({ onAnimationFinish }) =>
         loop={false}
         onAnimationFinish={onAnimationFinish}
       />
-    </View>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#6172FD',
     justifyContent: 'center',
     alignItems: 'center',
   },

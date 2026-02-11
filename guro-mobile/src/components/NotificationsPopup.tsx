@@ -130,7 +130,7 @@ const NotificationsPopup: React.FC<NotificationsPopupProps> = ({ visible, onClos
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Ionicons name="notifications" size={22} color="#6172FD" />
+              <Ionicons name="notifications" size={22} color="#573CFF" />
               <Text style={styles.headerTitle}>Notificaciones</Text>
             </View>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -146,7 +146,7 @@ const NotificationsPopup: React.FC<NotificationsPopupProps> = ({ visible, onClos
           {/* Content */}
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#6172FD" />
+              <ActivityIndicator size="large" color="#573CFF" />
               <Text style={styles.loadingText}>Cargando notificaciones...</Text>
             </View>
           ) : error ? (
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     borderRadius: 8,
   },
   retryText: {

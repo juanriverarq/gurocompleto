@@ -12,10 +12,12 @@ import {
   Platform,
   Modal,
   FlatList,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { createCliente, CreateClienteData } from '../services/clientesService';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const TIPOS_DOC_PERSONA = ['CC', 'CE', 'TI', 'PP', 'RC'];
 const TIPOS_DOC_EMPRESA = ['NIT'];
@@ -69,10 +71,41 @@ const CreateClienteScreen: React.FC = () => {
 
   // Adicional
   const [fechaNacimiento, setFechaNacimiento] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
   const [genero, setGenero] = useState('');
   const [actividad, setActividad] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [estado, setEstado] = useState('active');
+
+  const formatDateStr = (date: Date) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const openDatePicker = () => {
+    if (fechaNacimiento) {
+      const parts = fechaNacimiento.split('-');
+      if (parts.length === 3) setTempDate(new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+      else setTempDate(new Date());
+    } else {
+      setTempDate(new Date());
+    }
+    setShowDatePicker(true);
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (event.type === 'dismissed') { setShowDatePicker(false); return; }
+    const date = selectedDate || tempDate;
+    setTempDate(date);
+    setFechaNacimiento(formatDateStr(date));
+    if (Platform.OS === 'android') setShowDatePicker(false);
+  };
+
+  const confirmIOSDate = () => {
+    setFechaNacimiento(formatDateStr(tempDate));
+    setShowDatePicker(false);
+  };
 
   const openPicker = (title: string, options: { label: string; value: string }[], callback: (val: string) => void) => {
     setPickerTitle(title);
@@ -230,7 +263,7 @@ const CreateClienteScreen: React.FC = () => {
         activeOpacity={0.7}
       >
         <View style={[styles.typeIconContainer, clientType === 'persona' && styles.typeIconActive]}>
-          <Ionicons name="person" size={28} color={clientType === 'persona' ? '#FFFFFF' : '#6172FD'} />
+          <Ionicons name="person" size={28} color={clientType === 'persona' ? '#FFFFFF' : '#573CFF'} />
         </View>
         <View style={styles.typeInfo}>
           <Text style={[styles.typeTitle, clientType === 'persona' && styles.typeTitleActive]}>Persona Natural</Text>
@@ -316,7 +349,15 @@ const CreateClienteScreen: React.FC = () => {
     <View>
       {clientType === 'persona' && (
         <>
-          {renderTextField('Fecha de Nacimiento', fechaNacimiento, setFechaNacimiento, 'YYYY-MM-DD')}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Fecha de Nacimiento</Text>
+            <TouchableOpacity style={styles.selectField} onPress={openDatePicker}>
+              <Text style={fechaNacimiento ? styles.selectText : styles.selectPlaceholder}>
+                {fechaNacimiento || 'Seleccionar fecha'}
+              </Text>
+              <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
           {renderSelectField('Genero', genero, 'Seleccionar', GENEROS, setGenero)}
         </>
       )}
@@ -328,13 +369,18 @@ const CreateClienteScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nuevo Cliente</Text>
-        <View style={{ width: 36 }} />
-      </View>
+        <View style={{ width: 38 }} />
+      </ImageBackground>
 
       {renderStepIndicator()}
 
@@ -358,7 +404,7 @@ const CreateClienteScreen: React.FC = () => {
         <View style={styles.bottomBar}>
           {step > 0 && (
             <TouchableOpacity style={styles.btnSecondary} onPress={() => setStep(step - 1)}>
-              <Ionicons name="chevron-back" size={18} color="#6172FD" />
+              <Ionicons name="chevron-back" size={18} color="#573CFF" />
               <Text style={styles.btnSecondaryText}>Anterior</Text>
             </TouchableOpacity>
           )}
@@ -416,6 +462,40 @@ const CreateClienteScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Date Picker */}
+      {showDatePicker && Platform.OS === 'ios' && (
+        <Modal transparent animationType="slide">
+          <View style={styles.pickerOverlay}>
+            <View style={[styles.pickerContainer, { paddingBottom: 20 }]}>
+              <View style={styles.pickerHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={{ fontSize: 16, fontFamily: 'Montserrat_600SemiBold', color: '#573CFF' }}>Cancelar</Text>
+                </TouchableOpacity>
+                <Text style={styles.pickerTitle}>Fecha de Nacimiento</Text>
+                <TouchableOpacity onPress={confirmIOSDate}>
+                  <Text style={{ fontSize: 16, fontFamily: 'Montserrat_600SemiBold', color: '#573CFF' }}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={onDateChange}
+                style={{ height: 200 }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showDatePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+        />
+      )}
     </View>
   );
 };
@@ -426,23 +506,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F6FA',
   },
   header: {
-    height: 95,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 48,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    shadowColor: '#6172FD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -475,7 +553,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepCircleActive: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   stepNumber: {
     fontSize: 12,
@@ -492,7 +570,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   stepLabelActive: {
-    color: '#6172FD',
+    color: '#573CFF',
   },
   stepLine: {
     width: 20,
@@ -501,7 +579,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   stepLineActive: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   // Scroll
   scrollView: {
@@ -535,7 +613,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   typeCardActive: {
-    borderColor: '#6172FD',
+    borderColor: '#573CFF',
     backgroundColor: '#F5F3FF',
   },
   typeIconContainer: {
@@ -547,7 +625,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   typeIconActive: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   typeInfo: {
     flex: 1,
@@ -559,7 +637,7 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
   typeTitleActive: {
-    color: '#6172FD',
+    color: '#573CFF',
   },
   typeDesc: {
     fontSize: 12,
@@ -577,13 +655,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   typeRadioActive: {
-    borderColor: '#6172FD',
+    borderColor: '#573CFF',
   },
   typeRadioDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   // Fields
   fieldContainer: {
@@ -658,7 +736,7 @@ const styles = StyleSheet.create({
   btnSecondaryText: {
     fontSize: 14,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   btnPrimary: {
     flexDirection: 'row',
@@ -666,7 +744,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     gap: 6,
   },
   btnSave: {

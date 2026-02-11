@@ -8,6 +8,8 @@ import {
   RefreshControl,
   TextInput,
   ActivityIndicator,
+  ImageBackground,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +19,8 @@ import { PolizasStackParamList } from '../navigation/PolizasStackNavigator';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 type NavigationProp = NativeStackNavigationProp<PolizasStackParamList>;
+
+const ESTADO_FILTERS = ['Todos', 'Activa', 'Vencida', 'Pendiente', 'Cancelada'];
 
 const PolizasScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -28,14 +32,19 @@ const PolizasScreen: React.FC = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [activeFilter, setActiveFilter] = useState('Todos');
+  const [showFilters, setShowFilters] = useState(false);
 
-  const fetchPolizas = async (pageNum: number = 1, isRefresh: boolean = false) => {
+  const fetchPolizas = async (pageNum: number = 1, isRefresh: boolean = false, estadoFilter?: string) => {
     try {
       setError(null);
+      const estado = estadoFilter !== undefined ? estadoFilter : (activeFilter !== 'Todos' ? activeFilter.toLowerCase() : undefined);
       const response = await getPolizas({ 
         page: pageNum, 
         per_page: 15,
-        search: search || undefined 
+        search: search || undefined,
+        estado: estado || undefined,
       });
       
       if (response.success) {
@@ -44,6 +53,7 @@ const PolizasScreen: React.FC = () => {
         } else {
           setPolizas(prev => [...prev, ...response.data]);
         }
+        setTotalCount(response.total || 0);
         setHasMore(response.current_page < response.last_page);
         setPage(response.current_page);
       } else {
@@ -72,6 +82,14 @@ const PolizasScreen: React.FC = () => {
     setLoading(true);
     setPage(1);
     fetchPolizas(1, true);
+  };
+
+  const onFilterChange = (filter: string) => {
+    setActiveFilter(filter);
+    setLoading(true);
+    setPage(1);
+    const estado = filter !== 'Todos' ? filter.toLowerCase() : undefined;
+    fetchPolizas(1, true, estado || '');
   };
 
   const loadMore = () => {
@@ -129,29 +147,30 @@ const PolizasScreen: React.FC = () => {
   };
 
   const renderPoliza = ({ item }: { item: Poliza }) => (
-    <TouchableOpacity style={styles.polizaCard} onPress={() => handlePolizaPress(item.id)}>
-      <View style={styles.polizaHeader}>
-        <Text style={styles.polizaNumber}>{item.numero_poliza || 'Sin número'}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.estado) }]}>
-          <Text style={styles.statusText}>{getStatusLabel(item.estado)}</Text>
+    <TouchableOpacity style={styles.polizaCard} activeOpacity={0.7} onPress={() => handlePolizaPress(item.id)}>
+      <View style={[styles.cardAccent, { backgroundColor: getStatusColor(item.estado) }]} />
+      <View style={styles.cardBody}>
+        <View style={styles.cardTopRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.polizaNumber} numberOfLines={1}>{item.numero_poliza || 'Sin número'}</Text>
+            <Text style={styles.clientName} numberOfLines={1}>
+              {item.nombre_completo_cliente || `${item.nombres_cliente || ''} ${item.apellidos_cliente || ''}`.trim() || item.cliente || 'Sin cliente'}
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.estado)}18` }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.estado) }]}>{getStatusLabel(item.estado)}</Text>
+          </View>
         </View>
-      </View>
-      
-      <Text style={styles.clientName}>{item.nombre_completo_cliente || `${item.nombres_cliente || ''} ${item.apellidos_cliente || ''}`.trim() || item.cliente || 'Cliente no especificado'}</Text>
-      
-      <View style={styles.ramoContainer}>
-        <Ionicons name="shield-outline" size={14} color="#6B7280" />
-        <Text style={styles.ramoText} numberOfLines={1}>{item.ramo_nombre || item.ramo_principal || item.ramo || 'N/A'}</Text>
-      </View>
-      
-      <View style={styles.polizaFooter}>
-        <View>
-          <Text style={styles.labelSmall}>Prima</Text>
+        <View style={styles.cardBottomRow}>
+          <View style={styles.cardMeta}>
+            <Ionicons name="shield-outline" size={12} color="#9CA3AF" />
+            <Text style={styles.metaText} numberOfLines={1}>{item.ramo_nombre || item.ramo_principal || item.ramo || 'N/A'}</Text>
+          </View>
+          <View style={styles.cardMeta}>
+            <Ionicons name="calendar-outline" size={12} color="#9CA3AF" />
+            <Text style={styles.metaText}>{item.fecha_fin || 'N/A'}</Text>
+          </View>
           <Text style={styles.primeValue}>{formatCurrency(item.prima_neta || 0)}</Text>
-        </View>
-        <View>
-          <Text style={styles.labelSmall}>Vence</Text>
-          <Text style={styles.dateValue}>{item.fecha_fin || 'N/A'}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -163,16 +182,39 @@ const PolizasScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pólizas</Text>
-        <View style={styles.headerPlaceholder} />
-      </View>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.headerTitle}>Pólizas</Text>
+            <Text style={styles.headerCount}>{totalCount} registros</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.filterBtn, showFilters && styles.filterBtnActive]}
+            onPress={() => setShowFilters(!showFilters)}
+          >
+            <Ionicons name="options-outline" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </ImageBackground>
+
+      {showFilters && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+          {ESTADO_FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
+              onPress={() => onFilterChange(f)}
+            >
+              <Text style={[styles.filterChipText, activeFilter === f && styles.filterChipTextActive]}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
@@ -210,14 +252,14 @@ const PolizasScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} />
           }
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
             loadingMore ? (
               <View style={styles.loadingMore}>
-                <ActivityIndicator size="small" color="#6172FD" />
+                <ActivityIndicator size="small" color="#573CFF" />
               </View>
             ) : null
           }
@@ -247,30 +289,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
   },
-  backButton: {
-    width: 40,
-    height: 40,
+  headerTitle: {
+    fontSize: 17,
+    fontFamily: 'Montserrat_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  headerCount: {
+    fontSize: 11,
+    fontFamily: 'Montserrat_500Medium',
+    color: 'rgba(255,255,255,0.55)',
+    marginTop: 2,
+  },
+  filterBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Montserrat_700Bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  headerPlaceholder: {
-    width: 40,
+  filterBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   searchContainer: {
     paddingHorizontal: 20,
@@ -295,6 +347,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Montserrat_400Regular',
     color: '#374151',
+  },
+  filterScroll: {
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 22,
+    backgroundColor: '#F3F4F6',
+  },
+  filterChipActive: {
+    backgroundColor: '#573CFF',
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#6B7280',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -322,7 +396,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -338,91 +412,73 @@ const styles = StyleSheet.create({
   },
   polizaCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  polizaHeader: {
+    borderRadius: 14,
+    marginBottom: 8,
     flexDirection: 'row',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  cardAccent: {
+    width: 4,
+  },
+  cardBody: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 8,
   },
   polizaNumber: {
-    fontSize: 16,
+    fontSize: 13,
     fontFamily: 'Montserrat_700Bold',
-    color: '#6172FD',
+    color: '#0d0d0d',
+    letterSpacing: -0.2,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginLeft: 8,
   },
   statusText: {
-    fontSize: 11,
-    fontFamily: 'Montserrat_600SemiBold',
-    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Montserrat_700Bold',
+    letterSpacing: 0.3,
   },
   clientName: {
-    fontSize: 15,
-    fontFamily: 'Montserrat_600SemiBold',
-    color: '#374151',
-    marginBottom: 10,
-  },
-  polizaDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailText: {
-    fontSize: 13,
-    fontFamily: 'Montserrat_400Regular',
-    color: '#6B7280',
-    flex: 1,
-    marginLeft: 6,
-  },
-  ramoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  ramoText: {
-    fontSize: 13,
-    fontFamily: 'Montserrat_400Regular',
-    color: '#6B7280',
-    flex: 1,
-    marginLeft: 6,
-  },
-  polizaFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-  },
-  labelSmall: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'Montserrat_500Medium',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 11,
+    fontFamily: 'Montserrat_400Regular',
     color: '#9CA3AF',
   },
   primeValue: {
-    fontSize: 16,
+    fontSize: 12,
     fontFamily: 'Montserrat_700Bold',
     color: '#10B981',
-  },
-  dateValue: {
-    fontSize: 14,
-    fontFamily: 'Montserrat_600SemiBold',
-    color: '#374151',
+    marginLeft: 'auto',
   },
   loadingMore: {
     paddingVertical: 20,
@@ -447,10 +503,10 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,

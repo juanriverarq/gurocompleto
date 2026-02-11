@@ -6,6 +6,7 @@ import {
   ScrollView, 
   TouchableOpacity,
   RefreshControl,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -66,7 +67,7 @@ const ProfileDetailScreen: React.FC = () => {
       'enterprise': '#F59E0B',
       'trial': '#10B981',
     };
-    return colors[plan?.toLowerCase()] || '#6172FD';
+    return colors[plan?.toLowerCase()] || '#573CFF';
   };
 
   const getStatusLabel = (status: string) => {
@@ -108,20 +109,25 @@ const ProfileDetailScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Mi Perfil</Text>
         <View style={styles.headerPlaceholder} />
-      </View>
+      </ImageBackground>
 
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} />
         }
       >
         {error ? (
@@ -137,7 +143,7 @@ const ProfileDetailScreen: React.FC = () => {
             {/* Avatar y Nombre */}
             <View style={styles.profileHeader}>
               <View style={styles.avatarLarge}>
-                <Ionicons name="person" size={50} color="#6172FD" />
+                <Ionicons name="person" size={50} color="#573CFF" />
               </View>
               <Text style={styles.profileName}>{userData?.nombre || user?.displayName || 'Usuario'}</Text>
               <Text style={styles.profileEmail}>{userData?.email || user?.email || ''}</Text>
@@ -190,7 +196,7 @@ const ProfileDetailScreen: React.FC = () => {
             <View style={styles.infoCard}>
               <View style={styles.infoRow}>
                 <View style={styles.infoIconContainer}>
-                  <Ionicons name="business-outline" size={20} color="#6172FD" />
+                  <Ionicons name="business-outline" size={20} color="#573CFF" />
                 </View>
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Empresa</Text>
@@ -200,7 +206,7 @@ const ProfileDetailScreen: React.FC = () => {
 
               <View style={styles.infoRow}>
                 <View style={styles.infoIconContainer}>
-                  <Ionicons name="mail-outline" size={20} color="#6172FD" />
+                  <Ionicons name="mail-outline" size={20} color="#573CFF" />
                 </View>
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Correo Electrónico</Text>
@@ -210,7 +216,7 @@ const ProfileDetailScreen: React.FC = () => {
 
               <View style={styles.infoRow}>
                 <View style={styles.infoIconContainer}>
-                  <Ionicons name="finger-print-outline" size={20} color="#6172FD" />
+                  <Ionicons name="finger-print-outline" size={20} color="#573CFF" />
                 </View>
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>ID de Usuario</Text>
@@ -220,7 +226,7 @@ const ProfileDetailScreen: React.FC = () => {
 
               <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
                 <View style={styles.infoIconContainer}>
-                  <Ionicons name="key-outline" size={20} color="#6172FD" />
+                  <Ionicons name="key-outline" size={20} color="#573CFF" />
                 </View>
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>ID de Broker</Text>
@@ -232,12 +238,12 @@ const ProfileDetailScreen: React.FC = () => {
             {/* Acciones */}
             <View style={styles.actionsSection}>
               <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="create-outline" size={20} color="#6172FD" />
+                <Ionicons name="create-outline" size={20} color="#573CFF" />
                 <Text style={styles.actionButtonText}>Editar Perfil</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="lock-closed-outline" size={20} color="#6172FD" />
+                <Ionicons name="lock-closed-outline" size={20} color="#573CFF" />
                 <Text style={styles.actionButtonText}>Cambiar Contraseña</Text>
               </TouchableOpacity>
             </View>
@@ -254,30 +260,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 38,
   },
   loadingContainer: {
     flex: 1,
@@ -306,7 +314,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -339,7 +347,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#6172FD15',
+    backgroundColor: '#573CFF15',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -473,7 +481,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#6172FD10',
+    backgroundColor: '#573CFF10',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -513,7 +521,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 15,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
     marginLeft: 8,
   },
 });

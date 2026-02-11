@@ -5,6 +5,7 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   ScrollView,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,13 +16,18 @@ const TermsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Políticas de Uso</Text>
         <View style={styles.headerPlaceholder} />
-      </View>
+      </ImageBackground>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Última actualización */}
@@ -33,8 +39,8 @@ const TermsScreen: React.FC = () => {
         {/* Introducción */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={[styles.iconContainer, { backgroundColor: '#6172FD20' }]}>
-              <Ionicons name="document-text-outline" size={24} color="#6172FD" />
+            <View style={[styles.iconContainer, { backgroundColor: '#573CFF20' }]}>
+              <Ionicons name="document-text-outline" size={24} color="#573CFF" />
             </View>
             <Text style={styles.sectionTitle}>Introducción</Text>
           </View>
@@ -168,7 +174,7 @@ const TermsScreen: React.FC = () => {
 
         {/* Contacto */}
         <View style={styles.contactCard}>
-          <Ionicons name="mail-outline" size={28} color="#6172FD" />
+          <Ionicons name="mail-outline" size={28} color="#573CFF" />
           <Text style={styles.contactTitle}>¿Tienes preguntas?</Text>
           <Text style={styles.contactText}>
             Si tienes dudas sobre estas políticas, contáctanos en:
@@ -186,30 +192,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 38,
   },
   scrollView: {
     flex: 1,
@@ -322,7 +330,7 @@ const styles = StyleSheet.create({
   contactEmail: {
     fontSize: 15,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
     marginTop: 8,
   },
 });

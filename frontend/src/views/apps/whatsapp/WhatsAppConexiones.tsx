@@ -2,15 +2,17 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Badge, Button, Spinner, Modal, Alert, Table, Tooltip } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import HeroButton from 'src/components/HeroButton';
-import whatsappInstanceService, { CreateInstanceRequest, ConnectionType } from 'src/services/whatsappInstanceService';
+import whatsappInstanceService, { CreateInstanceRequest } from 'src/services/whatsappInstanceService';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import { useToast } from 'src/hooks/use-toast';
-import { useWhatsAppSocket } from 'src/hooks/useWhatsAppSocket';
+
+// Meta App ID for Embedded Signup
+const META_APP_ID = '1851158175529745';
+const META_CONFIG_ID = '894753990185576';
 
 interface LocalInstance {
   id: number;
   instance_id: string;
-  connection_type?: ConnectionType;
   phone_number?: string;
   status: string;
   is_active: boolean;
@@ -28,22 +30,27 @@ interface CloudApiFormData {
   verify_token: string;
 }
 
+declare global {
+  interface Window {
+    FB: any;
+    fbAsyncInit: () => void;
+  }
+}
+
 const WhatsAppConexiones: React.FC = () => {
   const { user: _user } = useUnifiedAuth();
   const { toast } = useToast();
   const [instances, setInstances] = useState<LocalInstance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [selectedInstance, setSelectedInstance] = useState<LocalInstance | null>(null);
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [qrLoading, setQrLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creatingInstance, setCreatingInstance] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [refreshingInstances, setRefreshingInstances] = useState<number[]>([]);
-  const [showConnectionSuccess, setShowConnectionSuccess] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedConnectionType, setSelectedConnectionType] = useState<ConnectionType>('cloud_api');
+  const [connectionMethod, setConnectionMethod] = useState<'embedded' | 'manual'>('embedded');
+  const [embeddedSignupLoading, setEmbeddedSignupLoading] = useState(false);
+  const [fbSdkReady, setFbSdkReady] = useState(false);
+  const fbInitRef = useRef(false);
   const [cloudApiForm, setCloudApiForm] = useState<CloudApiFormData>({
     phone_id: '',
     business_id: '',
@@ -58,57 +65,34 @@ const WhatsAppConexiones: React.FC = () => {
     error_instances: 0,
   });
 
-  // Refs para WebSocket
-  const selectedInstanceRef = useRef(selectedInstance);
-  const isQRModalOpenRef = useRef(showQRModal);
-
-  useEffect(() => {
-    selectedInstanceRef.current = selectedInstance;
-    isQRModalOpenRef.current = showQRModal;
-  }, [selectedInstance, showQRModal]);
-
-  // WebSocket para detección automática de conexión
-  const { isConnected: socketConnected, subscribeToInstance, unsubscribeFromInstance } = useWhatsAppSocket({
-    autoConnect: true,
-    events: {
-      onConnected: (data) => {
-        console.log('🎉 [WebSocket] Instancia conectada:', data.instanceId);
-        setInstances(prev => prev.map(instance => 
-          instance.instance_id === data.instanceId 
-            ? { ...instance, status: 'connected' }
-            : instance
-        ));
-        
-        if (selectedInstanceRef.current?.instance_id === data.instanceId && isQRModalOpenRef.current) {
-          setShowConnectionSuccess(true);
-          setQrCode(null);
-          setTimeout(() => {
-            setShowQRModal(false);
-            setShowConnectionSuccess(false);
-            toast({
-              title: "🎉 ¡WhatsApp Conectado!",
-              description: "La instancia se ha conectado exitosamente.",
-            });
-          }, 2000);
-        }
-        loadInstances();
-        loadInstanceStats();
-      },
-      onDisconnected: (data) => {
-        setInstances(prev => prev.map(instance => 
-          instance.instance_id === data.instanceId 
-            ? { ...instance, status: 'disconnected' }
-            : instance
-        ));
-        loadInstanceStats();
-      },
-      onQRCode: (data) => {
-        if (selectedInstanceRef.current?.instance_id === data.instanceId && isQRModalOpenRef.current) {
-          setQrCode(data.qrCode);
-        }
-      },
+  // Load Facebook SDK only when modal opens (avoid DOM conflicts with React)
+  const loadFbSdk = useCallback(() => {
+    if (window.FB) {
+      setFbSdkReady(true);
+      return;
     }
-  });
+    if (fbInitRef.current) return;
+    fbInitRef.current = true;
+
+    window.fbAsyncInit = function () {
+      window.FB.init({
+        appId: META_APP_ID,
+        cookie: true,
+        xfbml: false,
+        version: 'v22.0',
+      });
+      setFbSdkReady(true);
+    };
+
+    if (!document.getElementById('facebook-jssdk')) {
+      const script = document.createElement('script');
+      script.id = 'facebook-jssdk';
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+      script.async = true;
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+  }, []);
 
   // Cargar instancias desde Laravel
   const loadInstances = useCallback(async () => {
@@ -129,7 +113,6 @@ const WhatsAppConexiones: React.FC = () => {
           return {
             id: instance.id,
             instance_id: instance.instance_id,
-            connection_type: instance.connection_type || 'baileys',
             phone_number: phoneNumber,
             status: instance.status || 'disconnected',
             is_active: instance.is_active,
@@ -181,77 +164,117 @@ const WhatsAppConexiones: React.FC = () => {
     loadInstances();
   }, [loadInstances]);
 
-  // Suscribirse a instancias en WebSocket
-  useEffect(() => {
-    if (!socketConnected) return;
-    instances.forEach(inst => {
-      if (inst.instance_id) subscribeToInstance(inst.instance_id);
-    });
-    return () => {
-      instances.forEach(inst => {
-        if (inst.instance_id) unsubscribeFromInstance(inst.instance_id);
-      });
-    };
-  }, [socketConnected, instances, subscribeToInstance, unsubscribeFromInstance]);
-
-  // Abrir modal para seleccionar tipo de conexión
+  // Abrir modal para crear conexión Cloud API
   const handleOpenCreateModal = () => {
     setShowCreateModal(true);
-    setSelectedConnectionType('baileys');
+    setConnectionMethod('embedded');
     setCloudApiForm({ phone_id: '', business_id: '', token: '', verify_token: '' });
     setError(null);
+    loadFbSdk();
   };
 
-  // Crear nueva instancia según el tipo seleccionado
+  // Embedded Signup: Launch Facebook Login with WhatsApp Embedded Signup
+  const handleEmbeddedSignup = () => {
+    if (!window.FB) {
+      setError('Facebook SDK no está cargado. Recarga la página e intenta de nuevo.');
+      return;
+    }
+
+    setEmbeddedSignupLoading(true);
+    setError(null);
+
+    console.log('🚀 [EMBEDDED SIGNUP] Launching FB.login with config_id:', META_CONFIG_ID);
+
+    // FB.login callback MUST be a regular function (not async)
+    window.FB.login(
+      (response: any) => {
+        console.log('📥 [EMBEDDED SIGNUP] FB.login response:', JSON.stringify(response));
+
+        if (response.authResponse) {
+          const code = response.authResponse.code;
+          console.log('✅ [EMBEDDED SIGNUP] Got code:', code ? 'yes' : 'no');
+
+          if (code) {
+            // Handle async work outside the callback
+            whatsappInstanceService.embeddedSignup(code)
+              .then((result) => {
+                if (result.success) {
+                  setShowCreateModal(false);
+                  toast({
+                    title: 'WhatsApp Conectado',
+                    description: result.message || 'Tu línea de WhatsApp ha sido conectada exitosamente.',
+                  });
+                  loadInstances();
+                } else {
+                  setError(result.message || 'Error al completar la conexión');
+                }
+              })
+              .catch((err: any) => {
+                console.error('❌ [EMBEDDED SIGNUP] Backend error:', err);
+                setError(err.message || 'Error procesando la respuesta de Meta');
+              })
+              .finally(() => {
+                setEmbeddedSignupLoading(false);
+              });
+            return; // Don't set loading false yet
+          } else {
+            setError('No se recibió código de autorización de Meta');
+          }
+        } else {
+          console.warn('⚠️ [EMBEDDED SIGNUP] No authResponse:', response);
+          if (response.status === 'unknown') {
+            setError('El popup fue cerrado o bloqueado. Permite ventanas emergentes e intenta de nuevo.');
+          } else {
+            setError('El proceso de conexión fue cancelado. Intenta de nuevo.');
+          }
+        }
+        setEmbeddedSignupLoading(false);
+      },
+      {
+        config_id: META_CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: '',
+          sessionInfoVersion: '2',
+        },
+      }
+    );
+  };
+
+  // Crear nueva instancia Cloud API
   const handleCreateInstance = async () => {
     try {
       setCreatingInstance(true);
       setError(null);
+
+      if (!cloudApiForm.phone_id || !cloudApiForm.token) {
+        setError('El Phone ID y el Token son obligatorios');
+        setCreatingInstance(false);
+        return;
+      }
       
       const instanceData: CreateInstanceRequest = {
-        connection_type: selectedConnectionType,
+        connection_type: 'cloud_api',
         phone_number: '',
         webhook_url: '',
-        settings: {}
+        settings: {},
+        cloud_api_phone_id: cloudApiForm.phone_id,
+        cloud_api_business_id: cloudApiForm.business_id,
+        cloud_api_token: cloudApiForm.token,
+        cloud_api_verify_token: cloudApiForm.verify_token,
       };
-
-      // Si es Cloud API, agregar los datos del formulario
-      if (selectedConnectionType === 'cloud_api') {
-        if (!cloudApiForm.phone_id || !cloudApiForm.token) {
-          setError('El Phone ID y el Token son obligatorios para Cloud API');
-          setCreatingInstance(false);
-          return;
-        }
-        instanceData.cloud_api_phone_id = cloudApiForm.phone_id;
-        instanceData.cloud_api_business_id = cloudApiForm.business_id;
-        instanceData.cloud_api_token = cloudApiForm.token;
-        instanceData.cloud_api_verify_token = cloudApiForm.verify_token;
-      }
       
       const response = await whatsappInstanceService.createInstance(instanceData);
 
       if (response.success && response.data) {
         setShowCreateModal(false);
         toast({
-          title: "Instancia Creada",
-          description: selectedConnectionType === 'baileys' 
-            ? "La nueva conexión ha sido creada. Escanea el código QR para conectar."
-            : "La conexión con Cloud API ha sido configurada.",
+          title: "Conexión Creada",
+          description: "La conexión con Cloud API ha sido configurada exitosamente.",
         });
         await loadInstances();
-        
-        // Si es Baileys, abrir modal de QR automáticamente
-        if (selectedConnectionType === 'baileys') {
-          const newInstance: LocalInstance = {
-            id: response.data.id!,
-            instance_id: response.data.instance_id,
-            connection_type: response.data.connection_type,
-            phone_number: response.data.phone_number,
-            status: response.data.status,
-            is_active: response.data.is_active,
-          };
-          handleConnectInstance(newInstance);
-        }
       } else {
         setError(response.message || 'Error al crear la instancia');
         toast({
@@ -265,33 +288,6 @@ const WhatsAppConexiones: React.FC = () => {
       setError(error.message || 'Error al crear la conexión');
     } finally {
       setCreatingInstance(false);
-    }
-  };
-
-  // Conectar instancia (obtener QR)
-  const handleConnectInstance = async (instance: LocalInstance) => {
-    setSelectedInstance(instance);
-    setShowQRModal(true);
-    setQrLoading(true);
-    setQrCode(null);
-    setShowConnectionSuccess(false);
-
-    try {
-      const response = await whatsappInstanceService.getQRCode(instance.id);
-      
-      if (response.success && response.qr) {
-        setQrCode(response.qr);
-      } else if (response.message?.includes('already connected')) {
-        setShowConnectionSuccess(true);
-        await loadInstances();
-      } else {
-        setError(response.message || 'No se pudo obtener el código QR');
-      }
-    } catch (error: any) {
-      console.error('Error obteniendo QR:', error);
-      setError(error.message || 'Error al obtener el código QR');
-    } finally {
-      setQrLoading(false);
     }
   };
 
@@ -356,27 +352,6 @@ const WhatsAppConexiones: React.FC = () => {
     }
   };
 
-  // Refrescar QR
-  const handleRefreshQR = async () => {
-    if (!selectedInstance) return;
-    
-    setQrLoading(true);
-    try {
-      const response = await whatsappInstanceService.getQRCode(selectedInstance.id);
-      
-      if (response.success && response.qr) {
-        setQrCode(response.qr);
-      } else if (response.message?.includes('connected')) {
-        setShowConnectionSuccess(true);
-        await loadInstances();
-      }
-    } catch (error) {
-      console.error('Error refrescando QR:', error);
-    } finally {
-      setQrLoading(false);
-    }
-  };
-
   // Helpers
   const getStatusText = (status: string) => {
     const statusMap: Record<string, string> = {
@@ -385,7 +360,6 @@ const WhatsAppConexiones: React.FC = () => {
       'connecting': 'Conectando...',
       'disconnected': 'Desconectado',
       'error': 'Error',
-      'qr_pending': 'Esperando QR'
     };
     return statusMap[status] || status;
   };
@@ -510,16 +484,15 @@ const WhatsAppConexiones: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {instances.map((instance) => {
             const connected = instance.status === 'connected' || instance.status === 'authenticated';
-            const connecting = instance.status === 'connecting' || instance.status === 'qr_pending';
             
             return (
               <Card key={instance.id} className="hover:shadow-lg transition-all hover:border-primary/50">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`p-3 rounded-xl ${connected ? 'bg-green-100 dark:bg-green-900/30' : connecting ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                    <div className={`p-3 rounded-xl ${connected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
                       <Icon 
                         icon={connected ? "solar:smartphone-bold-duotone" : "solar:smartphone-outline"} 
-                        className={connected ? 'text-green-500' : connecting ? 'text-yellow-500' : 'text-gray-400'} 
+                        className={connected ? 'text-green-500' : 'text-gray-400'} 
                         width={28} 
                       />
                     </div>
@@ -534,10 +507,10 @@ const WhatsAppConexiones: React.FC = () => {
                     </div>
                   </div>
                   <Badge 
-                    color={connected ? 'success' : connecting ? 'warning' : 'gray'}
+                    color={connected ? 'success' : 'gray'}
                     className="text-xs"
                   >
-                    <span className={`w-2 h-2 rounded-full mr-1.5 inline-block ${connected ? 'bg-green-500 animate-pulse' : connecting ? 'bg-yellow-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                    <span className={`w-2 h-2 rounded-full mr-1.5 inline-block ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
                     {getStatusText(instance.status)}
                   </Badge>
                 </div>
@@ -549,15 +522,8 @@ const WhatsAppConexiones: React.FC = () => {
                         <Icon icon="solar:hashtag-bold" width={12} />
                         {instance.instance_id?.split('_').slice(-1)[0] || instance.id}
                       </span>
-                      <Badge 
-                        color={instance.connection_type === 'cloud_api' ? 'info' : 'purple'} 
-                        size="xs"
-                      >
-                        {instance.connection_type === 'cloud_api' ? (
-                          <><Icon icon="logos:meta" width={10} className="mr-1" /> Cloud API</>
-                        ) : (
-                          <><Icon icon="solar:qr-code-bold" width={10} className="mr-1" /> QR</>
-                        )}
+                      <Badge color="info" size="xs">
+                        <Icon icon="logos:meta" width={10} className="mr-1" /> Cloud API
                       </Badge>
                     </div>
                     {instance.last_activity_at && (
@@ -569,43 +535,20 @@ const WhatsAppConexiones: React.FC = () => {
                   </div>
                   
                   <div className="flex gap-2">
-                    {connected ? (
-                      <Button 
-                        size="sm" 
-                        color="light" 
-                        className="flex-1"
-                        onClick={() => handleRefreshStatus(instance.id)}
-                        disabled={refreshingInstances.includes(instance.id)}
-                      >
-                        {refreshingInstances.includes(instance.id) ? (
-                          <Spinner size="sm" className="mr-1" />
-                        ) : (
-                          <Icon icon="solar:refresh-bold" className="mr-1" width={16} />
-                        )}
-                        Actualizar
-                      </Button>
-                    ) : instance.connection_type === 'cloud_api' ? (
-                      <Button 
-                        size="sm" 
-                        color="light" 
-                        className="flex-1"
-                        onClick={() => handleRefreshStatus(instance.id)}
-                        disabled={refreshingInstances.includes(instance.id)}
-                      >
-                        <Icon icon="solar:settings-bold" className="mr-1" width={16} />
-                        Configurar
-                      </Button>
-                    ) : (
-                      <Button 
-                        size="sm" 
-                        color="light" 
-                        className="flex-1"
-                        onClick={() => handleConnectInstance(instance)}
-                      >
-                        <Icon icon="solar:qr-code-bold" className="mr-1" width={16} />
-                        Escanear QR
-                      </Button>
-                    )}
+                    <Button 
+                      size="sm" 
+                      color="light" 
+                      className="flex-1"
+                      onClick={() => handleRefreshStatus(instance.id)}
+                      disabled={refreshingInstances.includes(instance.id)}
+                    >
+                      {refreshingInstances.includes(instance.id) ? (
+                        <Spinner size="sm" className="mr-1" />
+                      ) : (
+                        <Icon icon="solar:refresh-bold" className="mr-1" width={16} />
+                      )}
+                      Actualizar
+                    </Button>
                     <Tooltip content="Eliminar conexión" trigger="hover">
                       <Button 
                         size="sm" 
@@ -665,24 +608,18 @@ const WhatsAppConexiones: React.FC = () => {
                     </Table.Cell>
                     <Table.Cell>
                       <div className="flex justify-end gap-2">
-                        {connected ? (
-                          <Button 
-                            size="xs" 
-                            color="light" 
-                            onClick={() => handleRefreshStatus(instance.id)}
-                            disabled={refreshingInstances.includes(instance.id)}
-                          >
-                            {refreshingInstances.includes(instance.id) ? (
-                              <Spinner size="xs" />
-                            ) : (
-                              <Icon icon="solar:refresh-bold" width={14} />
-                            )}
-                          </Button>
-                        ) : (
-                          <Button size="xs" color="light" onClick={() => handleConnectInstance(instance)}>
-                            <Icon icon="solar:qr-code-bold" width={14} />
-                          </Button>
-                        )}
+                        <Button 
+                          size="xs" 
+                          color="light" 
+                          onClick={() => handleRefreshStatus(instance.id)}
+                          disabled={refreshingInstances.includes(instance.id)}
+                        >
+                          {refreshingInstances.includes(instance.id) ? (
+                            <Spinner size="xs" />
+                          ) : (
+                            <Icon icon="solar:refresh-bold" width={14} />
+                          )}
+                        </Button>
                         <Button 
                           size="xs" 
                           color="light" 
@@ -701,210 +638,118 @@ const WhatsAppConexiones: React.FC = () => {
         </Card>
       )}
 
-      {/* QR Code Modal */}
-      <Modal show={showQRModal} onClose={() => setShowQRModal(false)} size="md">
+      {/* Modal de Nueva Conexión */}
+      <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="lg">
         <Modal.Header>
           <div className="flex items-center gap-2">
-            <Icon icon="solar:qr-code-bold-duotone" className="text-gray-600" width={24} />
-            Conectar WhatsApp
+            <Icon icon="logos:whatsapp-icon" width={24} />
+            <span>Conectar WhatsApp Business</span>
           </div>
         </Modal.Header>
         <Modal.Body>
-          <div className="text-center">
-            {qrLoading ? (
-              <div className="py-12">
-                {/* Animación de generación de QR */}
-                <div className="relative w-48 h-48 mx-auto mb-6">
-                  {/* Cuadro exterior animado */}
-                  <div className="absolute inset-0 border-2 border-gray-200 dark:border-gray-700 rounded-xl animate-pulse"></div>
-                  {/* Cuadrícula simulada */}
-                  <div className="absolute inset-4 grid grid-cols-5 gap-1">
-                    {[...Array(25)].map((_, i) => (
-                      <div 
-                        key={i} 
-                        className="bg-gray-200 dark:bg-gray-700 rounded-sm animate-pulse"
-                        style={{ animationDelay: `${i * 50}ms` }}
-                      />
-                    ))}
-                  </div>
-                  {/* Icono central */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-12 h-12 bg-white dark:bg-gray-900 rounded-lg flex items-center justify-center shadow-sm">
-                      <Icon icon="solar:qr-code-bold-duotone" className="text-gray-400 animate-pulse" width={28} />
-                    </div>
-                  </div>
-                </div>
-                <p className="text-gray-600 dark:text-gray-400 font-medium">Generando código QR...</p>
-                <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Esto puede tomar unos segundos</p>
-              </div>
-            ) : showConnectionSuccess ? (
-              <div className="py-12">
-                {/* Animación de éxito */}
-                <div className="w-20 h-20 mx-auto mb-4 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                  <Icon icon="solar:check-circle-bold" className="text-green-500" width={48} />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">¡Conectado exitosamente!</h3>
-                <p className="text-gray-500 mt-1">Tu WhatsApp está listo para usar</p>
-              </div>
-            ) : qrCode ? (
-              <div className="space-y-4">
-                <div className="bg-white p-3 rounded-xl inline-block shadow-sm border border-gray-100">
-                  <img 
-                    src={qrCode} 
-                    alt="QR Code" 
-                    className="w-56 h-56 mx-auto"
-                  />
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg text-left">
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-2 text-sm">
-                    Instrucciones:
-                  </h4>
-                  <ol className="text-sm text-gray-500 dark:text-gray-400 space-y-1.5">
-                    <li className="flex items-start gap-2">
-                      <span className="w-5 h-5 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">1</span>
-                      <span>Abre WhatsApp en tu teléfono</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="w-5 h-5 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">2</span>
-                      <span>Ve a Configuración → Dispositivos vinculados</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="w-5 h-5 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">3</span>
-                      <span>Toca "Vincular un dispositivo"</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="w-5 h-5 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">4</span>
-                      <span>Escanea este código QR</span>
-                    </li>
-                  </ol>
-                </div>
-                <div className="flex justify-center">
-                  <Button color="light" size="sm" onClick={handleRefreshQR}>
-                    <Icon icon="solar:refresh-bold" className="mr-2" width={16} />
-                    Refrescar QR
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="py-12">
-                <div className="w-20 h-20 mx-auto mb-4 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                  <Icon icon="solar:check-circle-bold" className="text-green-500" width={48} />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">¡Conectado exitosamente!</h3>
-                <p className="text-gray-500 mt-1">Tu WhatsApp está listo para usar</p>
-              </div>
-            )}
-          </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <div className="flex justify-center w-full">
-            <Button color="gray" onClick={() => setShowQRModal(false)}>
-              Cerrar
-            </Button>
-          </div>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Modal de Selección de Tipo de Conexión */}
-      <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="xl">
-        <Modal.Header>
-          <div className="flex items-center gap-2">
-            <Icon icon="solar:add-circle-bold-duotone" className="text-primary" width={24} />
-            <span>Nueva Conexión WhatsApp</span>
-          </div>
-        </Modal.Header>
-        <Modal.Body>
-          <div className="space-y-6">
-            <p className="text-gray-500 dark:text-gray-400">
-              Selecciona el tipo de conexión que deseas configurar:
-            </p>
-
-            {/* Opciones de tipo de conexión */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Opción Cloud API (PRIMERO) */}
-              <div
-                onClick={() => setSelectedConnectionType('cloud_api')}
-                className={`cursor-pointer p-5 rounded-xl border-2 transition-all ${
-                  selectedConnectionType === 'cloud_api'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+          <div className="space-y-5">
+            {/* Method Selector */}
+            <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+              <button
+                onClick={() => setConnectionMethod('embedded')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                  connectionMethod === 'embedded'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2 rounded-lg ${selectedConnectionType === 'cloud_api' ? 'bg-primary/10' : 'bg-gray-100 dark:bg-gray-800'}`}>
-                    <Icon icon="logos:meta" className={selectedConnectionType === 'cloud_api' ? '' : 'grayscale opacity-50'} width={28} />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-white">Cloud API</h4>
-                    <p className="text-xs text-gray-500">API Oficial de Meta</p>
-                  </div>
-                  {selectedConnectionType === 'cloud_api' && (
-                    <Icon icon="solar:check-circle-bold" className="text-primary ml-auto" width={20} />
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Usa la API oficial de WhatsApp Business. Requiere cuenta de Meta Business verificada.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge color="success" size="sm">Recomendado</Badge>
-                  <Badge color="info" size="sm">Oficial</Badge>
-                  <Badge color="gray" size="sm">Sin riesgo de bloqueo</Badge>
-                </div>
-              </div>
-
-              {/* Opción Baileys (QR) - SEGUNDO */}
-              <div
-                onClick={() => setSelectedConnectionType('baileys')}
-                className={`cursor-pointer p-5 rounded-xl border-2 transition-all ${
-                  selectedConnectionType === 'baileys'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                <Icon icon="logos:meta" width={16} />
+                Conexión automática
+              </button>
+              <button
+                onClick={() => setConnectionMethod('manual')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                  connectionMethod === 'manual'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2 rounded-lg ${selectedConnectionType === 'baileys' ? 'bg-primary/10' : 'bg-gray-100 dark:bg-gray-800'}`}>
-                    <Icon icon="solar:qr-code-bold-duotone" className={selectedConnectionType === 'baileys' ? 'text-primary' : 'text-gray-500'} width={28} />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-white">Escaneo QR</h4>
-                    <p className="text-xs text-gray-500">Conexión directa</p>
-                  </div>
-                  {selectedConnectionType === 'baileys' && (
-                    <Icon icon="solar:check-circle-bold" className="text-primary ml-auto" width={20} />
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Conecta escaneando un código QR desde tu WhatsApp. Ideal para pruebas.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge color="gray" size="sm">Gratis</Badge>
-                  <Badge color="gray" size="sm">Fácil configuración</Badge>
-                </div>
-              </div>
+                <Icon icon="solar:settings-bold" width={16} />
+                Configuración manual
+              </button>
             </div>
 
-            {/* Nota informativa para Escaneo QR */}
-            {selectedConnectionType === 'baileys' && (
-              <Alert color="gray" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                <div className="flex items-start gap-3">
-                  <Icon icon="solar:info-circle-bold" width={20} className="flex-shrink-0 text-gray-500 mt-0.5" />
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    <p className="font-medium text-gray-700 dark:text-gray-300 mb-1">Importante sobre esta conexión</p>
-                    <p>
-                      Esta conexión no es oficial de Meta. Evita enviar mensajes masivos o a contactos que no te hayan escrito primero para prevenir restricciones en tu línea.
-                    </p>
+            {/* ===== EMBEDDED SIGNUP (Primary) ===== */}
+            {connectionMethod === 'embedded' && (
+              <div className="space-y-4">
+                <div className="text-center py-4">
+                  <div className="w-20 h-20 mx-auto bg-green-50 dark:bg-green-900/20 rounded-2xl flex items-center justify-center mb-4">
+                    <Icon icon="logos:whatsapp-icon" width={44} />
                   </div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    Conecta tu WhatsApp en segundos
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-sm mx-auto">
+                    Inicia sesión con Facebook, selecciona tu cuenta de negocio y conecta tu número de WhatsApp automáticamente.
+                  </p>
                 </div>
-              </Alert>
+
+                {/* Steps */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { icon: 'solar:login-3-bold-duotone', title: 'Inicia sesión', desc: 'Con tu cuenta de Facebook' },
+                    { icon: 'solar:buildings-bold-duotone', title: 'Selecciona negocio', desc: 'Tu Business Manager' },
+                    { icon: 'solar:check-circle-bold-duotone', title: 'Listo', desc: 'WhatsApp conectado' },
+                  ].map((step, i) => (
+                    <div key={i} className="flex flex-col items-center text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                      <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center mb-2">
+                        <Icon icon={step.icon} width={22} className="text-blue-500" />
+                      </div>
+                      <p className="text-xs font-semibold text-gray-900 dark:text-white">{step.title}</p>
+                      <p className="text-[10px] text-gray-400">{step.desc}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  color="primary"
+                  size="lg"
+                  className="w-full"
+                  onClick={handleEmbeddedSignup}
+                  disabled={embeddedSignupLoading || !fbSdkReady}
+                >
+                  {embeddedSignupLoading ? (
+                    <>
+                      <Spinner size="sm" className="mr-2" />
+                      Conectando con Meta...
+                    </>
+                  ) : !fbSdkReady ? (
+                    <>
+                      <Spinner size="sm" className="mr-2" />
+                      Cargando Facebook SDK...
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon="logos:facebook" width={18} className="mr-2" />
+                      Conectar con Facebook
+                    </>
+                  )}
+                </Button>
+
+                <p className="text-[10px] text-center text-gray-400">
+                  Al conectar, autorizas a Guro a gestionar mensajes de WhatsApp Business en tu nombre.
+                </p>
+              </div>
             )}
 
-            {/* Formulario para Cloud API */}
-            {selectedConnectionType === 'cloud_api' && (
-              <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                <h4 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                  <Icon icon="solar:settings-bold" width={18} />
-                  Configuración de Cloud API
-                </h4>
+            {/* ===== MANUAL CONFIG (Secondary) ===== */}
+            {connectionMethod === 'manual' && (
+              <div className="space-y-4">
+                <Alert color="info">
+                  <div className="flex items-start gap-2">
+                    <Icon icon="solar:info-circle-bold" width={18} className="flex-shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium">Configuración avanzada</p>
+                      <p className="mt-1">Ingresa manualmente los datos de tu WhatsApp Cloud API desde <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">developers.facebook.com</a></p>
+                    </div>
+                  </div>
+                </Alert>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -955,15 +800,25 @@ const WhatsAppConexiones: React.FC = () => {
                     />
                   </div>
                 </div>
-                <Alert color="info" className="mt-3">
-                  <div className="flex items-start gap-2">
-                    <Icon icon="solar:info-circle-bold" width={18} className="flex-shrink-0 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium">¿Cómo obtener estos datos?</p>
-                      <p className="mt-1">Ve a <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="underline">developers.facebook.com</a> → Tu App → WhatsApp → Configuración de API</p>
-                    </div>
-                  </div>
-                </Alert>
+
+                <Button
+                  color="primary"
+                  className="w-full"
+                  onClick={handleCreateInstance}
+                  disabled={creatingInstance}
+                >
+                  {creatingInstance ? (
+                    <>
+                      <Spinner size="sm" className="mr-2" />
+                      Configurando...
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon="solar:add-circle-bold" className="mr-2" width={18} />
+                      Configurar Cloud API
+                    </>
+                  )}
+                </Button>
               </div>
             )}
 
@@ -975,30 +830,6 @@ const WhatsAppConexiones: React.FC = () => {
             )}
           </div>
         </Modal.Body>
-        <Modal.Footer>
-          <div className="flex justify-end gap-3 w-full">
-            <Button color="gray" onClick={() => setShowCreateModal(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              color="primary" 
-              onClick={handleCreateInstance}
-              disabled={creatingInstance}
-            >
-              {creatingInstance ? (
-                <>
-                  <Spinner size="sm" className="mr-2" />
-                  Creando...
-                </>
-              ) : (
-                <>
-                  <Icon icon="solar:add-circle-bold" className="mr-2" width={18} />
-                  {selectedConnectionType === 'baileys' ? 'Crear y Escanear QR' : 'Configurar Cloud API'}
-                </>
-              )}
-            </Button>
-          </div>
-        </Modal.Footer>
       </Modal>
     </div>
   );

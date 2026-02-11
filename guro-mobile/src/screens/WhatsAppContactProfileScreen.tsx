@@ -9,6 +9,7 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -100,7 +101,7 @@ const WhatsAppContactProfileScreen: React.FC = () => {
     return (
       <View style={styles.docItem}>
         <View style={styles.docIconContainer}>
-          <Ionicons name="document-text" size={24} color="#6172FD" />
+          <Ionicons name="document-text" size={24} color="#573CFF" />
         </View>
         <View style={styles.docInfo}>
           <Text style={styles.docName} numberOfLines={1}>{filename}</Text>
@@ -139,12 +140,17 @@ const WhatsAppContactProfileScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Info del contacto</Text>
-      </View>
+      </ImageBackground>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Card */}
@@ -184,21 +190,21 @@ const WhatsAppContactProfileScreen: React.FC = () => {
             style={[styles.tab, activeTab === 'media' && styles.tabActive]}
             onPress={() => setActiveTab('media')}
           >
-            <Ionicons name="image" size={18} color={activeTab === 'media' ? '#6172FD' : '#9CA3AF'} />
+            <Ionicons name="image" size={18} color={activeTab === 'media' ? '#573CFF' : '#9CA3AF'} />
             <Text style={[styles.tabText, activeTab === 'media' && styles.tabTextActive]}>Media</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'docs' && styles.tabActive]}
             onPress={() => setActiveTab('docs')}
           >
-            <Ionicons name="document" size={18} color={activeTab === 'docs' ? '#6172FD' : '#9CA3AF'} />
+            <Ionicons name="document" size={18} color={activeTab === 'docs' ? '#573CFF' : '#9CA3AF'} />
             <Text style={[styles.tabText, activeTab === 'docs' && styles.tabTextActive]}>Docs</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'search' && styles.tabActive]}
             onPress={() => setActiveTab('search')}
           >
-            <Ionicons name="search" size={18} color={activeTab === 'search' ? '#6172FD' : '#9CA3AF'} />
+            <Ionicons name="search" size={18} color={activeTab === 'search' ? '#573CFF' : '#9CA3AF'} />
             <Text style={[styles.tabText, activeTab === 'search' && styles.tabTextActive]}>Buscar</Text>
           </TouchableOpacity>
         </View>
@@ -206,7 +212,7 @@ const WhatsAppContactProfileScreen: React.FC = () => {
         {/* Tab Content */}
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6172FD" />
+            <ActivityIndicator size="large" color="#573CFF" />
           </View>
         ) : (
           <View style={styles.tabContent}>
@@ -312,25 +318,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F2F5',
   },
   header: {
-    height: 100,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 12,
-    paddingBottom: 10,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     fontSize: 17,
-    fontFamily: 'Montserrat_600SemiBold',
+    fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    marginLeft: 8,
+    letterSpacing: -0.3,
+    marginLeft: 12,
   },
   content: {
     flex: 1,
@@ -346,11 +356,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -389,7 +399,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 18,
     fontFamily: 'Montserrat_700Bold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   statLabel: {
     fontSize: 11,
@@ -420,7 +430,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: '#6172FD',
+    borderBottomColor: '#573CFF',
   },
   tabText: {
     fontSize: 13,
@@ -428,7 +438,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   tabTextActive: {
-    color: '#6172FD',
+    color: '#573CFF',
   },
   tabContent: {
     backgroundColor: '#FFFFFF',
@@ -533,7 +543,7 @@ const styles = StyleSheet.create({
   searchResultSender: {
     fontSize: 13,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   searchResultDate: {
     fontSize: 11,

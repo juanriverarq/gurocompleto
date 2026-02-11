@@ -7,6 +7,8 @@ import {
   FlatList,
   RefreshControl,
   TextInput,
+  ImageBackground,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -17,6 +19,8 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 type NavigationProp = NativeStackNavigationProp<ClientesStackParamList>;
 
+const TIPO_FILTERS = ['Todos', 'Persona', 'Empresa'];
+
 const ClientesScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [loading, setLoading] = useState(true);
@@ -25,6 +29,9 @@ const ClientesScreen: React.FC = () => {
   const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [totalCount, setTotalCount] = useState(0);
+  const [activeFilter, setActiveFilter] = useState('Todos');
+  const [showFilters, setShowFilters] = useState(false);
 
   const fetchClientes = async (isRefresh: boolean = false) => {
     try {
@@ -33,7 +40,7 @@ const ClientesScreen: React.FC = () => {
       
       if (response.success) {
         setClientes(response.data);
-        setFilteredClientes(response.data);
+        setTotalCount(response.total || response.data.length);
       } else {
         setError(response.message || 'Error al cargar clientes');
       }
@@ -50,11 +57,19 @@ const ClientesScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (search.trim() === '') {
-      setFilteredClientes(clientes);
-    } else {
+    let result = clientes;
+
+    // Filter by type
+    if (activeFilter === 'Persona') {
+      result = result.filter(c => c.client_type !== 'empresa');
+    } else if (activeFilter === 'Empresa') {
+      result = result.filter(c => c.client_type === 'empresa');
+    }
+
+    // Filter by search
+    if (search.trim() !== '') {
       const searchLower = search.toLowerCase();
-      const filtered = clientes.filter(cliente => 
+      result = result.filter(cliente => 
         (cliente.nombre?.toLowerCase().includes(searchLower)) ||
         (cliente.apellidos?.toLowerCase().includes(searchLower)) ||
         (cliente.email_principal?.toLowerCase().includes(searchLower)) ||
@@ -62,9 +77,10 @@ const ClientesScreen: React.FC = () => {
         (cliente.celular_principal?.includes(search)) ||
         (cliente.empresa?.toLowerCase().includes(searchLower))
       );
-      setFilteredClientes(filtered);
     }
-  }, [search, clientes]);
+
+    setFilteredClientes(result);
+  }, [search, clientes, activeFilter]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -98,11 +114,11 @@ const ClientesScreen: React.FC = () => {
   const renderCliente = ({ item }: { item: Cliente }) => (
     <TouchableOpacity style={styles.clienteCard} onPress={() => handleClientePress(item.id)}>
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatar, { backgroundColor: item.client_type === 'empresa' ? '#8B5CF620' : '#6172FD20' }]}>
+        <View style={[styles.avatar, { backgroundColor: item.client_type === 'empresa' ? '#8B5CF620' : '#573CFF20' }]}>
           <Ionicons 
             name={getClienteTypeIcon(item)} 
             size={24} 
-            color={item.client_type === 'empresa' ? '#8B5CF6' : '#6172FD'} 
+            color={item.client_type === 'empresa' ? '#8B5CF6' : '#573CFF'} 
           />
         </View>
       </View>
@@ -138,13 +154,39 @@ const ClientesScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Clientes</Text>
-        <View style={styles.headerPlaceholder} />
-      </View>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.headerTitle}>Clientes</Text>
+            <Text style={styles.headerCount}>{totalCount} registros</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.filterBtn, showFilters && styles.filterBtnActive]}
+            onPress={() => setShowFilters(!showFilters)}
+          >
+            <Ionicons name="options-outline" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </ImageBackground>
+
+      {showFilters && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+          {TIPO_FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
+              onPress={() => setActiveFilter(f)}
+            >
+              <Text style={[styles.filterChipText, activeFilter === f && styles.filterChipTextActive]}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
@@ -162,7 +204,6 @@ const ClientesScreen: React.FC = () => {
             </TouchableOpacity>
           )}
         </View>
-        <Text style={styles.totalText}>{filteredClientes.length} clientes</Text>
       </View>
 
       {error ? (
@@ -181,7 +222,7 @@ const ClientesScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -209,30 +250,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
   },
-  backButton: {
-    width: 40,
-    height: 40,
+  headerTitle: {
+    fontSize: 17,
+    fontFamily: 'Montserrat_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  headerCount: {
+    fontSize: 11,
+    fontFamily: 'Montserrat_500Medium',
+    color: 'rgba(255,255,255,0.55)',
+    marginTop: 2,
+  },
+  filterBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Montserrat_700Bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  headerPlaceholder: {
-    width: 40,
+  filterBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   searchContainer: {
     paddingHorizontal: 20,
@@ -258,12 +309,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_400Regular',
     color: '#374151',
   },
-  totalText: {
-    fontSize: 12,
-    fontFamily: 'Montserrat_500Medium',
+  filterScroll: {
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 22,
+    backgroundColor: '#F3F4F6',
+  },
+  filterChipActive: {
+    backgroundColor: '#573CFF',
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontFamily: 'Montserrat_600SemiBold',
     color: '#6B7280',
-    marginTop: 8,
-    textAlign: 'right',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -291,7 +357,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -380,10 +446,10 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,

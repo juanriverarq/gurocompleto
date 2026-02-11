@@ -847,8 +847,8 @@ class WhatsAppWebhookController extends Controller
         try {
             $payload = $request->all();
 
-            Log::info('📥 [META WEBHOOK] Payload recibido', [
-                'payload' => $payload
+            Log::info('📥 [META WEBHOOK] Payload recibido (raw)', [
+                'raw' => $request->getContent()
             ]);
 
             // Verificar que sea un evento de WhatsApp
@@ -1132,7 +1132,8 @@ class WhatsAppWebhookController extends Controller
                 'instance_id' => $instance->instance_id,
                 'message_id' => $messageId,
                 'status' => $statusValue,
-                'recipient' => $recipientId
+                'recipient' => $recipientId,
+                'errors' => $errors,
             ]);
 
             // Actualizar estado del mensaje en la base de datos

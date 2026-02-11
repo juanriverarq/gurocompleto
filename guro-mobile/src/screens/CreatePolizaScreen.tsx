@@ -12,6 +12,7 @@ import {
   Platform,
   Modal,
   FlatList,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -20,8 +21,10 @@ import {
   CreatePolizaData,
   getAseguradoras,
   getRamos,
+  getClientes,
   CatalogoItem,
 } from '../services/polizasService';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const ESTADOS = ['ACTIVA', 'COTIZACION', 'PENDIENTE', 'EXPEDICION'];
 const FORMAS_PAGO = ['Contado', 'Credito', 'Financiado'];
@@ -41,6 +44,18 @@ const CreatePolizaScreen: React.FC = () => {
   const [pickerOptions, setPickerOptions] = useState<{ label: string; value: string }[]>([]);
   const [pickerCallback, setPickerCallback] = useState<((val: string) => void) | null>(null);
   const [pickerSearch, setPickerSearch] = useState('');
+
+  // Client selection
+  const [clientesList, setClientesList] = useState<any[]>([]);
+  const [clienteSearch, setClienteSearch] = useState('');
+  const [clienteModalVisible, setClienteModalVisible] = useState(false);
+  const [selectedClienteId, setSelectedClienteId] = useState<number | null>(null);
+  const [loadingClientes, setLoadingClientes] = useState(false);
+
+  // Date picker state
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerField, setDatePickerField] = useState<'expedicion' | 'inicio' | 'fin'>('expedicion');
+  const [tempDate, setTempDate] = useState(new Date());
 
   // Step
   const [step, setStep] = useState(0); // 0=poliza, 1=cliente, 2=finanzas, 3=fechas
@@ -80,6 +95,7 @@ const CreatePolizaScreen: React.FC = () => {
 
   useEffect(() => {
     loadCatalogos();
+    loadClientes();
   }, []);
 
   const loadCatalogos = async () => {
@@ -88,6 +104,61 @@ const CreatePolizaScreen: React.FC = () => {
     setAseguradoras(aseg);
     setRamos(ram);
     setLoadingCatalogos(false);
+  };
+
+  const loadClientes = async (search?: string) => {
+    setLoadingClientes(true);
+    const data = await getClientes(search);
+    setClientesList(data);
+    setLoadingClientes(false);
+  };
+
+  const selectCliente = (cliente: any) => {
+    setSelectedClienteId(cliente.id);
+    setNombresCliente(cliente.nombre || cliente.nombres || '');
+    setApellidosCliente(cliente.apellidos || '');
+    setDniCliente(cliente.cuit || cliente.dni || '');
+    setTipoDocumento(cliente.tipo_documento || 'CC');
+    setTelefonoCliente(cliente.celular_principal || cliente.telefono || '');
+    setCorreoCliente(cliente.email_principal || '');
+    setClienteModalVisible(false);
+  };
+
+  const formatDateStr = (date: Date) => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  const openDatePicker = (field: 'expedicion' | 'inicio' | 'fin') => {
+    setDatePickerField(field);
+    const currentVal = field === 'expedicion' ? fechaExpedicion : field === 'inicio' ? fechaInicio : fechaFin;
+    if (currentVal) {
+      const parts = currentVal.split('-');
+      if (parts.length === 3) setTempDate(new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
+      else setTempDate(new Date());
+    } else {
+      setTempDate(new Date());
+    }
+    setShowDatePicker(true);
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (event.type === 'dismissed') { setShowDatePicker(false); return; }
+    const date = selectedDate || tempDate;
+    setTempDate(date);
+    const str = formatDateStr(date);
+    if (datePickerField === 'expedicion') setFechaExpedicion(str);
+    else if (datePickerField === 'inicio') setFechaInicio(str);
+    else setFechaFin(str);
+    if (Platform.OS === 'android') setShowDatePicker(false);
+  };
+
+  const confirmIOSDate = () => {
+    const str = formatDateStr(tempDate);
+    if (datePickerField === 'expedicion') setFechaExpedicion(str);
+    else if (datePickerField === 'inicio') setFechaInicio(str);
+    else setFechaFin(str);
+    setShowDatePicker(false);
   };
 
   // Auto-calculate IVA and total
@@ -290,6 +361,30 @@ const CreatePolizaScreen: React.FC = () => {
 
   const renderStep1 = () => (
     <View>
+      {/* Select existing client button */}
+      <TouchableOpacity 
+        style={styles.selectClienteButton} 
+        onPress={() => { setClienteSearch(''); setClienteModalVisible(true); }}
+      >
+        <Ionicons name="people-outline" size={18} color="#573CFF" />
+        <Text style={styles.selectClienteButtonText}>
+          {selectedClienteId ? 'Cambiar cliente seleccionado' : 'Seleccionar cliente existente'}
+        </Text>
+      </TouchableOpacity>
+
+      {selectedClienteId && (
+        <View style={styles.selectedClienteBadge}>
+          <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+          <Text style={styles.selectedClienteText}>Cliente vinculado: {nombresCliente} {apellidosCliente}</Text>
+        </View>
+      )}
+
+      <View style={styles.dividerRow}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>o ingresa manualmente</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
       <View style={styles.rowFields}>
         <View style={{ flex: 1, marginRight: 8 }}>
           {renderSelectField(
@@ -348,11 +443,26 @@ const CreatePolizaScreen: React.FC = () => {
     </View>
   );
 
+  const renderDateField = (label: string, value: string, field: 'expedicion' | 'inicio' | 'fin', required?: boolean) => (
+    <View style={styles.fieldContainer}>
+      <Text style={styles.fieldLabel}>
+        {label}
+        {required && <Text style={{ color: '#EF4444' }}> *</Text>}
+      </Text>
+      <TouchableOpacity style={styles.selectField} onPress={() => openDatePicker(field)}>
+        <Text style={value ? styles.selectText : styles.selectPlaceholder}>
+          {value || 'Seleccionar fecha'}
+        </Text>
+        <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderStep3 = () => (
     <View>
-      {renderTextField('Fecha Expedicion *', fechaExpedicion, setFechaExpedicion, 'YYYY-MM-DD', { required: true })}
-      {renderTextField('Fecha Inicio *', fechaInicio, setFechaInicio, 'YYYY-MM-DD', { required: true })}
-      {renderTextField('Fecha Fin *', fechaFin, setFechaFin, 'YYYY-MM-DD', { required: true })}
+      {renderDateField('Fecha Expedicion', fechaExpedicion, 'expedicion', true)}
+      {renderDateField('Fecha Inicio', fechaInicio, 'inicio', true)}
+      {renderDateField('Fecha Fin', fechaFin, 'fin', true)}
       
       {!fechaExpedicion && (
         <TouchableOpacity style={styles.todayButton} onPress={() => {
@@ -361,9 +471,9 @@ const CreatePolizaScreen: React.FC = () => {
           setFechaInicio(today);
           const next = new Date();
           next.setFullYear(next.getFullYear() + 1);
-          setFechaFin(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`);
+          setFechaFin(formatDateStr(next));
         }}>
-          <Ionicons name="calendar-outline" size={16} color="#6172FD" />
+          <Ionicons name="calendar-outline" size={16} color="#573CFF" />
           <Text style={styles.todayButtonText}>Usar hoy + 1 ano</Text>
         </TouchableOpacity>
       )}
@@ -375,13 +485,18 @@ const CreatePolizaScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nueva Poliza</Text>
-        <View style={{ width: 36 }} />
-      </View>
+        <View style={{ width: 38 }} />
+      </ImageBackground>
 
       {renderStepIndicator()}
 
@@ -398,7 +513,7 @@ const CreatePolizaScreen: React.FC = () => {
         >
           {loadingCatalogos ? (
             <View style={styles.loadingCatalogos}>
-              <ActivityIndicator size="small" color="#6172FD" />
+              <ActivityIndicator size="small" color="#573CFF" />
               <Text style={styles.loadingCatalogosText}>Cargando catalogos...</Text>
             </View>
           ) : (
@@ -414,7 +529,7 @@ const CreatePolizaScreen: React.FC = () => {
         <View style={styles.bottomBar}>
           {step > 0 && (
             <TouchableOpacity style={styles.btnSecondary} onPress={() => setStep(step - 1)}>
-              <Ionicons name="chevron-back" size={18} color="#6172FD" />
+              <Ionicons name="chevron-back" size={18} color="#573CFF" />
               <Text style={styles.btnSecondaryText}>Anterior</Text>
             </TouchableOpacity>
           )}
@@ -442,6 +557,100 @@ const CreatePolizaScreen: React.FC = () => {
           )}
         </View>
       </KeyboardAvoidingView>
+
+      {/* Client Selection Modal */}
+      <Modal visible={clienteModalVisible} transparent animationType="slide">
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContainer, { maxHeight: '70%' }]}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Seleccionar Cliente</Text>
+              <TouchableOpacity onPress={() => setClienteModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#374151" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.pickerSearchContainer}>
+              <Ionicons name="search" size={16} color="#9CA3AF" />
+              <TextInput
+                style={styles.pickerSearchInput}
+                placeholder="Buscar por nombre o documento..."
+                placeholderTextColor="#D1D5DB"
+                value={clienteSearch}
+                onChangeText={(text) => {
+                  setClienteSearch(text);
+                  loadClientes(text);
+                }}
+              />
+            </View>
+            {loadingClientes ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color="#573CFF" />
+              </View>
+            ) : (
+              <FlatList
+                data={clientesList}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.clienteOption}
+                    onPress={() => selectCliente(item)}
+                  >
+                    <View style={styles.clienteOptionAvatar}>
+                      <Ionicons name={item.client_type === 'empresa' ? 'business' : 'person'} size={18} color="#573CFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.clienteOptionName}>
+                        {item.client_type === 'empresa' && item.empresa ? item.empresa : `${item.nombre || ''} ${item.apellidos || ''}`.trim() || 'Sin nombre'}
+                      </Text>
+                      <Text style={styles.clienteOptionDoc}>{item.tipo_documento || 'CC'}: {item.cuit || 'N/A'}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <Text style={styles.pickerEmpty}>No se encontraron clientes</Text>
+                }
+                style={{ maxHeight: 350 }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Picker */}
+      {showDatePicker && Platform.OS === 'ios' && (
+        <Modal transparent animationType="slide">
+          <View style={styles.pickerOverlay}>
+            <View style={[styles.pickerContainer, { paddingBottom: 20 }]}>
+              <View style={styles.pickerHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={[styles.btnSecondaryText, { fontSize: 16 }]}>Cancelar</Text>
+                </TouchableOpacity>
+                <Text style={styles.pickerTitle}>
+                  {datePickerField === 'expedicion' ? 'Fecha Expedicion' : datePickerField === 'inicio' ? 'Fecha Inicio' : 'Fecha Fin'}
+                </Text>
+                <TouchableOpacity onPress={confirmIOSDate}>
+                  <Text style={[styles.btnSecondaryText, { fontSize: 16 }]}>Listo</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={onDateChange}
+                style={{ height: 200 }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showDatePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+        />
+      )}
 
       {/* Picker Modal */}
       <Modal visible={pickerVisible} transparent animationType="slide">
@@ -497,23 +706,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F6FA',
   },
   header: {
-    height: 105,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 50,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    shadowColor: '#6172FD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -546,7 +753,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepCircleActive: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   stepNumber: {
     fontSize: 12,
@@ -563,7 +770,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   stepLabelActive: {
-    color: '#6172FD',
+    color: '#573CFF',
   },
   stepLine: {
     width: 20,
@@ -572,7 +779,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   stepLineActive: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   // Scroll
   scrollView: {
@@ -656,7 +863,7 @@ const styles = StyleSheet.create({
   todayButtonText: {
     fontSize: 13,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   // Bottom bar
   bottomBar: {
@@ -681,7 +888,7 @@ const styles = StyleSheet.create({
   btnSecondaryText: {
     fontSize: 14,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   btnPrimary: {
     flexDirection: 'row',
@@ -689,7 +896,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     gap: 6,
   },
   btnSave: {
@@ -761,6 +968,84 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Montserrat_400Regular',
     color: '#9CA3AF',
+  },
+  // Client selection
+  selectClienteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#573CFF',
+    borderStyle: 'dashed',
+    backgroundColor: '#EEF2FF',
+    marginBottom: 12,
+  },
+  selectClienteButtonText: {
+    fontSize: 14,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#573CFF',
+  },
+  selectedClienteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  selectedClienteText: {
+    fontSize: 13,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#065F46',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    fontSize: 12,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#9CA3AF',
+  },
+  clienteOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    gap: 12,
+  },
+  clienteOptionAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clienteOptionName: {
+    fontSize: 15,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#1F2937',
+  },
+  clienteOptionDoc: {
+    fontSize: 12,
+    fontFamily: 'Montserrat_400Regular',
+    color: '#9CA3AF',
+    marginTop: 2,
   },
 });
 

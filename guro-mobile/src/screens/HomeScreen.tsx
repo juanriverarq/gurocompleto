@@ -1,131 +1,188 @@
-import React, { useRef, useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
   Dimensions,
-  FlatList,
   Linking,
+  ImageBackground,
+  Image,
   Animated,
+  Pressable,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import Banner1 from '../../banners/Banner 1.svg';
-import Banner2 from '../../banners/2.svg';
-import Banner3 from '../../banners/3.svg';
-import Banner4 from '../../banners/4.svg';
-import Banner5 from '../../banners/5.svg';
 import NotificationsPopup from '../components/NotificationsPopup';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: SW } = Dimensions.get('window');
+const TOOL_W = SW * 0.7;
+const TOOL_GAP = 12;
+
+/* ── Data ── */
 
 const banners = [
-  { id: '1', component: Banner1, url: 'https://guro.co/comenzar' },
-  { id: '2', component: Banner2, url: 'https://guro.co/comenzar' },
-  { id: '3', component: Banner3, url: 'https://guro.co/comenzar' },
-  { id: '4', component: Banner4, url: 'https://guro.co/comenzar' },
-  { id: '5', component: Banner5, url: 'https://guro.co/comenzar' },
+  { id: '1', image: require('../../banners/1.png'), url: 'https://guro.co/comenzar' },
+  { id: '2', image: require('../../banners/2.png'), url: 'https://guro.co/comenzar' },
+];
+
+const tools = [
+  {
+    id: '1', title: 'Gestión de Pólizas', icon: 'file-document-outline' as const,
+    color: '#3B82F6', bg: '#EFF6FF',
+    features: ['Emisión y endosos', 'Alertas de vencimiento', 'Dashboard de primas'],
+    screen: 'Polizas',
+  },
+  {
+    id: '2', title: 'CRM de Clientes', icon: 'account-group-outline' as const,
+    color: '#22C55E', bg: '#F0FDF4',
+    features: ['Ficha 360° por cliente', 'Segmentación', 'Historial completo'],
+    screen: 'Clientes',
+  },
+  {
+    id: '3', title: 'Renovaciones', icon: 'autorenew' as const,
+    color: '#F59E0B', bg: '#FEF3C7',
+    features: ['Pólizas por vencer', 'Contacto y seguimiento', 'Procesar renovación'],
+    screen: 'Renovaciones',
+  },
+  {
+    id: '4', title: 'Cartera', icon: 'wallet-outline' as const,
+    color: '#10B981', bg: '#D1FAE5',
+    features: ['Cobros y recaudos', 'Estado de pagos', 'KPIs financieros'],
+    screen: 'Cartera',
+  },
+  {
+    id: '5', title: 'WhatsApp Business', icon: 'whatsapp' as const,
+    color: '#25D366', bg: '#F0FDF4',
+    features: ['Chat en tiempo real', 'Gestión de contactos', 'Envío de mensajes'],
+    screen: 'WhatsApp',
+  },
+  {
+    id: '6', title: 'Dashboard', icon: 'chart-box-outline' as const,
+    color: '#573CFF', bg: '#EEF2FF',
+    features: ['KPIs en tiempo real', 'Finanzas y recaudos', 'Tendencias'],
+    screen: 'Dashboard',
+  },
+  {
+    id: '7', title: 'Empleados', icon: 'account-tie-outline' as const,
+    color: '#EC4899', bg: '#FDF2F8',
+    features: ['Gestión de equipo', 'Trazabilidad', 'Permisos y roles'],
+    screen: 'Empleados',
+  },
+];
+
+const quickActions = [
+  { id: '1', icon: 'account-plus-outline' as const, label: 'NUEVO CLIENTE', screen: 'CreateCliente' },
+  { id: '2', icon: 'file-plus-outline' as const, label: 'NUEVA PÓLIZA', screen: 'CreatePoliza' },
+  { id: '3', icon: 'account-tie-outline' as const, label: 'NUEVO EMPLEADO', screen: 'CreateEmpleado' },
+];
+
+const consejos = [
+  { id: '1', icon: 'chart-bar' as const, text: 'El 70% de los clientes renuevan si los contactas 30 días antes.', color: '#573CFF' },
+  { id: '2', icon: 'lightbulb-on-outline' as const, text: 'Clientes con +2 pólizas tienen 90% de retención.', color: '#22C55E' },
+  { id: '3', icon: 'trophy-outline' as const, text: 'Los corredores top dedican 40% a seguimiento post-venta.', color: '#F59E0B' },
+  { id: '4', icon: 'cellphone-message' as const, text: 'El 65% de los clientes prefieren WhatsApp.', color: '#3B82F6' },
+  { id: '5', icon: 'target' as const, text: 'Cross-selling aumenta el ticket promedio en 35%.', color: '#EC4899' },
 ];
 
 const dailyQuotes = [
-  { id: '1', text: 'El éxito en seguros no se mide por las pólizas vendidas, sino por las familias protegidas.', author: 'Anónimo' },
-  { id: '2', text: 'La confianza es el activo más valioso de un corredor de seguros.', author: 'Warren Buffett' },
-  { id: '3', text: 'No vendas seguros, vende tranquilidad y protección.', author: 'Zig Ziglar' },
-  { id: '4', text: 'El mejor momento para asegurar el futuro es hoy.', author: 'Proverbio' },
-  { id: '5', text: 'Un buen corredor no busca clientes para sus productos, busca productos para sus clientes.', author: 'Seth Godin' },
+  { text: 'El éxito en seguros no se mide por las pólizas vendidas, sino por las familias protegidas.', author: 'Anónimo' },
+  { text: 'La confianza es el activo más valioso de un corredor de seguros.', author: 'Warren Buffett' },
+  { text: 'No vendas seguros, vende tranquilidad y protección.', author: 'Zig Ziglar' },
+  { text: 'El mejor momento para asegurar el futuro es hoy.', author: 'Proverbio' },
+  { text: 'Un buen corredor busca productos para sus clientes, no clientes para sus productos.', author: 'Seth Godin' },
+  { text: 'El seguro es la única inversión que esperamos nunca necesitar, pero agradecemos cuando la tenemos.', author: 'Anónimo' },
+  { text: 'Cada póliza que vendes es una promesa de protección que cumples.', author: 'Anónimo' },
+  { text: 'La persistencia supera al talento cuando el talento no persiste.', author: 'Calvin Coolidge' },
+  { text: 'Tu reputación es tu mejor carta de presentación.', author: 'Henry Ford' },
+  { text: 'El cliente no compra un producto, compra la solución a su preocupación.', author: 'Philip Kotler' },
+  { text: 'La diferencia entre ordinario y extraordinario es ese pequeño extra.', author: 'Jimmy Johnson' },
+  { text: 'Vender es ayudar a alguien a tomar una decisión que mejorará su vida.', author: 'Brian Tracy' },
+  { text: 'El servicio al cliente no es un departamento, es una actitud.', author: 'Anónimo' },
+  { text: 'Las relaciones duraderas se construyen con confianza, no con contratos.', author: 'Stephen Covey' },
+  { text: 'Haz lo que amas y no trabajarás ni un solo día de tu vida.', author: 'Confucio' },
+  { text: 'El riesgo más grande es no tomar ningún riesgo.', author: 'Mark Zuckerberg' },
+  { text: 'No busques clientes para tus productos, busca productos para tus clientes.', author: 'Seth Godin' },
+  { text: 'La excelencia no es un acto, sino un hábito.', author: 'Aristóteles' },
+  { text: 'Cada día es una nueva oportunidad para proteger a una familia más.', author: 'Anónimo' },
+  { text: 'El profesionalismo es hacer las cosas bien incluso cuando nadie te está mirando.', author: 'Anónimo' },
+  { text: 'Un cliente satisfecho es la mejor estrategia de negocio.', author: 'Michael LeBoeuf' },
+  { text: 'La preparación de hoy determina el éxito de mañana.', author: 'Anónimo' },
+  { text: 'Escuchar es la habilidad más poderosa en ventas.', author: 'Dale Carnegie' },
+  { text: 'Tu actitud determina tu altitud en los negocios.', author: 'Zig Ziglar' },
+  { text: 'El conocimiento del producto genera confianza, la confianza genera ventas.', author: 'Anónimo' },
+  { text: 'No cuentes los días, haz que los días cuenten.', author: 'Muhammad Ali' },
+  { text: 'La clave del éxito es empezar antes de estar listo.', author: 'Marie Forleo' },
+  { text: 'Un buen seguimiento vale más que una buena primera impresión.', author: 'Anónimo' },
+  { text: 'El éxito es la suma de pequeños esfuerzos repetidos día tras día.', author: 'Robert Collier' },
+  { text: 'Proteger patrimonios es una de las profesiones más nobles que existen.', author: 'Anónimo' },
 ];
 
-const newsItems = [
-  {
-    id: '1',
-    icon: 'newspaper-outline',
-    category: 'Regulación',
-    title: 'Nuevas normas de Superfinanciera para seguros digitales',
-    color: '#6172FD',
-    bgColor: '#EEF2FF',
-  },
-  {
-    id: '2',
-    icon: 'trending-up-outline',
-    category: 'Mercado',
-    title: 'El sector asegurador crece un 12% en Colombia este año',
-    color: '#22C55E',
-    bgColor: '#F0FDF4',
-  },
-  {
-    id: '3',
-    icon: 'shield-outline',
-    category: 'Producto',
-    title: 'Seguros paramétricos: la nueva tendencia en protección',
-    color: '#F59E0B',
-    bgColor: '#FFF7ED',
-  },
-  {
-    id: '4',
-    icon: 'people-outline',
-    category: 'Ventas',
-    title: 'Cómo aumentar tu tasa de renovación al 85%',
-    color: '#EC4899',
-    bgColor: '#FDF2F8',
-  },
-];
+const getDailyQuote = () => {
+  const today = new Date();
+  const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+  return dailyQuotes[seed % dailyQuotes.length];
+};
 
-const didYouKnow = [
-  { id: '1', icon: 'bar-chart-outline', fact: 'El 70% de los clientes renuevan si los contactas 30 días antes del vencimiento.' },
-  { id: '2', icon: 'bulb-outline', fact: 'Los clientes con más de 2 pólizas tienen un 90% de retención.' },
-  { id: '3', icon: 'trophy-outline', fact: 'Los corredores top dedican el 40% de su tiempo a seguimiento post-venta.' },
-  { id: '4', icon: 'phone-portrait-outline', fact: 'El 65% de los clientes prefieren comunicarse por WhatsApp.' },
-  { id: '5', icon: 'locate-outline', fact: 'Ofrecer cross-selling aumenta el ticket promedio en un 35%.' },
-];
+/* ── Component ── */
 
-const shortcuts = [
-  { id: '1', icon: 'add-circle-outline', label: 'Nueva Póliza', color: '#6172FD', screen: 'Polizas' },
-  { id: '2', icon: 'person-add-outline', label: 'Nuevo Cliente', color: '#22C55E', screen: 'Clientes' },
-  { id: '3', icon: 'chatbubble-outline', label: 'Enviar Mensaje', color: '#3B82F6', screen: 'WhatsApp' },
-  { id: '4', icon: 'bar-chart-outline', label: 'Ver Reportes', color: '#F59E0B', screen: 'Dashboard' },
-];
+/* ── Animated CTA Chip (login-style purple expand) ── */
+const AnimatedCtaChip: React.FC<{
+  icon: any;
+  label: string;
+  onPress: () => void;
+}> = ({ icon, label, onPress }) => {
+  const purpleWidth = useRef(new Animated.Value(44)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-const tips = [
-  {
-    id: '1',
-    icon: 'bulb-outline',
-    title: 'Conoce a tu cliente',
-    description: 'Escucha sus necesidades antes de ofrecer un producto. Un cliente bien atendido es un cliente fiel.',
-  },
-  {
-    id: '2',
-    icon: 'calendar-outline',
-    title: 'Anticipa renovaciones',
-    description: 'Contacta a tus clientes 30 días antes del vencimiento para asegurar la renovación.',
-  },
-  {
-    id: '3',
-    icon: 'shield-checkmark-outline',
-    title: 'Explica las coberturas',
-    description: 'Un cliente informado valora más su póliza y entiende la importancia de estar protegido.',
-  },
-  {
-    id: '4',
-    icon: 'trending-up-outline',
-    title: 'Diversifica tu portafolio',
-    description: 'Ofrece diferentes tipos de seguros para aumentar tus ingresos y fidelizar clientes.',
-  },
-];
+  const handlePress = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 120,
+    }).start();
+
+    Animated.timing(purpleWidth, {
+      toValue: 200,
+      duration: 280,
+      useNativeDriver: false,
+    }).start(() => {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        friction: 4,
+        tension: 80,
+      }).start();
+      onPress();
+      setTimeout(() => purpleWidth.setValue(44), 400);
+    });
+  }, [onPress]);
+
+  return (
+    <Pressable onPress={handlePress}>
+      <Animated.View style={[s.ctaChip, { transform: [{ scale: scaleAnim }] }]}>
+        <Animated.View style={[s.ctaChipPurple, { width: purpleWidth }]} />
+        <View style={s.ctaChipContent}>
+          <View style={s.ctaChipIconWrap}>
+            <MaterialCommunityIcons name={icon} size={18} color="#FFFFFF" />
+          </View>
+          <Text style={s.ctaChipLabel}>{label}</Text>
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 const HomeScreen: React.FC = () => {
-  const { user, broker, logout } = useAuth();
+  const { user, broker } = useAuth();
   const navigation = useNavigation<any>();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
-  const [activeTipIndex, setActiveTipIndex] = useState(0);
-  const [activeFactIndex, setActiveFactIndex] = useState(0);
-  const bannerFlatListRef = useRef<ScrollView>(null);
+  const [activeBannerIdx, setActiveBannerIdx] = useState(0);
 
-  const todayQuote = dailyQuotes[new Date().getDay() % dailyQuotes.length];
+  const todayQuote = getDailyQuote();
 
   const getUserName = () => {
     if (broker?.name) return broker.name.split(' ')[0];
@@ -134,593 +191,254 @@ const HomeScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header con gradiente visual */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Image 
-            source={require('../../logo.png')} 
-            style={styles.headerLogo}
-            resizeMode="contain"
-          />
-          <TouchableOpacity style={styles.notificationButton} onPress={() => setShowNotifications(true)}>
-            <Ionicons name="notifications-outline" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.greetingContainer}>
-          <Text style={styles.greeting}>Hola, {getUserName()}</Text>
-          <Text style={styles.subtitle}>Bienvenid@ de vuelta</Text>
-        </View>
-      </View>
-
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+    <View style={s.container}>
+      {/* ─── HEADER ─── */}
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={s.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
       >
-        {/* Quick Actions */}
-        <View style={styles.quickActionsContainer}>
-          <View style={styles.quickActionsRow}>
-            <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('Dashboard')}>
-              <View style={[styles.quickActionIcon, { backgroundColor: '#EEF2FF' }]}>
-                <Ionicons name="grid-outline" size={22} color="#6172FD" />
-              </View>
-              <Text style={styles.quickActionText}>Dashboard</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('Clientes')}>
-              <View style={[styles.quickActionIcon, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="people-outline" size={22} color="#22C55E" />
-              </View>
-              <Text style={styles.quickActionText}>Clientes</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('Polizas')}>
-              <View style={[styles.quickActionIcon, { backgroundColor: '#FFF7ED' }]}>
-                <Ionicons name="document-text-outline" size={22} color="#F59E0B" />
-              </View>
-              <Text style={styles.quickActionText}>Pólizas</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('Empleados')}>
-              <View style={[styles.quickActionIcon, { backgroundColor: '#FDF2F8' }]}>
-                <Ionicons name="eye-outline" size={22} color="#EC4899" />
-              </View>
-              <Text style={styles.quickActionText}>Empleados</Text>
-            </TouchableOpacity>
+        <View style={s.headerRow}>
+          <View>
+            <Text style={s.greeting}>Hola, {getUserName()}</Text>
+            <Text style={s.greetingSub}>Bienvenid@ de vuelta</Text>
           </View>
-          <TouchableOpacity style={styles.whatsappCard} onPress={() => navigation.navigate('WhatsApp')}>
-            <View style={styles.whatsappCardLeft}>
-              <View style={styles.whatsappIconContainer}>
-                <Ionicons name="logo-whatsapp" size={24} color="#FFFFFF" />
-              </View>
-              <View>
-                <Text style={styles.whatsappCardTitle}>Chat WhatsApp</Text>
-                <Text style={styles.whatsappCardSub}>Gestiona tus conversaciones</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
+          <TouchableOpacity style={s.bellBtn} onPress={() => setShowNotifications(true)}>
+            <MaterialCommunityIcons name="bell-outline" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
+      </ImageBackground>
 
-        {/* Daily Quote */}
-        <View style={styles.quoteCard}>
-          <View style={styles.quoteIconRow}>
-            <Ionicons name="chatbubble-ellipses" size={18} color="#6172FD" />
-            <Text style={styles.quoteLabel}>Frase del Día</Text>
-          </View>
-          <Text style={styles.quoteText}>"{todayQuote.text}"</Text>
-          <Text style={styles.quoteAuthor}>— {todayQuote.author}</Text>
-        </View>
+      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* Accesos Rápidos */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Accesos Rápidos</Text>
+        {/* ─── QUICK ACTIONS (create buttons) ─── */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipScroll}>
+          {quickActions.map((q) => (
+            <AnimatedCtaChip
+              key={q.id}
+              icon={q.icon}
+              label={q.label}
+              onPress={() => navigation.navigate(q.screen)}
+            />
+          ))}
+        </ScrollView>
+
+        {/* ─── TOOLS CAROUSEL (landing-style square cards) ─── */}
+        <View style={s.sec}>
+          <Text style={s.badge}>GESTIONA</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcutsScroll}>
-          {shortcuts.map((item) => (
-            <TouchableOpacity key={item.id} style={styles.shortcutChip} onPress={() => navigation.navigate(item.screen)}>
-              <Ionicons name={item.icon as any} size={18} color={item.color} />
-              <Text style={[styles.shortcutText, { color: item.color }]}>{item.label}</Text>
+        <ScrollView
+          horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.toolScroll}
+          decelerationRate="fast"
+          snapToInterval={TOOL_W + TOOL_GAP}
+        >
+          {tools.map((t) => (
+            <TouchableOpacity
+              key={t.id} style={s.toolCard} activeOpacity={0.8}
+              onPress={() => navigation.navigate(t.screen)}
+            >
+              <View style={[s.toolIconWrap, { backgroundColor: t.bg }]}>
+                <MaterialCommunityIcons name={t.icon} size={26} color={t.color} />
+              </View>
+              <Text style={s.toolTitle}>{t.title}</Text>
+              {t.features.map((f, i) => (
+                <View key={i} style={s.toolFeatureRow}>
+                  <MaterialCommunityIcons name="check-circle" size={14} color={t.color} />
+                  <Text style={s.toolFeature}>{f}</Text>
+                </View>
+              ))}
+              <View style={s.toolCta}>
+                <Text style={[s.toolCtaText, { color: t.color }]}>Ver más</Text>
+                <MaterialCommunityIcons name="arrow-right" size={14} color={t.color} />
+              </View>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Noticias del Sector */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Noticias del Sector</Text>
-        </View>
-        {newsItems.map((item) => (
-          <TouchableOpacity key={item.id} style={styles.newsCard} activeOpacity={0.7}>
-            <View style={[styles.newsIconBg, { backgroundColor: item.bgColor }]}>
-              <Ionicons name={item.icon as any} size={20} color={item.color} />
-            </View>
-            <View style={styles.newsContent}>
-              <Text style={[styles.newsCategory, { color: item.color }]}>{item.category}</Text>
-              <Text style={styles.newsTitle} numberOfLines={2}>{item.title}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
-          </TouchableOpacity>
-        ))}
-
-        {/* ¿Sabías que? */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>¿Sabías que?</Text>
+        {/* ─── CONSEJOS (horizontal snap cards) ─── */}
+        <View style={s.sec}>
+          <Text style={s.badge}>CONSEJOS</Text>
         </View>
         <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(event) => {
-            const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
-            setActiveFactIndex(index);
-          }}
+          horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.insightScroll}
+          decelerationRate="fast"
+          snapToInterval={SW * 0.78 + 12}
         >
-          {didYouKnow.map((item) => (
-            <View key={item.id} style={styles.factSlide}>
-              <View style={styles.factCard}>
-                <View style={styles.factIconBg}>
-                  <Ionicons name={item.icon as any} size={22} color="#6172FD" />
-                </View>
-                <Text style={styles.factText}>{item.fact}</Text>
+          {consejos.map((item) => (
+            <View key={item.id} style={s.insightCard}>
+              <View style={[s.insightIcon, { backgroundColor: item.color + '15' }]}>
+                <MaterialCommunityIcons name={item.icon} size={22} color={item.color} />
               </View>
+              <Text style={s.insightText}>{item.text}</Text>
             </View>
           ))}
         </ScrollView>
-        <View style={styles.paginationContainer}>
-          {didYouKnow.map((_, index) => (
-            <Animated.View
-              key={index}
-              style={[
-                styles.paginationDot,
-                index === activeFactIndex && styles.paginationDotActive,
-              ]}
-            />
-          ))}
+
+        {/* ─── QUOTE ─── */}
+        <View style={s.secPad}>
+          <Text style={s.badge}>FRASE DEL DÍA</Text>
+          <View style={s.quoteCard}>
+            <MaterialCommunityIcons name="format-quote-open" size={24} color="#573CFF" style={{ marginBottom: 8 }} />
+            <Text style={s.quoteText}>{todayQuote.text}</Text>
+            <Text style={s.quoteAuthor}>— {todayQuote.author}</Text>
+          </View>
         </View>
 
-        {/* Tips Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Tips de Gestión</Text>
+        {/* ─── BANNERS ─── */}
+        <View style={s.sec}>
+          <Text style={[s.badge, { marginLeft: 0 }]}>RECOMENDADO</Text>
         </View>
         <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(event) => {
-            const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
-            setActiveTipIndex(index);
-          }}
-          style={styles.tipsScrollView}
+          horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => setActiveBannerIdx(Math.round(e.nativeEvent.contentOffset.x / SW))}
         >
-          {tips.map((item) => (
-            <View key={item.id} style={styles.tipSlide}>
-              <View style={styles.tipCard}>
-                <View style={styles.tipIconContainer}>
-                  <Ionicons name={item.icon as any} size={24} color="#6172FD" />
-                </View>
-                <View style={styles.tipContent}>
-                  <Text style={styles.tipTitle}>{item.title}</Text>
-                  <Text style={styles.tipDescription}>{item.description}</Text>
-                </View>
-              </View>
+          {banners.map((item) => (
+            <View key={item.id} style={s.bannerSlide}>
+              <TouchableOpacity style={s.bannerCard} activeOpacity={0.9} onPress={() => item.url && Linking.openURL(item.url)}>
+                <Image source={item.image} style={{ width: SW - 40, height: 150, borderRadius: 20 }} resizeMode="cover" />
+              </TouchableOpacity>
             </View>
           ))}
         </ScrollView>
-        <View style={styles.paginationContainer}>
-          {tips.map((_, index) => (
-            <Animated.View
-              key={index}
-              style={[
-                styles.paginationDot,
-                index === activeTipIndex && styles.paginationDotActive,
-              ]}
-            />
+        <View style={s.dots}>
+          {banners.map((_, i) => (
+            <View key={i} style={[s.dot, i === activeBannerIdx && s.dotActive]} />
           ))}
         </View>
 
-        {/* Banners Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Te Recomendamos</Text>
-        </View>
-        <ScrollView
-          ref={bannerFlatListRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(event) => {
-            const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
-            setActiveBannerIndex(index);
-          }}
-          style={styles.bannerScrollView}
-        >
-          {banners.map((item) => {
-            const BannerComponent = item.component;
-            return (
-              <View key={item.id} style={styles.bannerSlide}>
-                <TouchableOpacity 
-                  style={styles.bannerCard}
-                  onPress={() => item.url && Linking.openURL(item.url)}
-                  activeOpacity={0.9}
-                >
-                  <BannerComponent width={screenWidth - 40} height={170} preserveAspectRatio="xMidYMid slice" />
-                </TouchableOpacity>
-              </View>
-            );
-          })}
-        </ScrollView>
-        <View style={[styles.paginationContainer, { marginBottom: 100 }]}>
-          {banners.map((_, index) => (
-            <Animated.View
-              key={index}
-              style={[
-                styles.paginationDot,
-                index === activeBannerIndex && styles.paginationDotActive,
-              ]}
-            />
-          ))}
-        </View>
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      <NotificationsPopup 
-        visible={showNotifications} 
-        onClose={() => setShowNotifications(false)} 
-      />
+      <NotificationsPopup visible={showNotifications} onClose={() => setShowNotifications(false)} />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F5F6FA',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  header: { 
-    backgroundColor: '#6172FD',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    shadowColor: '#6172FD',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  headerLogo: {
-    width: 55,
-    height: 55,
-  },
-  notificationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  greetingContainer: {
-    marginBottom: 0,
-  },
-  greeting: { 
-    fontSize: 24, 
-    fontFamily: 'Montserrat_700Bold',
-    color: '#FFFFFF',
-  },
-  subtitle: {
-    fontSize: 14,
-    fontFamily: 'Montserrat_400Regular',
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 3,
-  },
-  quickActionsContainer: {
-    paddingHorizontal: 16,
-    marginTop: -1,
-    paddingTop: 20,
-  },
-  quickActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  quickAction: {
-    alignItems: 'center',
-    width: '23%',
-  },
-  quickActionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  quickActionText: {
-    fontSize: 11,
-    fontFamily: 'Montserrat_600SemiBold',
-    color: '#374151',
-    textAlign: 'center',
-  },
-  whatsappCard: {
-    backgroundColor: '#25D366',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-    shadowColor: '#25D366',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  whatsappCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  whatsappIconContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  whatsappCardTitle: {
-    fontSize: 15,
-    fontFamily: 'Montserrat_700Bold',
-    color: '#FFFFFF',
-  },
-  whatsappCardSub: {
-    fontSize: 12,
-    fontFamily: 'Montserrat_400Regular',
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 1,
-  },
-  sectionHeader: {
-    paddingHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 14,
-  },
-  sectionTitle: { 
-    fontSize: 18, 
-    fontFamily: 'Montserrat_700Bold',
-    color: '#1F2937', 
-  },
-  tipsScrollView: {
-    // full width
-  },
-  tipSlide: {
-    width: screenWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tipCard: {
-    width: screenWidth - 40,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  tipIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#EEF2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  tipContent: {
-    flex: 1,
-  },
-  tipTitle: {
-    fontSize: 15,
-    fontFamily: 'Montserrat_700Bold',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  tipDescription: {
-    fontSize: 13,
-    fontFamily: 'Montserrat_400Regular',
-    color: '#6B7280',
-    lineHeight: 18,
-  },
-  bannerScrollView: {
-    // full width
-  },
-  bannerSlide: {
-    width: screenWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bannerCard: {
-    width: screenWidth - 40,
-    borderRadius: 16,
+/* ════════════════════════════════════════════════════════════════ */
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+
+  /* ── Header ── */
+  header: {
+    paddingTop: 54, paddingBottom: 18, paddingHorizontal: 20,
+    borderBottomLeftRadius: 28, borderBottomRightRadius: 28,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 14,
-    marginBottom: 8,
-    gap: 8,
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  bellBtn: {
+    width: 38, height: 38, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#D1D5DB',
+  greeting: { fontSize: 22, fontFamily: 'Montserrat_700Bold', color: '#FFF', letterSpacing: -0.3 },
+  greetingSub: { fontSize: 13, fontFamily: 'Montserrat_400Regular', color: 'rgba(255,255,255,0.45)', marginTop: 2 },
+
+  /* ── Scroll ── */
+  scroll: { flex: 1 },
+  scrollContent: { paddingTop: 16 },
+
+  /* ── Sections ── */
+  sec: { paddingHorizontal: 20, marginBottom: 12 },
+  secPad: { paddingHorizontal: 20, marginBottom: 20, marginTop: 4 },
+  badge: {
+    fontSize: 11, fontFamily: 'Montserrat_700Bold', color: '#573CFF',
+    letterSpacing: 1.5, marginBottom: 12,
   },
-  paginationDotActive: {
-    backgroundColor: '#6172FD',
-    width: 24,
-    borderRadius: 4,
+
+  /* ── Quick Action CTAs ── */
+  chipScroll: { paddingHorizontal: 20, gap: 10, marginBottom: 20 },
+  ctaChip: {
+    backgroundColor: '#0d0d0d', borderRadius: 16,
+    height: 44, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 10, elevation: 4,
   },
-  // Daily Quote
-  quoteCard: {
-    marginHorizontal: 16,
-    marginTop: 20,
-    backgroundColor: '#FFFFFF',
+  ctaChipPurple: {
+    position: 'absolute', left: 0, top: 0,
+    height: 44, backgroundColor: '#573CFF',
     borderRadius: 16,
-    padding: 18,
-    borderLeftWidth: 4,
-    borderLeftColor: '#6172FD',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
-  quoteIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
+  ctaChipContent: {
+    flexDirection: 'row', alignItems: 'center', height: 44,
   },
-  quoteLabel: {
-    fontSize: 12,
-    fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+  ctaChipIconWrap: {
+    width: 44, height: 44, justifyContent: 'center', alignItems: 'center',
+  },
+  ctaChipLabel: {
+    fontSize: 10, fontFamily: 'Montserrat_700Bold', color: '#FFFFFF',
+    letterSpacing: 1.5, paddingRight: 16,
+  },
+
+  /* ── Tools Carousel (landing-style) ── */
+  toolScroll: { paddingLeft: 20, paddingRight: 8, gap: TOOL_GAP, marginBottom: 24 },
+  toolCard: {
+    width: TOOL_W, backgroundColor: '#FFFFFF', borderRadius: 22, padding: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.07, shadowRadius: 16, elevation: 4,
+  },
+  toolIconWrap: {
+    width: 52, height: 52, borderRadius: 16,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 14,
+  },
+  toolTitle: {
+    fontSize: 16, fontFamily: 'Montserrat_700Bold', color: '#0d0d0d',
+    marginBottom: 12, letterSpacing: -0.2,
+  },
+  toolFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  toolFeature: { fontSize: 12, fontFamily: 'Montserrat_400Regular', color: '#6B7280' },
+  toolCta: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12,
+  },
+  toolCtaText: { fontSize: 13, fontFamily: 'Montserrat_600SemiBold' },
+
+  /* ── Insights ── */
+  insightScroll: { paddingLeft: 20, paddingRight: 8, gap: 12, marginBottom: 24 },
+  insightCard: {
+    width: SW * 0.78, backgroundColor: '#0d0d0d', borderRadius: 20, padding: 20,
+    flexDirection: 'row', alignItems: 'center',
+  },
+  insightIcon: {
+    width: 46, height: 46, borderRadius: 14,
+    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+  },
+  insightText: {
+    flex: 1, fontSize: 13, fontFamily: 'Montserrat_500Medium',
+    color: 'rgba(255,255,255,0.8)', lineHeight: 20,
+  },
+
+  /* ── Quote ── */
+  quoteCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 20, padding: 22,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06, shadowRadius: 12, elevation: 3,
   },
   quoteText: {
-    fontSize: 14,
-    fontFamily: 'Montserrat_500Medium',
-    color: '#374151',
-    lineHeight: 21,
-    fontStyle: 'italic',
+    fontSize: 15, fontFamily: 'Montserrat_500Medium', color: '#374151',
+    lineHeight: 23, fontStyle: 'italic',
   },
   quoteAuthor: {
-    fontSize: 12,
-    fontFamily: 'Montserrat_400Regular',
-    color: '#9CA3AF',
-    marginTop: 8,
-    textAlign: 'right',
+    fontSize: 12, fontFamily: 'Montserrat_400Regular', color: '#9CA3AF',
+    marginTop: 10, textAlign: 'right',
   },
-  // Shortcuts
-  shortcutsScroll: {
-    paddingHorizontal: 16,
-    gap: 10,
+
+  /* ── Banners ── */
+  bannerSlide: { width: SW, alignItems: 'center' },
+  bannerCard: {
+    width: SW - 40, borderRadius: 20, overflow: 'hidden', backgroundColor: '#FFF',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
   },
-  shortcutChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+
+  /* ── Dots ── */
+  dots: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    marginTop: 14, marginBottom: 8, gap: 6,
   },
-  shortcutText: {
-    fontSize: 13,
-    fontFamily: 'Montserrat_600SemiBold',
-  },
-  // News
-  newsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 14,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  newsIconBg: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  newsContent: {
-    flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
-  },
-  newsCategory: {
-    fontSize: 10,
-    fontFamily: 'Montserrat_700Bold',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 3,
-  },
-  newsTitle: {
-    fontSize: 13,
-    fontFamily: 'Montserrat_500Medium',
-    color: '#374151',
-    lineHeight: 18,
-  },
-  // Did You Know
-  factSlide: {
-    width: screenWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  factCard: {
-    width: screenWidth - 40,
-    backgroundColor: '#6172FD',
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  factIconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  factText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Montserrat_500Medium',
-    color: '#FFFFFF',
-    lineHeight: 20,
-  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D1D5DB' },
+  dotActive: { backgroundColor: '#573CFF', width: 20, borderRadius: 3 },
 });
 
 export default HomeScreen;

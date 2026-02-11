@@ -134,6 +134,7 @@
     "@types/react-slick": "^0.23.13",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/recharts": "^1.8.29",
+    "@vitejs/plugin-basic-ssl": "^2.1.4",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "copy-webpack-plugin": "^13.0.0",

@@ -13,6 +13,10 @@ import {
   Image,
   Alert,
   Pressable,
+  ImageBackground,
+  Linking,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -44,14 +48,32 @@ const WhatsAppChatScreen: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingLocked, setIsRecordingLocked] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const recordingInterval = useRef<NodeJS.Timeout | null>(null);
+
+  // Audio recording animation refs
+  const micScale = useRef(new Animated.Value(1)).current;
+  const micPulse = useRef(new Animated.Value(1)).current;
+  const lockTranslateY = useRef(new Animated.Value(0)).current;
+  const lockOpacity = useRef(new Animated.Value(0)).current;
+  const lockFlashOpacity = useRef(new Animated.Value(0)).current;
+  const slideLeftHint = useRef(new Animated.Value(1)).current;
+  const pulseAnimation = useRef<Animated.CompositeAnimation | null>(null);
+  const waveAnims = useRef(
+    Array.from({ length: 28 }, () => new Animated.Value(0.15))
+  ).current;
+  const waveAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const isRecordingRef = useRef(false);
+  const isLockedRef = useRef(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedMsgId, setHighlightedMsgId] = useState<number | null>(null);
+  const [searchResultIndex, setSearchResultIndex] = useState(0);
   const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
   const [audioProgress, setAudioProgress] = useState<number>(0);
   const [audioDurationMs, setAudioDurationMs] = useState<number>(0);
@@ -201,7 +223,66 @@ const WhatsAppChatScreen: React.FC = () => {
     }
   };
 
+  const startWaveAnimation = () => {
+    const animations = waveAnims.map((anim, i) => {
+      const randomDuration = 300 + Math.random() * 400;
+      const randomHeight = 0.3 + Math.random() * 0.7;
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: randomHeight,
+            duration: randomDuration,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0.15,
+            duration: randomDuration,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    });
+    waveAnimationRef.current = Animated.parallel(animations);
+    waveAnimationRef.current.start();
+  };
+
+  const stopWaveAnimation = () => {
+    if (waveAnimationRef.current) {
+      waveAnimationRef.current.stop();
+      waveAnimationRef.current = null;
+    }
+    waveAnims.forEach(a => a.setValue(0.15));
+  };
+
+  const startPulseAnimation = () => {
+    pulseAnimation.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(micPulse, { toValue: 1.6, duration: 800, useNativeDriver: true }),
+        Animated.timing(micPulse, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    pulseAnimation.current.start();
+    startWaveAnimation();
+  };
+
+  const stopPulseAnimation = () => {
+    if (pulseAnimation.current) {
+      pulseAnimation.current.stop();
+      pulseAnimation.current = null;
+    }
+    stopWaveAnimation();
+    micPulse.setValue(1);
+    micScale.setValue(1);
+    lockOpacity.setValue(0);
+    lockFlashOpacity.setValue(0);
+    lockTranslateY.setValue(0);
+    slideLeftHint.setValue(1);
+  };
+
   const startRecording = async () => {
+    // Prevent starting if already recording
+    if (isRecordingRef.current || recordingRef.current) return;
+
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
@@ -217,9 +298,18 @@ const WhatsAppChatScreen: React.FC = () => {
       const { recording: newRecording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
+      recordingRef.current = newRecording;
       setRecording(newRecording);
       setIsRecording(true);
+      setIsRecordingLocked(false);
+      isRecordingRef.current = true;
+      isLockedRef.current = false;
       setRecordingDuration(0);
+
+      // Start animations
+      Animated.spring(micScale, { toValue: 1.4, useNativeDriver: true }).start();
+      Animated.timing(lockOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      startPulseAnimation();
 
       recordingInterval.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
@@ -231,7 +321,8 @@ const WhatsAppChatScreen: React.FC = () => {
   };
 
   const stopRecording = async () => {
-    if (!recording) return;
+    const rec = recordingRef.current;
+    if (!rec) return;
 
     try {
       if (recordingInterval.current) {
@@ -239,11 +330,22 @@ const WhatsAppChatScreen: React.FC = () => {
         recordingInterval.current = null;
       }
 
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
+      stopPulseAnimation();
+      isRecordingRef.current = false;
+      isLockedRef.current = false;
+      recordingRef.current = null;
+
+      await rec.stopAndUnloadAsync();
+      const uri = rec.getURI();
       setRecording(null);
       setIsRecording(false);
+      setIsRecordingLocked(false);
       setRecordingDuration(0);
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
 
       if (uri) {
         await sendMedia(uri, 'audio');
@@ -254,7 +356,8 @@ const WhatsAppChatScreen: React.FC = () => {
   };
 
   const cancelRecording = async () => {
-    if (!recording) return;
+    const rec = recordingRef.current;
+    if (!rec) return;
 
     try {
       if (recordingInterval.current) {
@@ -262,14 +365,73 @@ const WhatsAppChatScreen: React.FC = () => {
         recordingInterval.current = null;
       }
 
-      await recording.stopAndUnloadAsync();
+      stopPulseAnimation();
+      isRecordingRef.current = false;
+      isLockedRef.current = false;
+      recordingRef.current = null;
+
+      await rec.stopAndUnloadAsync();
       setRecording(null);
       setIsRecording(false);
+      setIsRecordingLocked(false);
       setRecordingDuration(0);
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
     } catch (err) {
       console.error('Error canceling recording:', err);
     }
   };
+
+  // PanResponder for mic button: hold to record, slide up to lock, release to send
+  const micPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        startRecording();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (!isRecordingRef.current || isLockedRef.current) return;
+
+        const { dy, dx } = gestureState;
+
+        // Slide up to lock (threshold: -80px)
+        if (dy < -20) {
+          const progress = Math.min(1, Math.abs(dy) / 80);
+          lockTranslateY.setValue(dy * 0.5);
+          lockOpacity.setValue(0.5 + progress * 0.5);
+
+          if (dy < -80) {
+            // Lock the recording — flash lock icon briefly
+            isLockedRef.current = true;
+            Animated.spring(micScale, { toValue: 1, useNativeDriver: true }).start();
+            Animated.timing(lockOpacity, { toValue: 0, duration: 100, useNativeDriver: true }).start();
+            // Flash the lock icon in the center
+            lockFlashOpacity.setValue(1);
+            Animated.timing(lockFlashOpacity, { toValue: 0, duration: 600, useNativeDriver: true }).start();
+            setIsRecordingLocked(true);
+          }
+        }
+
+        // Slide left to cancel (threshold: -100px)
+        if (dx < -100 && !isLockedRef.current) {
+          cancelRecording();
+        }
+      },
+      onPanResponderRelease: () => {
+        if (!isRecordingRef.current) return;
+
+        // If locked, don't stop — user will use the send button
+        if (isLockedRef.current) return;
+
+        // Otherwise, release = send the audio
+        stopRecording();
+      },
+    })
+  ).current;
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -278,6 +440,7 @@ const WhatsAppChatScreen: React.FC = () => {
   };
 
   const sendMedia = async (uri: string, type: 'image' | 'audio' | 'document', filename?: string) => {
+    console.log('📤 [sendMedia] Called with:', { uri, type, filename, conversationId });
     setSending(true);
     
     const optimisticMessage: WhatsAppMessage = {
@@ -296,14 +459,16 @@ const WhatsAppChatScreen: React.FC = () => {
     setMessages(prev => [...prev, optimisticMessage]);
     
     try {
+      console.log('📤 [sendMedia] Calling sendMediaMessage...');
       await sendMediaMessage(conversationId, uri, type, filename);
+      console.log('📤 [sendMedia] Success! Fetching messages...');
       fetchMessages();
     } catch (err: any) {
-      console.error('Error sending media:', err);
+      console.error('📤 [sendMedia] ERROR:', err?.message, err?.response?.status, err?.response?.data);
       setMessages(prev => prev.map(m => 
         m.id === optimisticMessage.id ? { ...m, status: 'failed' } : m
       ));
-      Alert.alert('Error', 'No se pudo enviar el archivo');
+      Alert.alert('Error', `No se pudo enviar el archivo: ${err?.message || 'Error desconocido'}`);
     } finally {
       setSending(false);
     }
@@ -345,7 +510,7 @@ const WhatsAppChatScreen: React.FC = () => {
       case 'delivered':
         return <Ionicons name="checkmark-done" size={14} color="#9CA3AF" />;
       case 'read':
-        return <Ionicons name="checkmark-done" size={14} color="#6172FD" />;
+        return <Ionicons name="checkmark-done" size={14} color="#573CFF" />;
       case 'sending':
         return <Ionicons name="time-outline" size={14} color="#9CA3AF" />;
       case 'failed':
@@ -436,32 +601,43 @@ const WhatsAppChatScreen: React.FC = () => {
     };
   }, []);
 
-  const getAccessibleMediaUrl = (url: string | null | undefined): string | null => {
+  const getAccessibleMediaUrl = (url: string | null | undefined, forAudio: boolean = false): string | null => {
     if (!url) return null;
     
-    const NGROK_URL = 'https://hookless-kaylynn-greasily.ngrok-free.dev';
+    // Base URL del backend local (misma que usa api.ts)
+    const BACKEND_BASE = 'http://192.168.1.80:8001';
     
-    // Extraer el nombre del archivo de la URL
+    // Extraer filename de la URL para usar el endpoint de streaming
     const extractFilename = (mediaUrl: string): string | null => {
       const match = mediaUrl.match(/whatsapp-media\/([^?]+)/);
       return match ? match[1] : null;
     };
-    
-    const filename = extractFilename(url);
-    if (filename) {
-      // Usar el endpoint de API que sirve los archivos directamente
-      return `${NGROK_URL}/api/media/${filename}`;
+
+    // Para audio/video, usar el endpoint de streaming API que soporta Range requests (iOS AVFoundation)
+    if (forAudio) {
+      const filename = extractFilename(url);
+      if (filename) {
+        return `${BACKEND_BASE}/api/media/${filename}`;
+      }
     }
     
-    // Fallback: Si es una URL relativa, agregar el dominio
+    // Si es URL relativa (/storage/...), agregar base del backend
+    if (url.startsWith('/storage/')) {
+      return `${BACKEND_BASE}${url}`;
+    }
+    
+    // Si es URL de ngrok con /storage/, convertir a URL local del backend
+    if (url.includes('ngrok') && url.includes('/storage/')) {
+      const storagePath = url.substring(url.indexOf('/storage/'));
+      return `${BACKEND_BASE}${storagePath}`;
+    }
+    
+    // Si es URL relativa sin /storage/
     if (url.startsWith('/')) {
-      return NGROK_URL + url;
+      return `${BACKEND_BASE}${url}`;
     }
     
-    // Fallback: Reemplazar URL local por ngrok
-    if (url.includes('192.168.') || url.includes('localhost') || url.includes('127.0.0.1')) {
-      return url.replace(/https?:\/\/(192\.168\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?/, NGROK_URL);
-    }
+    // Si ya es URL absoluta (ej: media de Meta), usarla directamente
     return url;
   };
 
@@ -474,16 +650,35 @@ const WhatsAppChatScreen: React.FC = () => {
   const scrollToMessage = useCallback((msgId: number) => {
     const index = messages.findIndex(m => m.id === msgId);
     if (index !== -1 && flatListRef.current) {
-      flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      try {
+        flatListRef.current.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      } catch {
+        flatListRef.current.scrollToOffset({ offset: index * 80, animated: true });
+      }
       setHighlightedMsgId(msgId);
-      setTimeout(() => setHighlightedMsgId(null), 2000);
+      setTimeout(() => setHighlightedMsgId(null), 3000);
     }
   }, [messages]);
+
+  const goToSearchResult = useCallback((idx: number) => {
+    if (searchResults.length === 0) return;
+    const clamped = Math.max(0, Math.min(idx, searchResults.length - 1));
+    setSearchResultIndex(clamped);
+    scrollToMessage(searchResults[clamped].id);
+  }, [searchResults, scrollToMessage]);
+
+  useEffect(() => {
+    if (searchResults.length > 0) {
+      setSearchResultIndex(0);
+      scrollToMessage(searchResults[0].id);
+    }
+  }, [searchQuery]);
 
   const renderMessageContent = (item: WhatsAppMessage) => {
     const messageType = item.type || item.media_type;
     const rawMediaUrl = item.media_url || (item as any).media?.url;
-    const mediaUrl = getAccessibleMediaUrl(rawMediaUrl);
+    const isAudioOrVideo = messageType === 'audio' || messageType === 'video';
+    const mediaUrl = getAccessibleMediaUrl(rawMediaUrl, isAudioOrVideo);
 
     if (messageType === 'audio' && mediaUrl) {
       const isPlaying = playingAudioId === item.id;
@@ -502,7 +697,7 @@ const WhatsAppChatScreen: React.FC = () => {
             <Ionicons 
               name={isPlaying ? "pause" : "play"} 
               size={20} 
-              color={outgoing ? "#6172FD" : "#FFFFFF"} 
+              color={outgoing ? "#573CFF" : "#FFFFFF"} 
             />
           </TouchableOpacity>
           <View style={styles.audioRight}>
@@ -523,14 +718,14 @@ const WhatsAppChatScreen: React.FC = () => {
                   styles.audioSliderFill, 
                   { 
                     width: `${progress * 100}%`,
-                    backgroundColor: outgoing ? '#FFFFFF' : '#6172FD',
+                    backgroundColor: outgoing ? '#FFFFFF' : '#573CFF',
                   }
                 ]} />
                 <View style={[
                   styles.audioSliderThumb,
                   { 
                     left: `${progress * 100}%`,
-                    backgroundColor: outgoing ? '#FFFFFF' : '#6172FD',
+                    backgroundColor: outgoing ? '#FFFFFF' : '#573CFF',
                   }
                 ]} />
               </View>
@@ -542,7 +737,7 @@ const WhatsAppChatScreen: React.FC = () => {
               </Text>
               {isPlaying && (
                 <TouchableOpacity style={[styles.audioSpeedButton, { backgroundColor: outgoing ? 'rgba(255,255,255,0.25)' : 'rgba(97,114,253,0.15)' }]} onPress={toggleSpeed}>
-                  <Text style={[styles.audioSpeedText, { color: outgoing ? '#FFFFFF' : '#6172FD' }]}>
+                  <Text style={[styles.audioSpeedText, { color: outgoing ? '#FFFFFF' : '#573CFF' }]}>
                     {speed}x
                   </Text>
                 </TouchableOpacity>
@@ -565,16 +760,42 @@ const WhatsAppChatScreen: React.FC = () => {
       );
     }
 
-    if (messageType === 'document') {
+    if (messageType === 'video' && mediaUrl) {
       return (
-        <TouchableOpacity style={styles.documentContainer}>
-          <Ionicons name="document-outline" size={32} color={item.from_me ? "#FFFFFF" : "#6172FD"} />
+        <TouchableOpacity 
+          style={styles.documentContainer} 
+          onPress={() => Linking.openURL(mediaUrl)}
+        >
+          <View style={[styles.videoPlayOverlay, { backgroundColor: item.from_me ? 'rgba(255,255,255,0.2)' : 'rgba(87,60,255,0.1)' }]}>
+            <Ionicons name="play-circle" size={40} color={item.from_me ? "#FFFFFF" : "#573CFF"} />
+          </View>
           <Text style={[
             styles.documentName,
             item.from_me ? styles.messageTextRight : styles.messageTextLeft
           ]} numberOfLines={2}>
-            {item.body || 'Documento'}
+            Reproducir video
           </Text>
+        </TouchableOpacity>
+      );
+    }
+
+    if (messageType === 'document') {
+      const docUrl = getAccessibleMediaUrl(rawMediaUrl);
+      return (
+        <TouchableOpacity 
+          style={styles.documentContainer}
+          onPress={() => {
+            if (docUrl) Linking.openURL(docUrl);
+          }}
+        >
+          <Ionicons name="document-outline" size={32} color={item.from_me ? "#FFFFFF" : "#573CFF"} />
+          <Text style={[
+            styles.documentName,
+            item.from_me ? styles.messageTextRight : styles.messageTextLeft
+          ]} numberOfLines={2}>
+            {(item as any).media?.filename || item.body || 'Documento'}
+          </Text>
+          <Ionicons name="download-outline" size={18} color={item.from_me ? "rgba(255,255,255,0.7)" : "#9CA3AF"} />
         </TouchableOpacity>
       );
     }
@@ -599,7 +820,7 @@ const WhatsAppChatScreen: React.FC = () => {
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const showDate = shouldShowDate(item, prevMessage);
     const messageType = item.type || item.media_type || 'text';
-    const isMedia = ['audio', 'image', 'document'].includes(messageType);
+    const isMedia = ['audio', 'image', 'document', 'video'].includes(messageType);
     const isHighlighted = highlightedMsgId === item.id;
     
     return (
@@ -633,11 +854,7 @@ const WhatsAppChatScreen: React.FC = () => {
         </View>
       </View>
     );
-  }, [messages, playingAudioId, audioProgress, audioDurationMs, audioPositionMs, audioSpeed, highlightedMsgId]);
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  }, [messages, highlightedMsgId, searchQuery, showSearch, playingAudioId, audioProgress, audioPositionMs, audioDurationMs, audioSpeed]);
 
   return (
     <KeyboardAvoidingView 
@@ -645,7 +862,12 @@ const WhatsAppChatScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         {showSearch ? (
           <>
             <TouchableOpacity style={styles.backButton} onPress={() => { setShowSearch(false); setSearchQuery(''); }}>
@@ -695,27 +917,35 @@ const WhatsAppChatScreen: React.FC = () => {
             </TouchableOpacity>
           </>
         )}
-      </View>
+      </ImageBackground>
 
-      {showSearch && searchQuery.trim().length > 0 && searchResults.length > 0 && (
-        <View style={styles.searchResultsBar}>
-          <FlatList
-            data={searchResults}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => `sr-${item.id}`}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.searchResultChip}
-                onPress={() => { setShowSearch(false); setSearchQuery(''); scrollToMessage(item.id); }}
-              >
-                <Text style={styles.searchResultChipText} numberOfLines={1}>
-                  {(item.body || '').substring(0, 40)}
-                </Text>
-                <Text style={styles.searchResultChipDate}>{formatTime(item.created_at)}</Text>
-              </TouchableOpacity>
-            )}
-          />
+      {showSearch && searchQuery.trim().length > 0 && (
+        <View style={styles.searchNavBar}>
+          {searchResults.length > 0 ? (
+            <>
+              <Text style={styles.searchNavCount}>
+                {searchResultIndex + 1} de {searchResults.length}
+              </Text>
+              <View style={styles.searchNavButtons}>
+                <TouchableOpacity
+                  style={[styles.searchNavBtn, searchResultIndex <= 0 && styles.searchNavBtnDisabled]}
+                  onPress={() => goToSearchResult(searchResultIndex - 1)}
+                  disabled={searchResultIndex <= 0}
+                >
+                  <Ionicons name="chevron-up" size={20} color={searchResultIndex <= 0 ? '#D1D5DB' : '#573CFF'} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.searchNavBtn, searchResultIndex >= searchResults.length - 1 && styles.searchNavBtnDisabled]}
+                  onPress={() => goToSearchResult(searchResultIndex + 1)}
+                  disabled={searchResultIndex >= searchResults.length - 1}
+                >
+                  <Ionicons name="chevron-down" size={20} color={searchResultIndex >= searchResults.length - 1 ? '#D1D5DB' : '#573CFF'} />
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.searchNavNoResults}>Sin resultados</Text>
+          )}
         </View>
       )}
 
@@ -734,13 +964,14 @@ const WhatsAppChatScreen: React.FC = () => {
             data={messages}
             renderItem={renderMessage}
             keyExtractor={(item) => item.id.toString()}
+            extraData={`${playingAudioId}-${Math.floor(audioProgress * 20)}-${audioSpeed}-${highlightedMsgId}`}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
             initialNumToRender={20}
             maxToRenderPerBatch={15}
             windowSize={10}
-            removeClippedSubviews={Platform.OS === 'android'}
+            removeClippedSubviews={false}
             getItemLayout={undefined}
             onScrollToIndexFailed={(info) => {
               flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
@@ -755,23 +986,94 @@ const WhatsAppChatScreen: React.FC = () => {
         )}
       </View>
 
-      {isRecording ? (
+      {isRecording && isRecordingLocked ? (
+        /* Locked recording mode - hands free with waveform */
         <View style={styles.recordingContainer}>
-          <TouchableOpacity style={styles.cancelRecordButton} onPress={cancelRecording}>
-            <Ionicons name="trash-outline" size={24} color="#EF4444" />
+          <TouchableOpacity activeOpacity={0.6} style={styles.cancelRecordButton} onPress={() => cancelRecording()}>
+            <Ionicons name="trash-outline" size={22} color="#EF4444" />
           </TouchableOpacity>
-          <View style={styles.recordingInfo}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>Grabando {formatDuration(recordingDuration)}</Text>
+
+          <View style={styles.lockedRecordingCenter}>
+            <Animated.View style={[styles.recordingDotSmall, { transform: [{ scale: micPulse }] }]} />
+            <Text style={styles.recordingTimerText}>{formatDuration(recordingDuration)}</Text>
+            <View style={styles.waveformContainer}>
+              {waveAnims.map((anim, i) => (
+                <Animated.View
+                  key={i}
+                  style={[
+                    styles.waveBar,
+                    { transform: [{ scaleY: anim }] },
+                  ]}
+                />
+              ))}
+            </View>
           </View>
-          <TouchableOpacity style={styles.stopRecordButton} onPress={stopRecording}>
-            <Ionicons name="send" size={24} color="#FFFFFF" />
+
+          <TouchableOpacity activeOpacity={0.6} style={styles.stopRecordButton} onPress={() => stopRecording()}>
+            <Ionicons name="send" size={20} color="#FFFFFF" />
           </TouchableOpacity>
+
+          {/* Lock flash overlay - must be last and pointer-events none */}
+          <Animated.View style={[styles.lockFlash, { opacity: lockFlashOpacity }]} pointerEvents="none">
+            <Ionicons name="lock-closed" size={20} color="#573CFF" />
+          </Animated.View>
+        </View>
+      ) : isRecording && !isRecordingLocked ? (
+        /* Hold-to-record mode with waveform */
+        <View style={styles.inputContainer}>
+          <View style={styles.holdRecordingLeft}>
+            <Animated.View style={[styles.recordingDotSmall, { transform: [{ scale: micPulse }] }]} />
+            <Text style={styles.recordingTimerText}>{formatDuration(recordingDuration)}</Text>
+          </View>
+
+          <View style={styles.waveformContainerHold}>
+            {waveAnims.map((anim, i) => (
+              <Animated.View
+                key={i}
+                style={[
+                  styles.waveBar,
+                  { transform: [{ scaleY: anim }] },
+                ]}
+              />
+            ))}
+          </View>
+
+          {/* Lock indicator above mic */}
+          <Animated.View style={[
+            styles.lockIndicator,
+            { 
+              opacity: lockOpacity,
+              transform: [{ translateY: lockTranslateY }],
+            }
+          ]}>
+            <View style={styles.lockIconContainer}>
+              <Ionicons name="lock-closed" size={18} color="#573CFF" />
+            </View>
+            <View style={styles.lockArrow}>
+              <Ionicons name="chevron-up" size={14} color="#9CA3AF" />
+            </View>
+          </Animated.View>
+
+          {/* Animated mic button with pan responder */}
+          <Animated.View
+            style={[
+              styles.micButtonRecording,
+              { transform: [{ scale: micScale }] }
+            ]}
+            {...micPanResponder.panHandlers}
+          >
+            <Animated.View style={[
+              styles.micPulseRing,
+              { transform: [{ scale: micPulse }], opacity: micPulse.interpolate({ inputRange: [1, 1.6], outputRange: [0.6, 0.1] }) }
+            ]} />
+            <Ionicons name="mic" size={24} color="#FFFFFF" />
+          </Animated.View>
         </View>
       ) : (
+        /* Normal input mode */
         <View style={styles.inputContainer}>
           <TouchableOpacity style={styles.attachButton} onPress={() => setShowAttachMenu(true)}>
-            <Ionicons name="add-circle-outline" size={28} color="#6172FD" />
+            <Ionicons name="add-circle-outline" size={28} color="#573CFF" />
           </TouchableOpacity>
           <View style={styles.inputWrapper}>
             <TextInput
@@ -797,9 +1099,11 @@ const WhatsAppChatScreen: React.FC = () => {
               )}
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.micButton} onPress={startRecording}>
-              <Ionicons name="mic" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+            <View {...micPanResponder.panHandlers}>
+              <Animated.View style={[styles.micButton, { transform: [{ scale: micScale }] }]}>
+                <Ionicons name="mic" size={24} color="#FFFFFF" />
+              </Animated.View>
+            </View>
           )}
         </View>
       )}
@@ -836,7 +1140,7 @@ const WhatsAppChatScreen: React.FC = () => {
                   takePhoto();
                 }}
               >
-                <View style={[styles.attachIconContainer, { backgroundColor: '#6172FD' }]}>
+                <View style={[styles.attachIconContainer, { backgroundColor: '#573CFF' }]}>
                   <Ionicons name="camera" size={24} color="#FFFFFF" />
                 </View>
                 <Text style={styles.attachOptionText}>Cámara</Text>
@@ -879,22 +1183,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F2F5',
   },
   header: {
-    height: 110,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    shadowColor: '#6172FD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -958,7 +1258,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -1020,7 +1320,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 3,
   },
   messageBubbleRight: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     borderTopRightRadius: 3,
   },
   messageText: {
@@ -1095,10 +1395,10 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 4,
@@ -1118,53 +1418,141 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 4,
     elevation: 4,
+  },
+  micButtonRecording: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#573CFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#573CFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 10,
+  },
+  micPulseRing: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(87, 60, 255, 0.2)',
+  },
+  lockIndicator: {
+    position: 'absolute',
+    right: 19,
+    bottom: 70,
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  lockIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    marginBottom: 4,
+  },
+  lockArrow: {
+    alignItems: 'center',
+  },
+  lockFlash: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  holdRecordingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  recordingDotSmall: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+    marginRight: 6,
+  },
+  recordingTimerText: {
+    fontSize: 15,
+    fontFamily: 'Montserrat_700Bold',
+    color: '#374151',
+  },
+  waveformContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 32,
+    gap: 2,
+    marginLeft: 10,
+  },
+  waveformContainerHold: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 32,
+    gap: 2,
+    marginRight: 8,
+  },
+  waveBar: {
+    width: 3,
+    height: 32,
+    borderRadius: 1.5,
+    backgroundColor: '#573CFF',
+  },
+  lockedRecordingCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 10,
   },
   recordingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
+    paddingBottom: 30,
     backgroundColor: '#F0F2F5',
   },
   cancelRecordButton: {
     width: 44,
     height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEE2E2',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  recordingInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recordingDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#EF4444',
-    marginRight: 8,
-  },
-  recordingText: {
-    fontSize: 16,
-    fontFamily: 'Montserrat_600SemiBold',
-    color: '#374151',
   },
   stopRecordButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#573CFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 4,
   },
   modalOverlay: {
     flex: 1,
@@ -1228,7 +1616,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
   audioPlayButtonIncoming: {
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
   },
   audioRight: {
     flex: 1,
@@ -1288,12 +1676,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minWidth: 180,
+    gap: 8,
   },
   documentName: {
     flex: 1,
     fontSize: 14,
     fontFamily: 'Montserrat_500Medium',
-    marginLeft: 10,
+    marginLeft: 2,
+  },
+  videoPlayOverlay: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mediaBubble: {
     padding: 5,
@@ -1336,31 +1732,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  searchResultsBar: {
+  searchNavBar: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  searchResultChip: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 8,
-    maxWidth: 220,
+  searchNavCount: {
+    fontSize: 13,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#6B7280',
   },
-  searchResultChipText: {
+  searchNavNoResults: {
     fontSize: 13,
     fontFamily: 'Montserrat_400Regular',
-    color: '#374151',
-  },
-  searchResultChipDate: {
-    fontSize: 10,
-    fontFamily: 'Montserrat_400Regular',
     color: '#9CA3AF',
-    marginTop: 2,
+    flex: 1,
+    textAlign: 'center',
+  },
+  searchNavButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  searchNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchNavBtnDisabled: {
+    opacity: 0.5,
   },
   imagePreviewContainer: {
     flex: 1,

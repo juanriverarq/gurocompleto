@@ -3,6 +3,7 @@ import Lottie from 'lottie-react';
 import guroLogoAnimation from 'src/assets/LOTTIE.json';
 
 const Footer = () => {
+
   const columns = [
     {
       title: 'Producto',
@@ -10,7 +11,7 @@ const Footer = () => {
         { name: 'Gestión de Pólizas', href: '#caracteristicas' },
         { name: 'Asistente IA', href: '#caracteristicas' },
         { name: 'CRM de Ventas', href: '#caracteristicas' },
-        { name: 'Reportes', href: '#caracteristicas' },
+        { name: 'Reportes', href: '#resultados' },
         { name: 'Herramientas', href: '#herramientas' },
       ],
     },
@@ -20,25 +21,25 @@ const Footer = () => {
         { name: 'Agentes independientes', href: '#precios' },
         { name: 'Agencias', href: '#precios' },
         { name: 'Corredores', href: '#precios' },
-        { name: 'Aseguradoras', href: '/contacto' },
+        { name: 'Aseguradoras', href: 'https://wa.me/573105360658' },
       ],
     },
     {
       title: 'Recursos',
       links: [
-        { name: 'Centro de ayuda', href: '/ayuda' },
+        { name: 'Centro de ayuda', href: 'mailto:soporte@guro.co' },
         { name: 'Blog', href: '/blog' },
-        { name: 'API Docs', href: '/api-docs' },
-        { name: 'Estado del sistema', href: '/status' },
+        { name: 'Comenzar gratis', href: '/comenzar' },
+        { name: 'Iniciar sesión', href: '/auth/login' },
       ],
     },
     {
       title: 'Empresa',
       links: [
-        { name: 'Sobre nosotros', href: '/nosotros' },
-        { name: 'Contacto', href: '/contacto' },
-        { name: 'Partners', href: '/partners' },
-        { name: 'Trabaja con nosotros', href: '/careers' },
+        { name: 'Sobre nosotros', href: '#resultados' },
+        { name: 'Contacto', href: 'https://wa.me/573105360658' },
+        { name: 'Testimonios', href: '#testimonios' },
+        { name: 'Precios', href: '#precios' },
       ],
     },
   ];
@@ -51,6 +52,7 @@ const Footer = () => {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
+    <>
     <footer className="bg-transparent text-white">
       {/* Main footer content */}
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-10">
@@ -95,6 +97,8 @@ const Footer = () => {
                   <li key={link.name}>
                     <a
                       href={link.href}
+                      target={link.href.startsWith('http') || link.href.startsWith('mailto') ? '_blank' : undefined}
+                      rel={link.href.startsWith('http') ? 'noopener noreferrer' : undefined}
                       className="text-sm text-white/60 hover:text-white transition-colors duration-200"
                     >
                       {link.name}
@@ -146,7 +150,7 @@ const Footer = () => {
         <div className="flex items-center gap-5 text-xs text-white/40">
           <a href="/terminos-condiciones" className="hover:text-white transition-colors">Términos</a>
           <a href="/politica-privacidad" className="hover:text-white transition-colors">Privacidad</a>
-          <a href="/cookies" className="hover:text-white transition-colors">Cookies</a>
+          <a href="/politica-privacidad" className="hover:text-white transition-colors">Cookies</a>
           <button onClick={scrollToTop} className="hover:text-white transition-colors flex items-center gap-1">
             <Icon icon="solar:arrow-up-linear" className="w-3 h-3" />
             Volver arriba
@@ -154,6 +158,8 @@ const Footer = () => {
         </div>
       </div>
     </footer>
+
+    </>
   );
 };
 

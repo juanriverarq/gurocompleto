@@ -17,7 +17,7 @@ const getAuthToken = async (): Promise<string | null> => {
 };
 
 // Interfaces para las instancias de WhatsApp
-export type ConnectionType = 'baileys' | 'cloud_api';
+export type ConnectionType = 'cloud_api';
 
 export interface WhatsAppInstance {
   id?: number;
@@ -213,6 +213,25 @@ class WhatsAppInstanceService {
     } catch (error: any) {      return {
         success: false,
         message: error.message || 'Error al obtener código QR'
+      };
+    }
+  }
+
+  /**
+   * Completar Embedded Signup (enviar code al backend)
+   */
+  async embeddedSignup(code: string): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const response = await this.makeRequest('/saas/whatsapp-instances/embedded-signup', 'POST', { code });
+      return {
+        success: response.success ?? true,
+        data: response.instance || response.data || response,
+        message: response.message || 'WhatsApp conectado exitosamente',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Error en Embedded Signup',
       };
     }
   }

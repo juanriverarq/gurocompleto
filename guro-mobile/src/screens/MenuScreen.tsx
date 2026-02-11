@@ -8,6 +8,7 @@ import {
   Image,
   Linking,
   Alert,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -66,30 +67,28 @@ const MenuScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <Text style={styles.headerTitle}>Menú</Text>
-        <View style={styles.headerPlaceholder} />
-      </View>
+      </ImageBackground>
       
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Perfil */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
-              <Ionicons name="person" size={40} color="#6172FD" />
+              <Ionicons name="person" size={40} color="#573CFF" />
             </View>
           </View>
           <Text style={styles.userName}>{getUserName()}</Text>
           <Text style={styles.userEmail}>{getUserEmail()}</Text>
           <TouchableOpacity style={styles.viewProfileButton} onPress={() => navigation.navigate('ProfileDetail')}>
             <Text style={styles.viewProfileText}>Ver mi perfil</Text>
-            <Ionicons name="chevron-forward" size={16} color="#6172FD" />
+            <Ionicons name="chevron-forward" size={16} color="#573CFF" />
           </TouchableOpacity>
         </View>
 
@@ -112,8 +111,8 @@ const MenuScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Configuración y Privacidad</Text>
           
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Permissions')}>
-            <View style={[styles.menuIconContainer, { backgroundColor: '#6172FD20' }]}>
-              <Ionicons name="key-outline" size={22} color="#6172FD" />
+            <View style={[styles.menuIconContainer, { backgroundColor: '#573CFF20' }]}>
+              <Ionicons name="key-outline" size={22} color="#573CFF" />
             </View>
             <View style={styles.menuTextContainer}>
               <Text style={styles.menuItemText}>Permisos</Text>
@@ -227,30 +226,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 45,
+    paddingTop: 54,
+    paddingBottom: 16,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  headerPlaceholder: {
-    width: 40,
+    letterSpacing: -0.3,
   },
   scrollView: {
     flex: 1,
@@ -275,7 +264,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#6172FD15',
+    backgroundColor: '#573CFF15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -296,13 +285,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#6172FD10',
+    backgroundColor: '#573CFF10',
     borderRadius: 20,
   },
   viewProfileText: {
     fontSize: 14,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
     marginRight: 4,
   },
   menuSection: {

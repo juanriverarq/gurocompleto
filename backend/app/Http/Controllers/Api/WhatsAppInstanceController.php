@@ -222,6 +222,194 @@ class WhatsAppInstanceController extends Controller
     }
 
     /**
+     * Handle Meta Embedded Signup callback
+     * Receives the code from Facebook Login, exchanges it for a token,
+     * then fetches WABA and phone number info to create the instance.
+     */
+    public function embeddedSignup(Request $request): Response
+    {
+        $user = $request->user();
+        $broker = $user->getPrimaryBroker();
+
+        if (!$broker) {
+            return response(['error' => 'No broker found for user'], 404);
+        }
+
+        $validated = $request->validate([
+            'code' => 'required|string',
+        ]);
+
+        $appId = env('META_APP_ID');
+        $appSecret = env('META_APP_SECRET');
+
+        if (!$appId || !$appSecret) {
+            return response(['error' => 'META_APP_ID y META_APP_SECRET no configurados en el servidor'], 500);
+        }
+
+        try {
+            // Step 1: Exchange code for user access token
+            Log::info('🔄 [EMBEDDED SIGNUP] Exchanging code for token...');
+
+            $tokenResponse = Http::get('https://graph.facebook.com/v22.0/oauth/access_token', [
+                'client_id' => $appId,
+                'client_secret' => $appSecret,
+                'code' => $validated['code'],
+            ]);
+
+            if (!$tokenResponse->successful()) {
+                $err = $tokenResponse->json('error.message', 'Error exchanging code');
+                Log::error('❌ [EMBEDDED SIGNUP] Token exchange failed', ['error' => $err]);
+                return response(['error' => 'Error al intercambiar código: ' . $err], 400);
+            }
+
+            $accessToken = $tokenResponse->json('access_token');
+
+            if (!$accessToken) {
+                return response(['error' => 'No se recibió access_token de Meta'], 400);
+            }
+
+            Log::info('✅ [EMBEDDED SIGNUP] Token obtained');
+
+            // Step 2: Get shared WABA info using the debug_token or business integration API
+            $sharedWabasResponse = Http::withToken($accessToken)
+                ->get('https://graph.facebook.com/v22.0/debug_token', [
+                    'input_token' => $accessToken,
+                ]);
+
+            $debugData = $sharedWabasResponse->json('data', []);
+            $granularScopes = $debugData['granular_scopes'] ?? [];
+
+            // Extract WABA ID from granular scopes
+            $wabaId = null;
+            foreach ($granularScopes as $scope) {
+                if ($scope['permission'] === 'whatsapp_business_management') {
+                    $wabaId = $scope['target_ids'][0] ?? null;
+                    break;
+                }
+            }
+
+            // Alternative: try to get WABAs directly
+            if (!$wabaId) {
+                $wabasResponse = Http::withToken($accessToken)
+                    ->get('https://graph.facebook.com/v22.0/me/businesses');
+
+                $businesses = $wabasResponse->json('data', []);
+                if (!empty($businesses)) {
+                    $businessId = $businesses[0]['id'];
+                    $wabaListResponse = Http::withToken($accessToken)
+                        ->get("https://graph.facebook.com/v22.0/{$businessId}/owned_whatsapp_business_accounts");
+                    $wabas = $wabaListResponse->json('data', []);
+                    if (!empty($wabas)) {
+                        $wabaId = $wabas[0]['id'];
+                    }
+                }
+            }
+
+            if (!$wabaId) {
+                Log::warning('⚠️ [EMBEDDED SIGNUP] No WABA ID found', ['debug_data' => $debugData]);
+                return response(['error' => 'No se encontró una cuenta de WhatsApp Business. Asegúrate de completar el proceso de registro.'], 400);
+            }
+
+            Log::info('✅ [EMBEDDED SIGNUP] WABA found', ['waba_id' => $wabaId]);
+
+            // Step 3: Get phone numbers from the WABA
+            $phonesResponse = Http::withToken($accessToken)
+                ->get("https://graph.facebook.com/v22.0/{$wabaId}/phone_numbers");
+
+            $phones = $phonesResponse->json('data', []);
+
+            if (empty($phones)) {
+                return response(['error' => 'No se encontraron números de teléfono en la cuenta WABA. Completa la verificación del número.'], 400);
+            }
+
+            $phoneData = $phones[0];
+            $phoneNumberId = $phoneData['id'];
+            $displayPhone = $phoneData['display_phone_number'] ?? '';
+            $verifiedName = $phoneData['verified_name'] ?? '';
+
+            Log::info('✅ [EMBEDDED SIGNUP] Phone number found', [
+                'phone_number_id' => $phoneNumberId,
+                'display_phone' => $displayPhone,
+                'verified_name' => $verifiedName,
+            ]);
+
+            // Step 4: Subscribe the app to the WABA for webhooks
+            Http::withToken($accessToken)
+                ->post("https://graph.facebook.com/v22.0/{$wabaId}/subscribed_apps");
+
+            // Step 5: Check if instance already exists for this phone
+            $existing = WhatsAppInstance::where('broker_id', $broker->id)
+                ->where('cloud_api_phone_id', $phoneNumberId)
+                ->first();
+
+            if ($existing) {
+                // Update existing instance with new token
+                $existing->update([
+                    'cloud_api_token' => $accessToken,
+                    'cloud_api_business_id' => $wabaId,
+                    'phone_number' => $displayPhone,
+                    'status' => 'connected',
+                    'is_active' => true,
+                    'last_activity_at' => now(),
+                ]);
+
+                Log::info('✅ [EMBEDDED SIGNUP] Existing instance updated', ['instance_id' => $existing->id]);
+
+                return response([
+                    'success' => true,
+                    'instance' => $existing->fresh(),
+                    'message' => 'Conexión actualizada exitosamente',
+                    'phone' => $displayPhone,
+                    'verified_name' => $verifiedName,
+                ], 200);
+            }
+
+            // Step 6: Create new instance
+            $instanceId = 'instance_' . $broker->id . '_' . Str::random(8);
+            $verifyToken = 'guro_' . Str::random(16);
+
+            $instance = WhatsAppInstance::create([
+                'broker_id' => $broker->id,
+                'instance_id' => $instanceId,
+                'connection_type' => 'cloud_api',
+                'cloud_api_phone_id' => $phoneNumberId,
+                'cloud_api_business_id' => $wabaId,
+                'cloud_api_token' => $accessToken,
+                'cloud_api_verify_token' => $verifyToken,
+                'phone_number' => $displayPhone,
+                'status' => 'connected',
+                'is_active' => true,
+                'last_activity_at' => now(),
+            ]);
+
+            Log::info('✅ [EMBEDDED SIGNUP] New instance created', [
+                'instance_id' => $instance->id,
+                'waba_id' => $wabaId,
+                'phone_number_id' => $phoneNumberId,
+                'display_phone' => $displayPhone,
+            ]);
+
+            return response([
+                'success' => true,
+                'instance' => $instance,
+                'message' => 'WhatsApp conectado exitosamente via Embedded Signup',
+                'phone' => $displayPhone,
+                'verified_name' => $verifiedName,
+            ], 201);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [EMBEDDED SIGNUP] Error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response([
+                'error' => 'Error en el proceso de conexión: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Display the specified resource.
      */
     public function show(Request $request, WhatsAppInstance $whatsAppInstance): Response

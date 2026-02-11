@@ -6,10 +6,16 @@ import {
   TouchableOpacity, 
   ScrollView,
   Linking,
+  ImageBackground,
+  Alert,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { getEmpleado, Empleado } from '../services/empleadosService';
+import { getEmpleado, updateEmpleado, deleteEmpleado, Empleado } from '../services/empleadosService';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const EmpleadoDetailScreen: React.FC = () => {
@@ -20,6 +26,9 @@ const EmpleadoDetailScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [empleado, setEmpleado] = useState<Empleado | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editData, setEditData] = useState<Record<string, any>>({});
 
   useEffect(() => {
     fetchEmpleado();
@@ -101,6 +110,85 @@ const EmpleadoDetailScreen: React.FC = () => {
     }
   };
 
+  const startEditing = () => {
+    if (empleado) {
+      setEditData({
+        nombres: empleado.nombres || '',
+        apellidos: empleado.apellidos || '',
+        email: empleado.email || '',
+        telefono: empleado.telefono || '',
+        celular: empleado.celular || '',
+        cargo: empleado.cargo || '',
+        departamento: empleado.departamento || '',
+        direccion: empleado.direccion || '',
+        ciudad: empleado.ciudad || '',
+        observaciones: empleado.observaciones || '',
+      });
+      setIsEditing(true);
+    }
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditData({});
+  };
+
+  const saveChanges = async () => {
+    if (!empleado) return;
+    setSaving(true);
+    try {
+      const response = await updateEmpleado(empleado.id, editData);
+      if (response.success) {
+        setEmpleado(response.data);
+        setIsEditing(false);
+        Alert.alert('Éxito', 'Empleado actualizado correctamente');
+      } else {
+        Alert.alert('Error', response.message || 'Error al actualizar');
+      }
+    } catch (err: any) {
+      const errors = err.response?.data?.errors;
+      if (errors) {
+        const errorList = Object.values(errors).flat().join('\n');
+        Alert.alert('Error de validación', errorList);
+      } else {
+        Alert.alert('Error', err?.response?.data?.message || err.message || 'Error de conexión');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (!empleado) return;
+    Alert.alert(
+      'Eliminar Empleado',
+      `¿Estás seguro de eliminar a ${empleado.nombres} ${empleado.apellidos}? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar', style: 'destructive', onPress: async () => {
+            try {
+              const response = await deleteEmpleado(empleado.id);
+              if (response.success) {
+                Alert.alert('Éxito', 'Empleado eliminado correctamente', [
+                  { text: 'OK', onPress: () => navigation.goBack() }
+                ]);
+              } else {
+                Alert.alert('Error', response.message || 'No se pudo eliminar');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.message || err.message || 'Error de conexión');
+            }
+          }
+        },
+      ]
+    );
+  };
+
+  const updateField = (field: string, value: string) => {
+    setEditData(prev => ({ ...prev, [field]: value }));
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -108,13 +196,18 @@ const EmpleadoDetailScreen: React.FC = () => {
   if (error || !empleado) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <ImageBackground
+          source={require('../../assets/backgrounds/hero-gradient.webp')}
+          style={styles.header}
+          imageStyle={{ transform: [{ scale: 2 }] }}
+          resizeMode="cover"
+        >
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Detalle</Text>
           <View style={styles.headerPlaceholder} />
-        </View>
+        </ImageBackground>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
           <Text style={styles.errorText}>{error || 'Empleado no encontrado'}</Text>
@@ -127,14 +220,34 @@ const EmpleadoDetailScreen: React.FC = () => {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={isEditing ? cancelEditing : () => navigation.goBack()}
+        >
+          <Ionicons name={isEditing ? "close" : "chevron-back"} size={22} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Detalle</Text>
-        <View style={styles.headerPlaceholder} />
-      </View>
+        <Text style={styles.headerTitle}>{isEditing ? 'Editar Empleado' : 'Detalle'}</Text>
+        {isEditing ? (
+          <TouchableOpacity style={styles.headerPlaceholder} onPress={saveChanges} disabled={saving}>
+            {saving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Ionicons name="checkmark" size={24} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.headerPlaceholder} onPress={startEditing}>
+            <Ionicons name="create-outline" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
+      </ImageBackground>
 
       <ScrollView 
         style={styles.content}
@@ -168,7 +281,7 @@ const EmpleadoDetailScreen: React.FC = () => {
 
           {empleado.rol && (
             <View style={styles.rolContainer}>
-              <Ionicons name="shield-checkmark" size={18} color="#6172FD" />
+              <Ionicons name="shield-checkmark" size={18} color="#573CFF" />
               <Text style={styles.rolName}>{empleado.rol.nombre}</Text>
             </View>
           )}
@@ -177,7 +290,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           <View style={styles.quickActions}>
             {empleado.celular && (
               <TouchableOpacity style={styles.actionButton} onPress={() => handleCall(empleado.celular)}>
-                <Ionicons name="call" size={20} color="#6172FD" />
+                <Ionicons name="call" size={20} color="#573CFF" />
               </TouchableOpacity>
             )}
             {empleado.celular && (
@@ -187,7 +300,7 @@ const EmpleadoDetailScreen: React.FC = () => {
             )}
             {empleado.email && (
               <TouchableOpacity style={styles.actionButton} onPress={() => handleEmail(empleado.email)}>
-                <Ionicons name="mail" size={20} color="#6172FD" />
+                <Ionicons name="mail" size={20} color="#573CFF" />
               </TouchableOpacity>
             )}
           </View>
@@ -199,7 +312,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           
           <View style={styles.infoRow}>
             <View style={styles.infoIcon}>
-              <Ionicons name="card-outline" size={18} color="#6172FD" />
+              <Ionicons name="card-outline" size={18} color="#573CFF" />
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Documento</Text>
@@ -209,7 +322,7 @@ const EmpleadoDetailScreen: React.FC = () => {
 
           <View style={styles.infoRow}>
             <View style={styles.infoIcon}>
-              <Ionicons name="mail-outline" size={18} color="#6172FD" />
+              <Ionicons name="mail-outline" size={18} color="#573CFF" />
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Email</Text>
@@ -220,7 +333,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           {empleado.celular && (
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <Ionicons name="phone-portrait-outline" size={18} color="#6172FD" />
+                <Ionicons name="phone-portrait-outline" size={18} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Celular</Text>
@@ -232,7 +345,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           {empleado.telefono && (
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <Ionicons name="call-outline" size={18} color="#6172FD" />
+                <Ionicons name="call-outline" size={18} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Teléfono</Text>
@@ -244,7 +357,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           {empleado.fecha_nacimiento && (
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <Ionicons name="calendar-outline" size={18} color="#6172FD" />
+                <Ionicons name="calendar-outline" size={18} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Fecha de Nacimiento</Text>
@@ -256,7 +369,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           {empleado.direccion && (
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <Ionicons name="location-outline" size={18} color="#6172FD" />
+                <Ionicons name="location-outline" size={18} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Dirección</Text>
@@ -271,7 +384,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           
           <View style={styles.infoRow}>
             <View style={styles.infoIcon}>
-              <Ionicons name="person-outline" size={18} color="#6172FD" />
+              <Ionicons name="person-outline" size={18} color="#573CFF" />
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Usuario</Text>
@@ -282,7 +395,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           {empleado.departamento && (
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <Ionicons name="business-outline" size={18} color="#6172FD" />
+                <Ionicons name="business-outline" size={18} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Departamento</Text>
@@ -293,7 +406,7 @@ const EmpleadoDetailScreen: React.FC = () => {
 
           <View style={styles.infoRow}>
             <View style={styles.infoIcon}>
-              <Ionicons name="briefcase-outline" size={18} color="#6172FD" />
+              <Ionicons name="briefcase-outline" size={18} color="#573CFF" />
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Tipo de Vinculación</Text>
@@ -304,7 +417,7 @@ const EmpleadoDetailScreen: React.FC = () => {
           {empleado.fecha_ingreso && (
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <Ionicons name="calendar-outline" size={18} color="#6172FD" />
+                <Ionicons name="calendar-outline" size={18} color="#573CFF" />
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Fecha de Ingreso</Text>
@@ -314,14 +427,59 @@ const EmpleadoDetailScreen: React.FC = () => {
           )}
         </View>
 
-        {empleado.observaciones && (
+        {empleado.observaciones && !isEditing && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Observaciones</Text>
             <Text style={styles.observaciones}>{empleado.observaciones}</Text>
           </View>
         )}
+
+        {/* Edit Form */}
+        {isEditing && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Editar Información</Text>
+            
+            <Text style={styles.editLabel}>Nombres</Text>
+            <TextInput style={styles.editInput} value={editData.nombres} onChangeText={(v) => updateField('nombres', v)} placeholder="Nombres" placeholderTextColor="#9CA3AF" />
+
+            <Text style={styles.editLabel}>Apellidos</Text>
+            <TextInput style={styles.editInput} value={editData.apellidos} onChangeText={(v) => updateField('apellidos', v)} placeholder="Apellidos" placeholderTextColor="#9CA3AF" />
+
+            <Text style={styles.editLabel}>Email</Text>
+            <TextInput style={styles.editInput} value={editData.email} onChangeText={(v) => updateField('email', v)} placeholder="Email" placeholderTextColor="#9CA3AF" keyboardType="email-address" autoCapitalize="none" />
+
+            <Text style={styles.editLabel}>Celular</Text>
+            <TextInput style={styles.editInput} value={editData.celular} onChangeText={(v) => updateField('celular', v)} placeholder="Celular" placeholderTextColor="#9CA3AF" keyboardType="phone-pad" />
+
+            <Text style={styles.editLabel}>Teléfono</Text>
+            <TextInput style={styles.editInput} value={editData.telefono} onChangeText={(v) => updateField('telefono', v)} placeholder="Teléfono" placeholderTextColor="#9CA3AF" keyboardType="phone-pad" />
+
+            <Text style={styles.editLabel}>Cargo</Text>
+            <TextInput style={styles.editInput} value={editData.cargo} onChangeText={(v) => updateField('cargo', v)} placeholder="Cargo" placeholderTextColor="#9CA3AF" />
+
+            <Text style={styles.editLabel}>Departamento</Text>
+            <TextInput style={styles.editInput} value={editData.departamento} onChangeText={(v) => updateField('departamento', v)} placeholder="Departamento" placeholderTextColor="#9CA3AF" />
+
+            <Text style={styles.editLabel}>Dirección</Text>
+            <TextInput style={styles.editInput} value={editData.direccion} onChangeText={(v) => updateField('direccion', v)} placeholder="Dirección" placeholderTextColor="#9CA3AF" />
+
+            <Text style={styles.editLabel}>Ciudad</Text>
+            <TextInput style={styles.editInput} value={editData.ciudad} onChangeText={(v) => updateField('ciudad', v)} placeholder="Ciudad" placeholderTextColor="#9CA3AF" />
+
+            <Text style={styles.editLabel}>Observaciones</Text>
+            <TextInput style={[styles.editInput, { minHeight: 80, textAlignVertical: 'top' }]} value={editData.observaciones} onChangeText={(v) => updateField('observaciones', v)} placeholder="Observaciones" placeholderTextColor="#9CA3AF" multiline />
+          </View>
+        )}
+
+        {/* Delete button */}
+        {!isEditing && (
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            <Text style={styles.deleteButtonText}>Eliminar empleado</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -331,30 +489,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
-    width: 40,
+    width: 38,
   },
   loadingContainer: {
     flex: 1,
@@ -376,7 +536,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -409,7 +569,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -477,7 +637,7 @@ const styles = StyleSheet.create({
   rolName: {
     fontSize: 14,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   quickActions: {
     flexDirection: 'row',
@@ -542,6 +702,42 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat_400Regular',
     color: '#4B5563',
     lineHeight: 22,
+  },
+  editLabel: {
+    fontSize: 12,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#374151',
+    marginBottom: 6,
+    marginTop: 14,
+  },
+  editInput: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontFamily: 'Montserrat_500Medium',
+    color: '#374151',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    marginTop: 4,
+    marginBottom: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    fontFamily: 'Montserrat_600SemiBold',
+    color: '#EF4444',
   },
 });
 

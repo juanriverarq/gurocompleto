@@ -221,6 +221,11 @@ const BaseMenuitems: MenuitemsType[] = [
       },
       {
         id: uniqueId(),
+        title: 'Contactos',
+        href: '/apps/whatsapp/contactos',
+      },
+      {
+        id: uniqueId(),
         title: 'Chatbots',
         href: '/apps/whatsapp/chatbots',
       },

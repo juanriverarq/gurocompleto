@@ -1,7 +1,9 @@
 import { Helmet } from "react-helmet";
 import { Link } from "react-router";
-import LpHeader from "src/components/landingpage/header/Header";
-import Footer from "src/components/landingpage/footer/Footer";
+import { motion } from "framer-motion";
+import { Icon } from "@iconify/react";
+import Navbar from "src/components/landingpage/framer-landing/Navbar";
+import Footer from "src/components/landingpage/framer-landing/Footer";
 
 const canonicalUrl = "https://www.guro.com.co/blog/software-seguros-colombia";
 const pageTitle = "Software de seguros en Colombia: guía completa y preguntas frecuentes";
@@ -214,7 +216,7 @@ const breadcrumbSchema = {
 
 const BlogSegurosSEO = () => {
   return (
-    <>
+    <div className="min-h-screen bg-[#0a0a0f]" style={{ fontFamily: "'General Sans', sans-serif" }}>
       <Helmet>
         <title>{pageTitle}</title>
         <meta name="description" content={pageDescription} />
@@ -235,154 +237,239 @@ const BlogSegurosSEO = () => {
         <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
       </Helmet>
 
-      <LpHeader />
+      <Navbar />
 
-      <section className="bg-gradient-to-br from-primary to-primaryemphasis text-white py-16 md:py-20">
-        <div className="max-w-6xl mx-auto px-4">
-          <p className="text-sm uppercase tracking-[0.2em] text-white/80 mb-4">Blog y guía experta</p>
-          <h1 className="text-3xl md:text-4xl font-semibold leading-tight">
-            Software de seguros en Colombia: guía completa, preguntas y mejores prácticas
-          </h1>
-          <p className="mt-4 text-lg text-white/90 max-w-3xl">
-            Resolvemos las dudas más buscadas sobre software de seguros: integraciones contables, siniestros en línea,
-            nube, costos y cumplimiento normativo. Optimizado para SEO en español (Colombia) y listo para compartir con
-            tu equipo.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <span className="bg-blue-500/20 border border-blue-400/40 text-blue-100 px-3 py-1 rounded-full text-sm">
-              Cumplimiento Habeas Data
+      {/* Hero */}
+      <section
+        className="relative pt-32 pb-16 sm:pt-40 sm:pb-24 overflow-hidden"
+        style={{
+          backgroundImage: 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: '200px 200px',
+            opacity: 0.18,
+          }}
+        />
+        <div className="max-w-[900px] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 30, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-2 text-white/40 text-sm mb-8">
+              <Link to="/" className="hover:text-white transition-colors">Inicio</Link>
+              <Icon icon="solar:alt-arrow-right-linear" className="w-3 h-3" />
+              <Link to="/blog" className="hover:text-white transition-colors">Blog</Link>
+              <Icon icon="solar:alt-arrow-right-linear" className="w-3 h-3" />
+              <span className="text-white/60">Guía completa</span>
+            </div>
+
+            <span className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 text-white/90 rounded-full text-[11px] font-bold uppercase tracking-[0.15em] mb-6">
+              <Icon icon="solar:book-2-bold" className="w-4 h-4" />
+              Guía experta
             </span>
-            <span className="bg-emerald-500/20 border border-emerald-400/40 text-emerald-100 px-3 py-1 rounded-full text-sm">
-              Integraciones contables
-            </span>
-            <span className="bg-indigo-500/20 border border-indigo-400/40 text-indigo-100 px-3 py-1 rounded-full text-sm">
-              IA para corredores
-            </span>
-          </div>
-          <div className="mt-8 flex flex-wrap gap-4 items-center">
-            <Link
-              to="/comenzar"
-              className="bg-white text-slate-900 px-5 py-3 rounded-xl font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-400/30 transition"
-            >
-              Agenda una demo guiada
-            </Link>
-            <a
-              href="#indice"
-              className="text-white/80 hover:text-white border border-white/25 px-4 py-2 rounded-xl"
-            >
-              Ver índice SEO
-            </a>
-          </div>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-[1.15] tracking-[-0.02em] mb-6">
+              Software de seguros en Colombia:{' '}
+              <span className="bg-gradient-to-r from-[#635BFF] via-[#49A5FF] to-[#16CDC7] bg-clip-text text-transparent">
+                guía completa
+              </span>
+            </h1>
+            <p className="text-lg sm:text-xl text-white/50 font-light leading-relaxed max-w-3xl">
+              Resolvemos las dudas más buscadas sobre software de seguros: integraciones contables, siniestros en línea,
+              nube, costos y cumplimiento normativo.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <span className="px-3 py-1.5 rounded-full text-xs font-medium border bg-white/[0.05] text-white/50 border-white/[0.08]">Cumplimiento</span>
+              <span className="px-3 py-1.5 rounded-full text-xs font-medium border bg-white/[0.05] text-white/50 border-white/[0.08]">Integraciones</span>
+              <span className="px-3 py-1.5 rounded-full text-xs font-medium border bg-white/[0.05] text-white/50 border-white/[0.08]">IA</span>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-4 items-center">
+              <a
+                href="/comenzar"
+                className="group relative inline-flex items-center bg-[#0d0d0d] rounded-2xl h-[48px] overflow-hidden border border-white/10"
+              >
+                <span className="absolute inset-y-0 left-0 w-[48px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+                <span className="relative z-10 flex items-center justify-center w-[48px] h-full flex-shrink-0">
+                  <Icon icon="solar:arrow-right-linear" className="w-5 h-5 text-white" />
+                </span>
+                <span className="relative z-10 pl-2 pr-5 text-[11px] font-bold text-white uppercase tracking-[0.15em] whitespace-nowrap">
+                  Demo guiada
+                </span>
+              </a>
+              <a
+                href="#indice"
+                className="text-white/50 hover:text-white text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <Icon icon="solar:list-bold" className="w-4 h-4" />
+                Ver índice
+              </a>
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      <section id="indice" className="bg-slate-50 dark:bg-slate-950 py-12 border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-100 dark:border-slate-800">
-            <h2 className="text-xl md:text-2xl font-semibold text-slate-900 dark:text-white mb-4">Índice rápido</h2>
-            <p className="text-slate-600 dark:text-slate-300 mb-4">
-              Accede a cada pregunta frecuente. Incluimos buenas prácticas de compra, migración y cumplimiento para
-              corredurías en Colombia.
+      {/* TOC Index */}
+      <section id="indice" className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1100px] mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="bg-[#12121a] rounded-2xl p-6 sm:p-8 border border-white/[0.06]"
+          >
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-[-0.02em] mb-2">Índice rápido</h2>
+            <p className="text-white/40 text-sm mb-6">
+              Accede a cada pregunta frecuente. Incluimos buenas prácticas de compra, migración y cumplimiento.
             </p>
-            <div className="grid md:grid-cols-2 gap-3">
-              {faqItems.map((item) => (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {faqItems.map((item, index) => (
                 <a
                   key={item.id}
                   href={`#${item.id}`}
-                  className="group flex items-start gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 hover:border-blue-400 hover:bg-white dark:hover:bg-slate-800 transition"
+                  className="group flex items-start gap-3 p-3 rounded-xl border border-white/[0.06] hover:border-[#573CFF]/30 bg-white/[0.02] hover:bg-[#573CFF]/5 transition-all"
                 >
-                  <span className="text-blue-500 mt-0.5">●</span>
-                  <span className="text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-300">
+                  <span className="text-[#573CFF] text-xs font-bold mt-0.5 w-5 flex-shrink-0">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="text-white/60 text-sm group-hover:text-white transition-colors leading-snug">
                     {item.question}
                   </span>
                 </a>
               ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      <section className="bg-white dark:bg-slate-900 py-12 md:py-16">
-        <div className="max-w-6xl mx-auto px-4 space-y-8">
-          {faqItems.map((item) => (
-            <article
+      {/* FAQ Items */}
+      <section className="pb-16 sm:pb-24 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1100px] mx-auto space-y-6">
+          {faqItems.map((item, index) => (
+            <motion.article
               key={item.id}
               id={item.id}
-              className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 md:p-8 shadow-lg"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: Math.min(index * 0.03, 0.4) }}
+              className="bg-[#12121a] border border-white/[0.06] rounded-2xl p-6 sm:p-8 scroll-mt-24"
             >
-              <div className="flex flex-wrap justify-between gap-4 mb-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-blue-500 mb-2">Guía práctica</p>
-                  <h2 className="text-2xl font-semibold text-slate-900 dark:text-white leading-snug">{item.question}</h2>
+              <div className="flex flex-wrap justify-between gap-4 mb-4">
+                <div className="flex-1">
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold bg-[#573CFF]/10 border border-[#573CFF]/20 text-[#573CFF] uppercase tracking-[0.15em] mb-3">
+                    <Icon icon="solar:question-circle-bold" className="w-3 h-3" />
+                    Pregunta {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-bold text-white leading-snug tracking-[-0.01em]">{item.question}</h2>
                 </div>
                 <a
                   href="#indice"
-                  className="text-sm text-blue-600 dark:text-blue-300 hover:underline"
-                  aria-label="Volver al índice"
+                  className="text-white/30 hover:text-[#573CFF] transition-colors flex items-center gap-1 text-sm flex-shrink-0"
                 >
-                  ↑ Volver
+                  <Icon icon="solar:arrow-up-linear" className="w-3 h-3" />
+                  Índice
                 </a>
               </div>
-              <p className="text-slate-700 dark:text-slate-200 text-base leading-relaxed">{item.answer}</p>
-              <div className="mt-4 grid md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                  <h3 className="font-semibold text-slate-900 dark:text-white mb-2 text-sm">Checklist rápido</h3>
-                  <ul className="text-sm text-slate-700 dark:text-slate-300 space-y-2 list-disc list-inside">
-                    <li>Valida integración con contabilidad y emisión.</li>
-                    <li>Revisa SLA y soporte en español.</li>
-                    <li>Solicita demo con tus flujos reales.</li>
+              <p className="text-white/50 text-[15px] leading-[1.8] mb-6">{item.answer}</p>
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon icon="solar:checklist-bold" className="w-4 h-4 text-emerald-400" />
+                    <h3 className="font-bold text-white text-sm">Checklist</h3>
+                  </div>
+                  <ul className="text-sm text-white/40 space-y-2">
+                    <li className="flex items-start gap-2">
+                      <Icon icon="solar:check-circle-bold" className="w-4 h-4 text-emerald-400/60 flex-shrink-0 mt-0.5" />
+                      Valida integración contable y emisión.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Icon icon="solar:check-circle-bold" className="w-4 h-4 text-emerald-400/60 flex-shrink-0 mt-0.5" />
+                      Revisa SLA y soporte en español.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Icon icon="solar:check-circle-bold" className="w-4 h-4 text-emerald-400/60 flex-shrink-0 mt-0.5" />
+                      Solicita demo con tus flujos reales.
+                    </li>
                   </ul>
                 </div>
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                  <h3 className="font-semibold text-slate-900 dark:text-white mb-2 text-sm">SEO insight</h3>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                    Incluye palabras clave como "software de seguros Colombia", "integración contable" y "siniestros en
-                    línea" en tus páginas de servicio y casos de éxito.
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon icon="solar:chart-bold" className="w-4 h-4 text-sky-400" />
+                    <h3 className="font-bold text-white text-sm">SEO insight</h3>
+                  </div>
+                  <p className="text-sm text-white/40 leading-relaxed">
+                    Incluye palabras clave como "software de seguros Colombia" e "integración contable" en tus páginas de servicio.
                   </p>
                 </div>
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                  <h3 className="font-semibold text-slate-900 dark:text-white mb-2 text-sm">Acción sugerida</h3>
-                  <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">
-                    Agenda una demo para probar emisión, cobranzas y reportes fiscales en un entorno sandbox.
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon icon="solar:rocket-bold" className="w-4 h-4 text-[#573CFF]" />
+                    <h3 className="font-bold text-white text-sm">Acción</h3>
+                  </div>
+                  <p className="text-sm text-white/40 leading-relaxed mb-3">
+                    Prueba emisión, cobranzas y reportes en un entorno sandbox.
                   </p>
                   <Link
                     to="/comenzar"
-                    className="inline-flex items-center text-blue-600 dark:text-blue-300 font-semibold hover:underline"
+                    className="inline-flex items-center gap-2 text-[#573CFF] font-bold text-sm hover:gap-3 transition-all"
                   >
-                    Probar ahora →
+                    Probar ahora
+                    <Icon icon="solar:arrow-right-linear" className="w-3 h-3" />
                   </Link>
                 </div>
               </div>
-            </article>
+            </motion.article>
           ))}
         </div>
       </section>
 
-      <section className="bg-slate-100 dark:bg-slate-950 py-12">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl">
+      {/* Bottom CTA */}
+      <section className="pb-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1100px] mx-auto">
+          <div
+            className="rounded-2xl p-6 sm:p-8 border border-white/10"
+            style={{
+              backgroundImage: 'url(https://framerusercontent.com/images/jBUMVVFjKCBRw4l4EEvLSAq3ik4.png)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               <div>
-                <p className="text-sm uppercase tracking-[0.2em] text-emerald-500 mb-2">Checklist de compra</p>
-                <h3 className="text-2xl font-semibold text-slate-900 dark:text-white mb-2">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold bg-white/10 border border-white/20 text-white/80 uppercase tracking-[0.15em] mb-3">
+                  <Icon icon="solar:shield-check-bold" className="w-3 h-3" />
+                  Checklist de compra
+                </span>
+                <h3 className="text-2xl font-bold text-white tracking-[-0.02em]">
                   ¿Listo para elegir software de seguros?
                 </h3>
-                <p className="text-slate-700 dark:text-slate-300 max-w-3xl">
-                  Descarga nuestra lista de verificación: seguridad, integraciones, SLA, impuestos y plan de migración.
-                  Úsala en tu proceso de RFP.
+                <p className="text-white/50 mt-2 max-w-2xl text-[15px] leading-relaxed">
+                  Seguridad, integraciones, SLA, impuestos y plan de migración. Todo en una lista de verificación.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
                 <Link
                   to="/comenzar"
-                  className="bg-emerald-500 text-white px-5 py-3 rounded-xl font-semibold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-400/30 transition"
+                  className="group relative inline-flex items-center bg-white rounded-2xl h-[48px] overflow-hidden flex-shrink-0"
                 >
-                  Solicitar checklist
+                  <span className="absolute inset-y-0 left-0 w-[48px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
+                  <span className="relative z-10 flex items-center justify-center w-[48px] h-full flex-shrink-0">
+                    <Icon icon="solar:arrow-right-linear" className="w-4 h-4 text-[#0d0d0d] group-hover:text-white transition-colors" />
+                  </span>
+                  <span className="relative z-10 pl-2 pr-5 text-[11px] font-bold text-[#0d0d0d] group-hover:text-white uppercase tracking-[0.15em] whitespace-nowrap transition-colors">
+                    Comenzar
+                  </span>
                 </Link>
                 <a
                   href="#indice"
-                  className="border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 px-4 py-3 rounded-xl"
+                  className="text-white/40 hover:text-white text-sm font-medium transition-colors flex items-center gap-2 px-4"
                 >
+                  <Icon icon="solar:arrow-up-linear" className="w-4 h-4" />
                   Volver arriba
                 </a>
               </div>
@@ -390,8 +477,22 @@ const BlogSegurosSEO = () => {
           </div>
         </div>
       </section>
-      <Footer />
-    </>
+
+      {/* Footer */}
+      <div
+        style={{
+          backgroundImage: 'url(https://framerusercontent.com/images/hwuS8TidtTCFW9uCzecWzF4NiU.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center center',
+          backgroundRepeat: 'no-repeat',
+          transform: 'scaleY(-1)',
+        }}
+      >
+        <div style={{ transform: 'scaleY(-1)' }}>
+          <Footer />
+        </div>
+      </div>
+    </div>
   );
 };
 

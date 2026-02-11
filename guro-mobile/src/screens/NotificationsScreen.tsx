@@ -8,6 +8,7 @@ import {
   Switch,
   Alert,
   Linking,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -134,13 +135,18 @@ const NotificationsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notificaciones</Text>
         <View style={styles.headerPlaceholder} />
-      </View>
+      </ImageBackground>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Estado de permisos */}
@@ -162,7 +168,7 @@ const NotificationsScreen: React.FC = () => {
 
         {/* Descripción */}
         <View style={styles.descriptionCard}>
-          <Ionicons name="notifications-outline" size={40} color="#6172FD" />
+          <Ionicons name="notifications-outline" size={40} color="#573CFF" />
           <Text style={styles.descriptionTitle}>Personaliza tus Alertas</Text>
           <Text style={styles.descriptionText}>
             Elige qué tipo de notificaciones deseas recibir para mantenerte informado.
@@ -187,7 +193,7 @@ const NotificationsScreen: React.FC = () => {
               <Switch
                 value={settings[option.key]}
                 onValueChange={() => toggleSetting(option.key)}
-                trackColor={{ false: '#E5E7EB', true: '#6172FD' }}
+                trackColor={{ false: '#E5E7EB', true: '#573CFF' }}
                 thumbColor="#FFFFFF"
                 ios_backgroundColor="#E5E7EB"
                 disabled={!permissionGranted}
@@ -214,27 +220,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   headerPlaceholder: {
     width: 40,

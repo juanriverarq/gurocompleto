@@ -11,9 +11,16 @@ import EmpleadosMenuScreen from '../screens/EmpleadosMenuScreen';
 import EmpleadosListScreen from '../screens/EmpleadosListScreen';
 import EmpleadoDetailScreen from '../screens/EmpleadoDetailScreen';
 import CreateEmpleadoScreen from '../screens/CreateEmpleadoScreen';
+import CreateClienteScreen from '../screens/CreateClienteScreen';
+import CreatePolizaScreen from '../screens/CreatePolizaScreen';
 import WhatsAppScreen from '../screens/WhatsAppScreen';
 import WhatsAppChatScreen from '../screens/WhatsAppChatScreen';
 import WhatsAppContactProfileScreen from '../screens/WhatsAppContactProfileScreen';
+import RenovacionesScreen from '../screens/RenovacionesScreen';
+import RenovacionDetailScreen from '../screens/RenovacionDetailScreen';
+import CarteraScreen from '../screens/CarteraScreen';
+import ClienteDetailScreen from '../screens/ClienteDetailScreen';
+import PolizaDetailScreen from '../screens/PolizaDetailScreen';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export type RootStackParamList = {
@@ -25,10 +32,17 @@ export type RootStackParamList = {
   EmpleadosList: undefined;
   EmpleadoDetail: { empleadoId: number };
   CreateEmpleado: undefined;
+  CreateCliente: undefined;
+  CreatePoliza: undefined;
   Trazabilidad: undefined;
   WhatsApp: undefined;
   WhatsAppChat: { conversationId: number; contactName: string; phone: string };
   WhatsAppContactProfile: { conversationId: number; contactName: string; phone: string };
+  Renovaciones: undefined;
+  RenovacionDetail: { renovacion: any };
+  Cartera: undefined;
+  ClienteDetail: { clienteId: number };
+  PolizaDetail: { polizaId: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -51,10 +65,17 @@ const AppNavigator: React.FC = () => {
             <Stack.Screen name="EmpleadosList" component={EmpleadosListScreen} />
             <Stack.Screen name="EmpleadoDetail" component={EmpleadoDetailScreen} />
             <Stack.Screen name="CreateEmpleado" component={CreateEmpleadoScreen} />
+            <Stack.Screen name="CreateCliente" component={CreateClienteScreen} />
+            <Stack.Screen name="CreatePoliza" component={CreatePolizaScreen} />
             <Stack.Screen name="Trazabilidad" component={EmpleadosScreen} />
             <Stack.Screen name="WhatsApp" component={WhatsAppScreen} />
             <Stack.Screen name="WhatsAppChat" component={WhatsAppChatScreen} />
             <Stack.Screen name="WhatsAppContactProfile" component={WhatsAppContactProfileScreen} />
+            <Stack.Screen name="Renovaciones" component={RenovacionesScreen} />
+            <Stack.Screen name="RenovacionDetail" component={RenovacionDetailScreen} />
+            <Stack.Screen name="Cartera" component={CarteraScreen} />
+            <Stack.Screen name="ClienteDetail" component={ClienteDetailScreen} />
+            <Stack.Screen name="PolizaDetail" component={PolizaDetailScreen} />
           </>
         ) : (
           <>

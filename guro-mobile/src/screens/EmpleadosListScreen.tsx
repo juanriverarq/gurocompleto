@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Linking,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -140,7 +141,7 @@ const EmpleadosListScreen: React.FC = () => {
           </View>
           {item.rol && (
             <View style={styles.rolBadge}>
-              <Ionicons name="shield-checkmark" size={11} color="#6172FD" />
+              <Ionicons name="shield-checkmark" size={11} color="#573CFF" />
               <Text style={styles.rolText}>{item.rol.nombre}</Text>
             </View>
           )}
@@ -150,7 +151,7 @@ const EmpleadosListScreen: React.FC = () => {
         <View style={styles.quickActionsRow}>
           {item.celular && (
             <TouchableOpacity style={styles.quickBtn} onPress={(e) => { e.stopPropagation(); Linking.openURL(`tel:${item.celular}`); }}>
-              <Ionicons name="call" size={15} color="#6172FD" />
+              <Ionicons name="call" size={15} color="#573CFF" />
               <Text style={styles.quickBtnText}>Llamar</Text>
             </TouchableOpacity>
           )}
@@ -177,13 +178,18 @@ const EmpleadosListScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <ImageBackground
+        source={require('../../assets/backgrounds/hero-gradient.webp')}
+        style={styles.header}
+        imageStyle={{ transform: [{ scale: 2 }] }}
+        resizeMode="cover"
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Empleados</Text>
         <View style={styles.headerPlaceholder} />
-      </View>
+      </ImageBackground>
 
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
@@ -220,14 +226,14 @@ const EmpleadosListScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6172FD']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#573CFF']} />
           }
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
             loadingMore ? (
               <View style={styles.loadingMore}>
-                <ActivityIndicator size="small" color="#6172FD" />
+                <ActivityIndicator size="small" color="#573CFF" />
               </View>
             ) : null
           }
@@ -257,26 +263,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   header: {
-    height: 120,
-    backgroundColor: '#6172FD',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 45,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'Montserrat_700Bold',
     color: '#FFFFFF',
+    letterSpacing: -0.3,
     textAlign: 'center',
   },
   headerPlaceholder: {
@@ -338,7 +347,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -371,7 +380,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -416,7 +425,7 @@ const styles = StyleSheet.create({
   rolText: {
     fontSize: 10,
     fontFamily: 'Montserrat_500Medium',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   empleadoRight: {
     alignItems: 'flex-end',
@@ -456,7 +465,7 @@ const styles = StyleSheet.create({
   quickBtnText: {
     fontSize: 11,
     fontFamily: 'Montserrat_600SemiBold',
-    color: '#6172FD',
+    color: '#573CFF',
   },
   loadingMore: {
     paddingVertical: 20,
@@ -481,10 +490,10 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#6172FD',
+    backgroundColor: '#573CFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6172FD',
+    shadowColor: '#573CFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
