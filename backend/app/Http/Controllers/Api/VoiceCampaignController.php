@@ -7,6 +7,7 @@ use App\Models\VoiceCampaign;
 use App\Models\VoiceCampaignExecution;
 use App\Models\VoiceCampaignCall;
 use App\Models\VoiceCampaignTrigger;
+use App\Models\VoiceCampaignScheduledCall;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -860,6 +861,8 @@ class VoiceCampaignController extends Controller
                 $this->processVapiStatusUpdate($call, $payload);
             } elseif ($messageType === 'transcript') {
                 $this->processVapiTranscript($call, $payload);
+            } elseif ($messageType === 'tool-calls') {
+                return $this->handleToolCalls($payload, $call);
             }
 
             return response()->json(['success' => true]);
@@ -870,6 +873,81 @@ class VoiceCampaignController extends Controller
             ]);
             return response()->json(['success' => false, 'message' => 'Error interno'], 500);
         }
+    }
+
+    /**
+     * Auxiliar para manejar las herramientas (Tools) de Vapi
+     */
+    private function handleToolCalls(array $payload, ?VoiceCampaignCall $originalCall): JsonResponse
+    {
+        $toolCalls = $payload['message']['toolCalls'] ?? [];
+        $results = [];
+
+        foreach ($toolCalls as $toolCall) {
+            $name = $toolCall['function']['name'] ?? '';
+            $arguments = $toolCall['function']['arguments'] ?? [];
+            $toolCallId = $toolCall['id'];
+
+            if ($name === 'scheduleCallback') {
+                $datetime = $arguments['datetime'] ?? null;
+                $resultText = "No se pudo reagendar.";
+
+                if ($originalCall && $datetime) {
+                    try {
+                        $scheduledDate = Carbon::parse($datetime);
+
+                        // Mantiene todos los datos del contacto
+                        // Recupera el array original (si es null, crea array vacío)
+                        $fullContactData = $originalCall->contact_data ?? [];
+                        
+                        // Asegura que sea un array (por si acaso viene como objeto)
+                        if (!is_array($fullContactData)) {
+                            $fullContactData = (array) $fullContactData;
+                        }
+
+                        // Inyecta los datos nuevos
+                        $fullContactData['original_call_id'] = $originalCall->id;
+                        $fullContactData['rescheduled_from_agent'] = true;
+
+                        // Asegura que 'name' y 'phone' existan
+                        // Solo los sobrescribe si no existen o para asegurar consistencia
+                        $fullContactData['name'] = $originalCall->recipient_name; 
+                        $fullContactData['phone'] = $originalCall->recipient_phone;
+
+                        // Crea el registro
+                        VoiceCampaignScheduledCall::create([
+                            'voice_campaign_id' => $originalCall->voice_campaign_id,
+                            'broker_id' => $originalCall->broker_id,
+                            'scheduled_date' => $scheduledDate->format('Y-m-d'),
+                            'scheduled_time' => $scheduledDate->format('H:i:s'),
+                            'status' => VoiceCampaignScheduledCall::STATUS_PENDING,
+                            'reason' => VoiceCampaignScheduledCall::REASON_MANUAL,
+                            'contact_data' => $fullContactData,
+                            'retry_count' => 0,
+                            'priority' => 10
+                        ]);
+
+                        $resultText = "Perfecto, su llamada ha quedado programada. Yo misma estaré pendiente de contactarlo nuevamente.";
+                        Log::info("✅ [DB] VoiceCampaignScheduledCall creada para {$scheduledDate}");
+
+                    } catch (\Exception $e) {
+                        Log::error("❌ [DB] Error creando ScheduledCall: " . $e->getMessage());
+                        $resultText = "Disculpe, el sistema tuvo un inconveniente técnico guardando la fecha, pero ya tomé nota.";
+                    }
+                } else {
+                    $resultText = "Error: Falta fecha o no se encontró la llamada original.";
+                }
+
+                $results[] = [
+                    'toolCallId' => $toolCallId,
+                    'result' => $resultText
+                ];
+            }
+        }
+
+        return response()->json([
+            'results' => $results
+        ]);
     }
 
     /**
@@ -2539,14 +2617,30 @@ Usa estas instrucciones únicamente en el paso 4 (Cierre), no antes.
                 : "# Tools
 No hay datos adicionales que recolectar en esta llamada. Procede directamente al cierre y despedida una vez confirmada la acción del cliente.";
 
-            // Fecha actual para contexto temporal
-            $todayDate = Carbon::now()->locale('es')->isoFormat('dddd D [de] MMMM [de] YYYY');
-            $todayContext = "Hoy es {$todayDate}.";
+            // Fecha y hora actual para contexto temporal
+            $now = Carbon::now()->locale('es');
+            $todayDate = $now->isoFormat('dddd D [de] MMMM [de] YYYY');
+            $currentTime = $now->format('h:i A');
+            $todayContext = "Hoy es {$todayDate} y son las {$currentTime}.";
+
+            //Instrucciones para el reagendamiento
+            $rescheduleInstructions = "
+# MANEJO DE CLIENTES OCUPADOS (REAGENDAMIENTO)
+Si el cliente indica que está ocupado, conduciendo, en reunión o pide que lo llamen luego:
+1. No presiones ni intentes continuar con el guion de venta/cobro.
+2. Muestra empatía: \"Entiendo, no te preocupes\".
+3. Pregunta una fecha y hora específica: \"¿A qué hora te quedaría mejor que te volvamos a llamar?\"
+4. Una vez acuerden la hora, CONFIRMA el dato (ej: \"Perfecto, te llamamos mañana a las 3 de la tarde\").
+5. EJECUTA INMEDIATAMENTE la herramienta 'scheduleCallback' con la fecha y hora acordada en formato ISO.
+6. Despídete cordialmente y finaliza la llamada.";
             
             // Determinar el prompt según el tipo de campaña
             if ($isCrossSell) {
                 // PROMPT ESPECÍFICO PARA VENTA CRUZADA - PLAN VIDA DEUDOR
                 $finalPrompt = trim("
+# Contexto temporal
+{$todayContext}
+
 # Personalidad  
 Eres {$agentDisplayName}, asesor de {$safeCompany}. Tu estilo es amable, natural y directo. Hablas español de Colombia.
 
@@ -2610,7 +2704,7 @@ Después de que el cliente responda (\"no\", \"nada más\", \"igualmente\", etc.
 
 ## Casos especiales:
 - **No lo llamen más**: \"Entendido, disculpa la molestia. ¡Que tengas buen día!\"
-- **Está ocupado**: \"Entiendo, ¿te puedo llamar en otro momento?\"
+
 
 # GUARDRAILS
 - No des asesoría financiera detallada.
@@ -2624,7 +2718,7 @@ Después de despedirte cordialmente, USA la función endCall para terminar la ll
 NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará.
 
 {$toolsSection}
-");
+"). "\n\n" . $rescheduleInstructions;
             } elseif (!empty($customSystemPrompt)) {
                 // Usar system_prompt personalizado de la campaña si existe
                 $finalPrompt = str_replace(
@@ -2633,7 +2727,7 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
                     $customSystemPrompt
                 );
                 // Agregar contexto de fecha actual al inicio
-                $finalPrompt = "# Contexto temporal\n{$todayContext}\n\n" . $finalPrompt;
+                $finalPrompt = "# Contexto temporal\n{$todayContext}\n\n" . $finalPrompt . "\n\n" . $rescheduleInstructions;
             } else {
                 // Prompt por defecto para cobranza
                 $finalPrompt = trim("
@@ -2670,8 +2764,7 @@ Plan de conversación y orden:
    - Confirma con el cliente la acción acordada (p. ej., envío del enlace por WhatsApp al mismo número u otro, compromiso de pago inmediato o fecha y recordatorio).
    - NO solicites datos aún. Primero cierra la decisión y recibe la respuesta del cliente.
 {$cierreSection}
-5) Si el cliente está ocupado:
-   - Ofrece reagendar de forma proactiva y NO recolectes datos en ese momento.
+
 
 # Guardrails
 - Sé amable pero directa.
@@ -2694,7 +2787,7 @@ Después de despedirte cordialmente, USA la función endCall para terminar la ll
 NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará.
 
 {$toolsSection}
-");
+"). "\n\n" . $rescheduleInstructions;
             }
 
             // Payload VAPI con agente transient (inline)
@@ -2723,7 +2816,38 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
                             [
                                 'type' => 'endCall',
                             ],
-                        ],
+                            [
+                                'type' => 'function',
+                                'function' => [
+                                    'name' => 'scheduleCallback',
+                                    'description' => 'Agendas una llamada futura cuando el cliente está ocupado o lo solicita.',
+                                    'parameters' => [
+                                        'type' => 'object',
+                                        'properties' => [
+                                            'datetime' => [
+                                                'type' => 'string',
+                                                'description' => 'La fecha y hora acordada para la próxima llamada en formato ISO YYYY-MM-DD HH:mm. Calcula la fecha futura basándote en que hoy es ' . $todayDate . ' hora ' . $currentTime,
+                                            ]
+                                        ],
+                                        'required' => ['datetime']
+                                    ]
+                                ],
+                                'messages' => [
+                                    [
+                                        'type' => 'request-start',
+                                        'content' => 'Claro que sí, regáleme un segundo ya mismo valido la agenda para confirmar la reprogramación.'
+                                    ],
+                                    [
+                                        'type' => 'request-response-delayed',
+                                        'content' => 'Qué pena la demora, sigo aquí con usted. El sistema está guardando la fecha, no me cuelgue por favor.'
+                                    ],
+                                    [
+                                        'type' => 'request-failed',
+                                        'content' => 'Ay, qué pena con usted. Tuve un pequeño inconveniente técnico guardando la cita en el sistema, pero no se preocupe que ya tomé nota manualmente.'
+                                    ]
+                                ]
+                            ]
+                        ]
                     ],
                     'voice' => [
                         'provider' => '11labs',
