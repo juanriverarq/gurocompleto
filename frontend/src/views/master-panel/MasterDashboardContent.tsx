@@ -411,7 +411,7 @@ const MasterDashboardContent: React.FC = () => {
                         <IconifyIcon icon="solar:buildings-bold" className="h-5 w-5 text-purple-600" />
                         <div>
                           <p className="font-medium">{broker.name}</p>
-                          <p className="text-xs text-gray-500">Plan: {broker.plan?.toUpperCase() || 'BASIC'}</p>
+                          <p className="text-xs text-gray-500">Plan: {{ starter: 'Starter', professional: 'Professional', business: 'Business', custom: 'A tu medida' }[broker.plan || ''] || broker.plan || 'Starter'}</p>
                         </div>
                       </div>
                       <div className="text-right">

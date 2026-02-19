@@ -654,6 +654,25 @@ const CarteraClientes = () => {
     URL.revokeObjectURL(url);
   };
 
+  // Descargar informe de errores de una importación del historial
+  const descargarInformeErroresHistorial = (imp: any) => {
+    const errores = imp.errores || [];
+    if (!errores.length) return;
+
+    const csv = [
+      'Fila,Número Póliza,Motivo Error',
+      ...errores.map((e: any) => `${e.fila},"${e.poliza || ''}","${(e.motivo || '').replace(/"/g, '""')}"`)
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `errores_importacion_${imp.id}_${(imp.created_at || '').split(' ')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Resetear modal de importación
   const resetearImportacion = () => {
     setArchivoImportacion(null);
@@ -1281,55 +1300,58 @@ const CarteraClientes = () => {
             title={`Cartera General (${contadoresTabs.general})`}
             icon={() => <Icon icon="solar:users-group-rounded-bold-duotone" />}
           >
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell className="text-center">Pólizas</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Prima Total</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Recaudado</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Por Cobrar</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Comisiones</Table.HeadCell>
-                  <Table.HeadCell>Próximo Venc.</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th className="text-center">Pólizas</th>
+                    <th className="text-right">Prima Total</th>
+                    <th className="text-right">Recaudado</th>
+                    <th className="text-right">Por Cobrar</th>
+                    <th className="text-right">Comisiones</th>
+                    <th>Próximo Venc.</th>
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {clientesPaginados.map((data) => (
-                    <Table.Row key={data.id}>
-                      <Table.Cell>
+                    <tr key={data.id} className="group">
+                      <td>
                         <div>
                           <div className="font-medium">{data.cliente}</div>
                           <div className="text-xs text-gray-500">{data.documento}</div>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="text-center font-semibold text-blue-600">
+                      </td>
+                      <td className="text-center font-semibold text-blue-600">
                         {data.polizas}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
+                      </td>
+                      <td className="text-right font-semibold">
                         {formatCurrency(data.primaTotal)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-green-600">
+                      </td>
+                      <td className="text-right font-semibold text-green-600">
                         {formatCurrency(data.recaudado)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-orange-600">
+                      </td>
+                      <td className="text-right font-semibold text-orange-600">
                         {formatCurrency(data.porCobrar)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-indigo-600">
+                      </td>
+                      <td className="text-right font-semibold text-indigo-600">
                         {formatCurrency(data.comisiones)}
-                      </Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td>
                         {formatDate(data.proximoVenc)}
-                      </Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td className="sticky-right">
                         <div className="relative inline-block">
                           <Dropdown
                             label=""
                             dismissOnClick={false}
                             placement="left-start"
                             className="z-50"
+                            style={{ minWidth: '260px' }}
                             renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
+                              <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
+                                <IconDots size={18} />
                               </span>
                             )}
                           >
@@ -1356,16 +1378,16 @@ const CarteraClientes = () => {
                             </Dropdown.Item>
                           </Dropdown>
                         </div>
-                      </Table.Cell>
-                    </Table.Row>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
             </div>
 
             {/* Paginación Por Clientes */}
             {totalPaginasClientes > 1 && (
-              <div className="flex items-center justify-between p-4 border-t">
+              <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
                   Mostrando {((paginaClientes - 1) * elementosPorPagina) + 1} a {Math.min(paginaClientes * elementosPorPagina, clientesConsolidados.length)} de {clientesConsolidados.length} clientes
                 </div>
@@ -1457,36 +1479,38 @@ const CarteraClientes = () => {
               </Card>
             </div>
 
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Póliza</Table.HeadCell>
-                  <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell>Aseguradora</Table.HeadCell>
-                  <Table.HeadCell>Vendedor</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Total Póliza</Table.HeadCell>
-                  <Table.HeadCell className="text-center">Estado Recaudo</Table.HeadCell>
-                  <Table.HeadCell>Vencimiento</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Póliza</th>
+                    <th>Cliente</th>
+                    <th>Aseguradora</th>
+                    <th>Vendedor</th>
+                    <th className="text-right">Total Póliza</th>
+                    <th className="text-center">Estado Recaudo</th>
+                    <th>Vencimiento</th>
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {polizasPorCobrarPaginadas.map((poliza) => (
-                    <Table.Row key={poliza.id}>
-                      <Table.Cell className="font-medium">{poliza.numeroPoliza}</Table.Cell>
-                      <Table.Cell>
+                    <tr key={poliza.id} className="group">
+                      <td className="font-medium">{poliza.numeroPoliza}</td>
+                      <td>
                         <div>
                           <div className="font-medium">{poliza.cliente}</div>
                           <div className="text-xs text-gray-500">{poliza.documento}</div>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell>{poliza.aseguradora}</Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td>{poliza.aseguradora}</td>
+                      <td>
                         <span className="text-sm">{poliza.vendedor || 'Sin asignar'}</span>
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
+                      </td>
+                      <td className="text-right font-semibold">
                         {formatCurrency(poliza.total)}
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
+                      </td>
+                      <td className="text-center">
                         <div className="space-y-1">
                           <div className="text-sm font-semibold text-orange-600">
                             Pendiente: {formatCurrency(Math.max(0, (poliza.total || 0) - (poliza.recaudo_oficina?.recaudado || 0) - (poliza.recaudo_aseguradora?.pagado || 0)))}
@@ -1502,23 +1526,24 @@ const CarteraClientes = () => {
                             </div>
                           )}
                         </div>
-                      </Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td>
                         <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
                         {poliza.diasMora > 0 && (
                           <div className="text-xs text-red-600">{poliza.diasMora} días mora</div>
                         )}
-                      </Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td className="sticky-right">
                         <div className="relative inline-block">
                           <Dropdown
                             label=""
                             dismissOnClick={false}
                             placement="left-start"
                             className="z-50"
+                            style={{ minWidth: '260px' }}
                             renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
+                              <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
+                                <IconDots size={18} />
                               </span>
                             )}
                           >
@@ -1545,11 +1570,11 @@ const CarteraClientes = () => {
                             </Link>
                           </Dropdown>
                         </div>
-                      </Table.Cell>
-                    </Table.Row>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
 
               {polizasPorCobrar.length === 0 && (
                 <div className="text-center py-12">
@@ -1561,7 +1586,7 @@ const CarteraClientes = () => {
 
             {/* Paginación del Servidor */}
             {serverPagination && serverPagination.last_page > 1 && (
-              <div className="flex items-center justify-between p-4 border-t">
+              <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
                   Mostrando página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} pólizas totales)
                 </div>
@@ -1625,43 +1650,45 @@ const CarteraClientes = () => {
               </Card>
             </div>
 
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Póliza</Table.HeadCell>
-                  <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell>Aseguradora</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Prima Neta</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Recaudado Oficina</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Por Pagar</Table.HeadCell>
-                  <Table.HeadCell>Vencimiento</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Póliza</th>
+                    <th>Cliente</th>
+                    <th>Aseguradora</th>
+                    <th className="text-right">Prima Neta</th>
+                    <th className="text-right">Recaudado Oficina</th>
+                    <th className="text-right">Por Pagar</th>
+                    <th>Vencimiento</th>
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {polizasPorPagarPaginadas.map((poliza) => (
-                    <Table.Row key={poliza.id}>
-                      <Table.Cell className="font-medium">{poliza.numeroPoliza}</Table.Cell>
-                      <Table.Cell>
+                    <tr key={poliza.id} className="group">
+                      <td className="font-medium">{poliza.numeroPoliza}</td>
+                      <td>
                         <div>
                           <div className="font-medium">{poliza.cliente}</div>
                           <div className="text-xs text-gray-500">{poliza.documento}</div>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell>{poliza.aseguradora}</Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
+                      </td>
+                      <td>{poliza.aseguradora}</td>
+                      <td className="text-right font-semibold">
                         {formatCurrency(poliza.primaNeta)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-blue-600">
+                      </td>
+                      <td className="text-right font-semibold text-blue-600">
                         {formatCurrency(poliza.recaudo_oficina?.recaudado || 0)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-purple-600">
+                      </td>
+                      <td className="text-right font-semibold text-purple-600">
                         {formatCurrency(poliza.recaudo_aseguradora?.pendiente || 0)}
-                      </Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td>
                         <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex gap-2">
+                      </td>
+                      <td className="sticky-right">
+                        <div className="flex gap-2 justify-center">
                           <Button
                             size="sm"
                             color="purple"
@@ -1681,11 +1708,11 @@ const CarteraClientes = () => {
                             </Button>
                           )}
                         </div>
-                      </Table.Cell>
-                    </Table.Row>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
 
               {polizasPorPagar.length === 0 && (
                 <div className="text-center py-12">
@@ -1698,7 +1725,7 @@ const CarteraClientes = () => {
 
             {/* Paginación del Servidor */}
             {serverPagination && serverPagination.last_page > 1 && (
-              <div className="flex items-center justify-between p-4 border-t">
+              <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
                   Mostrando página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} pólizas totales)
                 </div>
@@ -1762,46 +1789,49 @@ const CarteraClientes = () => {
               </Card>
             </div>
 
-            <div className="overflow-x-auto">
+            <div>
               {cargandoPagosAseguradora ? (
                 <div className="text-center py-12">
                   <Spinner size="lg" />
                   <p className="text-gray-500 mt-2">Cargando pagos...</p>
                 </div>
               ) : (
-                <Table hoverable>
-                  <Table.Head>
-                    <Table.HeadCell>Póliza</Table.HeadCell>
-                    <Table.HeadCell>Cliente</Table.HeadCell>
-                    <Table.HeadCell>Aseguradora</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Monto Pagado</Table.HeadCell>
-                    <Table.HeadCell>Fecha Pago</Table.HeadCell>
-                    <Table.HeadCell>Método</Table.HeadCell>
-                    <Table.HeadCell>Acciones</Table.HeadCell>
-                  </Table.Head>
-                  <Table.Body className="divide-y">
-                    {pagosAseguradora.map((pago) => (
-                        <Table.Row key={pago.pago_id}>
-                          <Table.Cell className="font-medium">{pago.numero_poliza}</Table.Cell>
-                          <Table.Cell>
+                <div className="guro-table-wrap">
+                  <table className="guro-table">
+                    <thead>
+                      <tr>
+                        <th>Póliza</th>
+                        <th>Cliente</th>
+                        <th>Aseguradora</th>
+                        <th className="text-right">Monto Pagado</th>
+                        <th>Fecha Pago</th>
+                        <th>Método</th>
+                        <th className="sticky-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagosAseguradora.map((pago) => (
+                        <tr key={pago.pago_id} className="group">
+                          <td className="font-medium">{pago.numero_poliza}</td>
+                          <td>
                             <div>
                               <div className="font-medium">{pago.cliente}</div>
                               <div className="text-xs text-gray-500">{pago.documento}</div>
                             </div>
-                          </Table.Cell>
-                          <Table.Cell>{pago.aseguradora}</Table.Cell>
-                          <Table.Cell className="text-right font-semibold text-green-600">
+                          </td>
+                          <td>{pago.aseguradora}</td>
+                          <td className="text-right font-semibold text-green-600">
                             {formatCurrency(pago.monto_pagado)}
-                          </Table.Cell>
-                          <Table.Cell>
+                          </td>
+                          <td>
                             {pago.fecha_pago ? new Date(pago.fecha_pago).toLocaleDateString('es-CO') : '-'}
-                          </Table.Cell>
-                          <Table.Cell>
+                          </td>
+                          <td>
                             <Badge color="info" size="sm">
                               {pago.metodo_pago || 'Directo'}
                             </Badge>
-                          </Table.Cell>
-                          <Table.Cell>
+                          </td>
+                          <td className="sticky-right">
                             <Button
                               size="sm"
                               color="red"
@@ -1810,11 +1840,12 @@ const CarteraClientes = () => {
                             >
                               <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4" />
                             </Button>
-                          </Table.Cell>
-                        </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
 
               {!cargandoPagosAseguradora && pagosAseguradora.length === 0 && (
@@ -1828,7 +1859,7 @@ const CarteraClientes = () => {
 
             {/* Paginación de Pagos Aseguradora */}
             {pagosAseguradoraPagination && pagosAseguradoraPagination.last_page > 1 && (
-              <div className="flex items-center justify-between p-4 border-t">
+              <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
                   Mostrando página {pagosAseguradoraPagination.current_page} de {pagosAseguradoraPagination.last_page} ({pagosAseguradoraPagination.total} pagos totales)
                 </div>
@@ -2709,26 +2740,39 @@ const CarteraClientes = () => {
                         )}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        {imp.can_revert && (
-                          <Button
-                            size="xs"
-                            color="failure"
-                            onClick={() => revertirImportacionMasiva(imp.id)}
-                            disabled={revertiendoImportacion === imp.id}
-                          >
-                            {revertiendoImportacion === imp.id ? (
-                              <Spinner size="xs" className="mr-1" />
-                            ) : (
-                              <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4 mr-1" />
-                            )}
-                            Revertir
-                          </Button>
-                        )}
-                        {imp.reverted_at && (
-                          <span className="text-xs text-gray-500">
-                            Revertida: {imp.reverted_at}
-                          </span>
-                        )}
+                        <div className="flex gap-1 justify-center flex-wrap">
+                          {imp.fallidos > 0 && (imp.errores || []).length > 0 && (
+                            <Button
+                              size="xs"
+                              color="gray"
+                              onClick={() => descargarInformeErroresHistorial(imp)}
+                              title="Descargar informe de errores"
+                            >
+                              <Icon icon="solar:download-bold-duotone" className="w-4 h-4 mr-1" />
+                              Errores
+                            </Button>
+                          )}
+                          {imp.can_revert && (
+                            <Button
+                              size="xs"
+                              color="failure"
+                              onClick={() => revertirImportacionMasiva(imp.id)}
+                              disabled={revertiendoImportacion === imp.id}
+                            >
+                              {revertiendoImportacion === imp.id ? (
+                                <Spinner size="xs" className="mr-1" />
+                              ) : (
+                                <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4 mr-1" />
+                              )}
+                              Revertir
+                            </Button>
+                          )}
+                          {imp.reverted_at && (
+                            <span className="text-xs text-gray-500">
+                              Revertida: {imp.reverted_at}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -2859,31 +2903,33 @@ const CarteraClientes = () => {
             <div className="bg-gray-50 dark:bg-gray-800 px-4 py-3 border-b">
               <h4 className="font-semibold text-gray-700 dark:text-gray-300">Pólizas y Estado de Recaudo</h4>
             </div>
-            <div className="overflow-x-auto max-h-96">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Póliza</Table.HeadCell>
-                  <Table.HeadCell>Aseguradora</Table.HeadCell>
-                  <Table.HeadCell>Ramo</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Total</Table.HeadCell>
-                  <Table.HeadCell className="text-center">Recaudo Oficina</Table.HeadCell>
-                  <Table.HeadCell className="text-center">Pago Aseg.</Table.HeadCell>
-                  <Table.HeadCell className="text-center">Comisión</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+            <div className="guro-table-wrap max-h-96">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Póliza</th>
+                    <th>Aseguradora</th>
+                    <th>Ramo</th>
+                    <th className="text-right">Total</th>
+                    <th className="text-center">Recaudo Oficina</th>
+                    <th className="text-center">Pago Aseg.</th>
+                    <th className="text-center">Comisión</th>
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {polizasCliente.map((poliza) => (
-                    <Table.Row key={poliza.id}>
-                      <Table.Cell>
+                    <tr key={poliza.id} className="group">
+                      <td>
                         <div>
                           <div className="font-medium text-sm">{poliza.numeroPoliza}</div>
                           <div className="text-xs text-gray-500">Vence: {formatDate(poliza.fechaVencimiento)}</div>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="text-sm">{poliza.aseguradora}</Table.Cell>
-                      <Table.Cell className="text-sm">{poliza.ramo}</Table.Cell>
-                      <Table.Cell className="text-right font-semibold">{formatCurrency(poliza.total)}</Table.Cell>
-                      <Table.Cell className="text-center">
+                      </td>
+                      <td className="text-sm">{poliza.aseguradora}</td>
+                      <td className="text-sm">{poliza.ramo}</td>
+                      <td className="text-right font-semibold">{formatCurrency(poliza.total)}</td>
+                      <td className="text-center">
                         <div className="space-y-1">
                           {(poliza.recaudo_oficina?.pendiente || poliza.total || 0) > 0 ? (
                             <>
@@ -2900,7 +2946,6 @@ const CarteraClientes = () => {
                           ) : (
                             <Badge color="success" size="xs">Completo</Badge>
                           )}
-                          {/* Historial de abonos */}
                           {(poliza.recaudo_oficina?.historial?.length || 0) > 0 && (
                             <div className="mt-2 text-left border-t pt-2">
                               <div className="text-xs font-semibold text-gray-600 mb-1">Abonos:</div>
@@ -2918,8 +2963,8 @@ const CarteraClientes = () => {
                             </div>
                           )}
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
+                      </td>
+                      <td className="text-center">
                         <div className="space-y-1">
                           {(poliza.recaudo_aseguradora?.pendiente || 0) > 0 ? (
                             <>
@@ -2936,8 +2981,8 @@ const CarteraClientes = () => {
                             <span className="text-xs text-gray-400">-</span>
                           )}
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="text-center">
+                      </td>
+                      <td className="text-center">
                         <div className="space-y-1">
                           {(poliza.cobro_comision?.pendiente || 0) > 0 ? (
                             <>
@@ -2954,9 +2999,9 @@ const CarteraClientes = () => {
                             <span className="text-xs text-gray-400">-</span>
                           )}
                         </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex gap-1">
+                      </td>
+                      <td className="sticky-right">
+                        <div className="flex gap-1 justify-center">
                           {(poliza.recaudo_oficina?.pendiente || poliza.total || 0) > 0 && (
                             <Button
                               size="xs"
@@ -2997,11 +3042,11 @@ const CarteraClientes = () => {
                             </Button>
                           )}
                         </div>
-                      </Table.Cell>
-                    </Table.Row>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
             </div>
           </div>
 

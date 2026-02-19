@@ -111,9 +111,20 @@ const ChatbotsList: React.FC = () => {
           description: `El chatbot "${chatbot.name}" ha sido ${chatbot.is_active ? 'pausado' : 'activado'}.`,
         });
         await loadData();
+      } else {
+        toast({
+          title: 'No se pudo activar el chatbot',
+          description: result.message || 'Solo puede haber un chatbot activo por línea.',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Error actualizando chatbot:', error);
+      toast({
+        title: 'Error',
+        description: 'Ocurrió un error al actualizar el chatbot.',
+        variant: 'destructive',
+      });
     }
   };
 

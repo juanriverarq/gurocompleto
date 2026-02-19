@@ -646,6 +646,29 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
     Route::get('/dashboard', function (Request $request) {
         $user = $request->user();
         
+        // Empleados autenticados vía UnifiedAuthMiddleware no tienen getPrimaryBroker()
+        if (!$user && $request->get('auth_type') === 'empleado') {
+            $empleado = $request->get('authenticated_empleado');
+            if ($empleado) {
+                return response()->json([
+                    'success' => true,
+                    'message' => '¡Bienvenido al dashboard!',
+                    'auth_type' => 'empleado',
+                    'broker' => $empleado->broker ? [
+                        'id' => $empleado->broker->id,
+                        'name' => $empleado->broker->name,
+                        'status' => $empleado->broker->status,
+                        'plan' => $empleado->broker->plan ?? 'starter',
+                    ] : null,
+                    'needs_onboarding' => false,
+                ]);
+            }
+        }
+
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
+        }
+        
         // Obtener información del broker usando getPrimaryBroker()
         $broker = $user->getPrimaryBroker();
         $needsOnboarding = !$broker;
@@ -673,7 +696,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
                 'name' => $broker->name,
                 'legal_name' => $broker->legal_name,
                 'status' => $broker->status,
-                'plan' => $broker->plan ?? 'basic',
+                'plan' => $broker->plan ?? 'starter',
                 'trial_ends_at' => $broker->trial_ends_at,
             ] : null,
             'needs_onboarding' => $needsOnboarding,
@@ -716,7 +739,7 @@ Route::middleware(['security.auth'])->prefix('global')->group(function () {
 // RUTAS SAAS: INSTANCIAS WHATSAPP (PROTEGIDAS)
 // =============================================================================
 
-Route::middleware(['security.auth'])->prefix('saas/whatsapp-instances')->group(function () {
+Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/whatsapp-instances')->group(function () {
     Route::get('/', [WhatsAppInstanceController::class, 'index']);
     Route::post('/', [WhatsAppInstanceController::class, 'store']);
     Route::get('{whatsAppInstance}/qr', [WhatsAppInstanceController::class, 'getQrCode']);
@@ -857,6 +880,10 @@ Route::prefix('master-panel')->group(function () {
         Route::get('/facturacion', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getFacturacion']);
         Route::get('/logs', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getLogs']);
         
+        // Crear y actualizar brokers
+        Route::post('/brokers', [\App\Http\Controllers\Api\MasterDashboardController::class, 'createBroker']);
+        Route::put('/brokers/{brokerId}', [\App\Http\Controllers\Api\MasterDashboardController::class, 'updateBroker']);
+
         // Rutas específicas de broker (deben ir antes de la ruta genérica {brokerId})
         Route::get('/brokers/{brokerId}/full-detail', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getBrokerFullDetail']);
         Route::get('/brokers/{brokerId}/payments', [\App\Http\Controllers\Api\MasterDashboardController::class, 'getBrokerPayments']);
@@ -1298,6 +1325,25 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
         ], 401);
     }
     
+    // Empleados autenticados vía UnifiedAuthMiddleware: usar broker del empleado directamente
+    if ($user instanceof \App\Models\EmpleadoBroker) {
+        $broker = $user->broker;
+        return response()->json([
+            'success' => true,
+            'auth_type' => 'empleado',
+            'broker' => $broker ? [
+                'id' => $broker->id,
+                'name' => $broker->name,
+                'status' => $broker->status,
+                'plan' => $broker->plan ?? 'starter',
+                'features' => $broker->features ?? [],
+                'branding' => $broker->branding ?? [],
+                'logo_url' => method_exists($broker, 'getLogoUrl') ? $broker->getLogoUrl() : null,
+            ] : null,
+            'needs_onboarding' => false,
+        ]);
+    }
+
     $broker = $user->getPrimaryBroker();
     $needsOnboarding = !$broker;
     
@@ -1346,32 +1392,48 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
                 'permisos' => $user->permissions ?? [],
                 'rol' => $user->role ?? 'super_admin'
             ],
-            'broker' => [
-                'id' => $broker->id,
-                'nombre' => $broker->name,
-                'name' => $broker->name,
-                'email' => $broker->email,
-                'nit' => $broker->document_number,
-                'document_number' => $broker->document_number,
-                'telefono' => $broker->phone,
-                'phone' => $broker->phone,
-                'ciudad' => $broker->city,
-                'city' => $broker->city,
-                'direccion' => $broker->address,
-                'plan' => $broker->plan,
-                'status' => $broker->status,
-                'trial_ends_at' => $broker->trial_ends_at?->toISOString(),
-                'subscription_ends_at' => $broker->subscription_ends_at?->toISOString(),
-                'branding' => [
-                    'logo' => $broker->getLogoUrl(),
-                    'colores' => [
-                        'primario' => '#635BFF',
-                        'secundario' => '#16CDC7',
-                        'acento' => '#36c96c'
+            'broker' => (function() use ($broker) {
+                $savedBranding = is_array($broker->branding) ? $broker->branding : [];
+                $primaryColor = $savedBranding['primary_color'] ?? '#635BFF';
+                $secondaryColor = $savedBranding['secondary_color'] ?? '#16CDC7';
+                $accentColor = $savedBranding['accent_color'] ?? '#36c96c';
+
+                return [
+                    'id' => $broker->id,
+                    'nombre' => $broker->name,
+                    'name' => $broker->name,
+                    'email' => $broker->email,
+                    'nit' => $broker->document_number,
+                    'document_number' => $broker->document_number,
+                    'telefono' => $broker->phone,
+                    'phone' => $broker->phone,
+                    'ciudad' => $broker->city,
+                    'city' => $broker->city,
+                    'direccion' => $broker->address,
+                    'plan' => $broker->plan,
+                    'status' => $broker->status,
+                    'trial_ends_at' => $broker->trial_ends_at?->toISOString(),
+                    'subscription_ends_at' => $broker->subscription_ends_at?->toISOString(),
+                    'logo_url' => $broker->getLogoUrl(),
+                    'features' => $broker->features ?? [],
+                    'max_users' => $broker->max_users,
+                    'max_clients' => $broker->max_clients,
+                    'max_policies' => $broker->max_policies,
+                    'branding' => [
+                        'logo' => $broker->getLogoUrl(),
+                        'primary_color' => $primaryColor,
+                        'secondary_color' => $secondaryColor,
+                        'accent_color' => $accentColor,
+                        'colores' => [
+                            'primario' => $primaryColor,
+                            'secundario' => $secondaryColor,
+                            'acento' => $accentColor,
+                        ],
+                        'nombre_comercial' => $broker->name,
                     ],
-                    'nombre_comercial' => $broker->name
-                ]
-            ]
+                ];
+            })()
+
         ]
     ]);
 });
@@ -1534,6 +1596,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
             Route::post('/{id}/activate', [\App\Http\Controllers\Api\CampaignController::class, 'activate'])->whereNumber('id');
             Route::post('/{id}/execute-now', [\App\Http\Controllers\Api\CampaignController::class, 'executeNow'])->whereNumber('id');
             Route::post('/{id}/execute', [\App\Http\Controllers\Api\CampaignController::class, 'executeCampaign'])->whereNumber('id');
+            Route::post('/{id}/retry-failed', [\App\Http\Controllers\Api\CampaignController::class, 'retryFailed'])->whereNumber('id');
             Route::get('/{id}/executions', [\App\Http\Controllers\Api\CampaignController::class, 'getExecutions'])->whereNumber('id');
         });
 
@@ -1625,6 +1688,14 @@ Route::post('/triggers/process-event', [\App\Http\Controllers\Api\VoiceCampaignT
             Route::post('/{id}/refresh-calls', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'refreshScheduledCalls'])->whereNumber('id');
             Route::post('/scheduled-calls/{scheduledCallId}/execute', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'executeScheduledCall'])->whereNumber('scheduledCallId');
             Route::post('/scheduled-calls/{scheduledCallId}/retry', [\App\Http\Controllers\Api\VoiceCampaignController::class, 'retryScheduledCall'])->whereNumber('scheduledCallId');
+
+            // 📞 Phone Number Management (self-service Twilio verification + ElevenLabs registration)
+            Route::prefix('phone-numbers')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\PhoneNumberController::class, 'getPhoneNumbers']);
+                Route::post('/verify', [\App\Http\Controllers\Api\PhoneNumberController::class, 'initiateVerification']);
+                Route::post('/check', [\App\Http\Controllers\Api\PhoneNumberController::class, 'checkVerification']);
+                Route::delete('/', [\App\Http\Controllers\Api\PhoneNumberController::class, 'deletePhoneNumber']);
+            });
         });
 
         // =============================
@@ -1882,13 +1953,37 @@ Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group
                     'user_type' => $user->user_type ?? 'EMPLEADO',
                     'broker_id' => $user->broker_id ?? $request->get('broker_id'),
                 ],
-                'broker' => $broker ? [
-                    'id' => $broker->id,
-                    'name' => $broker->name,
-                    'status' => $broker->status,
-                    'plan' => $broker->plan,
-                    'trial_ends_at' => optional($broker->trial_ends_at)->toISOString(),
-                ] : null,
+                'broker' => $broker ? (function() use ($broker) {
+                    $savedBranding = is_array($broker->branding) ? $broker->branding : [];
+                    $primaryColor = $savedBranding['primary_color'] ?? '#635BFF';
+                    $secondaryColor = $savedBranding['secondary_color'] ?? '#16CDC7';
+                    $accentColor = $savedBranding['accent_color'] ?? '#36c96c';
+
+                    return [
+                        'id' => $broker->id,
+                        'name' => $broker->name,
+                        'nombre' => $broker->name,
+                        'status' => $broker->status,
+                        'plan' => $broker->plan ?? 'starter',
+                        'trial_ends_at' => optional($broker->trial_ends_at)->toISOString(),
+                        'logo_url' => $broker->getLogoUrl(),
+                        'features' => $broker->features ?? [],
+                        'max_users' => $broker->max_users ?? 5,
+                        'settings' => $broker->settings ?? [],
+                        'branding' => [
+                            'logo' => $broker->getLogoUrl(),
+                            'primary_color' => $primaryColor,
+                            'secondary_color' => $secondaryColor,
+                            'accent_color' => $accentColor,
+                            'colores' => [
+                                'primario' => $primaryColor,
+                                'secundario' => $secondaryColor,
+                                'acento' => $accentColor,
+                            ],
+                            'nombre_comercial' => $broker->name,
+                        ],
+                    ];
+                })() : null,
             ],
             'source' => 'api.php hotfix'
         ]);
@@ -1911,11 +2006,11 @@ Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group
             ], 403);
         }
 
-        // Compose branding payload with computed URLs to ensure frontend always receives them
-        $branding = is_array($broker->branding) ? $broker->branding : [];
-        $branding['primary_color'] = $branding['primary_color'] ?? null;
-        $branding['logo'] = method_exists($broker, 'getLogoUrl') ? $broker->getLogoUrl() : ($branding['logo'] ?? null);
-        $branding['favicon'] = method_exists($broker, 'getFaviconUrl') ? $broker->getFaviconUrl() : ($branding['favicon'] ?? null);
+        // Compose branding payload with computed URLs and actual saved colors
+        $savedBranding = is_array($broker->branding) ? $broker->branding : [];
+        $primaryColor = $savedBranding['primary_color'] ?? '#635BFF';
+        $secondaryColor = $savedBranding['secondary_color'] ?? '#16CDC7';
+        $accentColor = $savedBranding['accent_color'] ?? '#36c96c';
 
         return response()->json([
             'success' => true,
@@ -1930,11 +2025,27 @@ Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group
                 'broker' => [
                     'id' => $broker->id,
                     'name' => $broker->name,
+                    'nombre' => $broker->name,
                     'status' => $broker->status,
-                    'plan' => $broker->plan,
+                    'plan' => $broker->plan ?? 'starter',
                     'trial_ends_at' => optional($broker->trial_ends_at)->toISOString(),
                     'logo' => $broker->logo,
-                    'branding' => $branding,
+                    'logo_url' => $broker->getLogoUrl(),
+                    'features' => $broker->features ?? [],
+                    'max_users' => $broker->max_users ?? 5,
+                    'settings' => $broker->settings ?? [],
+                    'branding' => [
+                        'logo' => $broker->getLogoUrl(),
+                        'primary_color' => $primaryColor,
+                        'secondary_color' => $secondaryColor,
+                        'accent_color' => $accentColor,
+                        'colores' => [
+                            'primario' => $primaryColor,
+                            'secundario' => $secondaryColor,
+                            'acento' => $accentColor,
+                        ],
+                        'nombre_comercial' => $broker->name,
+                    ],
                 ],
             ],
         ]);

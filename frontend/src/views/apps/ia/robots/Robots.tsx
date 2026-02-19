@@ -601,41 +601,43 @@ const Robots = () => {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table hoverable>
-                    <Table.Head>
-                      <Table.HeadCell>Tipo</Table.HeadCell>
-                      <Table.HeadCell>Aseguradora</Table.HeadCell>
-                      <Table.HeadCell>Descripción</Table.HeadCell>
-                      <Table.HeadCell>Fecha</Table.HeadCell>
-                      <Table.HeadCell>Acciones</Table.HeadCell>
-                    </Table.Head>
-                    <Table.Body className="divide-y">
+                <div className="guro-table-wrap">
+                  <table className="guro-table">
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Aseguradora</th>
+                        <th>Descripción</th>
+                        <th>Fecha</th>
+                        <th className="sticky-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
                       {datosPendientes
                         .filter(d => d.estado === 'pendiente')
                         .map((dato) => {
                           const robot = robots.find(r => r.id === dato.robotId);
                           return (
-                            <Table.Row key={dato.id} className="bg-white dark:bg-gray-800">
-                              <Table.Cell>
+                            <tr key={dato.id} className="group">
+                              <td>
                                 <div className="flex items-center gap-2">
                                   {robot && (
                                     <Icon icon={robot.icon} className={robot.iconColor} width={20} />
                                   )}
                                   <span className="font-medium">{dato.tipo}</span>
                                 </div>
-                              </Table.Cell>
-                              <Table.Cell>
+                              </td>
+                              <td>
                                 <Badge color="gray">{dato.aseguradora}</Badge>
-                              </Table.Cell>
-                              <Table.Cell>
+                              </td>
+                              <td>
                                 <span className="text-sm">{dato.descripcion}</span>
-                              </Table.Cell>
-                              <Table.Cell>
+                              </td>
+                              <td>
                                 <span className="text-sm text-gray-500">{dato.fecha}</span>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <div className="flex gap-2">
+                              </td>
+                              <td className="sticky-right">
+                                <div className="flex gap-2 justify-center">
                                   <Button
                                     size="xs"
                                     color="success"
@@ -654,12 +656,12 @@ const Robots = () => {
                                     <Icon icon="solar:eye-bold" width={16} />
                                   </Button>
                                 </div>
-                              </Table.Cell>
-                            </Table.Row>
+                              </td>
+                            </tr>
                           );
                         })}
-                    </Table.Body>
-                  </Table>
+                    </tbody>
+                  </table>
                 </div>
               )}
 

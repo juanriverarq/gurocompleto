@@ -295,11 +295,12 @@ const MasterFacturacionPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            broker.plan === 'pro' ? 'bg-purple-100 text-purple-700' :
-                            broker.plan === 'enterprise' ? 'bg-indigo-100 text-indigo-700' :
+                            broker.plan === 'professional' ? 'bg-blue-100 text-blue-700' :
+                            broker.plan === 'business' ? 'bg-purple-100 text-purple-700' :
+                            broker.plan === 'custom' ? 'bg-indigo-100 text-indigo-700' :
                             'bg-gray-100 text-gray-700'
                           }`}>
-                            {broker.plan?.toUpperCase() || 'BASIC'}
+                            {({ starter: 'Starter', professional: 'Professional', business: 'Business', custom: 'A tu medida' } as Record<string, string>)[broker.plan] || broker.plan?.toUpperCase() || 'STARTER'}
                           </span>
                         </TableCell>
                         <TableCell>

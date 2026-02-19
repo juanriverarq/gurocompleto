@@ -18,6 +18,7 @@ import { IconDots } from '@tabler/icons-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import HeroButton from 'src/components/HeroButton';
+import TableActionMenu, { TableMenuItem } from 'src/components/TableActionMenu';
 
 import {
   polizaService,
@@ -36,8 +37,11 @@ import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import OnboardingGuard from '../../../../components/auth/OnboardingGuard';
 import policyNotificationService from 'src/services/policyNotificationService';
 import { useWhatsAppSocket } from 'src/hooks/useWhatsAppSocket';
+import { useAutoTour } from 'src/components/GuroTour/useAutoTour';
+import { TOUR_POLIZAS } from 'src/components/GuroTour/tourConfigs';
 
 const Polizas: React.FC = () => {
+  useAutoTour(TOUR_POLIZAS);
   const [polizas, setPolizas] = useState<Poliza[]>([]);
   const [loading, setLoading] = useState(true);
   const [estadisticas, setEstadisticas] = useState<any>(null);
@@ -737,70 +741,69 @@ const Polizas: React.FC = () => {
         <div className="space-y-6">
           {/* Estadísticas - Mejorado para tablets */}
           {estadisticas && estadisticas.total_polizas !== undefined && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+            <div data-tour="polizas-stats" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
               <Card className="p-3 md:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-600">Total Pólizas</p>
-                    <p className="text-lg md:text-2xl font-bold text-blue-600">
+                    <p data-tour="polizas-page-title" className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Total Pólizas</p>
+                    <p className="text-lg md:text-2xl font-bold text-[#573CFF]">
                       {estadisticas.total_polizas || 0}
                     </p>
                   </div>
-                  <Icon
-                    icon="solar:document-bold-duotone"
-                    className="w-6 h-6 md:w-8 md:h-8 text-blue-500"
-                  />
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-[#573CFF]/10 dark:bg-[#573CFF]/20 rounded-xl flex items-center justify-center">
+                    <Icon icon="solar:document-bold-duotone" className="w-5 h-5 text-[#573CFF]" />
+                  </div>
                 </div>
               </Card>
               <Card className="p-3 md:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-600">Activas</p>
-                    <p className="text-lg md:text-2xl font-bold text-green-600">
+                    <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Activas</p>
+                    <p className="text-lg md:text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                       {estadisticas.polizas_activas || 0}
                     </p>
                   </div>
-                  <div className="w-6 h-6 md:w-8 md:h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <div className="w-2 h-2 md:w-3 md:h-3 bg-green-500 rounded-full"></div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500/10 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
                   </div>
                 </div>
               </Card>
               <Card className="p-3 md:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-600">Por Vencer</p>
-                    <p className="text-lg md:text-2xl font-bold text-orange-600">
+                    <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Por Vencer</p>
+                    <p className="text-lg md:text-2xl font-bold text-amber-600 dark:text-amber-400">
                       {estadisticas.polizas_por_vencer}
                     </p>
                   </div>
-                  <div className="w-6 h-6 md:w-8 md:h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                    <div className="w-2 h-2 md:w-3 md:h-3 bg-orange-500 rounded-full"></div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-amber-500/10 dark:bg-amber-500/20 rounded-xl flex items-center justify-center">
+                    <div className="w-2.5 h-2.5 bg-amber-500 rounded-full"></div>
                   </div>
                 </div>
               </Card>
               <Card className="p-3 md:p-4 col-span-2 sm:col-span-1">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-600">Prima Total</p>
-                    <p className="text-sm md:text-lg font-bold text-purple-600">
+                    <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Prima Total</p>
+                    <p className="text-sm md:text-lg font-bold text-[#573CFF]">
                       {polizaUtils.formatCurrency(estadisticas.valor_total_primas)}
                     </p>
                   </div>
-                  <div className="w-6 h-6 md:w-8 md:h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-purple-600 font-bold text-xs md:text-sm">$</span>
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-[#573CFF]/10 dark:bg-[#573CFF]/20 rounded-xl flex items-center justify-center">
+                    <span className="text-[#573CFF] font-bold text-xs md:text-sm">$</span>
                   </div>
                 </div>
               </Card>
               <Card className="p-3 md:p-4 col-span-2 sm:col-span-3 md:col-span-1">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-600">Vencidas</p>
-                    <p className="text-lg md:text-2xl font-bold text-red-600">
+                    <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Vencidas</p>
+                    <p className="text-lg md:text-2xl font-bold text-rose-600 dark:text-rose-400">
                       {estadisticas.polizas_vencidas}
                     </p>
                   </div>
-                  <div className="w-6 h-6 md:w-8 md:h-8 bg-red-100 rounded-full flex items-center justify-center">
-                    <div className="w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full"></div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-rose-500/10 dark:bg-rose-500/20 rounded-xl flex items-center justify-center">
+                    <div className="w-2.5 h-2.5 bg-rose-500 rounded-full"></div>
                   </div>
                 </div>
               </Card>
@@ -928,7 +931,7 @@ const Polizas: React.FC = () => {
                   </Button>
 
                   {canCreatePolicy && (
-                    <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreateTypeModal(true)}>Nueva Póliza</HeroButton>
+                    <span data-tour="polizas-create-btn"><HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreateTypeModal(true)}>Nueva Póliza</HeroButton></span>
                   )}
                 </div>
               </div>
@@ -936,7 +939,7 @@ const Polizas: React.FC = () => {
           </div>
 
           {/* Tabla de pólizas - Mejorada con columnas dinámicas */}
-          <Card>
+          <Card data-tour="polizas-table">
             {loading ? (
               <div className="flex justify-center items-center py-8">
                 <Spinner size="lg" />
@@ -996,87 +999,64 @@ const Polizas: React.FC = () => {
                   </div>
                 )}
                 {/* Vista de tabla para pantallas grandes */}
-                <div className="hidden lg:block overflow-x-auto table-container-with-dropdowns">
-                  <Table hoverable>
-                    <Table.Head>
-                      <Table.HeadCell className="w-10">
-                        <Checkbox checked={isAllSelected} onChange={() => toggleSelectAll()} />
-                      </Table.HeadCell>
-                      {visibleColumns.map((columnKey) => (
-                        <Table.HeadCell key={columnKey}>{getColumnName(columnKey)}</Table.HeadCell>
-                      ))}
-                      <Table.HeadCell>Acciones</Table.HeadCell>
-                    </Table.Head>
-                    <Table.Body className="">
-                      {polizas &&
-                        polizas.length > 0 &&
-                        polizas.map((poliza) => (
-                          <Table.Row key={poliza.id} className="">
-                            <Table.Cell>
-                              <Checkbox
-                                checked={selectedIds.has(String(poliza.id))}
-                                onChange={() => toggleSelectOne(poliza.id as string)}
-                              />
-                            </Table.Cell>
-                            {visibleColumns.map((columnKey) => (
-                              <Table.Cell key={columnKey} className="whitespace-nowrap">
-                                {renderTableCell(poliza, columnKey)}
-                              </Table.Cell>
-                            ))}
-                            <Table.Cell>
-                              <Dropdown
-                                label=""
-                                dismissOnClick={false}
-                                placement="left-start"
-                                className="z-50"
-                                renderTrigger={() => (
-                                  <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                    <IconDots size={22} />
-                                  </span>
-                                )}
-                              >
-                                <Dropdown.Item
-                                  className="flex gap-3"
-                                  onClick={() => handleViewPoliza(poliza)}
-                                >
-                                  <Icon icon="solar:eye-bold-duotone" height={18} />
-                                  <span>Ver Detalles</span>
-                                </Dropdown.Item>
-                                {poliza.enlace_externo && (
-                                  <Dropdown.Item
-                                    className="flex gap-3 text-blue-600"
-                                    onClick={() => window.open(poliza.enlace_externo, '_blank')}
-                                  >
-                                    <Icon icon="solar:link-round-bold-duotone" height={18} />
-                                    <span>Enlace Externo</span>
-                                  </Dropdown.Item>
-                                )}
-                                {canEditPolicy && (
-                                  <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
-                                    <Dropdown.Item className="flex gap-3">
-                                      <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
-                                      <span>Editar</span>
-                                    </Dropdown.Item>
-                                  </Link>
-                                )}
-                                {canDeletePolicy && (
-                                  <Dropdown.Item
-                                    className="flex gap-3 text-red-600 hover:text-red-700"
-                                    onClick={() => handleDeletePoliza(poliza)}
-                                  >
-                                    <Icon
-                                      icon="solar:trash-bin-minimalistic-bold-duotone"
-                                      height={18}
-                                    />
-                                    <span>Eliminar</span>
-                                  </Dropdown.Item>
-                                )}
-                              </Dropdown>
-                            </Table.Cell>
-                          </Table.Row>
-                        ))}
-                    </Table.Body>
-                  </Table>
+                <div className="hidden lg:block">
+                  <div className="guro-table-wrap">
+                    <table className="guro-table">
+                      <thead>
+                        <tr>
+                          {visibleColumns.map((columnKey) => (
+                            <th key={columnKey} className="whitespace-nowrap">{getColumnName(columnKey)}</th>
+                          ))}
+                          <th className="sticky-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {polizas &&
+                          polizas.length > 0 &&
+                          polizas.map((poliza) => (
+                            <tr
+                              key={poliza.id}
+                              className={`group${selectedIds.has(String(poliza.id)) ? ' row-selected' : ''}`}
+                              onClick={() => toggleSelectOne(poliza.id as string)}
+                            >
+                              {visibleColumns.map((columnKey) => (
+                                <td key={columnKey} className="whitespace-nowrap">
+                                  {renderTableCell(poliza, columnKey)}
+                                </td>
+                              ))}
+                              <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                                <TableActionMenu>
+                                  <TableMenuItem onClick={() => handleViewPoliza(poliza)}>
+                                    <Icon icon="solar:eye-bold-duotone" height={18} />
+                                    <span>Ver Detalles</span>
+                                  </TableMenuItem>
+                                  {poliza.enlace_externo && (
+                                    <TableMenuItem className="text-blue-600" onClick={() => window.open(poliza.enlace_externo, '_blank')}>
+                                      <Icon icon="solar:link-round-bold-duotone" height={18} />
+                                      <span>Enlace Externo</span>
+                                    </TableMenuItem>
+                                  )}
+                                  {canEditPolicy && (
+                                    <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
+                                      <TableMenuItem>
+                                        <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
+                                        <span>Editar</span>
+                                      </TableMenuItem>
+                                    </Link>
+                                  )}
+                                  {canDeletePolicy && (
+                                    <TableMenuItem className="text-red-600 hover:text-red-700" onClick={() => handleDeletePoliza(poliza)}>
+                                      <Icon icon="solar:trash-bin-minimalistic-bold-duotone" height={18} />
+                                      <span>Eliminar</span>
+                                    </TableMenuItem>
+                                  )}
+                                </TableActionMenu>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {/* Vista de cards para tablets y móviles */}

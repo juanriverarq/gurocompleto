@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "@iconify/react";
 import { Button } from "../shadcn-ui/Default-Ui/button";
 import { Input } from "../shadcn-ui/Default-Ui/input";
@@ -73,6 +74,7 @@ const AVAILABLE_VARIABLES = campaignValidationService.getAvailableVariables();
 
 const CreateCampaignWizard: React.FC<CreateCampaignWizardProps> = ({ open, onClose, onCampaignCreated }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   
   // Estados del wizard
   const [currentStep, setCurrentStep] = useState(1);
@@ -591,28 +593,17 @@ if (reset) {
     return true;
   };
 
-  // Step 2: Template selection OR free text message
+  // Step 2: Template selection (required)
   const validateStep2 = () => {
     const errors: string[] = [];
 
-    if (campaignData.messageMode === 'template') {
-      if (!selectedMetaTemplate || !campaignData.template_name) {
-        errors.push("Selecciona una plantilla aprobada por Meta");
-      }
-    } else {
-      // Free text mode
-      if (!campaignData.message_template.trim()) {
-        errors.push("El mensaje de la campaña es requerido");
-      }
-      const msgValidation = campaignValidationService.validateMessage(campaignData.message_template, []);
-      if (msgValidation && !msgValidation.isValid) {
-        errors.push(...msgValidation.errors);
-      }
+    if (!selectedMetaTemplate || !campaignData.template_name) {
+      errors.push("Selecciona una plantilla aprobada por Meta para continuar");
     }
 
     if (errors.length > 0) {
       setValidationErrors(errors);
-      toast({ title: "Errores de validación", description: errors[0], variant: "destructive" });
+      toast({ title: "Plantilla requerida", description: errors[0], variant: "destructive" });
       return false;
     }
 
@@ -775,27 +766,32 @@ if (reset) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 border dark:border-gray-700/50">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Icon icon="solar:chat-round-dots-bold-duotone" className="w-6 h-6 text-indigo-600" />
-            Crear Nueva Campaña
+          <DialogTitle className="flex items-center gap-3 text-gray-900 dark:text-white">
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center">
+              <Icon icon="solar:chat-round-dots-bold-duotone" className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <span className="text-lg font-bold">Crear Nueva Campaña</span>
+              <p className="text-xs font-normal text-gray-500 dark:text-gray-400 mt-0.5">Envía mensajes masivos usando plantillas aprobadas por Meta</p>
+            </div>
           </DialogTitle>
         </DialogHeader>
 
         {/* Progress Steps - 3 pasos */}
-        <div className="flex items-center justify-center mb-4 pb-4 border-b">
+        <div className="flex items-center justify-center mb-4 pb-4 border-b border-gray-200 dark:border-gray-700/50">
           <div className="flex items-center gap-2">
-            {[{ step: 1, label: 'Configuración' }, { step: 2, label: 'Mensaje' }, { step: 3, label: 'Destinatarios' }].map(({ step, label }, idx) => (
+            {[{ step: 1, label: 'Configuración' }, { step: 2, label: 'Plantilla' }, { step: 3, label: 'Destinatarios' }].map(({ step, label }, idx) => (
               <React.Fragment key={step}>
-                {idx > 0 && <div className={`w-10 h-1 rounded-full transition-all ${currentStep > step - 1 ? 'bg-green-400' : 'bg-gray-200'}`} />}
+                {idx > 0 && <div className={`w-10 h-1 rounded-full transition-all ${currentStep > step - 1 ? 'bg-green-400 dark:bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`} />}
                 <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all ${
-                  currentStep > step ? 'bg-green-50 text-green-700 border border-green-200'
-                    : currentStep === step ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm'
-                    : 'bg-gray-50 text-gray-500 border border-gray-200'
+                  currentStep > step ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-500/30'
+                    : currentStep === step ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 shadow-sm'
+                    : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
                 }`}>
                   <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                    currentStep > step ? 'bg-green-500 text-white' : currentStep === step ? 'bg-indigo-600 text-white' : 'bg-gray-300 text-gray-600'
+                    currentStep > step ? 'bg-green-500 text-white' : currentStep === step ? 'bg-indigo-600 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
                   }`}>
                     {currentStep > step ? <Icon icon="solar:check-circle-bold-duotone" className="w-5 h-5" /> : step}
                   </div>
@@ -811,19 +807,19 @@ if (reset) {
           <div className="space-y-6">
             {/* Campaign Type: 2 opciones */}
             <div>
-              <Label className="text-base font-semibold mb-3 block">Tipo de Envío</Label>
+              <Label className="text-base font-semibold mb-3 block text-gray-900 dark:text-white">Tipo de Envío</Label>
               <div className="grid grid-cols-2 gap-4">
                 <button type="button" onClick={() => setCampaignData(prev => ({ ...prev, type: 'immediate' }))}
-                  className={`p-5 border-2 rounded-xl text-left transition-all hover:shadow-md ${campaignData.type === 'immediate' ? 'border-green-500 bg-green-50 text-green-700 ring-2 ring-green-200' : 'border-gray-200 hover:border-gray-300'}`}>
+                  className={`p-5 border-2 rounded-xl text-left transition-all hover:shadow-md ${campaignData.type === 'immediate' ? 'border-green-500 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 ring-2 ring-green-200 dark:ring-green-500/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'}`}>
                   <Icon icon="solar:bolt-bold-duotone" className="w-8 h-8 mb-2" />
                   <div className="font-semibold text-base">Inmediato</div>
-                  <div className="text-xs text-gray-500 mt-1">Se envía al crear la campaña</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Se envía al crear la campaña</div>
                 </button>
                 <button type="button" onClick={() => setCampaignData(prev => ({ ...prev, type: 'scheduled' }))}
-                  className={`p-5 border-2 rounded-xl text-left transition-all hover:shadow-md ${campaignData.type === 'scheduled' ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200' : 'border-gray-200 hover:border-gray-300'}`}>
+                  className={`p-5 border-2 rounded-xl text-left transition-all hover:shadow-md ${campaignData.type === 'scheduled' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 ring-2 ring-blue-200 dark:ring-blue-500/30' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'}`}>
                   <Icon icon="solar:calendar-mark-bold-duotone" className="w-8 h-8 mb-2" />
                   <div className="font-semibold text-base">Programado</div>
-                  <div className="text-xs text-gray-500 mt-1">Elige fecha y hora de envío</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Elige fecha y hora de envío</div>
                 </button>
               </div>
             </div>
@@ -831,26 +827,26 @@ if (reset) {
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="campaign-name">Nombre de la Campaña *</Label>
-                <Input id="campaign-name" placeholder="Ej: Promoción Enero 2024" value={campaignData.name} onChange={(e) => setCampaignData(prev => ({ ...prev, name: e.target.value }))} />
+                <Label htmlFor="campaign-name" className="text-gray-700 dark:text-gray-300">Nombre de la Campaña *</Label>
+                <Input id="campaign-name" placeholder="Ej: Promoción Enero 2024" value={campaignData.name} onChange={(e) => setCampaignData(prev => ({ ...prev, name: e.target.value }))} className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder-gray-500" />
               </div>
               <div>
-                <Label htmlFor="campaign-description">Descripción</Label>
-                <Input id="campaign-description" placeholder="Descripción breve de la campaña" value={campaignData.description} onChange={(e) => setCampaignData(prev => ({ ...prev, description: e.target.value }))} />
+                <Label htmlFor="campaign-description" className="text-gray-700 dark:text-gray-300">Descripción</Label>
+                <Input id="campaign-description" placeholder="Descripción breve de la campaña" value={campaignData.description} onChange={(e) => setCampaignData(prev => ({ ...prev, description: e.target.value }))} className="dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:placeholder-gray-500" />
               </div>
             </div>
 
             {/* Scheduled Date */}
             {campaignData.type === 'scheduled' && (
               <div>
-                <Label htmlFor="scheduled-date">Fecha y Hora de Envío *</Label>
-                <Input id="scheduled-date" type="datetime-local" value={campaignData.scheduled_date || ''} onChange={(e) => setCampaignData(prev => ({ ...prev, scheduled_date: e.target.value }))} />
+                <Label htmlFor="scheduled-date" className="text-gray-700 dark:text-gray-300">Fecha y Hora de Envío *</Label>
+                <Input id="scheduled-date" type="datetime-local" value={campaignData.scheduled_date || ''} onChange={(e) => setCampaignData(prev => ({ ...prev, scheduled_date: e.target.value }))} className="dark:bg-gray-800 dark:border-gray-700 dark:text-white" />
               </div>
             )}
 
             {/* WhatsApp Instance */}
             <div>
-              <Label className="flex items-center gap-2 mb-2">
+              <Label className="flex items-center gap-2 mb-2 text-gray-700 dark:text-gray-300">
                 <Icon icon="solar:chat-round-dots-bold-duotone" className="w-4 h-4 text-green-500" />
                 Instancia de WhatsApp
               </Label>
@@ -858,85 +854,82 @@ if (reset) {
                 const connectedInstances = whatsappInstances.filter((inst) => inst.status === 'connected' || inst.status === 'authenticated');
                 const hasConnected = connectedInstances.length > 0;
                 return (
-                  <div className={`mb-3 p-3 rounded-lg border ${hasConnected ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <div className={`mb-3 p-3 rounded-lg border ${hasConnected ? 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/30' : 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'}`}>
                     <div className="flex items-center gap-2">
-                      <Icon icon={hasConnected ? "solar:check-circle-bold-duotone" : "solar:danger-triangle-bold-duotone"} className={`w-5 h-5 ${hasConnected ? 'text-green-600' : 'text-red-600'}`} />
+                      <Icon icon={hasConnected ? "solar:check-circle-bold-duotone" : "solar:danger-triangle-bold-duotone"} className={`w-5 h-5 ${hasConnected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
                       <div>
-                        <p className={`text-sm font-medium ${hasConnected ? 'text-green-700' : 'text-red-700'}`}>
+                        <p className={`text-sm font-medium ${hasConnected ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                           {hasConnected ? `${connectedInstances.length} instancia(s) conectada(s)` : 'No hay instancias conectadas'}
                         </p>
-                        <p className="text-xs text-gray-500">{hasConnected ? 'Puedes enviar mensajes de WhatsApp' : 'Ve a Conexiones WhatsApp para conectar una instancia'}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{hasConnected ? 'Puedes enviar mensajes de WhatsApp' : 'Ve a Conexiones WhatsApp para conectar una instancia'}</p>
                       </div>
                     </div>
                   </div>
                 );
               })()}
-              <select className="w-full p-2 border rounded-md" value={campaignData.whatsapp_instance_id || ''} onChange={(e) => setCampaignData(prev => ({ ...prev, whatsapp_instance_id: e.target.value ? parseInt(e.target.value) : undefined }))}>
+              <select className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white" value={campaignData.whatsapp_instance_id || ''} onChange={(e) => setCampaignData(prev => ({ ...prev, whatsapp_instance_id: e.target.value ? parseInt(e.target.value) : undefined }))}>
                 <option value="">Instancia automática</option>
                 {whatsappInstances.map((instance) => (<option key={instance.id} value={instance.id}>{instance.name}</option>))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">Selecciona una instancia específica o deja automático</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Selecciona una instancia específica o deja automático</p>
             </div>
 
             {/* Validation Errors */}
             {validationErrors.length > 0 && (
-              <Alert className="border-red-200 bg-red-50">
-                <Icon icon="solar:danger-bold" className="w-4 h-4 text-red-600" />
+              <Alert className="border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
+                <Icon icon="solar:danger-bold" className="w-4 h-4 text-red-600 dark:text-red-400" />
                 <AlertDescription>
-                  <div className="space-y-1">{validationErrors.map((error, index) => (<div key={index} className="text-red-700 text-sm">• {error}</div>))}</div>
+                  <div className="space-y-1">{validationErrors.map((error, index) => (<div key={index} className="text-red-700 dark:text-red-400 text-sm">• {error}</div>))}</div>
                 </AlertDescription>
               </Alert>
             )}
 
             {/* Navigation */}
             <div className="flex justify-end">
-              <Button onClick={handleNext} className="px-8">
+              <Button onClick={handleNext} className="px-8 bg-indigo-600 hover:bg-indigo-700 text-white">
                 Siguiente <Icon icon="solar:arrow-right-bold" className="w-4 h-4 ml-2" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* STEP 2: Mensaje */}
+        {/* STEP 2: Plantilla */}
         {currentStep === 2 && (
           <div className="space-y-6">
-            {/* Toggle: Template vs Free Text */}
-            <div>
-              <Label className="text-base font-semibold mb-3 block">Tipo de Mensaje</Label>
-              <div className="grid grid-cols-2 gap-4">
-                <button type="button" onClick={() => setCampaignData(prev => ({ ...prev, messageMode: 'template' }))}
-                  className={`p-4 border-2 rounded-xl text-left transition-all hover:shadow-md ${campaignData.messageMode === 'template' ? 'border-green-500 bg-green-50 text-green-700 ring-2 ring-green-200' : 'border-gray-200 hover:border-gray-300'}`}>
-                  <Icon icon="solar:document-text-bold-duotone" className="w-7 h-7 mb-2" />
-                  <div className="font-semibold">Plantilla Meta</div>
-                  <div className="text-xs text-gray-500 mt-1">Usa una plantilla aprobada (recomendado)</div>
-                </button>
-                <button type="button" onClick={() => { setCampaignData(prev => ({ ...prev, messageMode: 'freetext', template_name: undefined, template_language: undefined, variable_mapping: undefined })); setSelectedMetaTemplate(null); }}
-                  className={`p-4 border-2 rounded-xl text-left transition-all hover:shadow-md ${campaignData.messageMode === 'freetext' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200' : 'border-gray-200 hover:border-gray-300'}`}>
-                  <Icon icon="solar:pen-new-square-bold-duotone" className="w-7 h-7 mb-2" />
-                  <div className="font-semibold">Texto Libre</div>
-                  <div className="text-xs text-gray-500 mt-1">Escribe un mensaje personalizado</div>
-                </button>
+            {/* Info banner: templates required */}
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30">
+              <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Icon icon="solar:shield-check-bold-duotone" className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">Plantilla requerida por Meta</p>
+                <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Para enviar campañas masivas por WhatsApp, Meta requiere usar plantillas previamente aprobadas. Esto garantiza la entrega y evita bloqueos en tu cuenta.</p>
               </div>
             </div>
 
-            {/* Template Mode */}
-            {campaignData.messageMode === 'template' && (
-              <div className="space-y-4">
-                <Label className="text-sm font-semibold flex items-center gap-2">
-                  <Icon icon="solar:document-text-bold-duotone" className="w-5 h-5 text-green-500" />
-                  Selecciona una Plantilla Aprobada por Meta
-                </Label>
-                {loadingTemplates ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Icon icon="solar:refresh-bold" className="w-6 h-6 animate-spin text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-500">Cargando plantillas...</span>
+            {/* Template Selection */}
+            <div className="space-y-4">
+              <Label className="text-sm font-semibold flex items-center gap-2 text-gray-900 dark:text-white">
+                <Icon icon="solar:document-text-bold-duotone" className="w-5 h-5 text-green-500 dark:text-green-400" />
+                Selecciona una Plantilla Aprobada
+              </Label>
+              {loadingTemplates ? (
+                <div className="flex items-center justify-center py-10">
+                  <Icon icon="solar:refresh-bold" className="w-6 h-6 animate-spin text-gray-400 dark:text-gray-500 mr-2" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Cargando plantillas...</span>
+                </div>
+              ) : metaTemplates.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 dark:bg-gray-800/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center mx-auto mb-3">
+                    <Icon icon="solar:document-add-bold-duotone" className="w-7 h-7 text-amber-600 dark:text-amber-400" />
                   </div>
-                ) : metaTemplates.length === 0 ? (
-                  <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                    <Icon icon="solar:document-text-bold-duotone" className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500 font-medium">No hay plantillas aprobadas</p>
-                    <p className="text-xs text-gray-400 mt-1">Crea una plantilla en la sección de Plantillas y espera la aprobación de Meta</p>
-                  </div>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">No tienes plantillas aprobadas</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-sm mx-auto">Necesitas crear al menos una plantilla y esperar la aprobación de Meta antes de poder enviar campañas.</p>
+                  <Button type="button" onClick={() => { onClose(); navigate('/apps/whatsapp/plantillas'); }} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-6">
+                    <Icon icon="solar:add-circle-bold" className="w-4 h-4 mr-2" />
+                    Crear Plantilla
+                  </Button>
+                </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1">
                     {metaTemplates.map(tpl => {
@@ -945,24 +938,24 @@ if (reset) {
                       const isSelected = selectedMetaTemplate?.id === tpl.id;
                       return (
                         <button key={tpl.id} type="button"
-                          className={`relative border rounded-xl p-3 text-left transition-all hover:shadow-md ${isSelected ? 'border-green-500 bg-green-50 ring-2 ring-green-200' : 'border-gray-200 hover:border-green-300'}`}
+                          className={`relative border rounded-xl p-3 text-left transition-all hover:shadow-md ${isSelected ? 'border-green-500 bg-green-50 dark:bg-green-500/10 ring-2 ring-green-200 dark:ring-green-500/30' : 'border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-500/50 bg-white dark:bg-gray-800'}`}
                           onClick={() => handleSelectMetaTemplate(tpl)}>
                           <div className="flex items-start justify-between mb-1">
-                            <span className="font-mono text-xs font-medium text-gray-900">{tpl.name}</span>
-                            <Badge className={`text-[10px] ${tpl.category === 'MARKETING' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            <span className="font-mono text-xs font-medium text-gray-900 dark:text-gray-200">{tpl.name}</span>
+                            <Badge className={`text-[10px] ${tpl.category === 'MARKETING' ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400'}`}>
                               {tpl.category === 'MARKETING' ? 'Marketing' : 'Utilidad'}
                             </Badge>
                           </div>
-                          <div className="bg-white rounded-lg p-2 mb-1 border border-gray-100">
-                            <p className="text-[11px] text-gray-600 whitespace-pre-wrap line-clamp-3">{bodyText}</p>
+                          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-2 mb-1 border border-gray-100 dark:border-gray-700">
+                            <p className="text-[11px] text-gray-600 dark:text-gray-400 whitespace-pre-wrap line-clamp-3">{bodyText}</p>
                           </div>
-                          {vars.length > 0 && <p className="text-[10px] text-gray-500">{vars.length} variable{vars.length > 1 ? 's' : ''}: {vars.map(v => `{{${v}}}`).join(', ')}</p>}
+                          {vars.length > 0 && <p className="text-[10px] text-gray-500 dark:text-gray-400">{vars.length} variable{vars.length > 1 ? 's' : ''}: {vars.map(v => `{{${v}}}`).join(', ')}</p>}
                           {tpl.parsed?.buttons && tpl.parsed.buttons.length > 0 && (
                             <div className="flex gap-1 mt-1">
-                              {tpl.parsed.buttons.map((btn, i) => (<span key={i} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{btn.text}</span>))}
+                              {tpl.parsed.buttons.map((btn, i) => (<span key={i} className="text-[10px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400 rounded">{btn.text}</span>))}
                             </div>
                           )}
-                          {isSelected && <div className="absolute top-2 right-2"><Icon icon="solar:check-circle-bold" className="w-5 h-5 text-green-600" /></div>}
+                          {isSelected && <div className="absolute top-2 right-2"><Icon icon="solar:check-circle-bold" className="w-5 h-5 text-green-600 dark:text-green-400" /></div>}
                         </button>
                       );
                     })}
@@ -971,21 +964,21 @@ if (reset) {
 
                 {/* Variable Mapping */}
                 {selectedMetaTemplate && campaignData.variable_mapping && Object.keys(campaignData.variable_mapping).length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-200">
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-3 border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-2">
-                      <Icon icon="solar:code-bold-duotone" className="w-4 h-4 text-indigo-600" />
-                      <Label className="text-sm font-semibold">Mapeo de Variables</Label>
+                      <Icon icon="solar:code-bold-duotone" className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <Label className="text-sm font-semibold text-gray-900 dark:text-white">Mapeo de Variables</Label>
                     </div>
-                    <p className="text-xs text-gray-500">Asigna de dónde se obtiene cada variable.</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Asigna de dónde se obtiene cada variable.</p>
                     {Object.entries(campaignData.variable_mapping).map(([varName, mapping]) => (
-                      <div key={varName} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-gray-100">
-                        <span className="text-xs font-mono text-indigo-600 w-16 flex-shrink-0 font-medium">{`{{${varName}}}`}</span>
+                      <div key={varName} className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg p-2 border border-gray-100 dark:border-gray-700">
+                        <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 w-16 flex-shrink-0 font-medium">{`{{${varName}}}`}</span>
                         <Icon icon="solar:arrow-right-bold" className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                        <select value={mapping.source} onChange={e => setCampaignData(prev => ({ ...prev, variable_mapping: { ...prev.variable_mapping, [varName]: { ...prev.variable_mapping![varName], source: e.target.value } } }))} className="flex-1 text-xs p-1.5 border rounded-md">
+                        <select value={mapping.source} onChange={e => setCampaignData(prev => ({ ...prev, variable_mapping: { ...prev.variable_mapping, [varName]: { ...prev.variable_mapping![varName], source: e.target.value } } }))} className="flex-1 text-xs p-1.5 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white">
                           {VARIABLE_SOURCES.map(s => (<option key={s.value} value={s.value}>{s.label}</option>))}
                         </select>
                         {mapping.source === 'fixed' && (
-                          <Input value={mapping.fixedValue} onChange={e => setCampaignData(prev => ({ ...prev, variable_mapping: { ...prev.variable_mapping, [varName]: { ...prev.variable_mapping![varName], fixedValue: e.target.value } } }))} placeholder="Valor para todos" className="w-32 h-7 text-xs" />
+                          <Input value={mapping.fixedValue} onChange={e => setCampaignData(prev => ({ ...prev, variable_mapping: { ...prev.variable_mapping, [varName]: { ...prev.variable_mapping![varName], fixedValue: e.target.value } } }))} placeholder="Valor para todos" className="w-32 h-7 text-xs dark:bg-gray-800 dark:border-gray-700 dark:text-white" />
                         )}
                       </div>
                     ))}
@@ -994,83 +987,34 @@ if (reset) {
 
                 {/* Template Preview */}
                 {selectedMetaTemplate && (
-                  <div className="bg-[#e5ddd5] rounded-xl p-3">
-                    <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-2">Vista previa</p>
-                    <div className="bg-white rounded-lg shadow-sm p-3 max-w-xs">
-                      {selectedMetaTemplate.parsed?.header?.text && <p className="font-bold text-sm text-gray-900 mb-1">{selectedMetaTemplate.parsed.header.text}</p>}
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedMetaTemplate.parsed?.body || ''}</p>
+                  <div className="bg-[#e5ddd5] dark:bg-gray-800 rounded-xl p-3 border dark:border-gray-700">
+                    <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Vista previa del mensaje</p>
+                    <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-3 max-w-xs border dark:border-gray-700">
+                      {selectedMetaTemplate.parsed?.header?.text && <p className="font-bold text-sm text-gray-900 dark:text-white mb-1">{selectedMetaTemplate.parsed.header.text}</p>}
+                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedMetaTemplate.parsed?.body || ''}</p>
                       {selectedMetaTemplate.parsed?.footer && <p className="text-xs text-gray-400 mt-2">{selectedMetaTemplate.parsed.footer}</p>}
                       {selectedMetaTemplate.parsed?.buttons && selectedMetaTemplate.parsed.buttons.length > 0 && (
-                        <div className="border-t border-gray-100 mt-2 pt-2 space-y-1">
-                          {selectedMetaTemplate.parsed.buttons.map((btn, i) => (<div key={i} className="text-center py-1 text-xs text-blue-500 font-medium border border-blue-50 rounded">{btn.text}</div>))}
+                        <div className="border-t border-gray-100 dark:border-gray-700 mt-2 pt-2 space-y-1">
+                          {selectedMetaTemplate.parsed.buttons.map((btn, i) => (<div key={i} className="text-center py-1 text-xs text-blue-500 dark:text-blue-400 font-medium border border-blue-50 dark:border-blue-500/20 rounded">{btn.text}</div>))}
                         </div>
                       )}
                     </div>
                   </div>
                 )}
               </div>
-            )}
-
-            {/* Free Text Mode */}
-            {campaignData.messageMode === 'freetext' && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="message-textarea" className="text-base font-semibold">Mensaje de la Campaña *</Label>
-                  <Textarea id="message-textarea" placeholder="Escribe tu mensaje aquí... Usa {nombre}, {apellidos}, etc. para personalizar" value={campaignData.message_template} onChange={(e) => setCampaignData(prev => ({ ...prev, message_template: e.target.value }))} rows={6} className={`resize-none ${messageValidation && !messageValidation.isValid ? 'border-red-500' : ''}`} />
-                  <div className="flex justify-between items-center text-xs mt-1">
-                    <span className={`${messageValidation?.characterCount > 4096 ? 'text-red-600' : messageValidation?.characterCount > 3686 ? 'text-yellow-600' : 'text-gray-500'}`}>
-                      {messageValidation?.characterCount || 0}/4096 caracteres
-                    </span>
-                    {messageValidation && !messageValidation.isValid && <span className="text-red-600 font-medium">⚠️ Errores detectados</span>}
-                  </div>
-                  {messageValidation && messageValidation.errors.length > 0 && (
-                    <Alert className="border-red-200 bg-red-50 mt-2">
-                      <Icon icon="solar:danger-bold" className="w-4 h-4 text-red-600" />
-                      <AlertDescription><div className="space-y-1">{messageValidation.errors.map((error: string, index: number) => (<div key={index} className="text-red-700 text-sm">• {error}</div>))}</div></AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">Variables Disponibles</Label>
-                  <div className="border rounded-md p-3 max-h-40 overflow-y-auto">
-                    <div className="grid grid-cols-2 gap-2">
-                      {AVAILABLE_VARIABLES.map((variable) => (
-                        <button key={variable.key} type="button" onClick={() => insertVariable(variable.key)} className="flex items-center justify-between p-2 text-xs border rounded hover:bg-gray-50 transition-colors">
-                          <span className="font-medium">{variable.label}</span>
-                          <Badge variant="outline" className="text-xs">{`{${variable.key}}`}</Badge>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">Vista Previa</Label>
-                  <div className="border rounded-md p-3 bg-gray-50 min-h-[80px]">
-                    {selectedPreviewClient ? (
-                      <div className="space-y-2">
-                        <div className="text-xs text-gray-500">Preview para: {selectedPreviewClient.nombre} {selectedPreviewClient.apellidos}</div>
-                        <div className="text-sm whitespace-pre-wrap">{messagePreview || "Escribe un mensaje para ver la vista previa..."}</div>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-gray-500">{campaignData.message_template || "Escribe un mensaje para ver la vista previa..."}</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {validationErrors.length > 0 && (
-              <Alert className="border-red-200 bg-red-50">
-                <Icon icon="solar:danger-bold" className="w-4 h-4 text-red-600" />
-                <AlertDescription><div className="space-y-1">{validationErrors.map((error, index) => (<div key={index} className="text-red-700 text-sm">• {error}</div>))}</div></AlertDescription>
+              <Alert className="border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
+                <Icon icon="solar:danger-bold" className="w-4 h-4 text-red-600 dark:text-red-400" />
+                <AlertDescription><div className="space-y-1">{validationErrors.map((error, index) => (<div key={index} className="text-red-700 dark:text-red-400 text-sm">• {error}</div>))}</div></AlertDescription>
               </Alert>
             )}
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={handleBack}>
+              <Button variant="outline" onClick={handleBack} className="dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
                 <Icon icon="solar:arrow-left-bold" className="w-4 h-4 mr-2" /> Anterior
               </Button>
-              <Button onClick={handleNext} className="px-8">
+              <Button onClick={handleNext} className="px-8 bg-indigo-600 hover:bg-indigo-700 text-white">
                 Siguiente <Icon icon="solar:arrow-right-bold" className="w-4 h-4 ml-2" />
               </Button>
             </div>
@@ -1080,21 +1024,21 @@ if (reset) {
         {/* STEP 3: Destinatarios */}
         {currentStep === 3 && (
           <div className="space-y-6">
-            <Label className="text-base font-semibold mb-3 block">Destinatarios</Label>
+            <Label className="text-base font-semibold mb-3 block text-gray-900 dark:text-white">Destinatarios</Label>
 
             {/* Select All Toggle */}
             <button type="button" onClick={() => handleSelectAllToggle(!campaignData.selectAllClients)}
-              className={`w-full flex items-center justify-between p-4 mb-4 rounded-xl border-2 transition-all ${campaignData.selectAllClients ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-400 shadow-md' : 'bg-gray-50 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'}`}>
+              className={`w-full flex items-center justify-between p-4 mb-4 rounded-xl border-2 transition-all ${campaignData.selectAllClients ? 'bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-500/10 dark:to-emerald-500/10 border-green-400 dark:border-green-500/50 shadow-md' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-500/50 hover:bg-indigo-50 dark:hover:bg-indigo-500/5'}`}>
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${campaignData.selectAllClients ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${campaignData.selectAllClients ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                   <Icon icon="solar:users-group-two-rounded-bold-duotone" className="w-5 h-5" />
                 </div>
                 <div className="text-left">
-                  <div className={`font-semibold ${campaignData.selectAllClients ? 'text-green-700' : 'text-gray-700'}`}>Enviar a todos los clientes</div>
-                  <div className="text-xs text-gray-500">{campaignData.selectAllClients ? '✓ Se enviará a todos los clientes activos con celular' : 'Haz clic para seleccionar todos automáticamente'}</div>
+                  <div className={`font-semibold ${campaignData.selectAllClients ? 'text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>Enviar a todos los clientes</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{campaignData.selectAllClients ? '✓ Se enviará a todos los clientes activos con celular' : 'Haz clic para seleccionar todos automáticamente'}</div>
                 </div>
               </div>
-              <div className={`w-12 h-7 rounded-full p-1 transition-all ${campaignData.selectAllClients ? 'bg-green-500' : 'bg-gray-300'}`}>
+              <div className={`w-12 h-7 rounded-full p-1 transition-all ${campaignData.selectAllClients ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                 <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-transform ${campaignData.selectAllClients ? 'translate-x-5' : 'translate-x-0'}`} />
               </div>
             </button>
@@ -1103,15 +1047,15 @@ if (reset) {
               <>
                 {/* Segmentos */}
                 <div className="space-y-3 mb-4">
-                  <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                  <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                          <Icon icon="solar:users-group-rounded-bold-duotone" className="w-4 h-4 text-purple-600" />
+                        <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center">
+                          <Icon icon="solar:users-group-rounded-bold-duotone" className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                         </div>
                         <div>
-                          <Label className="text-sm font-semibold text-gray-800">Segmentos Guardados</Label>
-                          <p className="text-xs text-gray-500">{segments.length} segmento(s) disponible(s)</p>
+                          <Label className="text-sm font-semibold text-gray-800 dark:text-gray-200">Segmentos Guardados</Label>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{segments.length} segmento(s) disponible(s)</p>
                         </div>
                       </div>
                       <Button type="button" variant="outline" size="sm" onClick={() => setShowSegmentManager(true)} className="h-8 px-3 text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200">
@@ -1264,24 +1208,24 @@ if (reset) {
             )}
 
             {campaignData.selectAllClients && (
-              <Alert>
-                <Icon icon="solar:info-circle-bold" className="w-4 h-4" />
-                <AlertDescription>La campaña se enviará a todos los clientes activos con número de celular válido.</AlertDescription>
+              <Alert className="dark:border-gray-700 dark:bg-gray-800">
+                <Icon icon="solar:info-circle-bold" className="w-4 h-4 dark:text-blue-400" />
+                <AlertDescription className="dark:text-gray-300">La campaña se enviará a todos los clientes activos con número de celular válido.</AlertDescription>
               </Alert>
             )}
 
             {validationErrors.length > 0 && (
-              <Alert className="border-red-200 bg-red-50">
-                <Icon icon="solar:danger-bold" className="w-4 h-4 text-red-600" />
-                <AlertDescription><div className="space-y-1">{validationErrors.map((error, index) => (<div key={index} className="text-red-700 text-sm">• {error}</div>))}</div></AlertDescription>
+              <Alert className="border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10">
+                <Icon icon="solar:danger-bold" className="w-4 h-4 text-red-600 dark:text-red-400" />
+                <AlertDescription><div className="space-y-1">{validationErrors.map((error, index) => (<div key={index} className="text-red-700 dark:text-red-400 text-sm">• {error}</div>))}</div></AlertDescription>
               </Alert>
             )}
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={handleBack}>
+              <Button variant="outline" onClick={handleBack} className="dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800">
                 <Icon icon="solar:arrow-left-bold" className="w-4 h-4 mr-2" /> Anterior
               </Button>
-              <Button onClick={handleSubmit} disabled={loading} className="px-8">
+              <Button onClick={handleSubmit} disabled={loading} className="px-8 bg-indigo-600 hover:bg-indigo-700 text-white">
                 {loading ? <Icon icon="solar:refresh-bold" className="w-4 h-4 mr-2 animate-spin" /> : <Icon icon="solar:paper-plane-bold" className="w-4 h-4 mr-2" />}
                 {campaignData.type === 'immediate' ? 'Crear y Enviar' : 'Programar Campaña'}
               </Button>
@@ -1291,9 +1235,9 @@ if (reset) {
 
         {/* Modal de gestión de segmentos */}
         <Dialog open={showSegmentManager} onOpenChange={setShowSegmentManager}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 border dark:border-gray-700/50">
             <DialogHeader>
-              <DialogTitle>Gestión de Segmentos</DialogTitle>
+              <DialogTitle className="text-gray-900 dark:text-white">Gestión de Segmentos</DialogTitle>
             </DialogHeader>
             <ClientSegmentManager
               clients={clients}

@@ -159,97 +159,56 @@ class VoiceCampaignCallService
 
             $agentDisplayName = $agentName ?: 'tu asesor';
             $safeCompany      = $companyName ?: $brokerCommercialName;
-            $firstMessage     = "Hola {$customerName}, soy {$agentDisplayName} de {$safeCompany}. " .
+
+            // Detectar si el voice_message_template es un prompt completo del agente (contiene headers #)
+            // o solo un mensaje simple de campaña
+            $isFullAgentPrompt = (strlen($personalizedMsg) > 500 && (
+                str_contains($personalizedMsg, '# IDENTIDAD') ||
+                str_contains($personalizedMsg, '# FLUJO') ||
+                str_contains($personalizedMsg, '# REGLAS') ||
+                str_contains($personalizedMsg, '# Personality') ||
+                str_contains($personalizedMsg, '## APERTURA')
+            ));
+
+            if ($isFullAgentPrompt) {
+                // El template ya contiene el prompt completo del agente — usarlo directamente
+                $finalPrompt = $personalizedMsg;
+                // Extraer primer mensaje del prompt si contiene uno, o construir uno genérico
+                $firstMessage = "Hola {$customerName}, soy {$agentDisplayName} de {$safeCompany}. ¿Tienes un momento?";
+            } else {
+                // Template simple — construir prompt genérico breve
+                $firstMessage = "Hola {$customerName}, soy {$agentDisplayName} de {$safeCompany}. " .
                                 "Quería hablar contigo sobre tu póliza {$policyNumber}. ¿Te puedo contar los detalles?";
 
-            $whatsappInstruccion = $whatsappEnabled
-                ? " y pregunta si desea recibir el enlace de pago por WhatsApp. Si acepta, confirma el número de WhatsApp (puede ser el mismo de la llamada u otro)"
-                : "";
-            $whatsappCierre = $whatsappEnabled
-                ? "\n   - Si el cliente aceptó recibir el enlace por WhatsApp, confirma el número"
-                : "";
-            $whatsappGuardrail = $whatsappEnabled
-                ? "\n- Solo ofrece el envío por WhatsApp si el cliente lo acepta. Si no tiene WhatsApp, simplemente confirma la fecha de pago."
-                : "\n- NO menciones WhatsApp en ningún momento. Solo confirma la fecha en que puede realizar el pago.";
-
-            // Construir sección de cierre según si hay recolección de datos o no
-            $hasDataCollection = !empty($collectInstruction);
-            $cierreSection = $hasDataCollection
-                ? "4) Cierre (recolección de datos al final):
-   - Solo si corresponde y el cliente acepta continuar o finalizar, realiza la recolección de datos requerida.
-   - Pide todos los datos en una sola tanda (no interrumpas el flujo con datos administrativos antes).
-   - Anuncia la transición: \"Antes de finalizar, necesito confirmar unos datos cortos\".
-   - Para cada dato activo, usa EXACTAMENTE el formato: \"campo: valor\"
-     (ej.: \"email: usuario@dominio.com\", \"número de documento: 123456789\", \"address: Calle 10 # 20-30\").
-   - Si ya obtuviste un dato durante la conversación, no lo repitas; confírmalo una única vez.{$whatsappCierre}
-   - Al final, pregunta: \"¿Hay algo más en lo que pueda ayudarte?\" y ESPERA la respuesta del cliente.
-   - Solo después de que el cliente responda (\"no\", \"nada más\", \"eso es todo\", etc.), despídete cordialmente."
-                : "4) Cierre y despedida:
-   - Una vez confirmada la acción (fecha de pago, compromiso, etc.), pregunta: \"¿Hay algo más en lo que pueda ayudarte?\"
-   - IMPORTANTE: ESPERA a que el cliente responda antes de despedirte. No te despidas inmediatamente después de preguntar.
-   - Solo cuando el cliente confirme que no necesita nada más, despídete cordialmente: \"Perfecto, {$customerName}. Muchas gracias por tu tiempo. Que tengas un excelente día. ¡Hasta pronto!\"{$whatsappCierre}
-   - NO solicites datos adicionales si no están configurados.";
-
-            $toolsSection = $hasDataCollection
-                ? "# Tools
-Usa estas instrucciones únicamente en el paso 4 (Cierre), no antes.
-{$collectInstruction}"
-                : "# Tools
-No hay datos adicionales que recolectar en esta llamada. Procede directamente al cierre y despedida una vez confirmada la acción del cliente.";
-
-            $finalPrompt = trim("
+                $finalPrompt = trim("
 # Personality
-Eres {$agentDisplayName}, una asesora de {$safeCompany}. Tienes una personalidad amable, directa y resolutiva. Hablas español de Colombia.
+Eres {$agentDisplayName}, asesora de {$safeCompany}. Amable, directa, resolutiva. Español de Colombia.
 
 # Environment
-Estás realizando una llamada telefónica a un cliente. Mantente profesional y breve.
-Datos de contexto disponibles (si aplican):
-- Cliente: {$customerName}
-- Póliza: {$policyNumber}
-- Fecha límite: {$dueDate}
-- Deuda estimada: {$debtAmountRaw}
-- Contexto de campaña: {$personalizedMsg}
+Llamada telefónica. Cliente: {$customerName}. Póliza: {$policyNumber}. Fecha límite: {$dueDate}.
+Contexto: {$personalizedMsg}
 
 # Tone
-Mantén respuestas cortas y directas (máximo 2-3 oraciones). Evita repetir lo que ya se dijo; reformula solo si el cliente no entendió.
+Máximo 2 oraciones por turno. Nombres propios cortos y naturales. No repitas info ya dicha.
+CRÍTICO: NUNCA digas dígitos sueltos. Convierte TODOS los números a palabras: 50000 = cincuenta mil, 247000 = doscientos cuarenta y siete mil.
 
 # Goal
-Tu objetivo es que el cliente entienda claramente el motivo de la llamada (recordatorio de pago), defina el siguiente paso (pago ahora o cuándo){$whatsappInstruccion}. Si no es inmediato, confirma fecha tentativa de pago.
+Recordatorio de pago. Confirmar siguiente paso (pago ahora o fecha tentativa).
 
-Plan de conversación y orden:
-1) Apertura (breve):
-   - Saluda por el nombre del cliente y preséntate con el nombre del agente y la compañía.
-   - INMEDIATAMENTE indica el motivo de la llamada en una sola oración.
-2) Desarrollo (resolver el objetivo):
-   - Atiende el objetivo principal primero (recordar vencimiento, falta de cobertura, opciones de pago).
-   - Haz solo las preguntas estrictamente necesarias para avanzar la intención principal.
-   - Evita repetir lo que ya se dijo; reformula solo si el cliente no entendió.
-   - Mantén respuestas cortas y directas (máximo 2-3 oraciones).
-3) Confirmación de decisiones (según políticas):
-   - Confirma con el cliente la acción acordada (p. ej., envío del enlace por WhatsApp al mismo número u otro, compromiso de pago inmediato o fecha y recordatorio).
-   - NO solicites datos aún. Primero cierra la decisión y recibe la respuesta del cliente.
-{$cierreSection}
-5) Si el cliente está ocupado:
-   - Ofrece reagendar de forma proactiva y NO recolectes datos en ese momento.
+# Flujo
+1) Saluda y di el motivo en 1 oración.
+2) Resuelve el objetivo (vencimiento, opciones de pago).
+3) Confirma la acción acordada.
+4) Pregunta: ¿Hay algo más? ESPERA respuesta. Solo después despídete.
 
-# Guardrails
+# Reglas
 - Sé amable pero directa.
-- No uses tecnicismos innecesarios.
-- Si el cliente está molesto, no presiones.
-- Usa el nombre del cliente una vez que lo sepas.
-- No repitas información salvo para confirmar una única vez.
-- No enumeres opciones extensas; entrega la información esencial.
-- Mantén el control del flujo y redirige con suavidad si el cliente se desvía.
-- No pidas datos administrativos hasta el cierre, salvo que sean imprescindibles para avanzar.
-- Siempre usa español de Colombia.{$whatsappGuardrail}
-- CRÍTICO: NUNCA termines la llamada sin una despedida cordial.
-- La despedida es OBLIGATORIA en todas las llamadas, sin excepción.
-- IMPORTANTE: Cuando preguntes \"¿Hay algo más en lo que pueda ayudarte?\", ESPERA a que el cliente responda. No hables encima de su respuesta.
-- Solo después de que el cliente confirme que no necesita nada más (\"no\", \"no gracias\", \"eso es todo\", \"nada más\"), despídete cordialmente: \"Perfecto, muchas gracias por tu tiempo. Que tengas un excelente día. ¡Hasta pronto!\"
-- NO te despidas mientras el cliente aún está hablando o antes de que responda a tu pregunta.
-
-{$toolsSection}
+- ESPERA respuesta del cliente antes de continuar.
+- NUNCA cuelgues sin despedirte cordialmente.
+- Español de Colombia.
+{$collectInstruction}
 ");
+            }
 
             $payload = [
                 'agent_id' => $agentId,
@@ -264,7 +223,13 @@ Plan de conversación y orden:
                         'language' => 'es',
                     ],
                     'tts' => [
+                        'model_id' => 'eleven_flash_v2_5',
                         'voice_id' => $voiceId ?: null,
+                        'stability' => $voiceSettings['stability'] ?? 0.9,
+                        'similarity_boost' => $voiceSettings['similarityBoost'] ?? $voiceSettings['similarity_boost'] ?? 0.80,
+                        'style' => $voiceSettings['style'] ?? 0.0,
+                        'use_speaker_boost' => $voiceSettings['speakerBoost'] ?? $voiceSettings['use_speaker_boost'] ?? false,
+                        'optimize_streaming_latency' => 4,
                     ],
                 ],
                 'conversation_initiation_client_data' => [
@@ -276,7 +241,13 @@ Plan de conversación y orden:
                             'language' => 'es',
                         ],
                         'tts' => [
+                            'model_id' => 'eleven_flash_v2_5',
                             'voice_id' => $voiceId ?: null,
+                            'stability' => $voiceSettings['stability'] ?? 0.9,
+                            'similarity_boost' => $voiceSettings['similarityBoost'] ?? $voiceSettings['similarity_boost'] ?? 0.80,
+                            'style' => $voiceSettings['style'] ?? 0.0,
+                            'use_speaker_boost' => $voiceSettings['speakerBoost'] ?? $voiceSettings['use_speaker_boost'] ?? false,
+                            'optimize_streaming_latency' => 4,
                         ],
                     ],
                     'custom_variables' => [
@@ -287,21 +258,7 @@ Plan de conversación y orden:
                         'policy_number' => (string) $policyNumber,
                         'payment_due_date' => (string) $dueDate,
                     ],
-                    'temperature' => 0.4,
-                ],
-                'overrides' => [
-                    'agent' => [
-                        'prompt' => [ 'prompt' => trim("Eres un asistente virtual profesional de una compañía de seguros.
-Contexto de campaña: {$personalizedMsg}
-{$collectInstruction}") ],
-                        'first_message' => $firstMessage,
-                        'firstMessage' => $firstMessage,
-                        'language' => 'es',
-                    ],
-                    'tts' => [
-                        'voice_id' => $voiceId ?: null,
-                        'voiceId'  => $voiceId ?: null,
-                    ],
+                    'temperature' => 0.1,
                 ],
                 'metadata' => [
                     'contact_name' => $customerName,

@@ -33,9 +33,15 @@ const BaseMenuitems: MenuitemsType[] = [
   },
   {
     id: uniqueId(),
+    title: 'Inicio',
+    icon: 'solar:home-smile-bold-duotone',
+    href: '/apps/',
+  },
+  {
+    id: uniqueId(),
     title: 'Dashboard',
     icon: 'solar:widget-2-bold-duotone',
-    href: '/apps/',
+    href: '/apps/dashboard',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -253,6 +259,22 @@ const BaseMenuitems: MenuitemsType[] = [
     title: 'Mini Web',
     icon: 'solar:smartphone-2-bold-duotone',
     href: '/apps/marketing/mini-web',
+  },
+  {
+    id: uniqueId(),
+    title: 'Mi Página Web',
+    icon: 'solar:globe-bold-duotone',
+    href: '/apps/marketing/mi-web',
+    chip: 'Nuevo',
+    chipColor: 'primary',
+  },
+  {
+    id: uniqueId(),
+    title: 'Creador de Contenido',
+    icon: 'solar:pallete-2-bold-duotone',
+    href: '/apps/marketing/creador-contenido',
+    chip: 'Nuevo',
+    chipColor: 'success',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -484,7 +506,8 @@ const applyTerminologia = (items: MenuitemsType[], terminologia: { vendedor: str
 export const getFilteredMenuItems = (
   hasPermission: (module: string, action: string) => boolean,
   canAccessModule: (module: string) => boolean,
-  terminologia?: { vendedor: string; vendedorPlural: string }
+  terminologia?: { vendedor: string; vendedorPlural: string },
+  isModuleInPlan?: (module: string) => boolean,
 ): MenuitemsType[] => {
   let items = [...BaseMenuitems];
   
@@ -493,7 +516,7 @@ export const getFilteredMenuItems = (
     items = applyTerminologia(items, terminologia);
   }
   
-  const filteredItems = filterMenuItemsByPermissions(items, hasPermission, canAccessModule);
+  const filteredItems = filterMenuItemsByPermissions(items, hasPermission, canAccessModule, isModuleInPlan);
   const cleanedItems = cleanOrphanedNavLabels(filteredItems);
   return cleanedItems;
 };

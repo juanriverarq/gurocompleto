@@ -80,6 +80,10 @@ const config: Config = {
   			'64': '64px'
   		},
   		colors: {
+  			gray: {
+  				'800': 'rgb(28 28 28)',
+  				'900': 'rgb(15 15 15)',
+  			},
   			cyan: {
   				'500': 'var(--color-primary)',
   				'600': 'var(--color-primary)',

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Badge, Progress, Spinner, Alert } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../config/api';
+import { MODULES } from '../../../components/landingpage/pricing-calculator/modules';
 
 interface SubscriptionData {
   subscription: {
@@ -38,7 +39,7 @@ interface UsageData {
   users: { used: number; limit: number; percentage: number };
   clients: { used: number; limit: number; percentage: number };
   policies: { used: number; limit: number; percentage: number };
-  storage: { used_mb: number; limit_gb: number; percentage: number };
+  storage: { used_bytes: number; used_mb: number; used_gb: number; limit_gb: number; file_count: number; percentage: number };
   subscription?: {
     period: string;
     status: string;
@@ -87,8 +88,8 @@ const MiSuscripcion: React.FC = () => {
 
   const getPlanDetails = (plan: string) => {
     const plans: Record<string, { name: string; color: string; icon: string }> = {
-      basic: {
-        name: 'Básico',
+      starter: {
+        name: 'Starter',
         color: 'gray',
         icon: 'solar:shield-bold-duotone'
       },
@@ -97,13 +98,18 @@ const MiSuscripcion: React.FC = () => {
         color: 'info',
         icon: 'solar:rocket-bold-duotone'
       },
-      enterprise: {
-        name: 'Empresarial',
+      business: {
+        name: 'Business',
+        color: 'purple',
+        icon: 'solar:buildings-bold-duotone'
+      },
+      custom: {
+        name: 'A tu medida',
         color: 'purple',
         icon: 'solar:crown-bold-duotone'
       }
     };
-    return plans[plan] || plans.basic;
+    return plans[plan] || plans.starter;
   };
 
   const formatDate = (dateString: string) => {
@@ -113,6 +119,36 @@ const MiSuscripcion: React.FC = () => {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const broker = subscriptionData?.broker;
+  const subscription = subscriptionData?.subscription;
+  const planDetails = getPlanDetails(broker?.plan || 'starter');
+  const isInTrial = subscriptionData?.is_in_trial || false;
+  const trialDaysRemaining = subscriptionData?.trial_days_remaining || 0;
+
+  // Módulos activos: usar features del broker (asignados en el plan)
+  const activeFeatures = useMemo(() => {
+    const keys = broker?.features || subscription?.modules || [];
+    return MODULES.filter(m => keys.includes(m.key));
+  }, [broker?.features, subscription?.modules]);
+
+  const inactiveFeatures = useMemo(() => {
+    const keys = broker?.features || subscription?.modules || [];
+    return MODULES.filter(m => !keys.includes(m.key));
+  }, [broker?.features, subscription?.modules]);
+
+  const statusLabel = (s: string) => {
+    const map: Record<string, { label: string; color: string }> = {
+      active: { label: 'Activa', color: 'success' },
+      trial: { label: 'Trial', color: 'warning' },
+      trial_expired: { label: 'Trial expirado', color: 'failure' },
+      suspended: { label: 'Suspendida', color: 'failure' },
+      inactive: { label: 'Inactiva', color: 'gray' },
+      trialing: { label: 'Trial', color: 'warning' },
+      canceled: { label: 'Cancelada', color: 'failure' },
+    };
+    return map[s] || { label: s, color: 'gray' };
   };
 
   if (loading) {
@@ -139,11 +175,6 @@ const MiSuscripcion: React.FC = () => {
       </Alert>
     );
   }
-
-  const broker = subscriptionData?.broker;
-  const planDetails = getPlanDetails(broker?.plan || 'basic');
-  const isInTrial = subscriptionData?.is_in_trial || false;
-  const trialDaysRemaining = subscriptionData?.trial_days_remaining || 0;
 
   return (
     <div className="space-y-4">
@@ -175,15 +206,16 @@ const MiSuscripcion: React.FC = () => {
             <div className="flex items-center gap-2">
               <Icon icon={planDetails.icon} height={20} className="text-primary" />
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">Plan {planDetails.name}</h2>
-              {isInTrial ? (
-                <Badge color={trialDaysRemaining <= 3 ? 'failure' : 'warning'} size="sm">Trial</Badge>
-              ) : (
-                <Badge color="success" size="sm">Activa</Badge>
+              <Badge color={statusLabel(broker?.status || 'trial').color as any} size="sm">
+                {statusLabel(broker?.status || 'trial').label}
+              </Badge>
+              {isInTrial && (
+                <Badge color={trialDaysRemaining <= 3 ? 'failure' : 'warning'} size="sm">
+                  {trialDaysRemaining} días restantes
+                </Badge>
               )}
             </div>
-            {!isInTrial && (
-              <Button color="light" size="xs">Cambiar plan</Button>
-            )}
+            <Button color="light" size="xs" onClick={() => navigate('/comenzar')}>Cambiar plan</Button>
           </div>
 
           {/* Plan Features Grid */}
@@ -208,9 +240,9 @@ const MiSuscripcion: React.FC = () => {
             </div>
             <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded text-center">
               <p className="text-lg font-bold text-gray-900 dark:text-white">
-                {usageData?.subscription?.storage_gb || usageData?.storage?.limit_gb || 5}GB
+                {usageData?.storage?.limit_gb || 10} GB
               </p>
-              <p className="text-xs text-gray-500">Storage</p>
+              <p className="text-xs text-gray-500">Almacenamiento</p>
             </div>
           </div>
 
@@ -277,26 +309,154 @@ const MiSuscripcion: React.FC = () => {
           </div>
           <div>
             <div className="flex justify-between text-xs mb-1">
-              <span className="text-gray-600 dark:text-gray-400">Storage</span>
-              <span className="text-gray-500">{usageData?.storage.used_mb || 0}MB/{usageData?.storage.limit_gb || 5}GB</span>
+              <span className="text-gray-600 dark:text-gray-400">
+                Almacenamiento ({usageData?.storage?.file_count || 0} archivos)
+              </span>
+              <span className="text-gray-500">
+                {(usageData?.storage?.used_mb || 0) >= 1024
+                  ? `${(usageData?.storage?.used_gb || 0).toFixed(2)} GB`
+                  : `${usageData?.storage?.used_mb || 0} MB`
+                } / {usageData?.storage?.limit_gb || 10} GB
+              </span>
             </div>
-            <Progress progress={usageData?.storage.percentage || 0} size="sm" color="yellow" />
+            <Progress
+              progress={usageData?.storage?.percentage || 0}
+              size="sm"
+              color={(usageData?.storage?.percentage || 0) >= 90 ? 'red' : (usageData?.storage?.percentage || 0) >= 70 ? 'yellow' : 'blue'}
+            />
           </div>
         </div>
       </Card>
 
+      {/* Subscription Details */}
+      {subscription && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+            <Icon icon="solar:calendar-bold-duotone" height={16} className="text-primary" />
+            Detalles de la suscripción
+          </h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Periodo</p>
+              <Badge color={subscription.period === 'annual' ? 'success' : 'info'} size="sm">
+                {subscription.period === 'annual' ? 'Anual (-12%)' : 'Mensual'}
+              </Badge>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Inicio</p>
+              <p className="font-medium text-gray-900 dark:text-white">{formatDate(subscription.starts_at)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Próxima factura</p>
+              <p className="font-medium text-gray-900 dark:text-white">{formatDate(subscription.current_period_end)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-0.5">Estado</p>
+              <Badge color={statusLabel(subscription.status).color as any} size="sm">
+                {statusLabel(subscription.status).label}
+              </Badge>
+            </div>
+            {subscription.totals && (
+              <>
+                {subscription.totals.subtotalMonthly && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">Total mensual</p>
+                    <p className="font-bold text-gray-900 dark:text-white">
+                      ${Number(subscription.totals.subtotalMonthly).toLocaleString('es-CO')} COP
+                    </p>
+                  </div>
+                )}
+                {subscription.totals.subtotalAnnual && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">Total anual</p>
+                    <p className="font-bold text-gray-900 dark:text-white">
+                      ${Number(subscription.totals.subtotalAnnual).toLocaleString('es-CO')} COP
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Active Modules */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Icon icon="solar:widget-5-bold-duotone" height={16} className="text-primary" />
+            Módulos activos ({activeFeatures.length})
+          </h3>
+          <Button color="light" size="xs" onClick={() => navigate('/comenzar')}>
+            <Icon icon="solar:add-circle-linear" className="mr-1" height={14} />
+            Agregar módulos
+          </Button>
+        </div>
+        {activeFeatures.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {activeFeatures.map((mod) => (
+              <div
+                key={mod.key}
+                className="flex items-center gap-3 p-3 rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/10 dark:border-green-800"
+              >
+                <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                  <Icon icon={mod.icon} className="w-4.5 h-4.5 text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{mod.name}</p>
+                  <p className="text-[11px] text-gray-500 truncate">{mod.description}</p>
+                </div>
+                <Icon icon="solar:check-circle-bold" className="w-4 h-4 text-green-500 flex-shrink-0 ml-auto" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-400">
+            <Icon icon="solar:widget-5-linear" height={32} className="mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No hay módulos asignados</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Inactive Modules */}
+      {inactiveFeatures.length > 0 && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
+            <Icon icon="solar:lock-keyhole-bold-duotone" height={16} />
+            Módulos disponibles ({inactiveFeatures.length})
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {inactiveFeatures.map((mod) => (
+              <div
+                key={mod.key}
+                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 opacity-60"
+              >
+                <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                  <Icon icon={mod.icon} className="w-4.5 h-4.5 text-gray-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{mod.name}</p>
+                  <p className="text-[11px] text-gray-400 truncate">{mod.description}</p>
+                </div>
+                <Icon icon="solar:lock-keyhole-bold" className="w-4 h-4 text-gray-300 flex-shrink-0 ml-auto" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Upgrade CTA - Compact */}
-      {(isInTrial || broker?.plan === 'basic') && (
+      {(isInTrial || broker?.plan === 'starter') && (
         <Card className="bg-gradient-to-r from-blue-600 to-indigo-600 border-0 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Icon icon="solar:rocket-bold-duotone" height={24} className="text-white" />
               <div>
-                <h3 className="text-sm font-bold text-white">Desbloquea GURO</h3>
-                <p className="text-xs text-blue-100">Más usuarios y funcionalidades</p>
+                <h3 className="text-sm font-bold text-white">Desbloquea todo GURO</h3>
+                <p className="text-xs text-blue-100">Más usuarios, módulos y funcionalidades avanzadas</p>
               </div>
             </div>
-            <Button color="light" size="xs" onClick={() => navigate('/precios')}>Ver planes</Button>
+            <Button color="light" size="xs" onClick={() => navigate('/comenzar')}>Cambiar plan</Button>
           </div>
         </Card>
       )}

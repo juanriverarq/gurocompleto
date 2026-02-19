@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   Node,
@@ -13,6 +13,9 @@ import {
   ReactFlowProvider,
   Panel,
   BackgroundVariant,
+  Handle,
+  Position,
+  type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button, Modal, TextInput, Textarea, Select, Badge, Spinner } from 'flowbite-react';
@@ -25,6 +28,7 @@ import chatbotService, {
   NodeConfig,
 } from '../../../../services/chatbotService';
 import ChatbotSettings from './ChatbotSettings';
+import guroToast from 'src/components/GuroToast/GuroToast';
 import ChatbotAnalyticsPanel from './ChatbotAnalyticsPanel';
 import { useEmpleadosBroker } from '../../../../hooks/useAdminCrudApi';
 
@@ -52,16 +56,16 @@ const nodePalette: NodePaletteItem[] = [
 ];
 
 const nodeStyles: Record<string, { bg: string; border: string; text: string }> = {
-  start: { bg: '#dcfce7', border: '#22c55e', text: '#166534' },
-  message: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
-  options: { bg: '#f3e8ff', border: '#a855f7', text: '#7c3aed' },
-  input: { bg: '#cffafe', border: '#06b6d4', text: '#0e7490' },
-  condition: { bg: '#ffedd5', border: '#f97316', text: '#c2410c' },
-  action: { bg: '#fef9c3', border: '#eab308', text: '#a16207' },
-  ai_response: { bg: '#fce7f3', border: '#ec4899', text: '#be185d' },
-  transfer: { bg: '#fee2e2', border: '#ef4444', text: '#b91c1c' },
-  delay: { bg: '#f3f4f6', border: '#6b7280', text: '#374151' },
-  end: { bg: '#f1f5f9', border: '#64748b', text: '#334155' },
+  start: { bg: '#1a2e1a', border: '#22c55e', text: '#86efac' },
+  message: { bg: '#1a2233', border: '#3b82f6', text: '#93c5fd' },
+  options: { bg: '#231a33', border: '#a855f7', text: '#d8b4fe' },
+  input: { bg: '#1a2b2e', border: '#06b6d4', text: '#67e8f9' },
+  condition: { bg: '#2e2215', border: '#f97316', text: '#fdba74' },
+  action: { bg: '#2e2b15', border: '#eab308', text: '#fde047' },
+  ai_response: { bg: '#2e1a27', border: '#ec4899', text: '#f9a8d4' },
+  transfer: { bg: '#2e1a1a', border: '#ef4444', text: '#fca5a5' },
+  delay: { bg: '#1e1e1e', border: '#6b7280', text: '#d1d5db' },
+  end: { bg: '#1c1e22', border: '#64748b', text: '#cbd5e1' },
 };
 
 const nodeIcons: Record<string, string> = {
@@ -77,17 +81,149 @@ const nodeIcons: Record<string, string> = {
   end: 'solar:stop-circle-bold',
 };
 
-const getNodeStyle = (type: string) => {
-  const style = nodeStyles[type] || nodeStyles.message;
-  return {
-    background: style.bg,
-    border: `2px solid ${style.border}`,
-    borderRadius: '12px',
-    padding: '0',
-    minWidth: '180px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-  };
+// ==================== CUSTOM NODE WITH HOVER ACTIONS ====================
+
+const GuroFlowNode: React.FC<NodeProps> = ({ data, id, selected }) => {
+  const [hovered, setHovered] = useState(false);
+  const nodeType = (data as any).nodeType || 'message';
+  const nodeName = (data as any).nodeName || 'Nodo';
+  const config = (data as any).config || {};
+  const style = nodeStyles[nodeType] || nodeStyles.message;
+  const icon = nodeIcons[nodeType] || 'solar:widget-bold';
+
+  const onEdit = (data as any).onEdit;
+  const onDelete = (data as any).onDelete;
+  const onDuplicate = (data as any).onDuplicate;
+
+  const hasOptionHandles = (nodeType === 'options' || nodeType === 'question') && config.options?.length > 0;
+  const hasConditionHandles = nodeType === 'condition';
+
+  return (
+    <div
+      className="relative group"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: style.bg,
+        border: `1px solid ${selected ? style.border : style.border + '40'}`,
+        borderRadius: '12px',
+        minWidth: hasOptionHandles ? '220px' : '180px',
+        boxShadow: selected
+          ? `0 0 0 2px ${style.border}60, 0 4px 20px rgba(0,0,0,0.4)`
+          : '0 4px 20px rgba(0,0,0,0.3)',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+      }}
+    >
+      {/* Target handle (left) — always present */}
+      <Handle type="target" position={Position.Left} style={{ background: style.border, width: 8, height: 8, border: '2px solid #0a0a0a' }} />
+
+      {/* Default source handle (right) — for non-options, non-condition nodes */}
+      {!hasOptionHandles && !hasConditionHandles && (
+        <Handle type="source" position={Position.Right} style={{ background: style.border, width: 8, height: 8, border: '2px solid #0a0a0a' }} />
+      )}
+
+      {/* Node header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px' }}>
+        <Icon icon={icon} width={20} style={{ color: style.border, flexShrink: 0 }} />
+        <span style={{ color: style.text, fontWeight: 500, fontSize: '13px' }}>{nodeName}</span>
+      </div>
+
+      {/* Per-option source handles for options nodes */}
+      {hasOptionHandles && (
+        <div style={{ borderTop: `1px solid ${style.border}30`, padding: '4px 0' }}>
+          {config.options.map((opt: any, idx: number) => (
+            <div key={opt.id || idx} className="relative flex items-center" style={{ padding: '3px 10px 3px 12px', minHeight: '26px' }}>
+              <span style={{ color: style.text, fontSize: '10px', opacity: 0.8, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {opt.text || `Opción ${idx + 1}`}
+              </span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`opt-${idx}`}
+                style={{
+                  background: '#a855f7',
+                  width: 7,
+                  height: 7,
+                  border: '2px solid #0a0a0a',
+                  right: -4,
+                  top: '50%',
+                  position: 'absolute',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Per-branch source handles for condition nodes */}
+      {hasConditionHandles && (
+        <div style={{ borderTop: `1px solid ${style.border}30`, padding: '4px 0' }}>
+          <div className="relative flex items-center" style={{ padding: '3px 10px 3px 12px', minHeight: '26px' }}>
+            <span style={{ color: '#86efac', fontSize: '10px', fontWeight: 600 }}>✓ Sí</span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="condition-true"
+              style={{ background: '#22c55e', width: 7, height: 7, border: '2px solid #0a0a0a', right: -4, top: '50%', position: 'absolute' }}
+            />
+          </div>
+          <div className="relative flex items-center" style={{ padding: '3px 10px 3px 12px', minHeight: '26px' }}>
+            <span style={{ color: '#fca5a5', fontSize: '10px', fontWeight: 600 }}>✗ No</span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="condition-false"
+              style={{ background: '#ef4444', width: 7, height: 7, border: '2px solid #0a0a0a', right: -4, top: '50%', position: 'absolute' }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Invisible hover bridge */}
+      {hovered && (
+        <div className="absolute -top-10 left-0 right-0 h-10" style={{ zIndex: 9 }} />
+      )}
+
+      {/* Hover action bar */}
+      {hovered && (
+        <div
+          className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 px-1.5 py-1 rounded-xl border border-white/[0.08] shadow-xl shadow-black/50"
+          style={{ background: '#1a1a1a', zIndex: 10 }}
+        >
+          {onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(id); }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all active:scale-90"
+              title="Editar"
+            >
+              <Icon icon="solar:pen-bold" width={13} />
+            </button>
+          )}
+          {onDuplicate && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDuplicate(id); }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all active:scale-90"
+              title="Duplicar"
+            >
+              <Icon icon="solar:copy-bold" width={13} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(id); }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all active:scale-90"
+              title="Eliminar"
+            >
+              <Icon icon="solar:trash-bin-trash-bold" width={13} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
+
+const customNodeTypes = { guroNode: GuroFlowNode };
 
 // ==================== COMPONENTE PRINCIPAL ====================
 
@@ -111,6 +247,7 @@ const FlowEditorContent: React.FC = () => {
   const [showNewFlowModal, setShowNewFlowModal] = useState(false);
   const [newFlowName, setNewFlowName] = useState('');
   const [activeTab, setActiveTab] = useState<'flows' | 'settings' | 'analytics'>('flows');
+  const [showPalette, setShowPalette] = useState(false);
 
   // Modales
 
@@ -151,15 +288,13 @@ const FlowEditorContent: React.FC = () => {
     if (!flow.nodes || flow.nodes.length === 0) {
       setNodes([{
         id: 'start-1',
-        type: 'default',
+        type: 'guroNode',
         position: { x: 250, y: 50 },
         data: { 
-          label: createNodeLabel('start', 'Inicio'),
           nodeName: 'Inicio',
           nodeType: 'start',
           config: {},
         },
-        style: getNodeStyle('start'),
       }]);
       setEdges([]);
       return;
@@ -169,19 +304,18 @@ const FlowEditorContent: React.FC = () => {
       const name = node.name || getNodeLabel(node.node_type);
       return {
         id: String(node.id),
-        type: 'default',
+        type: 'guroNode',
         position: { x: node.position_x, y: node.position_y },
         data: { 
-          label: createNodeLabel(node.node_type, name),
           nodeName: name,
           nodeType: node.node_type,
           config: node.config || {},
         },
-        style: getNodeStyle(node.node_type),
       };
     });
 
-    const flowEdges: Edge[] = flow.nodes
+    // Edges from next_node_id (linear connections)
+    const linearEdges: Edge[] = flow.nodes
       .filter(node => node.next_node_id)
       .map(node => ({
         id: `e${node.id}-${node.next_node_id}`,
@@ -191,8 +325,65 @@ const FlowEditorContent: React.FC = () => {
         style: { stroke: '#94a3b8', strokeWidth: 2 },
       }));
 
+    // Edges from options[].next_node_id (branching connections)
+    const optionEdges: Edge[] = flow.nodes.flatMap(node => {
+      const options = node.config?.options || [];
+      return options
+        .filter((opt: any) => opt.next_node_id)
+        .map((opt: any, idx: number) => ({
+          id: `e${node.id}-opt${idx}-${opt.next_node_id}`,
+          source: String(node.id),
+          sourceHandle: `opt-${idx}`,
+          target: String(opt.next_node_id),
+          animated: true,
+          label: opt.text || `Opción ${idx + 1}`,
+          style: { stroke: '#8b5cf6', strokeWidth: 2 },
+          labelStyle: { fontSize: 10, fill: '#8b5cf6', fontWeight: 500 },
+          labelBgStyle: { fill: '#f5f3ff', fillOpacity: 0.9 },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
+        }));
+    });
+
+    // Edges from condition true_node_id / false_node_id
+    const conditionEdges: Edge[] = flow.nodes.flatMap(node => {
+      const config = node.config || {};
+      const edges: Edge[] = [];
+      if (config.true_node_id) {
+        edges.push({
+          id: `e${node.id}-true-${config.true_node_id}`,
+          source: String(node.id),
+          sourceHandle: 'condition-true',
+          target: String(config.true_node_id),
+          animated: true,
+          label: 'Sí',
+          style: { stroke: '#22c55e', strokeWidth: 2 },
+          labelStyle: { fontSize: 10, fill: '#22c55e', fontWeight: 600 },
+          labelBgStyle: { fill: '#f0fdf4', fillOpacity: 0.9 },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
+        });
+      }
+      if (config.false_node_id) {
+        edges.push({
+          id: `e${node.id}-false-${config.false_node_id}`,
+          source: String(node.id),
+          sourceHandle: 'condition-false',
+          target: String(config.false_node_id),
+          animated: true,
+          label: 'No',
+          style: { stroke: '#ef4444', strokeWidth: 2 },
+          labelStyle: { fontSize: 10, fill: '#ef4444', fontWeight: 600 },
+          labelBgStyle: { fill: '#fef2f2', fillOpacity: 0.9 },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
+        });
+      }
+      return edges;
+    });
+
     setNodes(flowNodes);
-    setEdges(flowEdges);
+    setEdges([...linearEdges, ...optionEdges, ...conditionEdges]);
   };
 
   const getNodeLabel = (type: NodeType): string => {
@@ -200,19 +391,53 @@ const FlowEditorContent: React.FC = () => {
     return item?.label || type;
   };
 
-  const createNodeLabel = (type: string, name: string): React.ReactNode => {
-    const icon = nodeIcons[type] || 'solar:widget-bold';
-    const style = nodeStyles[type] || nodeStyles.message;
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px' }}>
-        <Icon icon={icon} width={20} style={{ color: style.border, flexShrink: 0 }} />
-        <span style={{ color: style.text, fontWeight: 500, fontSize: '13px' }}>{name}</span>
-      </div>
-    );
-  };
-
   const onConnect = useCallback((params: Connection) => {
-    setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#6b7280' } }, eds));
+    const sourceHandle = params.sourceHandle || '';
+    let edgeStyle: any = { animated: true, style: { stroke: '#94a3b8', strokeWidth: 2 } };
+
+    if (sourceHandle.startsWith('opt-')) {
+      // Find the option label from the source node
+      const sourceNode = nodes.find(n => n.id === params.source);
+      const optIdx = parseInt(sourceHandle.replace('opt-', ''));
+      const optText = (sourceNode?.data as any)?.config?.options?.[optIdx]?.text || `Opción ${optIdx + 1}`;
+      edgeStyle = {
+        animated: true,
+        label: optText,
+        style: { stroke: '#8b5cf6', strokeWidth: 2 },
+        labelStyle: { fontSize: 10, fill: '#8b5cf6', fontWeight: 500 },
+        labelBgStyle: { fill: '#f5f3ff', fillOpacity: 0.9 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 4,
+      };
+    } else if (sourceHandle === 'condition-true') {
+      edgeStyle = {
+        animated: true,
+        label: 'Sí',
+        style: { stroke: '#22c55e', strokeWidth: 2 },
+        labelStyle: { fontSize: 10, fill: '#22c55e', fontWeight: 600 },
+        labelBgStyle: { fill: '#f0fdf4', fillOpacity: 0.9 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 4,
+      };
+    } else if (sourceHandle === 'condition-false') {
+      edgeStyle = {
+        animated: true,
+        label: 'No',
+        style: { stroke: '#ef4444', strokeWidth: 2 },
+        labelStyle: { fontSize: 10, fill: '#ef4444', fontWeight: 600 },
+        labelBgStyle: { fill: '#fef2f2', fillOpacity: 0.9 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 4,
+      };
+    }
+
+    setEdges((eds) => addEdge({ ...params, ...edgeStyle }, eds));
+  }, [setEdges, nodes]);
+
+  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    if (confirm('¿Eliminar esta conexión?')) {
+      setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+    }
   }, [setEdges]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -235,15 +460,13 @@ const FlowEditorContent: React.FC = () => {
       const name = getNodeLabel(type);
       const newNode: Node = {
         id: `${type}-${Date.now()}`,
-        type: 'default',
+        type: 'guroNode',
         position,
         data: { 
-          label: createNodeLabel(type, name),
           nodeName: name,
           nodeType: type,
           config: getDefaultConfig(type),
         },
-        style: getNodeStyle(type),
       };
 
       setNodes((nds) => nds.concat(newNode));
@@ -282,6 +505,40 @@ const FlowEditorContent: React.FC = () => {
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
   }, [setNodes, setEdges]);
 
+  const onEditNode = useCallback((nodeId: string) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (node) {
+      setEditingNode(node);
+      setShowNodeEditor(true);
+    }
+  }, [nodes]);
+
+  const onDuplicateNode = useCallback((nodeId: string) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    const newNode: Node = {
+      id: `${(node.data as any).nodeType}-${Date.now()}`,
+      type: 'guroNode',
+      position: { x: node.position.x + 40, y: node.position.y + 40 },
+      data: { ...node.data },
+    };
+    setNodes((nds) => nds.concat(newNode));
+  }, [nodes, setNodes]);
+
+  // Inject callbacks into nodes so the custom GuroFlowNode can use them
+  const nodesWithCallbacks = useMemo(() =>
+    nodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        onEdit: onEditNode,
+        onDelete: onNodeDelete,
+        onDuplicate: onDuplicateNode,
+      },
+    })),
+    [nodes, onEditNode, onNodeDelete, onDuplicateNode]
+  );
+
   const handleSaveFlow = async () => {
     if (!currentFlow || !chatbot) return;
 
@@ -297,12 +554,33 @@ const FlowEditorContent: React.FC = () => {
       // Preparar nodos con conexiones
       const nodesToSave = nodes.map((node, index) => {
         const nodeType = (node.data as any).nodeType || 'start';
-        // Usar nodeName guardado en data, no el label (que es ReactNode)
         const nodeName = (node.data as any).nodeName || getNodeLabel(nodeType as NodeType);
+        const config = JSON.parse(JSON.stringify((node.data as any).config || {}));
         
-        // Buscar edge que sale de este nodo
-        const outgoingEdge = edges.find(e => e.source === node.id);
-        const nextNodeIndex = outgoingEdge ? nodeIdToIndex.get(outgoingEdge.target) : undefined;
+        // Classify outgoing edges by sourceHandle
+        const outgoingEdges = edges.filter(e => e.source === node.id);
+        
+        const linearEdge = outgoingEdges.find(e => 
+          !e.sourceHandle || (!e.sourceHandle.startsWith('opt-') && !e.sourceHandle.startsWith('condition-'))
+        );
+        const nextNodeIndex = linearEdge ? nodeIdToIndex.get(linearEdge.target) : undefined;
+
+        // Map option edges back to options[].next_node_index using sourceHandle
+        if (config.options && Array.isArray(config.options)) {
+          config.options = config.options.map((opt: any, optIdx: number) => {
+            const optEdge = outgoingEdges.find(e => e.sourceHandle === `opt-${optIdx}`);
+            return {
+              ...opt,
+              next_node_index: optEdge ? nodeIdToIndex.get(optEdge.target) : undefined,
+            };
+          });
+        }
+
+        // Map condition edges back to true_node_index / false_node_index
+        const trueEdge = outgoingEdges.find(e => e.sourceHandle === 'condition-true');
+        const falseEdge = outgoingEdges.find(e => e.sourceHandle === 'condition-false');
+        if (trueEdge) config.true_node_index = nodeIdToIndex.get(trueEdge.target);
+        if (falseEdge) config.false_node_index = nodeIdToIndex.get(falseEdge.target);
 
         return {
           temp_id: node.id,
@@ -311,7 +589,7 @@ const FlowEditorContent: React.FC = () => {
           name: nodeName,
           position_x: Math.round(node.position.x),
           position_y: Math.round(node.position.y),
-          config: (node.data as any).config || {},
+          config,
           next_node_index: nextNodeIndex,
         };
       });
@@ -356,17 +634,17 @@ const FlowEditorContent: React.FC = () => {
           }
         }
         
-        alert('¡Flujo guardado correctamente!');
+        guroToast.success('¡Flujo guardado!', 'El flujo se ha guardado correctamente');
         await loadChatbot();
       } else {
-        alert('Error al guardar: ' + (result.message || 'Error desconocido'));
+        guroToast.error('Error al guardar', result.message || 'Error desconocido');
       }
     } catch (error: any) {
       console.error('Error guardando flujo:', error);
       const errorMsg = error?.response?.data?.errors 
         ? JSON.stringify(error.response.data.errors) 
         : 'Error al guardar el flujo';
-      alert(errorMsg);
+      guroToast.error('Error al guardar', errorMsg);
     } finally {
       setSaving(false);
     }
@@ -383,7 +661,7 @@ const FlowEditorContent: React.FC = () => {
       });
 
       if (result.success && result.data) {
-        alert(`¡Flujo "${newFlowName}" creado!`);
+        guroToast.success('¡Flujo creado!', `Se ha creado el flujo "${newFlowName}"`);
         setShowNewFlowModal(false);
         setNewFlowName('');
         await loadChatbot();
@@ -404,7 +682,6 @@ const FlowEditorContent: React.FC = () => {
               ...node, 
               data: { 
                 ...node.data, 
-                label: createNodeLabel((node.data as any).nodeType, updatedData.label),
                 nodeName: updatedData.label,
                 config: updatedData.config,
               } 
@@ -436,99 +713,77 @@ const FlowEditorContent: React.FC = () => {
     );
   }
 
+  const TOOLBAR_NAV: { id: typeof activeTab; icon: string; tip: string }[] = [
+    { id: 'flows', icon: 'solar:diagram-up-linear', tip: 'Editor' },
+    { id: 'settings', icon: 'solar:settings-linear', tip: 'Configuración' },
+    { id: 'analytics', icon: 'solar:chart-2-linear', tip: 'Análisis' },
+  ];
+
   return (
-    <div className="h-screen flex flex-col">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button color="light" size="sm" onClick={() => navigate('/apps/whatsapp/chatbots')}>
-              <Icon icon="solar:arrow-left-bold" width={18} />
-            </Button>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <Icon icon="solar:bot-bold-duotone" className="text-blue-500" width={22} />
-                {chatbot.name}
-              </h1>
-              {activeTab === 'flows' && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <span>Flujo:</span>
-                  <button 
-                    onClick={() => setShowFlowSelector(true)}
-                    className="text-blue-600 hover:underline flex items-center gap-1"
-                  >
-                    {currentFlow?.name || 'Seleccionar'}
-                    <Icon icon="solar:alt-arrow-down-bold" width={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+    <div className="h-[calc(100vh-80px)] -mx-2 -mt-2 flex flex-col bg-gray-50 dark:bg-[#0a0a0a] text-gray-900 dark:text-white overflow-hidden rounded-2xl" style={{ fontFamily: "'General Sans', sans-serif" }}>
+      {/* ── Minimal top bar ── */}
+      <div className="flex items-center justify-between px-4 h-11 bg-white dark:bg-[#111] border-b border-gray-200 dark:border-white/[0.04] shrink-0">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/apps/whatsapp/chatbots')} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all active:scale-90">
+            <Icon icon="solar:arrow-left-linear" width={16} />
+          </button>
           <div className="flex items-center gap-2">
-            {activeTab === 'flows' && (
-              <>
-                <Button color="light" size="sm" onClick={() => setShowNewFlowModal(true)}>
-                  <Icon icon="solar:add-circle-bold" className="mr-1" width={16} />
-                  Nuevo Flujo
-                </Button>
-                <Button color="blue" size="sm" onClick={handleSaveFlow} disabled={saving}>
-                  {saving ? <Spinner size="sm" className="mr-1" /> : <Icon icon="solar:diskette-bold" className="mr-1" width={16} />}
-                  Guardar
-                </Button>
-              </>
-            )}
+            <Icon icon="solar:bot-bold-duotone" className="text-emerald-400" width={18} />
+            <span className="text-[12px] font-semibold text-gray-700 dark:text-gray-300">{chatbot.name}</span>
           </div>
+          {activeTab === 'flows' && currentFlow && (
+            <button onClick={() => setShowFlowSelector(true)} className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/[0.04] hover:bg-gray-200 dark:hover:bg-white/[0.08] text-[10px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-all">
+              <Icon icon="solar:routing-bold" width={12} className="text-emerald-500/60" />
+              {currentFlow.name}
+              <Icon icon="solar:alt-arrow-down-bold" width={10} />
+            </button>
+          )}
         </div>
-        
-        {/* Tabs */}
-        <div className="flex gap-1 mt-3 border-b border-gray-200 dark:border-gray-700">
-          <button
-            onClick={() => setActiveTab('flows')}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 ${
-              activeTab === 'flows' 
-                ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600 dark:bg-blue-900/20' 
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
-            }`}
-          >
-            <Icon icon="solar:diagram-up-bold" width={18} />
-            Editor de Flujos
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 ${
-              activeTab === 'settings' 
-                ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600 dark:bg-blue-900/20' 
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
-            }`}
-          >
-            <Icon icon="solar:settings-bold" width={18} />
-            Configuración
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 ${
-              activeTab === 'analytics' 
-                ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600 dark:bg-blue-900/20' 
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
-            }`}
-          >
-            <Icon icon="solar:chart-2-bold" width={18} />
-            Análisis
-          </button>
+        <div className="flex items-center gap-1.5">
+          {activeTab === 'flows' && (
+            <>
+              <button onClick={() => setShowNewFlowModal(true)} className="px-3 py-1 rounded-lg bg-gray-100 dark:bg-white/[0.04] hover:bg-gray-200 dark:hover:bg-white/[0.08] text-[10px] font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-all active:scale-95">
+                <Icon icon="solar:add-circle-linear" width={13} className="mr-1 inline" />
+                Nuevo Flujo
+              </button>
+              <button onClick={handleSaveFlow} disabled={saving} className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-[10px] font-bold text-white transition-all active:scale-95 shadow-lg shadow-emerald-600/20">
+                {saving ? <Spinner size="xs" className="mr-1 inline" /> : <Icon icon="solar:diskette-bold" width={13} className="mr-1 inline" />}
+                Guardar
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Contenido según pestaña activa */}
-      {activeTab === 'flows' && (
-        <div className="flex-1 flex">
-          {/* Paleta de nodos */}
-          <div className="w-64 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-3 overflow-y-auto">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-              Componentes
-            </h3>
-            <p className="text-xs text-gray-500 mb-3">Arrastra al canvas →</p>
-            <div className="space-y-2">
-              {nodePalette.map((item) => (
+      <div className="flex flex-1 overflow-hidden">
+        {/* ── Pill icon toolbar ── */}
+        <div className="w-[52px] shrink-0 flex flex-col items-center pt-4 gap-3">
+          {/* Navigation icons */}
+          <div className="bg-white dark:bg-[#161616] rounded-2xl py-2.5 px-1.5 flex flex-col items-center gap-1 border border-gray-200 dark:border-white/[0.06] shadow-lg shadow-black/10 dark:shadow-black/40">
+            {TOOLBAR_NAV.map((n) => (
+              <button key={n.id} onClick={() => setActiveTab(n.id)} title={n.tip}
+                className={`group relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                  activeTab === n.id ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                } active:scale-90`}>
+                <Icon icon={n.icon} width={17} />
+                <div className="absolute left-full ml-2 px-2 py-0.5 rounded-md bg-gray-800 dark:bg-[#222] text-[9px] font-medium text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 shadow-xl">{n.tip}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Node palette toggle (only in flows tab) */}
+          {activeTab === 'flows' && (
+            <div className="bg-white dark:bg-[#161616] rounded-2xl py-2.5 px-1.5 flex flex-col items-center gap-1 border border-gray-200 dark:border-white/[0.06] shadow-lg shadow-black/10 dark:shadow-black/40">
+              <button onClick={() => setShowPalette(!showPalette)} title="Componentes"
+                className={`group relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                  showPalette ? 'bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                } active:scale-90`}>
+                <Icon icon="solar:widget-add-linear" width={17} />
+                <div className="absolute left-full ml-2 px-2 py-0.5 rounded-md bg-gray-800 dark:bg-[#222] text-[9px] font-medium text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 shadow-xl">Componentes</div>
+              </button>
+
+              {/* Quick-add node icons */}
+              {nodePalette.slice(0, 6).map((item) => (
                 <div
                   key={item.type}
                   draggable
@@ -536,69 +791,124 @@ const FlowEditorContent: React.FC = () => {
                     e.dataTransfer.setData('application/reactflow', item.type);
                     e.dataTransfer.effectAllowed = 'move';
                   }}
-                  className="flex items-center gap-2 p-2 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 cursor-grab hover:shadow-md transition-shadow active:cursor-grabbing"
-                  style={{ borderLeftColor: nodeStyles[item.type]?.border, borderLeftWidth: '4px' }}
+                  title={item.label}
+                  className="group relative w-8 h-8 rounded-lg flex items-center justify-center cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all duration-200 active:scale-90"
                 >
-                  <Icon icon={item.icon} style={{ color: nodeStyles[item.type]?.border }} width={20} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{item.label}</p>
-                    <p className="text-xs text-gray-500 truncate">{item.description}</p>
-                  </div>
+                  <Icon icon={item.icon} width={15} style={{ color: nodeStyles[item.type]?.border }} />
+                  <div className="absolute left-full ml-2 px-2 py-0.5 rounded-md bg-gray-800 dark:bg-[#222] text-[9px] font-medium text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 shadow-xl">{item.label}</div>
                 </div>
               ))}
             </div>
-          </div>
+          )}
 
-          {/* Canvas */}
-          <div className="flex-1">
+          {/* Bottom actions */}
+          <div className="mt-auto mb-4 bg-white dark:bg-[#161616] rounded-2xl py-2.5 px-1.5 flex flex-col items-center gap-1 border border-gray-200 dark:border-white/[0.06] shadow-lg shadow-black/10 dark:shadow-black/40">
+            <button onClick={() => navigate('/apps/whatsapp/chatbots')} title="Volver"
+              className="group relative w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all duration-200 active:scale-90">
+              <Icon icon="solar:undo-left-linear" width={17} />
+              <div className="absolute left-full ml-2 px-2 py-0.5 rounded-md bg-gray-800 dark:bg-[#222] text-[9px] font-medium text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 shadow-xl">Volver</div>
+            </button>
+          </div>
+        </div>
+
+        {/* ── Expandable node palette panel ── */}
+        {activeTab === 'flows' && showPalette && (
+          <div className="w-[220px] bg-white dark:bg-[#111] border-r border-gray-200 dark:border-white/[0.04] overflow-y-auto shrink-0 transition-all">
+            <div className="p-3">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Componentes</span>
+                <button onClick={() => setShowPalette(false)} className="w-5 h-5 rounded flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-all">
+                  <Icon icon="solar:close-circle-linear" width={13} />
+                </button>
+              </div>
+              <p className="text-[9px] text-gray-400 dark:text-gray-600 mb-3">Arrastra al canvas →</p>
+              <div className="space-y-1.5">
+                {nodePalette.map((item) => (
+                  <div
+                    key={item.type}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('application/reactflow', item.type);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/[0.04] cursor-grab hover:bg-gray-100 dark:hover:bg-white/[0.05] hover:border-gray-300 dark:hover:border-white/[0.08] transition-all active:cursor-grabbing active:scale-[0.97]"
+                  >
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${nodeStyles[item.type]?.border}15` }}>
+                      <Icon icon={item.icon} width={14} style={{ color: nodeStyles[item.type]?.border }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium text-gray-700 dark:text-gray-300">{item.label}</p>
+                      <p className="text-[9px] text-gray-400 dark:text-gray-600 truncate">{item.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Main content area ── */}
+        {activeTab === 'flows' && (
+          <div className="flex-1 bg-gray-100 dark:bg-[#0a0a0a]">
             <ReactFlow
-              nodes={nodes}
+              nodes={nodesWithCallbacks}
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              onEdgeClick={onEdgeClick}
               onDrop={onDrop}
               onDragOver={onDragOver}
               onNodeDoubleClick={onNodeDoubleClick}
+              nodeTypes={customNodeTypes}
               fitView
               snapToGrid
-              snapGrid={[15, 15]}
+              snapGrid={[20, 20]}
               defaultEdgeOptions={{
                 animated: true,
-                style: { stroke: '#6b7280', strokeWidth: 2 },
+                style: { stroke: '#22c55e80', strokeWidth: 2 },
               }}
+              style={{ background: 'var(--rf-bg, #0a0a0a)' }}
+              className="[--rf-bg:#f3f4f6] dark:[--rf-bg:#0a0a0a]"
             >
-              <Controls />
-              <MiniMap 
-                nodeColor={(node) => nodeStyles[(node.data as any)?.nodeType]?.border || '#6b7280'}
-                style={{ background: '#f3f4f6' }}
+              <Controls
+                position="bottom-right"
+                style={{ background: '#161616', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', overflow: 'hidden' }}
+                className="!shadow-xl !shadow-black/40 [&>button]:!bg-[#161616] [&>button]:!border-white/[0.04] [&>button]:!text-gray-400 [&>button:hover]:!bg-white/5 [&>button:hover]:!text-white [&>button>svg]:!fill-current"
               />
-              <Background variant={BackgroundVariant.Dots} gap={15} size={1} />
-              
-              <Panel position="bottom-center" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2 text-xs text-gray-500">
-                Arrastra componentes • Doble clic para editar • Conecta nodos arrastrando
+              <MiniMap
+                nodeColor={(node) => nodeStyles[(node.data as any)?.nodeType]?.border || '#6b7280'}
+                style={{ background: '#111', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px' }}
+                maskColor="rgba(0,0,0,0.7)"
+              />
+              <Background variant={BackgroundVariant.Dots} gap={20} size={0.8} color="rgba(255,255,255,0.04)" />
+
+              <Panel position="bottom-center">
+                <div className="bg-[#161616] rounded-xl px-4 py-2 border border-white/[0.06] shadow-xl shadow-black/40">
+                  <span className="text-[9px] text-gray-500">Arrastra componentes • Doble clic para editar • Conecta nodos arrastrando</span>
+                </div>
               </Panel>
             </ReactFlow>
           </div>
-        </div>
-      )}
+        )}
 
-      {activeTab === 'settings' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">
-          <div className="max-w-4xl mx-auto">
-            <ChatbotSettings 
-              chatbot={chatbot} 
-              onUpdate={(updated) => setChatbot(updated)}
-            />
+        {activeTab === 'settings' && (
+          <div className="flex-1 overflow-y-auto p-6 bg-[#0a0a0a]">
+            <div className="max-w-4xl mx-auto">
+              <ChatbotSettings 
+                chatbot={chatbot} 
+                onUpdate={(updated) => setChatbot(updated)}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activeTab === 'analytics' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">
-          <ChatbotAnalyticsPanel chatbotId={chatbot.id} chatbotName={chatbot.name} />
-        </div>
-      )}
+        {activeTab === 'analytics' && (
+          <div className="flex-1 overflow-y-auto p-6 bg-[#0a0a0a]">
+            <ChatbotAnalyticsPanel chatbotId={chatbot.id} chatbotName={chatbot.name} />
+          </div>
+        )}
+      </div>
 
       {/* Modal: Selector de flujos */}
       <Modal show={showFlowSelector} onClose={() => setShowFlowSelector(false)} size="md">

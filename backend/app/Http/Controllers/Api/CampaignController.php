@@ -365,8 +365,10 @@ class CampaignController extends Controller
                         'instance_id' => $autoInstance->instance_id
                     ]);
                     
-                    // Sincronizar con microservicio
-                    $this->ensureInstanceExistsInMicroservice($autoInstance);
+                    // Sincronizar con microservicio (solo para instancias no-Cloud API)
+                    if ($autoInstance->connection_type !== 'cloud_api') {
+                        $this->ensureInstanceExistsInMicroservice($autoInstance);
+                    }
                 } else {
                     Log::warning('⚠️ [CREATE CAMPAIGN] No se encontró instancia automática, campaña sin instancia', [
                         'broker_id' => $brokerId
@@ -450,6 +452,12 @@ class CampaignController extends Controller
             }
 
         } catch (\Exception $e) {
+            \Log::error('❌ [CREATE IMMEDIATE] Exception en createImmediate', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Error al crear campaña inmediata',
@@ -606,7 +614,9 @@ class CampaignController extends Controller
                 'total_targets' => $totalTargets,
                 'next_execution' => $request->scheduled_date,
                 'created_by' => auth()->id() ?? null,
-                'whatsapp_instance_id' => $whatsappInstanceId
+                'whatsapp_instance_id' => $whatsappInstanceId,
+                'template_name' => $request->template_name,
+                'template_language' => $request->template_language ?? 'es',
             ]);
 
             // Guardar media (si viene) para que el scheduler la use
@@ -630,6 +640,11 @@ class CampaignController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Log::error('❌ [CREATE SCHEDULED] Exception en createScheduled', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Error al crear campaña programada',
@@ -1077,7 +1092,8 @@ class CampaignController extends Controller
                 $contacts[] = [
                     'phone' => $formattedPhone,
                     'name' => $contact['name'] ?? null,
-                    'message' => $personalizedMessage
+                    'message' => $personalizedMessage,
+                    'custom_data' => $contact['custom_data'] ?? [],
                 ];
                 
                 // Crear registro de mensaje para tracking
@@ -1463,6 +1479,7 @@ class CampaignController extends Controller
                         // Enviar plantilla aprobada por Meta
                         $components = [];
                         // Build body parameters from custom_data (variable mapping from frontend)
+                        // Only add body parameters if the template actually has variables
                         $customData = $contact['custom_data'] ?? [];
                         if (!empty($customData)) {
                             $bodyParams = [];
@@ -1477,15 +1494,9 @@ class CampaignController extends Controller
                                     'parameters' => $bodyParams
                                 ];
                             }
-                        } elseif (!empty($contactName)) {
-                            // Fallback: send contact name as first variable
-                            $components[] = [
-                                'type' => 'body',
-                                'parameters' => [
-                                    ['type' => 'text', 'text' => $contactName]
-                                ]
-                            ];
                         }
+                        // No fallback: if custom_data is empty, the template has 0 variables
+                        // Sending parameters for a 0-variable template causes Meta error #132000
 
                         $result = $cloudApi->sendTemplateMessage(
                             $whatsappInstance,
@@ -1517,6 +1528,41 @@ class CampaignController extends Controller
 
                     if ($result['success']) {
                         $successCount++;
+
+                        // Registrar en el Inbox: crear/encontrar conversación y agregar mensaje saliente
+                        try {
+                            // Normalizar teléfono: Cloud API almacena sin '+', ej: 573227697874
+                            $inboxPhone = ltrim($phone, '+');
+                            $conversation = \App\Models\WhatsAppConversation::findOrCreateByPhone(
+                                $campaign->broker_id,
+                                $whatsappInstance->id,
+                                $inboxPhone,
+                                $contactName !== 'Cliente' ? $contactName : null
+                            );
+
+                            $messageContent = $isTemplateSend
+                                ? "[Plantilla: {$templateName}] " . ($messageTemplate ?: '')
+                                : ($contact['message'] ?? $messageTemplate);
+
+                            $conversation->addMessage([
+                                'message_id' => $result['message_id'] ?? null,
+                                'direction' => 'outgoing',
+                                'sender_type' => 'bot',
+                                'message_type' => 'template',
+                                'content' => $messageContent,
+                                'status' => 'sent',
+                                'metadata' => [
+                                    'campaign_id' => $campaignId,
+                                    'template_name' => $templateName,
+                                    'template_language' => $templateLanguage,
+                                ],
+                            ]);
+                        } catch (\Exception $inboxErr) {
+                            Log::warning('⚠️ [INBOX SYNC] Error registrando mensaje en inbox', [
+                                'phone' => $phone,
+                                'error' => $inboxErr->getMessage(),
+                            ]);
+                        }
                     } else {
                         $failedCount++;
                         Log::warning('⚠️ [CLOUD API BULK SEND] Mensaje fallido', [
@@ -1988,6 +2034,162 @@ class CampaignController extends Controller
                 'success' => false,
                 'message' => 'Error al ejecutar campaña: ' . $e->getMessage(),
                 'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Reintentar envío de mensajes fallidos de una campaña
+     */
+    public function retryFailed($id, Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $campaign = Campaign::findOrFail($id);
+
+            if ($campaign->broker_id !== $brokerId) {
+                return response()->json(['success' => false, 'message' => 'No tienes permisos para esta campaña'], 403);
+            }
+
+            if ($campaign->status === 'sending') {
+                return response()->json(['success' => false, 'message' => 'La campaña está enviando actualmente'], 422);
+            }
+
+            // Buscar mensajes fallidos de esta campaña (de cualquier ejecución)
+            $failedMessages = CampaignMessage::where('campaign_id', $campaign->id)
+                ->where('status', CampaignMessage::STATUS_FAILED)
+                ->get();
+
+            if ($failedMessages->isEmpty()) {
+                return response()->json(['success' => false, 'message' => 'No hay mensajes fallidos para reintentar'], 422);
+            }
+
+            \Log::info('🔄 [RETRY FAILED] Iniciando reintento de mensajes fallidos', [
+                'campaign_id' => $campaign->id,
+                'failed_count' => $failedMessages->count(),
+                'broker_id' => $brokerId,
+            ]);
+
+            // Reconstruir contactos a partir de los mensajes fallidos + datos originales de la campaña
+            $campaignContacts = collect($campaign->contacts ?? []);
+            $retryContacts = [];
+
+            foreach ($failedMessages as $msg) {
+                // Buscar datos completos del contacto en los contactos originales de la campaña
+                $originalContact = $campaignContacts->first(function ($c) use ($msg) {
+                    $phone = $this->formatPhoneNumber($c['phone'] ?? '');
+                    return $phone === $msg->recipient_phone;
+                });
+
+                $retryContacts[] = [
+                    'phone' => $msg->recipient_phone,
+                    'name' => $msg->recipient_name ?? $originalContact['name'] ?? 'Cliente',
+                    'custom_data' => $originalContact['custom_data'] ?? [],
+                ];
+            }
+
+            // Crear nueva ejecución para el reintento
+            $execution = CampaignExecution::create([
+                'campaign_id' => $campaign->id,
+                'broker_id' => $brokerId,
+                'execution_date' => now(),
+                'status' => 'running',
+                'started_at' => now(),
+                'targets_found' => count($retryContacts),
+            ]);
+
+            // Marcar mensajes fallidos anteriores como "retry" para no confundirlos
+            CampaignMessage::where('campaign_id', $campaign->id)
+                ->where('status', CampaignMessage::STATUS_FAILED)
+                ->update(['status' => 'retrying']);
+
+            // Crear nuevos registros de mensaje para tracking
+            foreach ($retryContacts as $contact) {
+                CampaignMessage::create([
+                    'campaign_id' => $campaign->id,
+                    'campaign_execution_id' => $execution->id,
+                    'broker_id' => $brokerId,
+                    'recipient_phone' => $contact['phone'],
+                    'recipient_name' => $contact['name'],
+                    'message_content' => $this->processMessageVariables($campaign->message_template, $contact),
+                    'status' => CampaignMessage::STATUS_PENDING,
+                ]);
+            }
+
+            // Actualizar estado de la campaña
+            $campaign->update(['status' => 'sending', 'last_execution' => now()]);
+
+            // Enviar mensajes
+            $result = $this->sendBulkWhatsAppMessagesToMicroservice(
+                $retryContacts,
+                $campaign->message_template,
+                $campaign->id,
+                $execution->id
+            );
+
+            // Recalcular resultados
+            $dbSent = CampaignMessage::where('campaign_execution_id', $execution->id)
+                ->where('status', CampaignMessage::STATUS_SENT)->count();
+            $dbFailed = CampaignMessage::where('campaign_execution_id', $execution->id)
+                ->where('status', CampaignMessage::STATUS_FAILED)->count();
+
+            $allProcessed = ($dbSent + $dbFailed) >= count($retryContacts);
+
+            $execution->update([
+                'status' => $allProcessed ? 'completed' : 'running',
+                'completed_at' => $allProcessed ? now() : null,
+                'messages_sent' => $dbSent,
+                'messages_failed' => $dbFailed,
+            ]);
+
+            // Recalcular totales globales de la campaña
+            $totalSent = CampaignMessage::where('campaign_id', $campaign->id)
+                ->where('status', CampaignMessage::STATUS_SENT)->count();
+            $totalFailed = CampaignMessage::where('campaign_id', $campaign->id)
+                ->where('status', CampaignMessage::STATUS_FAILED)->count();
+            $totalRetrying = CampaignMessage::where('campaign_id', $campaign->id)
+                ->where('status', 'retrying')->count();
+
+            $campaign->update([
+                'status' => ($totalFailed === 0 && $totalRetrying === 0) ? 'completed' : ($allProcessed ? 'completed' : 'sending'),
+                'sent_count' => $totalSent,
+                'failed_count' => $totalFailed,
+                'last_execution' => now(),
+            ]);
+
+            \Log::info('✅ [RETRY FAILED] Reintento completado', [
+                'campaign_id' => $campaign->id,
+                'execution_id' => $execution->id,
+                'retry_sent' => $dbSent,
+                'retry_failed' => $dbFailed,
+                'total_sent' => $totalSent,
+                'total_failed' => $totalFailed,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Reintento completado: {$dbSent} enviados, {$dbFailed} fallidos de {$failedMessages->count()} reintentos",
+                'execution_id' => $execution->id,
+                'results' => [
+                    'retried' => $failedMessages->count(),
+                    'sent' => $dbSent,
+                    'failed' => $dbFailed,
+                    'total_campaign_sent' => $totalSent,
+                    'total_campaign_failed' => $totalFailed,
+                ],
+                'campaign' => $campaign->fresh(),
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('❌ [RETRY FAILED] Error en reintento', [
+                'campaign_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al reintentar mensajes fallidos: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -2643,9 +2845,29 @@ class CampaignController extends Controller
                 'agent_id' => $agentId,
                 'agent_phone_number_id' => env('ELEVENLABS_PHONE_NUMBER_ID', 'pn_60af9b3f5b4e4f001f0e1e1f'),
                 'to_number' => $phone,
+                'conversation_config_override' => [
+                    'tts' => [
+                        'model_id' => 'eleven_flash_v2_5',
+                        'stability' => 0.9,
+                        'similarity_boost' => 0.80,
+                        'style' => 0.0,
+                        'use_speaker_boost' => false,
+                        'optimize_streaming_latency' => 4,
+                    ],
+                ],
                 'conversation_initiation_client_data' => [
-                    'system_prompt' => "Eres un asistente virtual amigable que llama en nombre de una compañía de seguros. Tu mensaje principal es: {$message}. Mantén la conversación breve y profesional. Si la persona no está interesada, respeta su decisión y termina la llamada cordialmente.",
-                    'temperature' => 0.7
+                    'conversation_config_override' => [
+                        'tts' => [
+                            'model_id' => 'eleven_flash_v2_5',
+                            'stability' => 0.9,
+                            'similarity_boost' => 0.80,
+                            'style' => 0.0,
+                            'use_speaker_boost' => false,
+                            'optimize_streaming_latency' => 4,
+                        ],
+                    ],
+                    'system_prompt' => "Eres un asistente virtual amigable que llama en nombre de una compañía de seguros. Tu mensaje principal es: {$message}. Mantén la conversación breve y profesional. Respuestas cortas: máximo 1 oración por turno. Si la persona no está interesada, respeta su decisión y termina la llamada cordialmente.",
+                    'temperature' => 0.1
                 ],
                 'metadata' => [
                     'contact_name' => $contact['name'] ?? 'Cliente',

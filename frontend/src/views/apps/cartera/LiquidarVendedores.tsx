@@ -702,61 +702,63 @@ const LiquidarVendedores = () => {
             icon={() => <Icon icon="solar:wallet-money-bold-duotone" />}
             onClick={() => setTabActivo('porPagar')}
           >
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell className="w-10">
-                    <Checkbox
-                      checked={polizasSeleccionadas.size === todasLasPolizas.length && todasLasPolizas.length > 0}
-                      onChange={seleccionarTodasPolizas}
-                    />
-                  </Table.HeadCell>
-                  <Table.HeadCell>Póliza</Table.HeadCell>
-                  <Table.HeadCell>Cliente</Table.HeadCell>
-                  <Table.HeadCell>{terminologia.vendedor}</Table.HeadCell>
-                  <Table.HeadCell>Aseguradora</Table.HeadCell>
-                  <Table.HeadCell>Ramo</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Prima</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Retención</Table.HeadCell>
-                  <Table.HeadCell className="text-right">ICA</Table.HeadCell>
-                  <Table.HeadCell className="text-right">IVA</Table.HeadCell>
-                  <Table.HeadCell className="text-right">ReteIVA</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Com. Neta</Table.HeadCell>
-                  <Table.HeadCell>Fecha Cobro</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th className="w-10">
+                      <Checkbox
+                        checked={polizasSeleccionadas.size === todasLasPolizas.length && todasLasPolizas.length > 0}
+                        onChange={seleccionarTodasPolizas}
+                      />
+                    </th>
+                    <th>Póliza</th>
+                    <th>Cliente</th>
+                    <th>{terminologia.vendedor}</th>
+                    <th>Aseguradora</th>
+                    <th>Ramo</th>
+                    <th className="text-right">Prima</th>
+                    <th className="text-right">Com. Bruta</th>
+                    <th className="text-right">Retención</th>
+                    <th className="text-right">ICA</th>
+                    <th className="text-right">IVA</th>
+                    <th className="text-right">ReteIVA</th>
+                    <th className="text-right">Com. Neta</th>
+                    <th>Fecha Cobro</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {polizasPaginadas.map((poliza) => (
-                    <Table.Row key={poliza.id} className={polizasSeleccionadas.has(poliza.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}>
-                      <Table.Cell>
+                    <tr key={poliza.id} className={polizasSeleccionadas.has(poliza.id) ? 'row-selected' : ''}>
+                      <td>
                         <Checkbox
                           checked={polizasSeleccionadas.has(poliza.id)}
                           onChange={() => togglePolizaSeleccionada(poliza.id)}
                         />
-                      </Table.Cell>
-                      <Table.Cell className="font-medium">{poliza.numero_poliza}</Table.Cell>
-                      <Table.Cell>{poliza.cliente}</Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td className="font-medium">{poliza.numero_poliza}</td>
+                      <td>{poliza.cliente}</td>
+                      <td>
                         <Badge color="info" size="sm">{poliza.vendedor}</Badge>
-                      </Table.Cell>
-                      <Table.Cell>{poliza.aseguradora}</Table.Cell>
-                      <Table.Cell>{poliza.ramo}</Table.Cell>
-                      <Table.Cell className="text-right">{formatCurrency(poliza.prima_neta)}</Table.Cell>
-                      <Table.Cell className="text-right">{formatCurrency(poliza.comision_bruta)}</Table.Cell>
-                      <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.retencion)}</Table.Cell>
-                      <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.retencion_ica)}</Table.Cell>
-                      <Table.Cell className="text-right text-blue-500">{formatCurrency(poliza.iva)}</Table.Cell>
-                      <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.reteiva || 0)}</Table.Cell>
-                      <Table.Cell className="text-right font-semibold text-green-600">
+                      </td>
+                      <td>{poliza.aseguradora}</td>
+                      <td>{poliza.ramo}</td>
+                      <td className="text-right">{formatCurrency(poliza.prima_neta)}</td>
+                      <td className="text-right">{formatCurrency(poliza.comision_bruta)}</td>
+                      <td className="text-right text-red-500">{formatCurrency(poliza.retencion)}</td>
+                      <td className="text-right text-red-500">{formatCurrency(poliza.retencion_ica)}</td>
+                      <td className="text-right text-blue-500">{formatCurrency(poliza.iva)}</td>
+                      <td className="text-right text-red-500">{formatCurrency(poliza.reteiva || 0)}</td>
+                      <td className="text-right font-semibold text-green-600">
                         {formatCurrency(poliza.comision_neta)}
-                      </Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td>
                         <span className="text-green-600">{formatDate(poliza.fecha_cobro || poliza.fecha_poliza)}</span>
-                      </Table.Cell>
-                    </Table.Row>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
 
               {todasLasPolizas.length === 0 && (
                 <div className="text-center py-12">
@@ -771,7 +773,7 @@ const LiquidarVendedores = () => {
 
             {/* Paginación */}
             {totalPaginasPolizas > 1 && (
-              <div className="flex items-center justify-between p-4 border-t">
+              <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
                   Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, todasLasPolizas.length)} de {todasLasPolizas.length}
                 </div>
@@ -819,54 +821,56 @@ const LiquidarVendedores = () => {
             icon={() => <Icon icon="solar:user-bold-duotone" />}
             onClick={() => setTabActivo('porVendedor')}
           >
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>{terminologia.vendedor}</Table.HeadCell>
-                  <Table.HeadCell className="text-center">Pólizas</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Prima Total</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Retención</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Ret. ICA</Table.HeadCell>
-                  <Table.HeadCell className="text-right">IVA</Table.HeadCell>
-                  <Table.HeadCell className="text-right">ReteIVA</Table.HeadCell>
-                  <Table.HeadCell className="text-right">Com. Neta</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>{terminologia.vendedor}</th>
+                    <th className="text-center">Pólizas</th>
+                    <th className="text-right">Prima Total</th>
+                    <th className="text-right">Com. Bruta</th>
+                    <th className="text-right">Retención</th>
+                    <th className="text-right">Ret. ICA</th>
+                    <th className="text-right">IVA</th>
+                    <th className="text-right">ReteIVA</th>
+                    <th className="text-right">Com. Neta</th>
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {comisionesFiltradas.map((vendedor) => (
-                    <Table.Row key={vendedor.vendedor_id}>
-                      <Table.Cell className="font-medium">
+                    <tr key={vendedor.vendedor_id} className="group">
+                      <td className="font-medium">
                         <div>
                           <span>{vendedor.vendedor}</span>
                           <div className="text-xs text-gray-500">
                             Ret: {vendedor.porcentajes?.retencion || 0}% | ICA: {vendedor.porcentajes?.retencion_ica || 0}% | IVA: {vendedor.porcentajes?.iva || 0}% | ReteIVA: {vendedor.porcentajes?.reteiva || 0}%
                           </div>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="text-center font-semibold text-blue-600">
+                      </td>
+                      <td className="text-center font-semibold text-blue-600">
                         {vendedor.total_polizas}
-                      </Table.Cell>
-                      <Table.Cell className="text-right">{formatCurrency(vendedor.prima_total)}</Table.Cell>
-                      <Table.Cell className="text-right font-semibold">
+                      </td>
+                      <td className="text-right">{formatCurrency(vendedor.prima_total)}</td>
+                      <td className="text-right font-semibold">
                         {formatCurrency(vendedor.comision_bruta_total)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right text-red-600">
+                      </td>
+                      <td className="text-right text-red-600">
                         {formatCurrency(vendedor.retencion_total)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right text-red-600">
+                      </td>
+                      <td className="text-right text-red-600">
                         {formatCurrency(vendedor.retencion_ica_total)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right text-blue-600">
+                      </td>
+                      <td className="text-right text-blue-600">
                         {formatCurrency(vendedor.iva_total)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right text-red-600">
+                      </td>
+                      <td className="text-right text-red-600">
                         {formatCurrency(vendedor.reteiva_total || 0)}
-                      </Table.Cell>
-                      <Table.Cell className="text-right font-bold text-green-600">
+                      </td>
+                      <td className="text-right font-bold text-green-600">
                         {formatCurrency(vendedor.comision_neta_total)}
-                      </Table.Cell>
-                      <Table.Cell>
+                      </td>
+                      <td className="sticky-right">
                         <Button
                           size="sm"
                           color="primary"
@@ -875,11 +879,11 @@ const LiquidarVendedores = () => {
                           <Icon icon="solar:dollar-minimalistic-bold-duotone" className="w-4 h-4 mr-1" />
                           Liquidar
                         </Button>
-                      </Table.Cell>
-                    </Table.Row>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
 
               {comisionesFiltradas.length === 0 && (
                 <div className="text-center py-12">
@@ -901,41 +905,43 @@ const LiquidarVendedores = () => {
                 <Spinner size="lg" />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table hoverable>
-                  <Table.Head>
-                    <Table.HeadCell>Código</Table.HeadCell>
-                    <Table.HeadCell>{terminologia.vendedor}</Table.HeadCell>
-                    <Table.HeadCell>Período</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Pólizas</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Retención</Table.HeadCell>
-                    <Table.HeadCell className="text-right">ICA</Table.HeadCell>
-                    <Table.HeadCell className="text-right">IVA</Table.HeadCell>
-                    <Table.HeadCell className="text-right">ReteIVA</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Com. Neta</Table.HeadCell>
-                    <Table.HeadCell>Estado</Table.HeadCell>
-                    <Table.HeadCell>Fecha</Table.HeadCell>
-                    <Table.HeadCell>Acciones</Table.HeadCell>
-                  </Table.Head>
-                  <Table.Body className="divide-y">
+              <div className="guro-table-wrap">
+                <table className="guro-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>{terminologia.vendedor}</th>
+                      <th>Período</th>
+                      <th className="text-right">Pólizas</th>
+                      <th className="text-right">Com. Bruta</th>
+                      <th className="text-right">Retención</th>
+                      <th className="text-right">ICA</th>
+                      <th className="text-right">IVA</th>
+                      <th className="text-right">ReteIVA</th>
+                      <th className="text-right">Com. Neta</th>
+                      <th>Estado</th>
+                      <th>Fecha</th>
+                      <th className="sticky-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {liquidaciones.map((liquidacion) => (
-                      <Table.Row key={liquidacion.id}>
-                        <Table.Cell className="font-medium">{liquidacion.codigo}</Table.Cell>
-                        <Table.Cell>{liquidacion.vendedor?.nombres || 'N/A'}</Table.Cell>
-                        <Table.Cell>
+                      <tr key={liquidacion.id} className="group">
+                        <td className="font-medium">{liquidacion.codigo}</td>
+                        <td>{liquidacion.vendedor?.nombres || 'N/A'}</td>
+                        <td>
                           {formatDate(liquidacion.periodo_inicio)} - {formatDate(liquidacion.periodo_fin)}
-                        </Table.Cell>
-                        <Table.Cell className="text-right">{liquidacion.cantidad_polizas}</Table.Cell>
-                        <Table.Cell className="text-right">{formatCurrency(liquidacion.monto_bruto_total)}</Table.Cell>
-                        <Table.Cell className="text-right text-red-500">{formatCurrency(liquidacion.monto_retencion_total)}</Table.Cell>
-                        <Table.Cell className="text-right text-red-500">{formatCurrency(liquidacion.monto_retencion_ica_total)}</Table.Cell>
-                        <Table.Cell className="text-right text-blue-500">{formatCurrency(liquidacion.monto_iva_total)}</Table.Cell>
-                        <Table.Cell className="text-right text-red-500">{formatCurrency(liquidacion.monto_reteiva_total || 0)}</Table.Cell>
-                        <Table.Cell className="text-right font-semibold text-green-600">
+                        </td>
+                        <td className="text-right">{liquidacion.cantidad_polizas}</td>
+                        <td className="text-right">{formatCurrency(liquidacion.monto_bruto_total)}</td>
+                        <td className="text-right text-red-500">{formatCurrency(liquidacion.monto_retencion_total)}</td>
+                        <td className="text-right text-red-500">{formatCurrency(liquidacion.monto_retencion_ica_total)}</td>
+                        <td className="text-right text-blue-500">{formatCurrency(liquidacion.monto_iva_total)}</td>
+                        <td className="text-right text-red-500">{formatCurrency(liquidacion.monto_reteiva_total || 0)}</td>
+                        <td className="text-right font-semibold text-green-600">
                           {formatCurrency(liquidacion.monto_neto_total)}
-                        </Table.Cell>
-                        <Table.Cell>
+                        </td>
+                        <td>
                           <Badge 
                             color={
                               liquidacion.estado === 'pagada' ? 'success' :
@@ -947,9 +953,9 @@ const LiquidarVendedores = () => {
                           >
                             {liquidacion.estado.toUpperCase()}
                           </Badge>
-                        </Table.Cell>
-                        <Table.Cell>{formatDate(liquidacion.fecha_generacion)}</Table.Cell>
-                        <Table.Cell>
+                        </td>
+                        <td>{formatDate(liquidacion.fecha_generacion)}</td>
+                        <td className="sticky-right">
                           <Button 
                             size="xs" 
                             color="primary" 
@@ -958,11 +964,11 @@ const LiquidarVendedores = () => {
                           >
                             <Icon icon="solar:download-bold" className="w-4 h-4" />
                           </Button>
-                        </Table.Cell>
-                      </Table.Row>
+                        </td>
+                      </tr>
                     ))}
-                  </Table.Body>
-                </Table>
+                  </tbody>
+                </table>
 
                 {liquidaciones.length === 0 && (
                   <div className="text-center py-12">
@@ -1111,55 +1117,57 @@ const LiquidarVendedores = () => {
                     </Button>
                   </div>
                 </div>
-                <div className="max-h-64 overflow-y-auto">
-                  <Table hoverable>
-                    <Table.Head>
-                      <Table.HeadCell className="w-10">
-                        <Checkbox
-                          checked={polizasModalFiltradas.length > 0 && polizasModalFiltradas.every(p => polizasModalSeleccionadas.has(p.id))}
-                          onChange={seleccionarTodasPolizasModal}
-                        />
-                      </Table.HeadCell>
-                      <Table.HeadCell>Póliza</Table.HeadCell>
-                      <Table.HeadCell>Cliente</Table.HeadCell>
-                      <Table.HeadCell>Aseguradora</Table.HeadCell>
-                      <Table.HeadCell>Ramo</Table.HeadCell>
-                      <Table.HeadCell className="text-right">Com. Bruta</Table.HeadCell>
-                      <Table.HeadCell className="text-right">Retención</Table.HeadCell>
-                      <Table.HeadCell className="text-right">ICA</Table.HeadCell>
-                      <Table.HeadCell className="text-right">IVA</Table.HeadCell>
-                      <Table.HeadCell className="text-right">ReteIVA</Table.HeadCell>
-                      <Table.HeadCell className="text-right">Com. Neta</Table.HeadCell>
-                      <Table.HeadCell>Fecha</Table.HeadCell>
-                    </Table.Head>
-                    <Table.Body className="divide-y">
+                <div className="guro-table-wrap max-h-64">
+                  <table className="guro-table">
+                    <thead>
+                      <tr>
+                        <th className="w-10">
+                          <Checkbox
+                            checked={polizasModalFiltradas.length > 0 && polizasModalFiltradas.every(p => polizasModalSeleccionadas.has(p.id))}
+                            onChange={seleccionarTodasPolizasModal}
+                          />
+                        </th>
+                        <th>Póliza</th>
+                        <th>Cliente</th>
+                        <th>Aseguradora</th>
+                        <th>Ramo</th>
+                        <th className="text-right">Com. Bruta</th>
+                        <th className="text-right">Retención</th>
+                        <th className="text-right">ICA</th>
+                        <th className="text-right">IVA</th>
+                        <th className="text-right">ReteIVA</th>
+                        <th className="text-right">Com. Neta</th>
+                        <th>Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody>
                       {polizasModalFiltradas.map((poliza) => (
-                        <Table.Row 
-                          key={poliza.id} 
-                          className={`cursor-pointer ${polizasModalSeleccionadas.has(poliza.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                        <tr
+                          key={poliza.id}
+                          className={`cursor-pointer ${polizasModalSeleccionadas.has(poliza.id) ? 'row-selected' : ''}`}
                           onClick={() => togglePolizaModal(poliza.id)}
                         >
-                          <Table.Cell onClick={(e) => e.stopPropagation()}>
+                          <td onClick={(e) => e.stopPropagation()}>
                             <Checkbox
                               checked={polizasModalSeleccionadas.has(poliza.id)}
                               onChange={() => togglePolizaModal(poliza.id)}
                             />
-                          </Table.Cell>
-                          <Table.Cell className="font-medium">{poliza.numero_poliza}</Table.Cell>
-                          <Table.Cell>{poliza.cliente}</Table.Cell>
-                          <Table.Cell>{poliza.aseguradora}</Table.Cell>
-                          <Table.Cell>{poliza.ramo}</Table.Cell>
-                          <Table.Cell className="text-right">{formatCurrency(poliza.comision_bruta)}</Table.Cell>
-                          <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.retencion)}</Table.Cell>
-                          <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.retencion_ica)}</Table.Cell>
-                          <Table.Cell className="text-right text-blue-500">{formatCurrency(poliza.iva)}</Table.Cell>
-                          <Table.Cell className="text-right text-red-500">{formatCurrency(poliza.reteiva || 0)}</Table.Cell>
-                          <Table.Cell className="text-right font-semibold text-green-600">{formatCurrency(poliza.comision_neta)}</Table.Cell>
-                          <Table.Cell>{formatDate(poliza.fecha_cobro || poliza.fecha_poliza)}</Table.Cell>
-                        </Table.Row>
+                          </td>
+                          <td className="font-medium">{poliza.numero_poliza}</td>
+                          <td>{poliza.cliente}</td>
+                          <td>{poliza.aseguradora}</td>
+                          <td>{poliza.ramo}</td>
+                          <td className="text-right">{formatCurrency(poliza.comision_bruta)}</td>
+                          <td className="text-right text-red-500">{formatCurrency(poliza.retencion)}</td>
+                          <td className="text-right text-red-500">{formatCurrency(poliza.retencion_ica)}</td>
+                          <td className="text-right text-blue-500">{formatCurrency(poliza.iva)}</td>
+                          <td className="text-right text-red-500">{formatCurrency(poliza.reteiva || 0)}</td>
+                          <td className="text-right font-semibold text-green-600">{formatCurrency(poliza.comision_neta)}</td>
+                          <td>{formatDate(poliza.fecha_cobro || poliza.fecha_poliza)}</td>
+                        </tr>
                       ))}
-                    </Table.Body>
-                  </Table>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 

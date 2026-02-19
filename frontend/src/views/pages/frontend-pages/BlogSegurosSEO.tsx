@@ -5,7 +5,7 @@ import { Icon } from "@iconify/react";
 import Navbar from "src/components/landingpage/framer-landing/Navbar";
 import Footer from "src/components/landingpage/framer-landing/Footer";
 
-const canonicalUrl = "https://www.guro.com.co/blog/software-seguros-colombia";
+const canonicalUrl = "https://guro.co/blog/software-seguros-colombia";
 const pageTitle = "Software de seguros en Colombia: guía completa y preguntas frecuentes";
 const pageDescription =
   "Guía experta sobre software de seguros en Colombia: mejores opciones, integraciones contables, nube, costos, IA y migraciones de datos. Todo lo esencial para corredurías pequeñas y medianas.";
@@ -185,14 +185,26 @@ const blogPostingSchema = {
   author: {
     "@type": "Organization",
     name: "Guro",
+    url: "https://guro.co",
+    logo: "https://guro.co/favicon.png",
   },
   publisher: {
     "@type": "Organization",
     name: "Guro",
+    url: "https://guro.co",
+    logo: {
+      "@type": "ImageObject",
+      url: "https://guro.co/favicon.png",
+    },
   },
-  mainEntityOfPage: canonicalUrl,
-  datePublished: "2024-01-01",
-  dateModified: "2024-01-01",
+  mainEntityOfPage: {
+    "@type": "WebPage",
+    "@id": canonicalUrl,
+  },
+  url: canonicalUrl,
+  datePublished: "2026-02-01",
+  dateModified: "2026-02-12",
+  keywords: "software de seguros, software correduria, seguros colombia, software siniestros, integracion contable seguros",
 };
 
 const breadcrumbSchema = {
@@ -203,7 +215,7 @@ const breadcrumbSchema = {
       "@type": "ListItem",
       position: 1,
       name: "Inicio",
-      item: "https://www.guro.com.co/",
+      item: "https://guro.co/",
     },
     {
       "@type": "ListItem",

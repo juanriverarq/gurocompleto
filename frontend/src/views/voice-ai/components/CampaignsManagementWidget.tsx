@@ -24,7 +24,8 @@ import { Cliente, clienteService } from '../../../services/clienteService';
 import voiceCampaignService, {
   VoiceCampaign,
   VoiceCampaignStats,
-  CreateVoiceCampaignRequest
+  CreateVoiceCampaignRequest,
+  PhoneNumberEntry
 } from '../../../services/voiceCampaignService';
 import whatsappInstanceService from '../../../services/whatsappInstanceService';
 
@@ -145,6 +146,8 @@ const CampaignsManagementWidget: React.FC = () => {
     }
   });
   const [waInstances, setWaInstances] = useState<Array<{ id?: number; instance_id: string; status?: string }>>([]);
+  const [brokerPhoneLines, setBrokerPhoneLines] = useState<PhoneNumberEntry[]>([]);
+  const [selectedPhoneNumberId, setSelectedPhoneNumberId] = useState<string>('');
 
   // Función para manejar la creación desde el wizard
   const handleWizardCampaignCreate = async (campaignData: any) => {
@@ -232,7 +235,8 @@ const CampaignsManagementWidget: React.FC = () => {
         loadClients(),
         loadCampaigns(),
         loadStats(),
-        loadWhatsAppInstances()
+        loadWhatsAppInstances(),
+        loadPhoneLines()
       ]);
     } catch (error) {    } finally {
       setIsLoading(false);
@@ -250,6 +254,17 @@ const CampaignsManagementWidget: React.FC = () => {
     } catch (e) {
       setWaInstances([]);
     }
+  };
+
+  const loadPhoneLines = async () => {
+    try {
+      const result = await voiceCampaignService.getPhoneNumbers();
+      if (result.success && result.phone_numbers.length > 0) {
+        setBrokerPhoneLines(result.phone_numbers);
+        const first = result.phone_numbers[0];
+        if (first.phone_number_id) setSelectedPhoneNumberId(first.phone_number_id);
+      }
+    } catch (e) { /* no phone lines */ }
   };
 
   const loadAgents = async () => {
@@ -401,6 +416,7 @@ const CampaignsManagementWidget: React.FC = () => {
         priority: formData.priority,
         scheduled_at: formData.scheduledAt || undefined,
         contacts: contacts,
+        ...(selectedPhoneNumberId ? { elevenlabs_phone_number_id: selectedPhoneNumberId } : {}),
         settings: {
           max_retries: formData.maxRetries,
           retry_delay: 300,

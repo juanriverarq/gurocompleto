@@ -8,13 +8,12 @@ import {
   Tabs,
   Avatar,
   Spinner,
-  Dropdown,
   Label,
-  Checkbox,
 } from 'flowbite-react';
 import { IconDots } from '@tabler/icons-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
+import TableActionMenu, { TableMenuItem } from 'src/components/TableActionMenu';
 import { useToast } from 'src/hooks/use-toast';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import {
@@ -28,6 +27,8 @@ import { saasApi } from '../../../../services/saasApi';
 // import { ClienteSaaS } from '../../../../types/saas';
 import { TIPOS_CLIENTE, TIPOS_DOCUMENTO, GENEROS, ESTADOS_CLIENTE } from 'src/constants/catalogos';
 import ClientesExportModal from './components/ClientesExportModal';
+import { useAutoTour } from 'src/components/GuroTour/useAutoTour';
+import { TOUR_CLIENTES } from 'src/components/GuroTour/tourConfigs';
 import { ClienteSaaS } from 'src/types/saas';
 import { clienteService } from 'src/services/clienteService';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
@@ -236,6 +237,7 @@ const departamentosFallback = [
 ];
 
 const Clientes: React.FC = () => {
+  useAutoTour(TOUR_CLIENTES);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   // Paginación backend
   const [pagination, setPagination] = useState<{
@@ -992,15 +994,17 @@ const Clientes: React.FC = () => {
   const getCellClass = (columnKey: string) => {
     switch (columnKey) {
       case 'nombre':
-        return 'whitespace-nowrap max-w-[260px]';
+        return 'min-w-[220px] max-w-[280px] whitespace-normal break-words';
       case 'documento':
-        return 'whitespace-nowrap max-w-[200px]';
+        return 'min-w-[180px] max-w-[220px] whitespace-normal break-words';
       case 'contacto':
-        return 'whitespace-nowrap max-w-[260px]';
+        return 'min-w-[240px] max-w-[300px] whitespace-normal break-words';
       case 'ubicacion':
-        return 'whitespace-nowrap max-w-[220px]';
+        return 'min-w-[200px] max-w-[260px] whitespace-normal break-words';
+      case 'estado':
+        return 'min-w-[140px] whitespace-normal';
       default:
-        return 'whitespace-nowrap';
+        return 'min-w-[160px] whitespace-normal break-words';
     }
   };
 
@@ -1295,70 +1299,69 @@ const Clientes: React.FC = () => {
 
       {/* Estadísticas */}
       {estadisticasTotales && estadisticasTotales.total !== undefined && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+        <div data-tour="clientes-stats" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
           <Card className="p-3 md:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Total Clientes</p>
-                <p className="text-lg md:text-2xl font-bold text-blue-600">
+                <p data-tour="clientes-page-title" className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Total Clientes</p>
+                <p className="text-lg md:text-2xl font-bold text-[#573CFF]">
                   {estadisticasTotales.total}
                 </p>
               </div>
-              <Icon
-                icon="solar:users-group-two-rounded-bold-duotone"
-                className="w-6 h-6 md:w-8 md:h-8 text-blue-500"
-              />
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-[#573CFF]/10 dark:bg-[#573CFF]/20 rounded-xl flex items-center justify-center">
+                <Icon icon="solar:users-group-two-rounded-bold-duotone" className="w-5 h-5 text-[#573CFF]" />
+              </div>
             </div>
           </Card>
           <Card className="p-3 md:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Activos</p>
-                <p className="text-lg md:text-2xl font-bold text-green-600">
+                <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Activos</p>
+                <p className="text-lg md:text-2xl font-bold text-emerald-600 dark:text-emerald-400">
                   {estadisticasTotales.activos}
                 </p>
               </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-green-100 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 md:w-3 md:h-3 bg-green-500 rounded-full"></div>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
               </div>
             </div>
           </Card>
           <Card className="p-3 md:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Prospectos</p>
-                <p className="text-lg md:text-2xl font-bold text-orange-600">
+                <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Prospectos</p>
+                <p className="text-lg md:text-2xl font-bold text-amber-600 dark:text-amber-400">
                   {estadisticasTotales.prospectos}
                 </p>
               </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 md:w-3 md:h-3 bg-orange-500 rounded-full"></div>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-amber-100 dark:bg-amber-500/20 rounded-xl flex items-center justify-center">
+                <div className="w-2.5 h-2.5 bg-amber-500 rounded-full"></div>
               </div>
             </div>
           </Card>
           <Card className="p-3 md:p-4 col-span-2 sm:col-span-1">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Valor Cartera</p>
-                <p className="text-sm md:text-lg font-bold text-purple-600">
+                <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Valor Cartera</p>
+                <p className="text-sm md:text-lg font-bold text-[#573CFF]">
                   {formatCurrency(estadisticasTotales.valorTotal)}
                 </p>
               </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                <span className="text-purple-600 font-bold text-xs md:text-sm">$</span>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-[#573CFF]/10 dark:bg-[#573CFF]/20 rounded-xl flex items-center justify-center">
+                <span className="text-[#573CFF] font-bold text-xs md:text-sm">$</span>
               </div>
             </div>
           </Card>
           <Card className="p-3 md:p-4 col-span-2 sm:col-span-3 md:col-span-1">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Pólizas Activas</p>
-                <p className="text-lg md:text-2xl font-bold text-red-600">
+                <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Pólizas Activas</p>
+                <p className="text-lg md:text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {estadisticasTotales.polizasTotal}
                 </p>
               </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-red-100 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 md:w-3 md:h-3 bg-red-500 rounded-full"></div>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <Icon icon="solar:shield-check-bold-duotone" className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </Card>
@@ -1461,7 +1464,7 @@ const Clientes: React.FC = () => {
               </Button>
 
               {canCreateClient && (
-                <Link to="/apps/seguros/clientes/nuevo">
+                <Link to="/apps/seguros/clientes/nuevo" data-tour="clientes-create-btn">
                   <span className="group relative inline-flex items-center bg-[#0d0d0d] rounded-2xl h-10 shadow-lg shadow-black/10 overflow-hidden cursor-pointer">
                     <span className="absolute inset-y-0 left-0 w-10 group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
                     <span className="relative z-10 flex items-center justify-center w-10 h-full flex-shrink-0">
@@ -1478,7 +1481,7 @@ const Clientes: React.FC = () => {
       </div>
 
       {/* Tabla de clientes */}
-      <Card>
+      <Card data-tour="clientes-table">
         {loading ? (
           <div className="flex justify-center items-center py-8">
             <Spinner size="lg" />
@@ -1507,223 +1510,170 @@ const Clientes: React.FC = () => {
           </div>
         ) : (
           <>
-            {selectedIds.size > 0 && (
-              <div className="p-3 mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="text-sm text-blue-900 dark:text-blue-300">
-                  <strong>{selectedIds.size}</strong> cliente(s) seleccionados
-                  {estadisticasTotales && estadisticasTotales.total > selectedIds.size && (
-                    <span className="text-gray-500 dark:text-gray-400 ml-2">
-                      de {estadisticasTotales.total} totales
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {deleteEnabled && canDeleteClient && (
-                    <>
-                      <Button
-                        color="failure"
-                        size="sm"
-                        onClick={handleBulkDeleteClientes}
-                        className="rounded-[10px]"
-                        title="Eliminar solo los clientes seleccionados"
-                      >
-                        <Icon
-                          icon="solar:trash-bin-minimalistic-bold-duotone"
-                          className="w-4 h-4 mr-1"
-                        />
-                        Eliminar seleccionados ({selectedIds.size})
-                      </Button>
-                      {estadisticasTotales && estadisticasTotales.total > 0 && (
-                        <Button
-                          color="failure"
-                          size="sm"
-                          onClick={() => setShowBulkDeleteAllModal(true)}
-                          className="rounded-[10px]"
-                          title="Eliminar TODOS los clientes del sistema"
+            {/* ── Selection toolbar ── */}
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-white/[0.06]">
+              <button
+                onClick={() => toggleSelectAll()}
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                  currentClientes.length > 0 && currentClientes.every((c) => selectedIds.has(String(c.id)))
+                    ? 'bg-[#573CFF] text-white'
+                    : 'bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/[0.1]'
+                }`}
+              >
+                {currentClientes.length > 0 && currentClientes.every((c) => selectedIds.has(String(c.id)))
+                  ? 'Deseleccionar todo'
+                  : 'Seleccionar todo'}
+              </button>
+              {selectedIds.size > 0 && (
+                <>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <strong className="text-[#573CFF]">{selectedIds.size}</strong> seleccionados
+                  </span>
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <button
+                      onClick={handleOpenBulkClientStateModal}
+                      className="text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+                    >
+                      <Icon icon="solar:settings-bold-duotone" className="w-3.5 h-3.5 inline mr-1" />
+                      Cambiar estado
+                    </button>
+                    {deleteEnabled && canDeleteClient && (
+                      <>
+                        <button
+                          onClick={handleBulkDeleteClientes}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                         >
-                          <Icon
-                            icon="solar:trash-bin-trash-bold-duotone"
-                            className="w-4 h-4 mr-1"
-                          />
-                          Eliminar TODOS ({estadisticasTotales.total})
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  <Button
-                    color="blue"
-                    size="sm"
-                    onClick={handleOpenBulkClientStateModal}
-                    className="rounded-[10px]"
-                  >
-                    <Icon icon="solar:settings-bold-duotone" className="w-4 h-4 mr-1" />
-                    Cambiar estado
-                  </Button>
-                  <Button
-                    color="light"
-                    size="sm"
-                    onClick={clearSelection}
-                    className="rounded-[10px]"
-                  >
-                    Limpiar selección
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div className="overflow-x-auto table-container-with-dropdowns">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell className="w-10">
-                    <Checkbox
-                      checked={
-                        currentClientes.length > 0 &&
-                        currentClientes.every((c) => selectedIds.has(String(c.id)))
-                      }
-                      onChange={() => toggleSelectAll()}
-                    />
-                  </Table.HeadCell>
-                  {visibleColumns.map((columnKey) => {
-                    const apiField = columnToApiField[columnKey];
-                    const isSortable = !!apiField;
-                    const isActive = isSortable && filters.sort_by === apiField;
-                    const dir = isActive ? filters.sort_dir || 'asc' : undefined;
-                    return (
-                      <Table.HeadCell
-                        key={columnKey}
-                        className={columnKey === 'nombre' ? 'w-[200px]' : ''}
-                      >
-                        <div
-                          className={
-                            isSortable ? 'flex items-center gap-1 cursor-pointer select-none' : ''
-                          }
-                          onClick={() => isSortable && toggleSort(columnKey)}
-                        >
-                          <span>{getColumnName(columnKey)}</span>
-                          {isSortable && (
-                            <Icon
-                              icon={
-                                isActive
-                                  ? dir === 'asc'
-                                    ? 'solar:arrow-up-bold-duotone'
-                                    : 'solar:arrow-down-bold-duotone'
-                                  : 'solar:sort-vertical-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    );
-                  })}
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body>
-                  {currentClientes.map((cliente) => (
-                    <Table.Row key={cliente.id}>
-                      <Table.Cell>
-                        <Checkbox
-                          checked={selectedIds.has(String(cliente.id))}
-                          onChange={() => toggleSelectOne(cliente.id)}
-                        />
-                      </Table.Cell>
-                      {visibleColumns.map((columnKey) => (
-                        <Table.Cell
-                          key={columnKey}
-                          className={`${
-                            columnKey === 'nombre' ? 'w-[200px]' : ''
-                          } whitespace-nowrap pr-8`}
-                        >
-                          {renderTableCell(cliente, columnKey)}
-                        </Table.Cell>
-                      ))}
-                      <Table.Cell>
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            style={{ minWidth: '300px' }}
-                            renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
-                              </span>
-                            )}
+                          <Icon icon="solar:trash-bin-minimalistic-bold-duotone" className="w-3.5 h-3.5 inline mr-1" />
+                          Eliminar ({selectedIds.size})
+                        </button>
+                        {estadisticasTotales && estadisticasTotales.total > 0 && (
+                          <button
+                            onClick={() => setShowBulkDeleteAllModal(true)}
+                            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-500/30 transition-colors"
                           >
-                            <Dropdown.Item
-                              className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
-                              onClick={() => handleViewCliente(cliente)}
+                            <Icon icon="solar:trash-bin-trash-bold-duotone" className="w-3.5 h-3.5 inline mr-1" />
+                            Eliminar TODOS ({estadisticasTotales.total})
+                          </button>
+                        )}
+                      </>
+                    )}
+                    <button
+                      onClick={clearSelection}
+                      className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            {/* ── Modern Table ── */}
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    {visibleColumns.map((columnKey) => {
+                      const apiField = columnToApiField[columnKey];
+                      const isSortable = !!apiField;
+                      const isActive = isSortable && filters.sort_by === apiField;
+                      const dir = isActive ? filters.sort_dir || 'asc' : undefined;
+                      return (
+                        <th key={columnKey} className="whitespace-nowrap">
+                          <div
+                            className={isSortable ? 'flex items-center gap-1.5 cursor-pointer select-none hover:text-gray-900 dark:hover:text-white transition-colors' : ''}
+                            onClick={() => isSortable && toggleSort(columnKey)}
+                          >
+                            <span>{getColumnName(columnKey)}</span>
+                            {isSortable && (
+                              <Icon
+                                icon={
+                                  isActive
+                                    ? dir === 'asc'
+                                      ? 'solar:arrow-up-bold-duotone'
+                                      : 'solar:arrow-down-bold-duotone'
+                                    : 'solar:sort-vertical-bold-duotone'
+                                }
+                                className={`w-3.5 h-3.5 ${isActive ? 'text-[#573CFF]' : 'text-gray-400'}`}
+                              />
+                            )}
+                          </div>
+                        </th>
+                      );
+                    })}
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentClientes.map((cliente) => (
+                    <tr
+                      key={cliente.id}
+                      className={`group${selectedIds.has(String(cliente.id)) ? ' row-selected' : ''}`}
+                      onClick={() => toggleSelectOne(cliente.id)}
+                    >
+                      {visibleColumns.map((columnKey) => (
+                        <td key={columnKey} className="whitespace-nowrap">
+                          {renderTableCell(cliente, columnKey)}
+                        </td>
+                      ))}
+                      <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                        <TableActionMenu>
+                          <TableMenuItem onClick={() => handleViewCliente(cliente)}>
+                            <Icon icon="solar:eye-bold-duotone" height={18} />
+                            <span>Ver Detalles</span>
+                          </TableMenuItem>
+                          {canEditClient && (
+                            <Link
+                              to={`/apps/seguros/clientes/editar/${cliente.id}`}
+                              onClick={() => {
+                                const debugInfo = {
+                                  timestamp: new Date().toISOString(),
+                                  action: 'CLICK_EDITAR',
+                                  clienteId: cliente.id,
+                                  clienteCompleto: cliente,
+                                };
+                                localStorage.setItem(
+                                  'debug_last_cliente_edit',
+                                  JSON.stringify(debugInfo),
+                                );
+                                const historial = JSON.parse(
+                                  localStorage.getItem('debug_historial') || '[]',
+                                );
+                                historial.push(debugInfo);
+                                if (historial.length > 10) historial.shift();
+                                localStorage.setItem(
+                                  'debug_historial',
+                                  JSON.stringify(historial),
+                                );
+                              }}
                             >
-                              <Icon icon="solar:eye-bold-duotone" height={18} />
-                              <span>Ver Detalles</span>
-                            </Dropdown.Item>
-                            {canEditClient && (
-                              <Link
-                                to={`/apps/seguros/clientes/editar/${cliente.id}`}
-                                onClick={() => {
-                                  // Guardar en localStorage para debug
-                                  const debugInfo = {
-                                    timestamp: new Date().toISOString(),
-                                    action: 'CLICK_EDITAR',
-                                    clienteId: cliente.id,
-                                    clienteCompleto: cliente,
-                                  };
-                                  localStorage.setItem(
-                                    'debug_last_cliente_edit',
-                                    JSON.stringify(debugInfo),
-                                  );
-
-                                  // También agregar al historial de debug
-                                  const historial = JSON.parse(
-                                    localStorage.getItem('debug_historial') || '[]',
-                                  );
-                                  historial.push(debugInfo);
-                                  // Mantener solo los últimos 10
-                                  if (historial.length > 10) historial.shift();
-                                  localStorage.setItem(
-                                    'debug_historial',
-                                    JSON.stringify(historial),
-                                  );
-                                }}
-                              >
-                                <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                                  <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
-                                  <span>Editar</span>
-                                </Dropdown.Item>
-                              </Link>
-                            )}
-                            {canCreatePolicy && (
-                              <Dropdown.Item
-                                className="flex gap-3 w-full justify-start text-left"
-                                onClick={() => handleCreatePoliza(cliente)}
-                              >
-                                <Icon icon="solar:document-add-bold-duotone" height={18} />
-                                <span>Nueva Póliza</span>
-                              </Dropdown.Item>
-                            )}
-                            {deleteEnabled && canDeleteClient && (
-                              <Dropdown.Item
-                                className="flex gap-3 w-full justify-start text-left text-red-600 hover:text-red-700"
-                                onClick={() => handleDeleteCliente(cliente)}
-                              >
-                                <Icon
-                                  icon="solar:trash-bin-minimalistic-bold-duotone"
-                                  height={18}
-                                />
-                                <span>Eliminar</span>
-                              </Dropdown.Item>
-                            )}
-                          </Dropdown>
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
+                              <TableMenuItem>
+                                <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
+                                <span>Editar</span>
+                              </TableMenuItem>
+                            </Link>
+                          )}
+                          {canCreatePolicy && (
+                            <TableMenuItem onClick={() => handleCreatePoliza(cliente)}>
+                              <Icon icon="solar:document-add-bold-duotone" height={18} />
+                              <span>Nueva Póliza</span>
+                            </TableMenuItem>
+                          )}
+                          {deleteEnabled && canDeleteClient && (
+                            <TableMenuItem className="text-red-600 hover:text-red-700" onClick={() => handleDeleteCliente(cliente)}>
+                              <Icon icon="solar:trash-bin-minimalistic-bold-duotone" height={18} />
+                              <span>Eliminar</span>
+                            </TableMenuItem>
+                          )}
+                        </TableActionMenu>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
             </div>
 
             {/* Paginación (backend) */}
-            <div className="flex items-center justify-between p-4 border-t">
+            <div className="flex items-center justify-between p-4">
               <div className="text-sm text-gray-600">
                 Mostrando {startIndex || 0} a {endIndex || 0} de {pagination.total || 0} clientes
               </div>
@@ -2072,10 +2022,10 @@ const Clientes: React.FC = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-3">Datos Generales</h4>
+                      <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Datos Generales</h4>
                       <div className="space-y-3">
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Tipo de Cliente:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Tipo de Cliente:</span>
                           <div className="flex items-center gap-2">
                             <Icon
                               icon={getTipoIcon(selectedCliente.tipoCliente)}
@@ -2085,7 +2035,7 @@ const Clientes: React.FC = () => {
                           </div>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Estado:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Estado:</span>
                           <Badge
                             color={getEstadoBadge(
                               (fullCliente?.estado || selectedCliente.estado)
@@ -2101,18 +2051,18 @@ const Clientes: React.FC = () => {
                         </div>
                         {fullCliente?.codigo_cliente ? (
                           <div className="flex justify-between">
-                            <span className="text-gray-600">Código Cliente:</span>
+                            <span className="text-gray-600 dark:text-gray-400">Código Cliente:</span>
                             <span className="font-medium">{fullCliente.codigo_cliente}</span>
                           </div>
                         ) : null}
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Documento:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Documento:</span>
                           <span className="font-medium">
                             {selectedCliente.tipoDocumento} {selectedCliente.numeroDocumento}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Fecha de Nacimiento:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Fecha de Nacimiento:</span>
                           <span className="font-medium">
                             {fullCliente?.persona?.fecha_nacimiento ||
                               selectedCliente.fechaNacimiento ||
@@ -2120,7 +2070,7 @@ const Clientes: React.FC = () => {
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Fecha de Registro:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Fecha de Registro:</span>
                           <span className="font-medium">
                             {new Date(selectedCliente.fechaRegistro).toLocaleDateString('es-CO')}
                           </span>
@@ -2129,49 +2079,49 @@ const Clientes: React.FC = () => {
                     </div>
 
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-3">Contacto y Ubicación</h4>
+                      <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Contacto y Ubicación</h4>
                       <div className="space-y-3">
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Email:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Email:</span>
                           <span className="font-medium">
                             {fullCliente?.email || selectedCliente.email || '-'}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Teléfono:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Teléfono:</span>
                           <span className="font-medium">
                             {fullCliente?.telefono || selectedCliente.telefono || '-'}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Celular:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Celular:</span>
                           <span className="font-medium">{fullCliente?.celular || '-'}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Dirección:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Dirección:</span>
                           <span className="font-medium">
                             {fullCliente?.direccion || selectedCliente.direccion || '-'}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Ciudad:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Ciudad:</span>
                           <span className="font-medium">
                             {fullCliente?.ciudad || selectedCliente.ciudad || '-'}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Departamento:</span>
+                          <span className="text-gray-600 dark:text-gray-400">Departamento:</span>
                           <span className="font-medium">
                             {fullCliente?.departamento || selectedCliente.departamento || '-'}
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">País:</span>
+                          <span className="text-gray-600 dark:text-gray-400">País:</span>
                           <span className="font-medium">{fullCliente?.pais || 'Colombia'}</span>
                         </div>
                         {fullCliente?.codigo_postal ? (
                           <div className="flex justify-between">
-                            <span className="text-gray-600">Código Postal:</span>
+                            <span className="text-gray-600 dark:text-gray-400">Código Postal:</span>
                             <span className="font-medium">{fullCliente.codigo_postal}</span>
                           </div>
                         ) : null}
@@ -2181,45 +2131,45 @@ const Clientes: React.FC = () => {
                     <div className="md:col-span-2">
                       {fullCliente?.tipo === 'PERSONA' && fullCliente.persona ? (
                         <>
-                          <h4 className="font-semibold text-gray-900 mb-3">Datos de Persona</h4>
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Datos de Persona</h4>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             <div>
-                              <span className="text-gray-600">Nombres:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Nombres:</span>
                               <div className="font-medium">{fullCliente.persona.nombres}</div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Apellidos:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Apellidos:</span>
                               <div className="font-medium">{fullCliente.persona.apellidos}</div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Tipo Doc. / Número:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Tipo Doc. / Número:</span>
                               <div className="font-medium">
                                 {fullCliente.persona.tipo_documento} {fullCliente.persona.documento}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Fecha Nacimiento:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Fecha Nacimiento:</span>
                               <div className="font-medium">
                                 {fullCliente.persona.fecha_nacimiento}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Género:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Género:</span>
                               <div className="font-medium">{fullCliente.persona.genero}</div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Estado Civil:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Estado Civil:</span>
                               <div className="font-medium">{fullCliente.persona.estado_civil}</div>
                             </div>
                             {fullCliente.persona.profesion ? (
                               <div>
-                                <span className="text-gray-600">Profesión:</span>
+                                <span className="text-gray-600 dark:text-gray-400">Profesión:</span>
                                 <div className="font-medium">{fullCliente.persona.profesion}</div>
                               </div>
                             ) : null}
                             {typeof fullCliente.persona.ingresos_mensuales === 'number' ? (
                               <div>
-                                <span className="text-gray-600">Ingresos Mensuales:</span>
+                                <span className="text-gray-600 dark:text-gray-400">Ingresos Mensuales:</span>
                                 <div className="font-medium">
                                   {new Intl.NumberFormat('es-CO', {
                                     style: 'currency',
@@ -2235,60 +2185,60 @@ const Clientes: React.FC = () => {
 
                       {fullCliente?.tipo === 'EMPRESA' && fullCliente.empresa ? (
                         <>
-                          <h4 className="font-semibold text-gray-900 mb-3">Datos de Empresa</h4>
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Datos de Empresa</h4>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             <div>
-                              <span className="text-gray-600">Razón Social:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Razón Social:</span>
                               <div className="font-medium">{fullCliente.empresa.razon_social}</div>
                             </div>
                             <div>
-                              <span className="text-gray-600">NIT:</span>
+                              <span className="text-gray-600 dark:text-gray-400">NIT:</span>
                               <div className="font-medium">{fullCliente.empresa.nit}</div>
                             </div>
                             {fullCliente.empresa.nombre_comercial ? (
                               <div>
-                                <span className="text-gray-600">Nombre Comercial:</span>
+                                <span className="text-gray-600 dark:text-gray-400">Nombre Comercial:</span>
                                 <div className="font-medium">
                                   {fullCliente.empresa.nombre_comercial}
                                 </div>
                               </div>
                             ) : null}
                             <div>
-                              <span className="text-gray-600">Tipo de Empresa:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Tipo de Empresa:</span>
                               <div className="font-medium">{fullCliente.empresa.tipo_empresa}</div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Representante Legal:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Representante Legal:</span>
                               <div className="font-medium">
                                 {fullCliente.empresa.representante_legal}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Doc. Representante:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Doc. Representante:</span>
                               <div className="font-medium">
                                 {fullCliente.empresa.documento_representante}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Sector Económico:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Sector Económico:</span>
                               <div className="font-medium">
                                 {fullCliente.empresa.sector_economico}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Actividad Económica:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Actividad Económica:</span>
                               <div className="font-medium">
                                 {fullCliente.empresa.actividad_economica}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">N° Empleados:</span>
+                              <span className="text-gray-600 dark:text-gray-400">N° Empleados:</span>
                               <div className="font-medium">
                                 {fullCliente.empresa.numero_empleados}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Fecha Constitución:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Fecha Constitución:</span>
                               <div className="font-medium">
                                 {fullCliente.empresa.fecha_constitucion}
                               </div>
@@ -2299,22 +2249,22 @@ const Clientes: React.FC = () => {
 
                       {fullCliente?.tipo === 'CONSORCIO' && fullCliente.consorcio ? (
                         <>
-                          <h4 className="font-semibold text-gray-900 mb-3">Datos de Consorcio</h4>
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Datos de Consorcio</h4>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             <div>
-                              <span className="text-gray-600">Nombre:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Nombre:</span>
                               <div className="font-medium">
                                 {fullCliente.consorcio.nombre_consorcio}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Objeto:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Objeto:</span>
                               <div className="font-medium">
                                 {fullCliente.consorcio.objeto_consorcio}
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600">Duración:</span>
+                              <span className="text-gray-600 dark:text-gray-400">Duración:</span>
                               <div className="font-medium">
                                 {fullCliente.consorcio.duracion_consorcio}
                               </div>
@@ -2334,46 +2284,48 @@ const Clientes: React.FC = () => {
                 ) : polizasCliente.length === 0 ? (
                   <div className="py-6 text-gray-500">Sin pólizas para este cliente.</div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table hoverable>
-                      <Table.Head>
-                        <Table.HeadCell>Número</Table.HeadCell>
-                        <Table.HeadCell>Aseguradora</Table.HeadCell>
-                        <Table.HeadCell>Ramo</Table.HeadCell>
-                        <Table.HeadCell>Prima</Table.HeadCell>
-                        <Table.HeadCell>Estado</Table.HeadCell>
-                      </Table.Head>
-                      <Table.Body>
+                  <div className="guro-table-wrap">
+                    <table className="guro-table">
+                      <thead>
+                        <tr>
+                          <th>Número</th>
+                          <th>Aseguradora</th>
+                          <th>Ramo</th>
+                          <th>Prima</th>
+                          <th>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                         {polizasCliente.map((p: any) => (
-                          <Table.Row
+                          <tr
                             key={p.id}
-                            className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                            className="cursor-pointer group"
                             onClick={() => {
                               handleCloseDetailsModal();
                               navigate(`/apps/seguros/polizas?open_poliza_id=${p.id}`);
                             }}
                           >
-                            <Table.Cell>{p.numero_poliza || p.policy_number}</Table.Cell>
-                            <Table.Cell>
+                            <td>{p.numero_poliza || p.policy_number}</td>
+                            <td>
                               {(p as any).aseguradora_nombre ||
                                 p.aseguradora ||
                                 p.insurance_company}
-                            </Table.Cell>
-                            <Table.Cell>
+                            </td>
+                            <td>
                               {(p as any).ramo_nombre || p.ramo_principal || p.type}
-                            </Table.Cell>
-                            <Table.Cell>
+                            </td>
+                            <td>
                               {new Intl.NumberFormat('es-CO', {
                                 style: 'currency',
                                 currency: 'COP',
                                 minimumFractionDigits: 0,
                               }).format(p.prima_neta || p.premium_amount || 0)}
-                            </Table.Cell>
-                            <Table.Cell>{p.estado || p.status}</Table.Cell>
-                          </Table.Row>
+                            </td>
+                            <td>{p.estado || p.status}</td>
+                          </tr>
                         ))}
-                      </Table.Body>
-                    </Table>
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </Tabs.Item>
@@ -2385,31 +2337,33 @@ const Clientes: React.FC = () => {
                 ) : tareasCliente.length === 0 ? (
                   <div className="py-6 text-gray-500">Sin seguimientos registrados.</div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table hoverable>
-                      <Table.Head>
-                        <Table.HeadCell>Título</Table.HeadCell>
-                        <Table.HeadCell>Tipo</Table.HeadCell>
-                        <Table.HeadCell>Prioridad</Table.HeadCell>
-                        <Table.HeadCell>Estado</Table.HeadCell>
-                        <Table.HeadCell>Programado</Table.HeadCell>
-                      </Table.Head>
-                      <Table.Body>
+                  <div className="guro-table-wrap">
+                    <table className="guro-table">
+                      <thead>
+                        <tr>
+                          <th>Título</th>
+                          <th>Tipo</th>
+                          <th>Prioridad</th>
+                          <th>Estado</th>
+                          <th>Programado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                         {tareasCliente.map((t: any) => (
-                          <Table.Row key={t.id}>
-                            <Table.Cell>{t.title}</Table.Cell>
-                            <Table.Cell>{t.type}</Table.Cell>
-                            <Table.Cell>{t.priority}</Table.Cell>
-                            <Table.Cell>{t.status}</Table.Cell>
-                            <Table.Cell>
+                          <tr key={t.id} className="group">
+                            <td>{t.title}</td>
+                            <td>{t.type}</td>
+                            <td>{t.priority}</td>
+                            <td>{t.status}</td>
+                            <td>
                               {t.scheduled_for
                                 ? new Date(t.scheduled_for).toLocaleString('es-CO')
                                 : '-'}
-                            </Table.Cell>
-                          </Table.Row>
+                            </td>
+                          </tr>
                         ))}
-                      </Table.Body>
-                    </Table>
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </Tabs.Item>

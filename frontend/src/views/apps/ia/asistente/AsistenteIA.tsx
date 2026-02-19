@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Button, Card, TextInput, Badge } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import api from 'src/config/api';
 import { sanitizeHtml } from 'src/utils/sanitize';
-import saraAvatar from 'src/assets/images/profile/sara.webp';
+import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import guroToast from 'src/components/GuroToast/GuroToast';
 
 export interface ExportData {
   available: boolean;
@@ -40,14 +40,10 @@ const CONTEXTOS = [
 ];
 
 const AsistenteIA = () => {
-  const [mensajes, setMensajes] = useState<MensajeType[]>([
-    {
-      id: '1',
-      tipo: 'asistente',
-      mensaje: '¡Hola! Soy **Sara** 👋\n\nTu asistente virtual de Guro para gestionar tu negocio de seguros. Puedo ayudarte con:\n\n📊 **Análisis de tu cartera** - Pólizas, vencimientos, renovaciones\n👥 **Información de clientes** - Búsquedas, historial, contactos\n🚗 **Vehículos asegurados** - Consultas por placa, marca, modelo\n💰 **Finanzas** - Comisiones, pagos, cartera pendiente\n📈 **Reportes personalizados** - Exportables a Excel\n\n**Pregúntame lo que necesites en lenguaje natural.** Por ejemplo:\n• "¿Cuál es el cliente con más pólizas?"\n• "Vehículo con placa ABC123"\n• "Pólizas que vencen este mes"',
-      timestamp: new Date(),
-    }
-  ]);
+  const { user } = useUnifiedAuth();
+  const firstName = user?.displayName?.split(' ')[0] || 'usuario';
+  const [mensajes, setMensajes] = useState<MensajeType[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId] = useState(() => `conv_${Date.now()}`);
@@ -206,7 +202,7 @@ const AsistenteIA = () => {
   // Exportar a Excel
   const exportarExcel = (exportData: ExportData) => {
     if (!exportData?.available || !exportData?.data?.rows?.length) {
-      alert('No hay datos para exportar');
+      guroToast.warning('Sin datos', 'No hay datos para exportar');
       return;
     }
 
@@ -253,232 +249,233 @@ const AsistenteIA = () => {
     "Rendimiento de vendedores"
   ];
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-80px)] sm:h-[calc(100vh-90px)] md:h-[calc(100vh-100px)] p-2 sm:p-4">
-        {/* Header - Compacto en móvil */}
-        <Card className="mb-2 sm:mb-4 p-2 sm:p-4 flex-shrink-0">
-          <div className="flex items-center justify-between mb-2 sm:mb-4">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="relative">
-                <img 
-                  src={saraAvatar} 
-                  alt="Sara" 
-                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover shadow-lg border-2 border-primary/30"
-                />
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-white"></div>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base sm:text-lg font-semibold text-dark dark:text-white">Sara</h3>
-                  <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-medium">BETA</span>
-                </div>
-                <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">Tu asistente virtual de Guro</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Badge color="success" className="capitalize text-xs">
-                <span className="hidden sm:inline">Conectado</span>
-                <span className="sm:hidden">●</span>
-              </Badge>
-              <Button size="xs" color="light" onClick={limpiarChat} title="Limpiar chat">
-                <Icon icon="solar:trash-bin-minimalistic-outline" width={16} />
-              </Button>
-            </div>
-          </div>
-          
-          {/* Selector de Contexto - Scroll horizontal en móvil */}
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-2 sm:pt-3">
-            <p className="text-xs text-gray-500 mb-2 font-medium hidden sm:block">📍 Contexto de búsqueda:</p>
-            <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:flex-wrap scrollbar-hide">
-              {CONTEXTOS.map((ctx) => (
-                <button
-                  key={ctx.id}
-                  onClick={() => setContextoActivo(ctx.id)}
-                  className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${
-                    contextoActivo === ctx.id
-                      ? 'bg-primary text-white shadow-md'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                  title={ctx.description}
-                >
-                  <Icon icon={ctx.icon} width={14} />
-                  <span className="hidden sm:inline">{ctx.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </Card>
+  const hasMessages = mensajes.length > 0;
 
-        {/* Chat Messages */}
-        <Card className="flex-1 p-2 sm:p-4 overflow-hidden min-h-0">
-          <div className="h-full flex flex-col">
-            <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 mb-2 sm:mb-4 pr-1 sm:pr-2">
-              {mensajes.map((mensaje) => (
-                <div
-                  key={mensaje.id}
-                  className={`flex ${mensaje.tipo === 'usuario' ? 'justify-end' : 'justify-start'}`}
-                >
-                  {mensaje.tipo !== 'usuario' && (
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-2 flex-shrink-0 ${
-                      mensaje.tipo === 'error' ? 'bg-red-500' : 'bg-gradient-to-br from-primary to-blue-600'
+  return (
+    <div className="h-[calc(100vh-80px)] -mx-2 -mt-2 flex bg-gray-50 dark:bg-[#212121] text-gray-900 dark:text-white overflow-hidden rounded-2xl" style={{ fontFamily: "'General Sans', sans-serif" }}>
+      {/* ── Left icon sidebar ── */}
+      <div className="w-[52px] shrink-0 flex flex-col items-center pt-4 gap-3">
+        {/* Top actions */}
+        <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl py-2.5 px-1.5 flex flex-col items-center gap-1 border border-gray-200 dark:border-white/[0.06] shadow-lg shadow-black/10 dark:shadow-black/40">
+          <button onClick={limpiarChat} title="Nuevo chat"
+            className="group relative w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-all active:scale-90">
+            <Icon icon="solar:pen-new-square-linear" width={17} />
+            <div className="absolute left-full ml-2 px-2 py-0.5 rounded-md bg-gray-800 dark:bg-[#333] text-[9px] font-medium text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 shadow-xl">Nuevo chat</div>
+          </button>
+          <button onClick={() => setShowHistory(!showHistory)} title="Historial"
+            className={`group relative w-8 h-8 rounded-lg flex items-center justify-center transition-all active:scale-90 ${
+              showHistory ? 'bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
+            }`}>
+            <Icon icon="solar:clock-circle-linear" width={17} />
+            <div className="absolute left-full ml-2 px-2 py-0.5 rounded-md bg-gray-800 dark:bg-[#333] text-[9px] font-medium text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 shadow-xl">Historial</div>
+          </button>
+        </div>
+
+        {/* Context filters */}
+        <div className="bg-white dark:bg-[#2a2a2a] rounded-2xl py-2.5 px-1.5 flex flex-col items-center gap-1 border border-gray-200 dark:border-white/[0.06] shadow-lg shadow-black/10 dark:shadow-black/40">
+          {CONTEXTOS.map((ctx) => (
+            <button key={ctx.id} onClick={() => setContextoActivo(ctx.id)} title={ctx.label}
+              className={`group relative w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 active:scale-90 ${
+                contextoActivo === ctx.id ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+              }`}>
+              <Icon icon={ctx.icon} width={15} />
+              <div className="absolute left-full ml-2 px-2 py-0.5 rounded-md bg-gray-800 dark:bg-[#333] text-[9px] font-medium text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 shadow-xl">{ctx.label}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Main content ── */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-4 h-11 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Sara</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/20">IA</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {contextoActivo !== 'auto' && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-white/[0.06]">
+                <Icon icon={getContextoInfo()?.icon || ''} width={11} className="inline mr-1" />
+                {getContextoInfo()?.label}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Chat area */}
+        <div className="flex-1 overflow-y-auto px-4">
+          <div className="max-w-3xl mx-auto w-full">
+            {/* Empty state: greeting */}
+            {!hasMessages && !isTyping && (
+              <div className="flex flex-col items-center justify-center h-full min-h-[60vh]">
+                <h1 className="text-2xl sm:text-3xl font-semibold text-gray-800 dark:text-gray-200 mb-8 text-center">
+                  Me alegro de verte, {firstName}.
+                </h1>
+              </div>
+            )}
+
+            {/* Messages */}
+            {hasMessages && (
+              <div className="space-y-6 py-4">
+                {mensajes.map((mensaje) => (
+                  <div key={mensaje.id} className={`flex gap-3 ${mensaje.tipo === 'usuario' ? 'justify-end' : ''}`}>
+                    {/* Avatar */}
+                    {mensaje.tipo !== 'usuario' && (
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-1 ${
+                        mensaje.tipo === 'error' ? 'bg-red-500/20' : 'bg-purple-500/15'
+                      }`}>
+                        <Icon
+                          icon={mensaje.tipo === 'error' ? 'solar:danger-triangle-bold' : 'solar:cpu-bolt-bold'}
+                          width={14}
+                          className={mensaje.tipo === 'error' ? 'text-red-400' : 'text-purple-400'}
+                        />
+                      </div>
+                    )}
+
+                    {/* Bubble */}
+                    <div className={`max-w-[85%] sm:max-w-[80%] ${
+                      mensaje.tipo === 'usuario'
+                        ? 'bg-gray-200 dark:bg-[#2f2f2f] rounded-2xl rounded-br-md px-4 py-3'
+                        : mensaje.tipo === 'error'
+                        ? 'bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-2xl rounded-bl-md px-4 py-3'
+                        : ''
                     }`}>
-                      <Icon 
-                        icon={mensaje.tipo === 'error' ? "solar:danger-triangle-bold" : "solar:cpu-bolt-bold"} 
-                        className="text-white" 
-                        width={16} 
-                      />
-                    </div>
-                  )}
-                  
-                  <div className={`max-w-[85%] sm:max-w-[80%] md:max-w-3xl ${mensaje.tipo === 'usuario' ? '' : ''}`}>
-                    <div
-                      className={`p-2 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm text-sm ${
-                        mensaje.tipo === 'usuario'
-                          ? 'bg-primary text-white rounded-br-md'
-                          : mensaje.tipo === 'error'
-                          ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-bl-md'
-                          : 'bg-gray-50 dark:bg-gray-800 text-dark dark:text-white border border-gray-200 dark:border-gray-700 rounded-bl-md'
-                      }`}
-                    >
-                      <div 
-                        className="whitespace-pre-line text-sm leading-relaxed"
-                        dangerouslySetInnerHTML={{ 
+                      <div
+                        className={`whitespace-pre-line text-[14px] leading-relaxed ${
+                          mensaje.tipo === 'usuario' ? 'text-gray-800 dark:text-gray-100' : mensaje.tipo === 'error' ? 'text-red-600 dark:text-red-300' : 'text-gray-700 dark:text-gray-300'
+                        }`}
+                        dangerouslySetInnerHTML={{
                           __html: sanitizeHtml(formatMessage(
-                            mensaje.mensaje + 
-                            (expandedMessages.has(mensaje.id) && mensaje.export?.available 
-                              ? formatExpandedResults(mensaje.export) 
+                            mensaje.mensaje +
+                            (expandedMessages.has(mensaje.id) && mensaje.export?.available
+                              ? formatExpandedResults(mensaje.export)
                               : '')
                           ))
                         }}
                       />
-                      
-                      {/* Botón Ver más / Ver menos */}
+
+                      {/* Expand/collapse */}
                       {mensaje.export?.available && mensaje.export.data.total_rows > 10 && (
                         <button
                           onClick={() => toggleExpandMessage(mensaje.id)}
-                          className="mt-2 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                          className="mt-2 flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 transition-colors"
                         >
-                          <Icon 
-                            icon={expandedMessages.has(mensaje.id) ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} 
-                            width={14} 
-                          />
-                          {expandedMessages.has(mensaje.id) 
-                            ? 'Ver menos' 
-                            : `Ver todos (${mensaje.export.data.total_rows} resultados)`
-                          }
+                          <Icon icon={expandedMessages.has(mensaje.id) ? 'solar:alt-arrow-up-bold' : 'solar:alt-arrow-down-bold'} width={13} />
+                          {expandedMessages.has(mensaje.id) ? 'Ver menos' : `Ver todos (${mensaje.export.data.total_rows})`}
                         </button>
                       )}
-                      
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200/50 dark:border-gray-600/50">
-                        <p className="text-xs opacity-60">
-                          {mensaje.timestamp.toLocaleTimeString()}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          {/* Botón de exportar */}
+
+                      {/* Footer meta */}
+                      {mensaje.tipo !== 'usuario' && (
+                        <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-200/50 dark:border-white/[0.04]">
                           {mensaje.export?.available && (
                             <button
                               onClick={() => exportarExcel(mensaje.export!)}
-                              className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800/50 transition-colors"
-                              title="Exportar a Excel"
+                              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                             >
-                              <Icon icon="solar:file-download-bold" width={14} />
+                              <Icon icon="solar:file-download-bold" width={12} />
                               Exportar ({mensaje.export.data.total_rows})
                             </button>
                           )}
                           {mensaje.mode && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              mensaje.mode === 'ai_sql' 
-                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' 
-                                : mensaje.mode === 'rules'
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                            <span className={`text-[10px] px-2 py-0.5 rounded-lg ${
+                              mensaje.mode === 'ai_sql' ? 'bg-purple-500/10 text-purple-400'
+                                : mensaje.mode === 'rules' ? 'bg-emerald-500/10 text-emerald-400'
+                                : 'bg-white/5 text-gray-500'
                             }`}>
                               {mensaje.mode === 'ai_sql' ? '🤖 IA' : mensaje.mode === 'rules' ? '⚡ Reglas' : mensaje.mode}
                             </span>
                           )}
                           {mensaje.executionTime && (
-                            <span className="text-xs opacity-60">
-                              {mensaje.executionTime}ms
-                            </span>
+                            <span className="text-[10px] text-gray-600">{mensaje.executionTime}ms</span>
                           )}
+                          <span className="text-[10px] text-gray-600 ml-auto">{mensaje.timestamp.toLocaleTimeString()}</span>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
-              
-              {isTyping && (
-                <div className="flex justify-start">
-                  <div className="w-8 h-8 bg-gradient-to-br from-primary to-blue-600 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
-                    <Icon icon="solar:cpu-bolt-bold" className="text-white" width={16} />
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl rounded-bl-md border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-2">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                        <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                      </div>
-                      <span className="text-xs text-gray-500">Consultando base de datos...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
-            </div>
+                ))}
 
-            {/* Sugerencias rápidas */}
-            {mensajes.length === 1 && (
-              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                <p className="text-sm text-blue-700 dark:text-blue-300 mb-3 font-medium">
-                  💡 Prueba estas consultas:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {sugerencias.map((sugerencia, index) => (
-                    <Button
-                      key={index}
-                      size="xs"
-                      color="light"
-                      onClick={() => usarSugerencia(sugerencia)}
-                      className="text-xs hover:bg-blue-100 dark:hover:bg-blue-800"
-                    >
-                      {sugerencia}
-                    </Button>
-                  ))}
-                </div>
+                {/* Typing indicator */}
+                {isTyping && (
+                  <div className="flex gap-3">
+                    <div className="w-7 h-7 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0 mt-1">
+                      <Icon icon="solar:cpu-bolt-bold" width={14} className="text-purple-400" />
+                    </div>
+                    <div className="flex items-center gap-2 py-2">
+                      <div className="flex space-x-1">
+                        <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"></div>
+                        <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                        <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                      </div>
+                      <span className="text-[11px] text-gray-500">Consultando...</span>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
               </div>
             )}
+          </div>
+        </div>
 
-            {/* Input Area */}
-            <div className="flex gap-2 p-1.5 sm:p-2 bg-gray-50 dark:bg-gray-800 rounded-lg sm:rounded-xl border border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <div className="flex-1 min-w-0">
-                <TextInput
-                  ref={inputRef}
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="Pregunta algo..."
-                  onKeyDown={handleKeyPress}
-                  disabled={isTyping}
-                  className="border-0 bg-transparent focus:ring-0 text-sm"
-                />
+        {/* Suggestions (only when empty) */}
+        {!hasMessages && !isTyping && (
+          <div className="px-4 pb-2">
+            <div className="max-w-3xl mx-auto">
+              <div className="flex flex-wrap gap-2 justify-center">
+                {sugerencias.slice(0, 4).map((s, i) => (
+                  <button key={i} onClick={() => usarSugerencia(s)}
+                    className="px-3 py-1.5 rounded-xl text-[11px] text-gray-500 dark:text-gray-400 bg-white dark:bg-[#2f2f2f] border border-gray-200 dark:border-white/[0.06] hover:bg-gray-100 dark:hover:bg-[#383838] hover:text-gray-700 dark:hover:text-gray-200 transition-all shadow-sm">
+                    {s}
+                  </button>
+                ))}
               </div>
-              <Button
-                color="primary"
-                onClick={enviarMensaje}
-                disabled={!inputMessage.trim() || isTyping}
-                className="px-3 sm:px-6 flex-shrink-0"
-              >
-                {isTyping ? (
-                  <Icon icon="solar:loading-bold" className="animate-spin" width={20} />
-                ) : (
-                  <Icon icon="solar:plain-bold" width={20} />
-                )}
-              </Button>
             </div>
           </div>
-        </Card>
+        )}
+
+        {/* ── Bottom input bar ── */}
+        <div className="px-4 pb-4 pt-2 shrink-0">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center gap-2 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-200 dark:border-[#1a1a1a] px-3 py-2 shadow-xl shadow-black/5 dark:shadow-black/20 focus-within:border-gray-300 dark:focus-within:border-[#333] transition-colors">
+              <button className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all shrink-0" title="Adjuntar">
+                <Icon icon="solar:add-circle-linear" width={20} />
+              </button>
+              <input
+                ref={inputRef as any}
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={handleKeyPress}
+                disabled={isTyping}
+                placeholder="Pregunta lo que quieras"
+                className="flex-1 !bg-transparent dark:!bg-[#1a1a1a] !border-0 outline-none text-[14px] text-gray-800 dark:!text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-0 py-1"
+              />
+              <button className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all shrink-0" title="Voz">
+                <Icon icon="solar:microphone-3-linear" width={18} />
+              </button>
+              <button
+                onClick={enviarMensaje}
+                disabled={!inputMessage.trim() || isTyping}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                  inputMessage.trim() && !isTyping
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-[#212121] hover:bg-gray-700 dark:hover:bg-gray-200 active:scale-90'
+                    : 'bg-gray-200 dark:bg-white/10 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                }`}
+                title="Enviar"
+              >
+                {isTyping
+                  ? <Icon icon="solar:stop-bold" width={14} />
+                  : <Icon icon="solar:arrow-up-bold" width={16} />
+                }
+              </button>
+            </div>
+            <p className="text-center text-[10px] text-gray-400 dark:text-gray-600 mt-2">Sara puede cometer errores. Verifica la información importante.</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

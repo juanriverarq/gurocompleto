@@ -911,10 +911,10 @@ const WhatsAppInboxPro: React.FC = () => {
                         <p className="text-xs text-gray-400 truncate mt-0.5">{conv.phone}</p>
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                            conv.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                            conv.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                            conv.status === 'resolved' ? 'bg-green-100 text-green-700' :
-                            'bg-gray-100 text-gray-600'
+                            conv.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                            conv.status === 'in_progress' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
+                            conv.status === 'resolved' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                            'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                           }`}>
                             {getStatusLabel(conv.status)}
                           </span>
@@ -1064,11 +1064,7 @@ const WhatsAppInboxPro: React.FC = () => {
               {/* Mensajes */}
               <div 
                 ref={chatContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-3"
-                style={{ 
-                  backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%239C92AC\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-                  backgroundColor: '#f8fafc'
-                }}
+                className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/50"
               >
                 {loadingMessages ? (
                   <div className="flex items-center justify-center h-full">
@@ -1202,7 +1198,7 @@ const WhatsAppInboxPro: React.FC = () => {
                           onClick={() => handleQuickReply(reply)}
                           className="w-full text-left p-2 hover:bg-white dark:hover:bg-gray-600 rounded-lg transition-colors"
                         >
-                          <div className="font-medium text-sm">{reply.title}</div>
+                          <div className="font-medium text-sm text-gray-900 dark:text-white">{reply.title}</div>
                           <div className="text-xs text-gray-500 truncate">{reply.message}</div>
                         </button>
                       ))}
@@ -1520,7 +1516,7 @@ const WhatsAppInboxPro: React.FC = () => {
                   <Icon icon="solar:buildings-bold" width={14} />
                   Departamento
                 </div>
-                <p className="font-medium text-sm">{selectedConversation.department?.name || 'Sin asignar'}</p>
+                <p className="font-medium text-sm text-gray-900 dark:text-white">{selectedConversation.department?.name || 'Sin asignar'}</p>
               </div>
 
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
@@ -1528,7 +1524,7 @@ const WhatsAppInboxPro: React.FC = () => {
                   <Icon icon="solar:user-bold" width={14} />
                   Agente
                 </div>
-                <p className="font-medium text-sm">{selectedConversation.assigned_agent?.name || 'Sin asignar'}</p>
+                <p className="font-medium text-sm text-gray-900 dark:text-white">{selectedConversation.assigned_agent?.name || 'Sin asignar'}</p>
               </div>
 
               <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
@@ -1536,7 +1532,7 @@ const WhatsAppInboxPro: React.FC = () => {
                   <Icon icon="solar:chat-round-dots-bold" width={14} />
                   Mensajes
                 </div>
-                <p className="font-medium text-sm">{selectedConversation.message_count}</p>
+                <p className="font-medium text-sm text-gray-900 dark:text-white">{selectedConversation.message_count}</p>
               </div>
 
               {selectedConversation.contact_notes && (

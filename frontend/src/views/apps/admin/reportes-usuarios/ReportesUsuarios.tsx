@@ -421,42 +421,44 @@ const ReportesUsuarios: React.FC = () => {
           {/* Tabla de Empleados */}
           <Card>
             <h5 className="text-lg font-semibold mb-4">Actividad de Todos los Empleados</h5>
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Empleado</Table.HeadCell>
-                  <Table.HeadCell>Cargo</Table.HeadCell>
-                  <Table.HeadCell>Acciones</Table.HeadCell>
-                  <Table.HeadCell>Nivel</Table.HeadCell>
-                  <Table.HeadCell>Última Actividad</Table.HeadCell>
-                  <Table.HeadCell>Última Acción</Table.HeadCell>
-                  <Table.HeadCell></Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Empleado</th>
+                    <th>Cargo</th>
+                    <th>Acciones</th>
+                    <th>Nivel</th>
+                    <th>Última Actividad</th>
+                    <th>Última Acción</th>
+                    <th className="sticky-right"></th>
+                  </tr>
+                </thead>
+                <tbody>
                   {employees.map((emp) => {
                     const level = getActivityLevel(emp.total_actions, summary.avg_actions_per_user);
                     return (
-                      <Table.Row key={emp.id} className="bg-white">
-                        <Table.Cell>
+                      <tr key={emp.id} className="group">
+                        <td>
                           <div>
                             <p className="font-medium">{emp.nombres} {emp.apellidos}</p>
                             <p className="text-xs text-gray-500">{emp.email}</p>
                           </div>
-                        </Table.Cell>
-                        <Table.Cell>{emp.cargo || '-'}</Table.Cell>
-                        <Table.Cell>
+                        </td>
+                        <td>{emp.cargo || '-'}</td>
+                        <td>
                           <span className="font-bold">{emp.total_actions}</span>
-                        </Table.Cell>
-                        <Table.Cell>
+                        </td>
+                        <td>
                           <Badge color={level.color as any}>{level.label}</Badge>
-                        </Table.Cell>
-                        <Table.Cell className="text-sm">
+                        </td>
+                        <td className="text-sm">
                           {formatDate(emp.last_activity)}
-                        </Table.Cell>
-                        <Table.Cell className="text-sm">
+                        </td>
+                        <td className="text-sm">
                           {formatAction(emp.last_action)}
-                        </Table.Cell>
-                        <Table.Cell>
+                        </td>
+                        <td className="sticky-right">
                           <button
                             onClick={() => loadUserDetail(emp.id)}
                             className="text-primary hover:underline text-sm"
@@ -464,12 +466,12 @@ const ReportesUsuarios: React.FC = () => {
                           >
                             Ver detalle
                           </button>
-                        </Table.Cell>
-                      </Table.Row>
+                        </td>
+                      </tr>
                     );
                   })}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
             </div>
           </Card>
         </>
@@ -617,31 +619,33 @@ const ReportesUsuarios: React.FC = () => {
           {/* Acciones Recientes */}
           <Card>
             <h5 className="text-lg font-semibold mb-4">Últimas 50 Acciones</h5>
-            <div className="overflow-x-auto">
-              <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Fecha</Table.HeadCell>
-                  <Table.HeadCell>Acción</Table.HeadCell>
-                  <Table.HeadCell>Módulo</Table.HeadCell>
-                  <Table.HeadCell>Detalles</Table.HeadCell>
-                  <Table.HeadCell>IP</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Acción</th>
+                    <th>Módulo</th>
+                    <th>Detalles</th>
+                    <th>IP</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {userDetail.recent_actions.map((action) => (
-                    <Table.Row key={action.id} className="bg-white">
-                      <Table.Cell className="text-xs whitespace-nowrap">{formatDate(action.created_at)}</Table.Cell>
-                      <Table.Cell className="text-sm font-medium">{formatAction(action.action)}</Table.Cell>
-                      <Table.Cell>
+                    <tr key={action.id} className="group">
+                      <td className="text-xs whitespace-nowrap">{formatDate(action.created_at)}</td>
+                      <td className="text-sm font-medium">{formatAction(action.action)}</td>
+                      <td>
                         <Badge color="gray" size="sm">{action.module || 'General'}</Badge>
-                      </Table.Cell>
-                      <Table.Cell className="text-xs text-gray-600 max-w-md">
+                      </td>
+                      <td className="text-xs text-gray-600 max-w-md">
                         {formatActionDetails(action)}
-                      </Table.Cell>
-                      <Table.Cell className="text-xs font-mono">{action.ip_address || '-'}</Table.Cell>
-                    </Table.Row>
+                      </td>
+                      <td className="text-xs font-mono">{action.ip_address || '-'}</td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
             </div>
           </Card>
         </div>

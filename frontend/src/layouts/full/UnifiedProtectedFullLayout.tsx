@@ -11,6 +11,9 @@ import ScrollToTop from 'src/components/shared/ScrollToTop';
 import FirstTimeOnboardingModal from 'src/components/modals/FirstTimeOnboardingModal';
 import SubscriptionPaymentModal from 'src/components/modals/SubscriptionPaymentModal';
 import GuroLoader from 'src/components/GuroLoader';
+import { GuroTourProvider } from 'src/components/GuroTour/GuroTour';
+import { GuroToastContainer } from 'src/components/GuroToast/GuroToast';
+import ModuleGate from 'src/components/ModuleGate';
 
 const UnifiedProtectedFullLayout: React.FC = () => {
   const { activeLayout, isLayout } = useContext(CustomizerContext);
@@ -122,46 +125,31 @@ const UnifiedProtectedFullLayout: React.FC = () => {
     
     // Esperar a que se verifique el perfil del broker
     if (!brokerProfileChecked) return false;
-    
-    // Usar datos del perfil del broker si están disponibles, sino usar tenant
-    const t = brokerProfileData || tenant as any;
-    
+
     // Patrones de nombres genéricos/automáticos que indican datos no completados
-    const genericNamePatterns = [
-      'Broker de',
-      '- Agencia',
-      'Mi Agencia',
-    ];
-    
-    // El backend puede devolver 'name' o 'nombre', 'phone' o 'telefono', etc.
-    const name = (t.name || t.nombre || '').trim();
-    const isGenericName = !name || genericNamePatterns.some(pattern => name.includes(pattern));
-    
-    // Verificar campos obligatorios con datos reales
-    const hasValidName = name && !isGenericName;
-    const documentNumber = (t.document_number || t.nit || '').trim();
-    const hasDocument = documentNumber && documentNumber.length > 3;
-    const phone = (t.phone || t.telefono || '').trim();
-    const hasPhone = phone && phone.length > 5;
-    const city = (t.city || t.ciudad || '').trim();
-    const hasCity = city && city.length > 2;
-    
-    // Debug: mostrar qué campos faltan
-    console.debug('[OnboardingCheck] Broker validation:', {
-      source: brokerProfileData ? 'API profile' : 'tenant',
-      name,
-      isGenericName,
-      hasValidName,
-      documentNumber,
-      hasDocument,
-      phone,
-      hasPhone,
-      city,
-      hasCity,
-      result: !hasValidName || !hasDocument || !hasPhone || !hasCity
-    });
-    
-    return !hasValidName || !hasDocument || !hasPhone || !hasCity;
+    const genericNamePatterns = ['Broker de', '- Agencia', 'Mi Agencia'];
+
+    // Helper: verificar si un objeto tiene datos completos del broker
+    const isComplete = (t: any): boolean => {
+      if (!t) return false;
+      const name = (t.name || t.nombre || '').trim();
+      const isGenericName = !name || genericNamePatterns.some(p => name.includes(p));
+      if (!name || isGenericName) return false;
+      const doc = (t.document_number || t.nit || '').trim();
+      if (!doc || doc.length <= 3) return false;
+      const phone = (t.phone || t.telefono || '').trim();
+      if (!phone || phone.length <= 5) return false;
+      const city = (t.city || t.ciudad || '').trim();
+      if (!city || city.length <= 2) return false;
+      return true;
+    };
+
+    // Si CUALQUIERA de las fuentes tiene datos completos, no mostrar modal
+    if (isComplete(brokerProfileData)) return false;
+    if (isComplete(tenant)) return false;
+
+    console.debug('[OnboardingCheck] Broker data incomplete — neither API profile nor tenant have all fields');
+    return true;
   }, [tenant, isEmpleado, brokerProfileChecked, brokerProfileData]);
   
   // OBLIGATORIO: Mostrar modal si los datos del broker están incompletos
@@ -306,10 +294,10 @@ const UnifiedProtectedFullLayout: React.FC = () => {
   }
 
   return (
-    <>
+    <GuroTourProvider>
       {/* Modal OBLIGATORIO para completar datos del broker */}
       <FirstTimeOnboardingModal
-        isOpen={showOnboardingModal || isBrokerDataIncomplete}
+        isOpen={!isEmpleado && (showOnboardingModal || isBrokerDataIncomplete)}
         onClose={() => {
           // Solo permitir cerrar si los datos están completos
           if (!isBrokerDataIncomplete) {
@@ -352,13 +340,15 @@ const UnifiedProtectedFullLayout: React.FC = () => {
               {/* Body Content  */}
               <div
                 className={`${
-                  isLayout == 'full'
+                  isLayout == 'full' || location.pathname.includes('/marketing/creador-contenido') || location.pathname.includes('/whatsapp/inbox') || location.pathname.includes('/whatsapp/chatbots/flujos') || location.pathname.includes('/ia/asistente')
                     ? 'w-full py-8 md:py-10 px-4 md:px-6 xl:px-8 2xl:px-10'
                     : 'container mx-auto py-8 md:py-10'
                 } ${activeLayout == 'horizontal' ? 'xl:mt-3' : ''} min-w-0 overflow-x-auto`}
               >
                 <ScrollToTop>
-                  <Outlet />
+                  <ModuleGate>
+                    <Outlet />
+                  </ModuleGate>
                 </ScrollToTop>
               </div>
               <Customizer />
@@ -369,7 +359,8 @@ const UnifiedProtectedFullLayout: React.FC = () => {
         {/* Chat flotante global - DESACTIVADO TEMPORALMENTE */}
         {/* <FloatingChat /> */}
       </div>
-    </>
+      <GuroToastContainer />
+    </GuroTourProvider>
   );
 };
 

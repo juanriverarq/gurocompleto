@@ -34,9 +34,9 @@ const BlogArticle = () => {
     );
   }
 
-  const canonicalUrl = `https://www.guro.com.co/blog/${article.slug}`;
+  const canonicalUrl = `https://guro.co/blog/${article.slug}`;
   const keywordsStr = article.keywords?.join(', ') || '';
-  const imageUrl = article.image ? `https://www.guro.com.co${article.image.replace('/src', '')}` : 'https://www.guro.com.co/assets/images/blog/blog-img1.jpg';
+  const imageUrl = article.image ? `https://guro.co${article.image.replace('/src', '')}` : 'https://guro.co/assets/images/blog/blog-img1.jpg';
 
   const articleSchema = {
     '@context': 'https://schema.org',
@@ -48,16 +48,16 @@ const BlogArticle = () => {
     author: {
       '@type': 'Organization',
       name: 'Guro',
-      url: 'https://www.guro.com.co',
-      logo: 'https://www.guro.com.co/assets/images/logos/guro-logo.png',
+      url: 'https://guro.co',
+      logo: 'https://guro.co/assets/images/logos/guro-logo.png',
     },
     publisher: {
       '@type': 'Organization',
       name: 'Guro',
-      url: 'https://www.guro.com.co',
+      url: 'https://guro.co',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://www.guro.com.co/assets/images/logos/guro-logo.png',
+        url: 'https://guro.co/assets/images/logos/guro-logo.png',
       },
     },
     mainEntityOfPage: {
@@ -66,8 +66,8 @@ const BlogArticle = () => {
     },
     url: canonicalUrl,
     inLanguage: 'es-CO',
-    datePublished: '2026-01-01',
-    dateModified: '2026-01-25',
+    datePublished: '2026-02-01',
+    dateModified: '2026-02-12',
   };
 
   const breadcrumbSchema = {
@@ -78,13 +78,13 @@ const BlogArticle = () => {
         '@type': 'ListItem',
         position: 1,
         name: 'Inicio',
-        item: 'https://www.guro.com.co',
+        item: 'https://guro.co',
       },
       {
         '@type': 'ListItem',
         position: 2,
         name: 'Blog',
-        item: 'https://www.guro.com.co/blog',
+        item: 'https://guro.co/blog',
       },
       {
         '@type': 'ListItem',
@@ -126,9 +126,10 @@ const BlogArticle = () => {
         <meta name="twitter:description" content={article.excerpt} />
         <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large" />
         <meta name="author" content="Guro" />
-        <meta property="article:publisher" content="https://www.guro.com.co" />
-        <meta property="article:published_time" content="2026-01-01" />
-        <meta property="article:modified_time" content="2026-01-25" />
+        <meta property="article:publisher" content="https://guro.co" />
+        <meta property="article:published_time" content="2026-02-01" />
+        <meta property="article:modified_time" content="2026-02-12" />
+        <meta property="article:section" content="Software de Seguros" />
         <script type="application/ld+json">{JSON.stringify(articleSchema)}</script>
         <script type="application/ld+json">{JSON.stringify(breadcrumbSchema)}</script>
         {faqSchema && <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>}
@@ -322,6 +323,47 @@ const BlogArticle = () => {
                     {article.cta.buttonLabel || 'Comenzar gratis'}
                   </span>
                 </Link>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Related Articles */}
+          {article.relatedSlugs && article.relatedSlugs.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              className="mt-16"
+            >
+              <h2 className="text-xl font-bold text-white tracking-[-0.01em] mb-6">Artículos relacionados</h2>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {article.relatedSlugs.map((relSlug) => {
+                  const rel = segurosArticles.find((a) => a.slug === relSlug);
+                  if (!rel) return null;
+                  return (
+                    <Link
+                      key={relSlug}
+                      to={`/blog/${relSlug}`}
+                      className="group block p-5 bg-[#12121a] rounded-2xl border border-white/[0.06] hover:border-[#573CFF]/30 transition-all duration-300 hover:-translate-y-1"
+                    >
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {rel.tags?.slice(0, 2).map((tag) => (
+                          <span key={tag} className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-white/[0.05] text-white/40 border border-white/[0.06]">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <h3 className="text-sm font-bold text-white/70 group-hover:text-white leading-snug transition-colors line-clamp-3">
+                        {rel.title}
+                      </h3>
+                      <p className="mt-2 text-xs text-white/30 leading-relaxed line-clamp-2">{rel.excerpt}</p>
+                      <span className="inline-flex items-center gap-1 mt-3 text-[10px] font-bold text-[#573CFF] uppercase tracking-wider">
+                        Leer más
+                        <Icon icon="solar:arrow-right-linear" className="w-3 h-3" />
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
             </motion.div>
           )}

@@ -281,91 +281,95 @@ const WhatsAppContactos: React.FC = () => {
             <p className="text-sm text-gray-500 mt-1">Los contactos aparecerán aquí cuando alguien te escriba por WhatsApp</p>
           </div>
         ) : (
-          <Table hoverable>
-            <Table.Head>
-              <Table.HeadCell>Contacto</Table.HeadCell>
-              <Table.HeadCell>Teléfono</Table.HeadCell>
-              <Table.HeadCell>Ventana 24h</Table.HeadCell>
-              <Table.HeadCell>Conversaciones</Table.HeadCell>
-              <Table.HeadCell>Mensajes</Table.HeadCell>
-              <Table.HeadCell>Última interacción</Table.HeadCell>
-              <Table.HeadCell className="text-right">Acciones</Table.HeadCell>
-            </Table.Head>
-            <Table.Body className="divide-y">
-              {contacts.map((contact) => (
-                <Table.Row key={contact.phone} className="bg-white dark:border-gray-700 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750">
-                  <Table.Cell>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                        contact.conversation_window_open 
-                          ? 'bg-gradient-to-br from-green-400 to-green-600' 
-                          : 'bg-gradient-to-br from-gray-400 to-gray-500'
-                      }`}>
-                        {(contact.contact_first_name || contact.contact_push_name || contact.phone)?.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white text-sm">
-                          {contact.display_name}
-                        </p>
-                        {contact.contact_company && (
-                          <p className="text-[11px] text-gray-400 flex items-center gap-1">
-                            <Icon icon="solar:buildings-bold" width={10} />
-                            {contact.contact_company}
+          <div className="guro-table-wrap">
+            <table className="guro-table">
+              <thead>
+                <tr>
+                  <th>Contacto</th>
+                  <th>Teléfono</th>
+                  <th>Ventana 24h</th>
+                  <th>Conversaciones</th>
+                  <th>Mensajes</th>
+                  <th>Última interacción</th>
+                  <th className="sticky-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contacts.map((contact) => (
+                  <tr key={contact.phone} className="group">
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                          contact.conversation_window_open 
+                            ? 'bg-gradient-to-br from-green-400 to-green-600' 
+                            : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                        }`}>
+                          {(contact.contact_first_name || contact.contact_push_name || contact.phone)?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">
+                            {contact.display_name}
                           </p>
+                          {contact.contact_company && (
+                            <p className="text-[11px] text-gray-400 flex items-center gap-1">
+                              <Icon icon="solar:buildings-bold" width={10} />
+                              {contact.contact_company}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="text-sm font-mono text-gray-600 dark:text-gray-400">{contact.phone}</span>
+                    </td>
+                    <td>
+                      {contact.conversation_window_open ? (
+                        <Badge color="success" size="sm">
+                          <Icon icon="solar:check-circle-bold" width={12} className="mr-1" />
+                          Abierta
+                        </Badge>
+                      ) : (
+                        <Tooltip content="Solo se pueden enviar plantillas aprobadas por Meta" trigger="hover">
+                          <Badge color="gray" size="sm">
+                            <Icon icon="solar:lock-bold" width={12} className="mr-1" />
+                            Cerrada
+                          </Badge>
+                        </Tooltip>
+                      )}
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{contact.total_conversations}</span>
+                        {Number(contact.open_conversations) > 0 && (
+                          <Badge color="info" size="xs">{contact.open_conversations} abierta{Number(contact.open_conversations) > 1 ? 's' : ''}</Badge>
                         )}
                       </div>
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <span className="text-sm font-mono text-gray-600 dark:text-gray-400">{contact.phone}</span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    {contact.conversation_window_open ? (
-                      <Badge color="success" size="sm">
-                        <Icon icon="solar:check-circle-bold" width={12} className="mr-1" />
-                        Abierta
-                      </Badge>
-                    ) : (
-                      <Tooltip content="Solo se pueden enviar plantillas aprobadas por Meta" trigger="hover">
-                        <Badge color="gray" size="sm">
-                          <Icon icon="solar:lock-bold" width={12} className="mr-1" />
-                          Cerrada
-                        </Badge>
-                      </Tooltip>
-                    )}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{contact.total_conversations}</span>
-                      {Number(contact.open_conversations) > 0 && (
-                        <Badge color="info" size="xs">{contact.open_conversations} abierta{Number(contact.open_conversations) > 1 ? 's' : ''}</Badge>
-                      )}
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{contact.total_messages}</span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <span className="text-sm text-gray-500">{formatRelativeTime(contact.last_interaction_at)}</span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex justify-end gap-1.5">
-                      <Tooltip content="Ver conversación" trigger="hover">
-                        <Button size="xs" color="light" onClick={() => handleOpenConversation(contact)}>
-                          <Icon icon="solar:chat-round-dots-bold" width={14} className="text-green-500" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Editar contacto" trigger="hover">
-                        <Button size="xs" color="light" onClick={() => handleOpenDetail(contact)}>
-                          <Icon icon="solar:pen-bold" width={14} className="text-blue-500" />
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
+                    </td>
+                    <td>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{contact.total_messages}</span>
+                    </td>
+                    <td>
+                      <span className="text-sm text-gray-500">{formatRelativeTime(contact.last_interaction_at)}</span>
+                    </td>
+                    <td className="sticky-right">
+                      <div className="flex justify-center gap-1.5">
+                        <Tooltip content="Ver conversación" trigger="hover">
+                          <Button size="xs" color="light" onClick={() => handleOpenConversation(contact)}>
+                            <Icon icon="solar:chat-round-dots-bold" width={14} className="text-green-500" />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Editar contacto" trigger="hover">
+                          <Button size="xs" color="light" onClick={() => handleOpenDetail(contact)}>
+                            <Icon icon="solar:pen-bold" width={14} className="text-blue-500" />
+                          </Button>
+                        </Tooltip>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* Pagination */}

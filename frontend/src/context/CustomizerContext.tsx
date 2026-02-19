@@ -43,11 +43,11 @@ export const CustomizerContextProvider: React.FC<CustomizerContextProps> = ({ ch
   };
   const [activeDir, setActiveDir] = useState<string>(config.activeDir);
   const [activeMode, setActiveMode] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
+    try {
       const saved = localStorage.getItem('guro_active_mode');
       if (saved === 'light' || saved === 'dark') return saved;
-    }
-    return config.activeMode;
+    } catch {}
+    return 'dark'; // dark by default
   });
   const [activeTheme, setActiveTheme] = useState<string>(config.activeTheme);
   const [activeLayout, setActiveLayout] = useState<string>(config.activeLayout);
@@ -63,6 +63,7 @@ export const CustomizerContextProvider: React.FC<CustomizerContextProps> = ({ ch
     document.documentElement.setAttribute("class", activeMode);
     try {
       localStorage.setItem('guro_active_mode', activeMode);
+      localStorage.setItem('flowbite-theme-mode', activeMode);
     } catch {}
     document.documentElement.setAttribute("dir", activeDir);
     document.documentElement.setAttribute('data-color-theme', activeTheme);

@@ -115,26 +115,25 @@ const Coberturas = () => {
         </Card>
       ) : (
         <Card>
-          <div className="overflow-x-auto">
-            <Table striped>
-              <Table.Head>
-                <Table.HeadCell>Nombre de la Cobertura</Table.HeadCell>
-                <Table.HeadCell>Fecha de Creación</Table.HeadCell>
-                <Table.HeadCell>Acciones</Table.HeadCell>
-              </Table.Head>
-              <Table.Body className="divide-y">
+          <div className="guro-table-wrap">
+            <table className="guro-table">
+              <thead>
+                <tr>
+                  <th>Nombre de la Cobertura</th>
+                  <th>Fecha de Creación</th>
+                  <th className="sticky-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
                 {coberturas.map((item) => (
-                  <Table.Row
-                    key={item.id}
-                    className="bg-white dark:border-gray-700 dark:bg-gray-800"
-                  >
-                    <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                  <tr key={item.id} className="group">
+                    <td className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       {item.nombre}
-                    </Table.Cell>
-                    <Table.Cell className="text-gray-500 dark:text-gray-400">
+                    </td>
+                    <td className="text-gray-500 dark:text-gray-400">
                       {new Date(item.created_at).toLocaleDateString()}
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td className="sticky-right">
                       <div className="flex items-center gap-2">
                         <PermissionGate route="/apps/admin/coberturas" action="editar">
                           <Button size="sm" color="gray" onClick={() => handleEdit(item)}>
@@ -147,11 +146,11 @@ const Coberturas = () => {
                           </Button>
                         </PermissionGate>
                       </div>
-                    </Table.Cell>
-                  </Table.Row>
+                    </td>
+                  </tr>
                 ))}
-              </Table.Body>
-            </Table>
+              </tbody>
+            </table>
           </div>
         </Card>
       )}

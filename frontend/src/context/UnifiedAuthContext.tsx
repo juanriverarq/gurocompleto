@@ -81,6 +81,7 @@ interface UnifiedAuthContextType {
   checkSaasStatus: () => Promise<void>;
   hasPermission: (module: string, action: string) => boolean;
   canAccessModule: (module: string) => boolean;
+  isModuleInPlan: (module: string) => boolean;
   isRole: (role: string) => boolean;
 
   // Utilidades
@@ -917,17 +918,76 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
   // Verificar acceso a módulo
   const canAccessModule = useCallback(
     (module: string): boolean => {
-      // Empleado (Laravel): usar permisos normalizados si existen
+      const alwaysAllowed = new Set([
+        'dashboard', 'gestion_usuarios', 'roles_permisos', 'auditoria_accesos',
+        'informacion_agencia', 'sedes', 'aseguradoras', 'ramos', 'vendedores',
+        'coberturas', 'tipos_afiliacion', 'estados_siniestros', 'motivos_estados_poliza',
+        'mensajeros', 'configuracion_sistema', 'monitoreo_logs',
+        'integraciones_externas', 'sincronizacion', 'rrhh',
+        'contratos', 'documentos_clientes', 'cumplimiento_legal',
+      ]);
+      const featureMap: Record<string, string> = {
+        clientes: 'clientes',
+        polizas: 'polizas',
+        siniestros: 'siniestros',
+        renovaciones: 'renovaciones',
+        automoviles: 'automoviles',
+        seguimiento_comercial: 'seguimiento',
+        documentos_siniestro: 'documentos',
+        documentos_poliza: 'documentos',
+        embudo_ventas: 'crm',
+        metas_objetivos: 'crm',
+        equipos_ventas: 'crm',
+        analisis_rendimiento: 'crm',
+        whatsapp_business: 'whatsapp',
+        sms_marketing: 'whatsapp',
+        email_marketing: 'email',
+        enlaces_cotizacion: 'miniweb',
+        mini_web: 'miniweb',
+        asistentes_ia: 'ia_chatbot',
+        voice_ai: 'ia_callcenter',
+        analytics_predictivo: 'ia_predicciones',
+        comisiones: 'cartera',
+        cartera_clientes: 'cartera',
+        estados_cuenta: 'cartera',
+        reportes_financieros: 'cartera',
+      };
+
+      // Usuario SaaS MASTER/ADMIN: acceso total (evaluar ANTES de empleado para evitar
+      // bloqueo cuando hay sesión de empleado mezclada con sesión Firebase)
+      if (usuarioSaas) {
+        const isMasterOrAdmin =
+          usuarioSaas.rol === 'admin' ||
+          usuarioSaas.rol === 'ADMIN' ||
+          usuarioSaas.rol === 'MASTER' ||
+          usuarioSaas.rol === 'super_admin' ||
+          (usuarioSaas as any).user_type === 'MASTER' ||
+          (usuarioSaas as any).user_type === 'ADMIN';
+        if (isMasterOrAdmin) return true;
+      }
+
+      // Empleado (Laravel): acceso controlado por permisos de rol asignados por el admin.
+      // WhatsApp es libre para todos los empleados.
       if (empleado) {
+        if (module === 'whatsapp_business') return true;
         const list = Array.isArray(permisos)
           ? (permisos as string[])
           : empleado.rol?.permisos || [];
         if (!Array.isArray(list)) return false;
         if (list.includes('*')) return true;
         if (list.includes(`${module}.*`)) return true;
-        // Tener permiso de "ver" ya habilita visibilidad en UI
         if (list.includes(`${module}.ver`)) return true;
         return list.some((p: string) => p.startsWith(`${module}.`));
+      }
+
+      // Feature gate del plan: solo para usuarios SaaS (Firebase), no empleados
+      if (tenant?.features && Array.isArray(tenant.features) && tenant.features.length > 0) {
+        if (!alwaysAllowed.has(module)) {
+          const featureKey = featureMap[module] || module;
+          if (!tenant.features.includes(featureKey)) {
+            return false;
+          }
+        }
       }
 
       // Usuario SaaS (Firebase)
@@ -962,7 +1022,40 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
 
       return false;
     },
-    [empleado, usuarioSaas, permisos, user],
+    [empleado, usuarioSaas, permisos, user, tenant],
+  );
+
+  // Verificar si un módulo está incluido en el plan del broker (independiente de permisos de rol)
+  const isModuleInPlan = useCallback(
+    (module: string): boolean => {
+      const alwaysAllowed = new Set([
+        'dashboard', 'gestion_usuarios', 'roles_permisos', 'auditoria_accesos',
+        'informacion_agencia', 'sedes', 'aseguradoras', 'ramos', 'vendedores',
+        'coberturas', 'tipos_afiliacion', 'estados_siniestros', 'motivos_estados_poliza',
+        'mensajeros', 'configuracion_sistema', 'monitoreo_logs',
+        'integraciones_externas', 'sincronizacion', 'rrhh',
+        'contratos', 'documentos_clientes', 'cumplimiento_legal',
+      ]);
+      if (alwaysAllowed.has(module)) return true;
+      const featureMap: Record<string, string> = {
+        clientes: 'clientes', polizas: 'polizas', siniestros: 'siniestros',
+        renovaciones: 'renovaciones', automoviles: 'automoviles',
+        seguimiento_comercial: 'seguimiento', documentos_siniestro: 'documentos',
+        documentos_poliza: 'documentos', embudo_ventas: 'crm', metas_objetivos: 'crm',
+        equipos_ventas: 'crm', analisis_rendimiento: 'crm', whatsapp_business: 'whatsapp',
+        sms_marketing: 'whatsapp', email_marketing: 'email', enlaces_cotizacion: 'miniweb',
+        mini_web: 'miniweb', asistentes_ia: 'ia_chatbot', voice_ai: 'ia_callcenter',
+        analytics_predictivo: 'ia_predicciones', comisiones: 'cartera',
+        cartera_clientes: 'cartera', estados_cuenta: 'cartera', reportes_financieros: 'cartera',
+      };
+      if (tenant?.features && Array.isArray(tenant.features) && tenant.features.length > 0) {
+        const featureKey = featureMap[module] || module;
+        return tenant.features.includes(featureKey);
+      }
+      // If no features defined, allow all (legacy/no plan set)
+      return true;
+    },
+    [tenant],
   );
 
   // Verificar rol
@@ -1040,6 +1133,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
     checkSaasStatus,
     hasPermission,
     canAccessModule,
+    isModuleInPlan,
     isRole,
 
     // Utilities

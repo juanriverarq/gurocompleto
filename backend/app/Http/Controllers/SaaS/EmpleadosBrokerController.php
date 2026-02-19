@@ -124,6 +124,21 @@ class EmpleadosBrokerController extends Controller
     {
         try {
             $brokerId = $this->getBrokerId($request);
+
+            // Validar límite de usuarios del plan
+            $broker = Broker::find($brokerId);
+            if ($broker) {
+                $maxUsers = $broker->max_users ?? 5;
+                $currentActive = EmpleadoBroker::where('broker_id', $brokerId)
+                    ->where('estado', 'activo')
+                    ->count() + 1; // +1 por el usuario MASTER
+                if ($currentActive >= $maxUsers) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Has alcanzado el límite de {$maxUsers} usuarios de tu plan. Mejora tu plan para agregar más usuarios.",
+                    ], 403);
+                }
+            }
             
             $validator = Validator::make($request->all(), [
                 'nombres' => 'required|string|max:255',

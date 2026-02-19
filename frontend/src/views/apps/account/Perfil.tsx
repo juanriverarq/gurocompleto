@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Badge } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import guroToast from 'src/components/GuroToast/GuroToast';
 import { useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import { useAuthenticatedAdminRequest } from 'src/hooks/useAdminCrudApi';
@@ -117,11 +118,11 @@ const Perfil: React.FC = () => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('El archivo debe ser una imagen.');
+      guroToast.warning('Archivo inválido', 'El archivo debe ser una imagen.');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      alert('La imagen no puede superar los 5MB.');
+      guroToast.warning('Archivo muy grande', 'La imagen no puede superar los 5MB.');
       return;
     }
 
@@ -179,7 +180,7 @@ const Perfil: React.FC = () => {
         }
       }
     } catch (err: any) {
-      alert(err?.message || 'Error actualizando la foto de perfil');
+      guroToast.error('Error', err?.message || 'Error actualizando la foto de perfil');
     } finally {
       setUploadingAvatar(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

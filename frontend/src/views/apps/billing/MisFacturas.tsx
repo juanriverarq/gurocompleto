@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import guroToast from 'src/components/GuroToast/GuroToast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/shadcn-ui/Default-Ui/card';
 import { Button } from '../../../components/shadcn-ui/Default-Ui/button';
 import { Badge } from '../../../components/shadcn-ui/Default-Ui/badge';
@@ -84,7 +85,7 @@ const MisFacturas: React.FC = () => {
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error('Error downloading invoice:', err);
-      alert('Error al descargar la factura. Por favor intente de nuevo.');
+      guroToast.error('Error', 'Error al descargar la factura. Por favor intente de nuevo.');
     } finally {
       setDownloadingId(null);
     }

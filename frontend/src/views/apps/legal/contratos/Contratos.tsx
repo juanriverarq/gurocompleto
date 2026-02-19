@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Badge, Button, Alert, Modal, Table, TextInput, Dropdown } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import guroToast from 'src/components/GuroToast/GuroToast';
 import HeroButton from 'src/components/HeroButton';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import contratosService from 'src/services/contratosService';
@@ -802,7 +803,7 @@ const Contratos = () => {
                 !nuevoContrato.fecha_inicio ||
                 !nuevoContrato.fecha_vencimiento
               ) {
-                alert('Completa los campos requeridos');
+                guroToast.warning('Campos requeridos', 'Completa todos los campos obligatorios');
                 return;
               }
               try {
@@ -864,7 +865,7 @@ const Contratos = () => {
                 });
               } catch (e) {
                 console.error(e);
-                alert('Error creando contrato');
+                guroToast.error('Error', 'Error creando contrato');
               } finally {
                 setLoading(false);
               }
@@ -1061,7 +1062,7 @@ const Contratos = () => {
                 setMostrarEditar(false);
               } catch (e) {
                 console.error(e);
-                alert('Error actualizando contrato');
+                guroToast.error('Error', 'Error actualizando contrato');
               } finally {
                 setLoading(false);
               }

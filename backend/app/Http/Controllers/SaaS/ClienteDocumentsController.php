@@ -12,6 +12,7 @@ use Kreait\Firebase\Contract\Storage as FirebaseStorageContract;
 
 class ClienteDocumentsController extends Controller
 {
+    use \App\Traits\ChecksStorageLimit;
     public function __construct(private FirebaseStorageContract $firebaseStorage) {}
 
     private function getBrokerId(Request $request)
@@ -165,6 +166,13 @@ return response()->json([
             ]);
             $cliente = Cliente::where('broker_id',$brokerId)->find($id);
             if (!$cliente) return response()->json(['success'=>false,'message'=>'Cliente no encontrado'],404);
+
+            // Verificar límite de almacenamiento
+            $uploadSize = 0;
+            if ($request->hasFile('file')) $uploadSize += $request->file('file')->getSize();
+            if ($request->hasFile('files')) foreach ($request->file('files') as $f) $uploadSize += $f->getSize();
+            $storageCheck = $this->checkStorageLimit($brokerId, $uploadSize);
+            if ($storageCheck) return $storageCheck;
 
             try { $bucket = $this->getBucket(); } catch (\Throwable $e) {
                 Log::error(' [CLIENTES_UPLOAD] Error obteniendo bucket', ['cliente_id'=>$id,'error'=>$e->getMessage()]);

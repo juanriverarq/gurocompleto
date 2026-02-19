@@ -39,66 +39,91 @@ const nivelesAcceso = [
 ];
 
 // Estructura completa de módulos y permisos (fuente de verdad dinámica desde backend; fallback local)
+// Módulos alineados 1:1 con el sidebar activo (Sidebaritems.ts)
 const defaultModulosDisponibles = {
+  // ── Inicio ──
   dashboard: { label: 'Dashboard', icon: 'solar:widget-2-bold-duotone', permisos: ['ver'] },
+
+  // ── Seguros ──
   clientes: {
     label: 'Clientes',
     icon: 'solar:users-group-two-rounded-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'exportar', 'importar'],
-  },
-  seguimiento_comercial: {
-    label: 'Seguimiento Comercial',
-    icon: 'solar:target-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar'],
-  },
-  embudo_ventas: {
-    label: 'Embudo de Conversión',
-    icon: 'solar:chart-2-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
   polizas: {
     label: 'Pólizas',
     icon: 'solar:shield-check-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'emitir', 'renovar', 'anular'],
   },
-  automoviles: {
-    label: 'Automóviles',
-    icon: 'solar:car-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar'],
-  },
   renovaciones: {
     label: 'Renovaciones',
     icon: 'solar:refresh-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'procesar'],
+  },
+  automoviles: {
+    label: 'Automóviles',
+    icon: 'solar:car-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
   siniestros: {
     label: 'Siniestros',
     icon: 'solar:danger-triangle-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'reportar', 'procesar', 'cerrar'],
   },
+
+  // ── Comercial ──
+  embudo_ventas: {
+    label: 'Embudo de Ventas',
+    icon: 'solar:chart-2-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  seguimiento_comercial: {
+    label: 'Seguimiento',
+    icon: 'solar:clipboard-check-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
   metas_objetivos: {
     label: 'Metas y Objetivos',
     icon: 'solar:target-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
-  equipos_ventas: {
-    label: 'Equipos de Ventas',
-    icon: 'solar:users-group-rounded-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar'],
-  },
   analisis_rendimiento: {
-    label: 'Análisis de Rendimiento',
+    label: 'Rendimiento',
     icon: 'solar:graph-up-bold-duotone',
     permisos: ['ver', 'exportar'],
   },
+
+  // ── Finanzas ──
+  cartera_clientes: {
+    label: 'Cartera',
+    icon: 'solar:wallet-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'importar', 'exportar'],
+  },
+  comisiones: {
+    label: 'Comisiones',
+    icon: 'solar:dollar-minimalistic-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'calcular', 'pagar'],
+  },
+  liquidar_vendedores: {
+    label: 'Liquidar Vendedor / Asesor',
+    icon: 'solar:money-bag-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  reportes_financieros: {
+    label: 'Reportes Financieros',
+    icon: 'solar:chart-square-bold-duotone',
+    permisos: ['ver', 'generar', 'exportar'],
+  },
+
+  // ── Comunicaciones ──
   whatsapp_business: {
-    label: 'WhatsApp Business',
+    label: 'WhatsApp',
     icon: 'solar:chat-round-dots-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'enviar'],
   },
-  sms_marketing: {
-    label: 'SMS Marketing',
-    icon: 'solar:phone-bold-duotone',
+  email_marketing: {
+    label: 'Email Marketing',
+    icon: 'solar:letter-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'enviar'],
   },
   enlaces_cotizacion: {
@@ -106,117 +131,57 @@ const defaultModulosDisponibles = {
     icon: 'solar:link-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
-  plantillas_campana: {
-    label: 'Plantillas de Campaña',
-    icon: 'solar:document-text-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar'],
-  },
   mini_web: {
     label: 'Mini Web',
-    icon: 'solar:globe-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'publicar'],
+    icon: 'solar:smartphone-2-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
-  configuracion_masiva: {
-    label: 'Configuración Masiva',
-    icon: 'solar:chat-round-dots-bold-duotone',
-    permisos: ['ver', 'ejecutar'],
+  creador_contenido: {
+    label: 'Creador de Contenido',
+    icon: 'solar:pallete-2-bold-duotone',
+    permisos: ['ver', 'usar'],
   },
+
+  // ── Inteligencia Artificial ──
   asistentes_ia: {
-    label: 'Asistentes IA',
+    label: 'Asistente IA',
     icon: 'solar:cpu-bolt-bold-duotone',
     permisos: ['ver', 'usar', 'configurar'],
   },
   voice_ai: {
-    label: 'Voice AI (ElevenLabs)',
-    icon: 'solar:microphone-bold-duotone',
+    label: 'Call Center IA',
+    icon: 'solar:phone-calling-rounded-outline',
     permisos: ['ver', 'usar', 'configurar'],
   },
   analytics_predictivo: {
-    label: 'Analytics Predictivo',
-    icon: 'solar:chart-square-bold-duotone',
-    permisos: ['ver', 'usar', 'configurar'],
+    label: 'Ventas Cruzadas',
+    icon: 'solar:graph-up-bold-duotone',
+    permisos: ['ver', 'usar'],
   },
-  comisiones: {
-    label: 'Comisiones',
-    icon: 'solar:dollar-minimalistic-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'calcular', 'pagar'],
-  },
-  cartera: { label: 'Cartera', icon: 'solar:wallet-bold-duotone', permisos: ['ver', 'gestionar'] },
-  cartera_clientes: { 
-    label: 'Cartera de Clientes', 
-    icon: 'solar:wallet-money-bold-duotone', 
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'importar', 'exportar'] 
-  },
-  recaudos: { 
-    label: 'Recaudos', 
-    icon: 'solar:hand-money-bold-duotone', 
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'importar', 'revertir'] 
-  },
-  pagos_polizas: { 
-    label: 'Pagos de Pólizas', 
-    icon: 'solar:card-bold-duotone', 
-    permisos: ['ver', 'crear', 'editar', 'eliminar'] 
-  },
-  reportes_financieros: {
-    label: 'Reportes Financieros',
-    icon: 'solar:chart-square-bold-duotone',
-    permisos: ['ver', 'generar', 'exportar'],
-  },
-  contratos: {
-    label: 'Contratos',
-    icon: 'solar:document-medicine-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'firmar'],
+
+  // ── Documentos ──
+  documentos_clientes: {
+    label: 'De Clientes',
+    icon: 'solar:folder-with-files-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'],
   },
   documentos_poliza: {
-    label: 'Documentos de Póliza',
+    label: 'De Pólizas',
     icon: 'solar:folder-with-files-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'],
   },
   documentos_siniestro: {
-    label: 'Documentos de Siniestro',
-    icon: 'solar:folder-with-files-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'],
-  },
-  proteccion_datos: {
-    label: 'Protección de Datos',
-    icon: 'solar:shield-user-bold-duotone',
-    permisos: ['ver', 'gestionar'],
-  },
-  documentos_clientes: {
-    label: 'Documentos',
+    label: 'De Siniestros',
     icon: 'solar:folder-with-files-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'descargar'],
   },
   cumplimiento_legal: {
-    label: 'Cumplimiento Legal',
-    icon: 'solar:security-safe-bold-duotone',
-    permisos: ['ver', 'gestionar'],
+    label: 'Internos',
+    icon: 'solar:archive-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
-  integraciones_externas: {
-    label: 'Integraciones Externas',
-    icon: 'solar:programming-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'configurar'],
-  },
-  sincronizacion: {
-    label: 'Sincronización',
-    icon: 'solar:refresh-bold-duotone',
-    permisos: ['ver', 'ejecutar', 'configurar'],
-  },
-  gestion_usuarios: {
-    label: 'Gestión de Usuarios',
-    icon: 'solar:users-group-rounded-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar_roles'],
-  },
-  roles_permisos: {
-    label: 'Roles y Permisos',
-    icon: 'solar:shield-user-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar'],
-  },
-  auditoria_accesos: {
-    label: 'Auditoría de Accesos',
-    icon: 'solar:eye-bold-duotone',
-    permisos: ['ver', 'exportar'],
-  },
+
+  // ── Configuración: Mi Agencia ──
   informacion_agencia: {
     label: 'Información de Agencia',
     icon: 'solar:buildings-3-bold-duotone',
@@ -237,8 +202,22 @@ const defaultModulosDisponibles = {
     icon: 'solar:widget-3-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
+
+  // ── Configuración: Usuarios y Roles ──
+  gestion_usuarios: {
+    label: 'Usuarios',
+    icon: 'solar:users-group-rounded-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar_roles'],
+  },
+  roles_permisos: {
+    label: 'Roles y Permisos',
+    icon: 'solar:shield-user-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar'],
+  },
+
+  // ── Configuración: Catálogos ──
   vendedores: {
-    label: 'Vendedores',
+    label: 'Vendedor / Asesor',
     icon: 'solar:user-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
@@ -267,183 +246,61 @@ const defaultModulosDisponibles = {
     icon: 'solar:delivery-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
+
+  // ── Configuración: Integraciones ──
+  integraciones_externas: {
+    label: 'Conectores API',
+    icon: 'solar:programming-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'configurar'],
+  },
+  sincronizacion: {
+    label: 'Sincronización',
+    icon: 'solar:refresh-bold-duotone',
+    permisos: ['ver', 'ejecutar', 'configurar'],
+  },
+
+  // ── Configuración: Sistema ──
   configuracion_sistema: {
-    label: 'Configuración del Sistema',
+    label: 'Sistema',
     icon: 'solar:settings-bold-duotone',
     permisos: ['ver', 'editar'],
-  },
-  monitoreo_logs: {
-    label: 'Monitoreo y Logs',
-    icon: 'solar:chart-square-bold-duotone',
-    permisos: ['ver', 'exportar'],
-  },
-  rrhh: {
-    label: 'Recursos Humanos',
-    icon: 'solar:users-group-two-rounded-bold-duotone',
-    permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
 } as const;
 
 // Si backend expone permisosDisponibles, preferirlos
 // (useRolesBroker ya expone permisosDisponibles; aquí tomamos ese valor en tiempo de render)
 
-// Construcción dinámica de categorías a partir de módulos permitidos (whitelist del master)
-// Solo se muestran los módulos presentes en modulosDisponibles (backend o fallback local)
+// Categorías alineadas 1:1 con las secciones del sidebar (Sidebaritems.ts)
 const buildCategorias = (
   mods: Record<string, { label: string; icon?: string; permisos: string[] }>,
 ): Record<string, string[]> => {
   const groups: [string, string[]][] = [
-    // Dashboard
-    ['Panel de Control', ['dashboard']],
-
-    // Operaciones de Seguros (solo los indicados)
-    ['Operaciones de Seguros', ['clientes', 'polizas', 'automoviles', 'siniestros']],
-
-    // Gestión Comercial
-    [
-      'Gestión Comercial',
-      [
-        'embudo_ventas',
-        'seguimiento_comercial',
-        'metas_objetivos',
-        'equipos_ventas',
-        'analisis_rendimiento',
-      ],
-    ],
-
-    // Marketing Digital
-    [
-      'Marketing Digital',
-      ['whatsapp_business', 'email_marketing', 'sms_marketing', 'enlaces_cotizacion', 'mini_web'],
-    ],
-
-    // Inteligencia Artificial
+    ['Inicio', ['dashboard']],
+    ['Seguros', ['clientes', 'polizas', 'renovaciones', 'automoviles', 'siniestros']],
+    ['Comercial', ['embudo_ventas', 'seguimiento_comercial', 'metas_objetivos', 'analisis_rendimiento']],
+    ['Finanzas', ['cartera_clientes', 'comisiones', 'liquidar_vendedores', 'reportes_financieros']],
+    ['Comunicaciones', ['whatsapp_business', 'email_marketing', 'enlaces_cotizacion', 'mini_web', 'creador_contenido']],
     ['Inteligencia Artificial', ['asistentes_ia', 'voice_ai', 'analytics_predictivo']],
-
-    // Gestión Financiera
-    [
-      'Gestión Financiera',
-      ['cartera', 'cartera_clientes', 'recaudos', 'pagos_polizas', 'comisiones', 'liquidar_vendedores', 'reportes_financieros'],
-    ],
-
-    // Gestión Documental
-    [
-      'Gestión Documental',
-      [
-        'contratos',
-        'documentos_clientes',
-        'documentos_poliza',
-        'documentos_siniestro',
-        'cumplimiento_legal',
-      ],
-    ],
-
-    // Integraciones
+    ['Documentos', ['documentos_clientes', 'documentos_poliza', 'documentos_siniestro', 'cumplimiento_legal']],
+    ['Mi Agencia', ['informacion_agencia', 'sedes', 'aseguradoras', 'ramos']],
+    ['Usuarios y Roles', ['gestion_usuarios', 'roles_permisos']],
+    ['Catálogos', ['vendedores', 'coberturas', 'tipos_afiliacion', 'estados_siniestros', 'motivos_estados_poliza', 'mensajeros']],
     ['Integraciones', ['integraciones_externas', 'sincronizacion']],
-
-    // Administración
-    [
-      'Administración',
-      [
-        'gestion_usuarios',
-        'roles_permisos',
-        'auditoria_accesos',
-        'informacion_agencia',
-        'sedes',
-        'aseguradoras',
-        'ramos',
-        'vendedores',
-        'coberturas',
-        'tipos_afiliacion',
-        'estados_siniestros',
-        'motivos_estados_poliza',
-        'mensajeros',
-        'configuracion_sistema',
-        'monitoreo_logs',
-      ],
-    ],
+    ['Sistema', ['configuracion_sistema']],
   ];
 
   const result: Record<string, string[]> = {};
-  const covered = new Set<string>();
-
   for (const [groupName, keys] of groups) {
     const present = keys.filter((k) => Object.prototype.hasOwnProperty.call(mods, k));
     if (present.length > 0) {
       result[groupName] = present;
-      present.forEach((k) => covered.add(k));
     }
   }
-
-  // No agregar extras: eliminar todo lo que no esté en la whitelist del master
-
   return result;
 };
 
-// Overrides de etiquetas para que coincidan con los títulos del master
-const LABEL_OVERRIDES: Record<string, string> = {
-  // Operaciones
-  clientes: 'Clientes',
-  polizas: 'Polizas',
-  automoviles: 'Automoviles',
-  siniestros: 'Siniestros',
-
-  // Gestión Comercial
-  embudo_ventas: 'Negocios',
-  seguimiento_comercial: 'Seguimiento comercial',
-  metas_objetivos: 'Metas y objetivos',
-  equipos_ventas: 'Equipo de ventas',
-  analisis_rendimiento: 'Analisis de rendimiento',
-
-  // Marketing Digital
-  whatsapp_business: 'WhatsApp Marketing',
-  email_marketing: 'Email Marketing',
-  sms_marketing: 'SMS Marketing',
-  enlaces_cotizacion: 'Enlaces de Cotización',
-  mini_web: 'Mini Web',
-
-  // IA
-  asistentes_ia: 'Chatbot',
-  voice_ai: 'Call center IA',
-  analytics_predictivo: 'Predicciones de venta',
-
-  // Gestión Financiera
-  cartera: 'Cartera General',
-  cartera_clientes: 'Cartera de Clientes',
-  recaudos: 'Recaudos',
-  pagos_polizas: 'Pagos de Pólizas',
-  comisiones: 'Comisiones',
-  liquidar_vendedores: 'Liquidar Vendedores',
-  reportes_financieros: 'Reportes Financieros',
-
-  // Gestión Documental
-  contratos: 'Contratos',
-  documentos_clientes: 'Clientes',
-  documentos_poliza: 'Pólizas',
-  documentos_siniestro: 'Siniestros',
-  cumplimiento_legal: 'Internos',
-
-  // Integraciones
-  integraciones_externas: 'Integraciones Externas',
-  sincronizacion: 'Sincronización',
-
-  // Administración
-  gestion_usuarios: 'Gestión de Usuarios',
-  roles_permisos: 'Roles y Permisos',
-  auditoria_accesos: 'Auditoría de Accesos',
-  informacion_agencia: 'Información de Agencia',
-  sedes: 'Sedes',
-  aseguradoras: 'Aseguradoras',
-  ramos: 'Ramos',
-  vendedores: 'Vendedores',
-  coberturas: 'Coberturas',
-  tipos_afiliacion: 'Tipos de Afiliación',
-  estados_siniestros: 'Estados de Siniestros',
-  motivos_estados_poliza: 'Motivos Estados Póliza',
-  mensajeros: 'Mensajeros',
-  configuracion_sistema: 'Configuración del Sistema',
-  monitoreo_logs: 'Monitoreo y Logs',
-};
+// Las labels ya están correctas en defaultModulosDisponibles; este map es solo para overrides puntuales
+const LABEL_OVERRIDES: Record<string, string> = {};
 
 const Roles: React.FC = () => {
   const location = useLocation();
@@ -464,11 +321,9 @@ const Roles: React.FC = () => {
     permisosDisponibles,
     nivelesAcceso: nivelesFromApi,
   } = useRolesBroker();
-  // Fuente de verdad de módulos: si backend trae permisosDisponibles, usarlo; si no, fallback local
+  // Siempre usar el fallback local alineado con el sidebar; el backend puede tener módulos extra que no están en la UI
   const modulosDisponibles: Record<string, { label: string; icon?: string; permisos: string[] }> =
-    permisosDisponibles && Object.keys(permisosDisponibles).length > 0
-      ? (permisosDisponibles as any)
-      : (defaultModulosDisponibles as any);
+    defaultModulosDisponibles as any;
 
   // Construir categorías dinámicamente en base a los módulos disponibles
   const categorias = React.useMemo(() => buildCategorias(modulosDisponibles), [modulosDisponibles]);
@@ -714,20 +569,22 @@ const Roles: React.FC = () => {
       {error && <Alert color="failure">{error}</Alert>}
 
       <Card>
-        <div className="overflow-x-auto">
-          <Table>
-            <Table.Head>
-              <Table.HeadCell>Rol</Table.HeadCell>
-              <Table.HeadCell>Descripción</Table.HeadCell>
-              <Table.HeadCell>Nivel de Acceso</Table.HeadCell>
-              <Table.HeadCell>Empleados</Table.HeadCell>
-              <Table.HeadCell>Estado</Table.HeadCell>
-              <Table.HeadCell>Acciones</Table.HeadCell>
-            </Table.Head>
-            <Table.Body className="divide-y">
+        <div className="guro-table-wrap">
+          <table className="guro-table">
+            <thead>
+              <tr>
+                <th>Rol</th>
+                <th>Descripción</th>
+                <th>Nivel de Acceso</th>
+                <th>Empleados</th>
+                <th>Estado</th>
+                <th className="sticky-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
               {roles.map((rol) => (
-                <Table.Row key={rol.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                  <Table.Cell className="font-medium text-gray-900 dark:text-white">
+                <tr key={rol.id} className="group">
+                  <td className="font-medium text-gray-900 dark:text-white">
                     <div className="flex items-center space-x-2">
                       <div
                         className="w-3 h-3 rounded-full"
@@ -740,9 +597,9 @@ const Roles: React.FC = () => {
                         </Badge>
                       )}
                     </div>
-                  </Table.Cell>
-                  <Table.Cell>{rol.descripcion}</Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>{rol.descripcion}</td>
+                  <td>
                     <Badge
                       color={
                         rol.nivel_acceso === 4
@@ -756,16 +613,16 @@ const Roles: React.FC = () => {
                     >
                       {nivelesAcceso.find((n) => n.value === rol.nivel_acceso)?.label}
                     </Badge>
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     <Badge color="gray">{rol.empleados_count || 0} empleado(s)</Badge>
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     <Badge color={rol.activo ? 'success' : 'failure'}>
                       {rol.activo ? 'Activo' : 'Inactivo'}
                     </Badge>
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td className="sticky-right">
                     <div className="flex space-x-2">
                       <PermissionGate route={currentRoute} action="editar">
                         <Button size="sm" color="gray" onClick={() => openModal(rol)}>
@@ -778,11 +635,11 @@ const Roles: React.FC = () => {
                         </Button>
                       </PermissionGate>
                     </div>
-                  </Table.Cell>
-                </Table.Row>
+                  </td>
+                </tr>
               ))}
-            </Table.Body>
-          </Table>
+            </tbody>
+          </table>
         </div>
       </Card>
 

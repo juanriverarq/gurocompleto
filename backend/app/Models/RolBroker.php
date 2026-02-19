@@ -160,6 +160,16 @@ class RolBroker extends Model
             'icon' => 'solar:clock-circle-bold-duotone',
             'permisos' => ['ver', 'crear', 'editar', 'eliminar']
         ],
+        'mini_web' => [
+            'label' => 'Mini Web',
+            'icon' => 'solar:smartphone-2-bold-duotone',
+            'permisos' => ['ver', 'crear', 'editar', 'eliminar']
+        ],
+        'creador_contenido' => [
+            'label' => 'Creador de Contenido',
+            'icon' => 'solar:pallete-2-bold-duotone',
+            'permisos' => ['ver', 'usar']
+        ],
         'configuracion_masiva' => [
             'label' => 'Configuración Masiva',
             'icon' => 'solar:chat-round-dots-bold-duotone',
@@ -189,10 +199,30 @@ class RolBroker extends Model
             'icon' => 'solar:dollar-minimalistic-bold-duotone',
             'permisos' => ['ver', 'crear', 'editar', 'eliminar', 'calcular', 'pagar']
         ],
+        'cartera' => [
+            'label' => 'Cartera General',
+            'icon' => 'solar:wallet-bold-duotone',
+            'permisos' => ['ver', 'gestionar']
+        ],
         'cartera_clientes' => [
             'label' => 'Cartera de Clientes',
-            'icon' => 'solar:users-group-rounded-bold-duotone',
-            'permisos' => ['ver', 'gestionar']
+            'icon' => 'solar:wallet-money-bold-duotone',
+            'permisos' => ['ver', 'crear', 'editar', 'eliminar', 'importar', 'exportar']
+        ],
+        'recaudos' => [
+            'label' => 'Recaudos',
+            'icon' => 'solar:hand-money-bold-duotone',
+            'permisos' => ['ver', 'crear', 'editar', 'eliminar', 'importar', 'revertir']
+        ],
+        'pagos_polizas' => [
+            'label' => 'Pagos de Pólizas',
+            'icon' => 'solar:card-bold-duotone',
+            'permisos' => ['ver', 'crear', 'editar', 'eliminar']
+        ],
+        'liquidar_vendedores' => [
+            'label' => 'Liquidar Vendedores',
+            'icon' => 'solar:money-bag-bold-duotone',
+            'permisos' => ['ver', 'crear', 'editar', 'eliminar']
         ],
         'estados_cuenta' => [
             'label' => 'Estados de Cuenta',

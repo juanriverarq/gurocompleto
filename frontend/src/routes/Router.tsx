@@ -6,6 +6,7 @@ import Loadable from '../layouts/full/shared/loadable/Loadable';
 import TrialExpired from '../views/saas/billing/TrialExpired';
 import FrontendLayout from 'src/layouts/blank/FrontendLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
+import ForceLightMode from '../components/ForceLightMode';
 
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
@@ -21,6 +22,7 @@ const Regalo = Loadable(lazy(() => import('../views/pages/Regalo')));
 
 /* ****Apps***** */
 const CombinedDashboard = Loadable(lazy(() => import('../views/combined/CombinedDashboard')));
+const Inicio = Loadable(lazy(() => import('../views/inicio/Inicio')));
 
 // authentication
 const Login = Loadable(lazy(() => import('../views/authentication/auth1/Login')));
@@ -149,8 +151,12 @@ const EnlacesCotizacion = Loadable(
 );
 const Plantillas = Loadable(lazy(() => import('../views/apps/marketing/plantillas/Plantillas')));
 const MiniWeb = Loadable(lazy(() => import('../views/apps/marketing/mini-web/MiniWeb')));
+const MiPaginaWeb = Loadable(lazy(() => import('../views/apps/marketing/mi-web/MiPaginaWeb')));
 const ComparadorSeguros = Loadable(
   lazy(() => import('../views/apps/marketing/comparador-seguros/ComparadorSeguros')),
+);
+const CreadorContenido = Loadable(
+  lazy(() => import('../views/apps/marketing/creador-contenido/CreadorContenido')),
 );
 const MiniWebPublic = Loadable(lazy(() => import('../views/public/MiniWebPublic')));
 const QuoteForm = Loadable(lazy(() => import('../views/public/QuoteForm')));
@@ -281,7 +287,7 @@ const Router = [
     path: '/',
     element: <BlankLayout />,
     children: [
-      { path: '/', element: <FramerLandingPage /> },
+      { path: '/', element: <ForceLightMode><FramerLandingPage /></ForceLightMode> },
       { path: '/landing-old', element: <LandingPages /> },
       { path: '/blog', element: <BlogIndex /> },
       { path: '/blog/software-seguros-colombia', element: <BlogSegurosSEO /> },
@@ -290,9 +296,9 @@ const Router = [
       { path: '/terminos-condiciones', element: <TerminosCondiciones /> },
       { path: '/politica-privacidad', element: <PoliticaPrivacidad /> },
       // Transitional route while SaaS contexto/tenant se termina de resolver
-      { path: '/dashboard-building', element: <DashboardBuilding /> },
+      { path: '/dashboard-building', element: <ForceLightMode><DashboardBuilding /></ForceLightMode> },
       { path: '/empleados/login', element: <EmpleadoLogin /> },
-      { path: '/auth/login', element: <Login /> },
+      { path: '/auth/login', element: <ForceLightMode><Login /></ForceLightMode> },
     ],
   },
   // Dashboard bajo /apps
@@ -300,7 +306,8 @@ const Router = [
     path: '/apps',
     element: <UnifiedProtectedFullLayout />,
     children: [
-      { path: '/apps/', exact: true, element: <CombinedDashboard /> },
+      { path: '/apps/', exact: true, element: <Inicio /> },
+      { path: '/apps/dashboard', element: <CombinedDashboard /> },
 
       // Seguros Routes
       { path: '/apps/seguros/polizas', element: <Polizas /> },
@@ -349,6 +356,8 @@ const Router = [
       { path: '/apps/marketing/plantillas', element: <Plantillas /> },
       { path: '/apps/marketing/mini-web', element: <MiniWeb /> },
       { path: '/apps/marketing/comparador-seguros', element: <ComparadorSeguros /> },
+      { path: '/apps/marketing/creador-contenido', element: <CreadorContenido /> },
+      { path: '/apps/marketing/mi-web', element: <MiPaginaWeb /> },
 
       // Admin Routes
       { path: '/apps/admin/usuarios', element: <Usuarios /> },
@@ -469,18 +478,18 @@ const Router = [
         children: [{ path: '', element: <Checkout /> }],
       },
       // Nuevo flujo de onboarding simplificado
-      { path: '/comenzar', element: <SelectAppsFlow /> },
-      { path: '/comenzar/registro', element: <SignupFlow /> },
+      { path: '/comenzar', element: <ForceLightMode><SelectAppsFlow /></ForceLightMode> },
+      { path: '/comenzar/registro', element: <ForceLightMode><SignupFlow /></ForceLightMode> },
       // Variante con branding SURA
-      { path: '/sura', element: <SelectAppsFlow /> },
-      { path: '/sura/registro', element: <SignupFlow /> },
+      { path: '/sura', element: <ForceLightMode><SelectAppsFlow /></ForceLightMode> },
+      { path: '/sura/registro', element: <ForceLightMode><SignupFlow /></ForceLightMode> },
       { path: '/web/:slug', element: <MiniWebPublic /> },
       { path: '/web/:slug/:tipo', element: <QuoteForm /> },
       { path: '/empleados', element: <Navigate to="/empleados/login" /> },
       { path: '/empleados/login', element: <EmpleadoLogin /> },
-      { path: '/auth/login', element: <Login /> },
+      { path: '/auth/login', element: <ForceLightMode><Login /></ForceLightMode> },
       { path: '/auth/register', element: <Navigate to="/comenzar" replace /> },
-      { path: '/auth/forgot-password', element: <ForgotPassword /> },
+      { path: '/auth/forgot-password', element: <ForceLightMode><ForgotPassword /></ForceLightMode> },
       { path: '/auth/two-steps', element: <TwoSteps /> },
       { path: '/auth/email-verification', element: <EmailVerification /> },
 
@@ -505,9 +514,9 @@ const Router = [
     path: '/auth',
     element: <BlankLayout />,
     children: [
-      { path: 'login', element: <Login /> },
+      { path: 'login', element: <ForceLightMode><Login /></ForceLightMode> },
       { path: 'register', element: <Navigate to="/comenzar" replace /> },
-      { path: 'forgot-password', element: <ForgotPassword /> },
+      { path: 'forgot-password', element: <ForceLightMode><ForgotPassword /></ForceLightMode> },
       { path: 'two-steps', element: <TwoSteps /> },
       { path: 'email-verification', element: <EmailVerification /> },
     ],

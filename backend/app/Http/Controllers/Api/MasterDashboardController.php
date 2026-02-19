@@ -47,8 +47,8 @@ class MasterDashboardController extends Controller
             $totalBrokers = Broker::count();
             $brokersActivos = Broker::where('status', 'active')->count();
             $brokersInactivos = Broker::where('status', '!=', 'active')->count();
-            $brokersPorPlan = Broker::selectRaw('COALESCE(plan, "basic") as plan, COUNT(*) as total')
-                ->groupBy(DB::raw('COALESCE(plan, "basic")'))
+            $brokersPorPlan = Broker::selectRaw('COALESCE(plan, "starter") as plan, COUNT(*) as total')
+                ->groupBy(DB::raw('COALESCE(plan, "starter")'))
                 ->pluck('total', 'plan')
                 ->toArray();
 
@@ -113,7 +113,7 @@ class MasterDashboardController extends Controller
                     'id' => $b->id,
                     'name' => $b->name,
                     'status' => $b->status,
-                    'plan' => $b->plan ?? 'basic',
+                    'plan' => $b->plan ?? 'starter',
                     'polizas_count' => $b->policies_count
                 ]);
 
@@ -125,7 +125,7 @@ class MasterDashboardController extends Controller
                     'id' => $b->id,
                     'name' => $b->name,
                     'status' => $b->status,
-                    'plan' => $b->plan ?? 'basic',
+                    'plan' => $b->plan ?? 'starter',
                     'clientes_count' => $b->clients_count
                 ]);
 
@@ -137,7 +137,7 @@ class MasterDashboardController extends Controller
                     'id' => $b->id,
                     'name' => $b->name,
                     'status' => $b->status,
-                    'plan' => $b->plan ?? 'basic',
+                    'plan' => $b->plan ?? 'starter',
                     'created_at' => $b->created_at->format('Y-m-d H:i:s')
                 ]);
 
@@ -636,7 +636,7 @@ class MasterDashboardController extends Controller
                         'id' => $broker->id,
                         'name' => $broker->name,
                         'email' => $broker->email,
-                        'plan' => $broker->plan ?? 'basic',
+                        'plan' => $broker->plan ?? 'starter',
                         'status' => $broker->status,
                         'created_at' => $broker->created_at,
                         'trial_ends_at' => $broker->trial_ends_at,
@@ -1161,7 +1161,7 @@ class MasterDashboardController extends Controller
     }
 
     /**
-     * Actualizar suscripción de un broker
+     * Actualizar suscripción de un broker (gestión manual completa)
      */
     public function updateBrokerSubscription(Request $request, $brokerId)
     {
@@ -1177,25 +1177,36 @@ class MasterDashboardController extends Controller
 
             $broker = Broker::with(['owner'])->find($brokerId);
             
-            if (!$broker || !$broker->owner_id) {
+            if (!$broker) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Broker o propietario no encontrado'
+                    'message' => 'Broker no encontrado'
                 ], 404);
             }
 
-            $subscription = Subscription::where('user_id', $broker->owner_id)
-                ->orderBy('created_at', 'desc')
-                ->first();
+            // Buscar o crear suscripción
+            $subscription = null;
+            if ($broker->owner_id) {
+                $subscription = Subscription::where('user_id', $broker->owner_id)
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+            }
 
             if (!$subscription) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Suscripción no encontrada'
-                ], 404);
+                $subscription = new Subscription();
+                $subscription->user_id = $broker->owner_id;
+                $subscription->broker_id = $broker->id;
+                $subscription->status = 'active';
+                $subscription->period = 'monthly';
+                $subscription->users_count = $broker->max_users ?? 5;
+                $subscription->storage_gb = 10;
+                $subscription->modules = $broker->features ?? [];
+                $subscription->totals = ['monthly' => 0, 'annual' => 0];
+                $subscription->starts_at = now();
+                $subscription->current_period_end = now()->addMonth();
             }
 
-            // Actualizar campos permitidos
+            // --- Actualizar suscripción ---
             if ($request->has('status')) {
                 $subscription->status = $request->input('status');
             }
@@ -1206,10 +1217,10 @@ class MasterDashboardController extends Controller
                 $subscription->current_period_end = $request->input('current_period_end');
             }
             if ($request->has('users_count')) {
-                $subscription->users_count = $request->input('users_count');
+                $subscription->users_count = intval($request->input('users_count'));
             }
             if ($request->has('storage_gb')) {
-                $subscription->storage_gb = $request->input('storage_gb');
+                $subscription->storage_gb = intval($request->input('storage_gb'));
             }
             
             // Actualizar totals (montos)
@@ -1222,6 +1233,7 @@ class MasterDashboardController extends Controller
                 $totals = $subscription->totals ?? [];
                 if ($request->has('monthly_amount')) {
                     $totals['monthly'] = floatval($request->input('monthly_amount'));
+                    $totals['total'] = floatval($request->input('monthly_amount'));
                 }
                 if ($request->has('annual_amount')) {
                     $totals['annual'] = floatval($request->input('annual_amount'));
@@ -1231,11 +1243,38 @@ class MasterDashboardController extends Controller
 
             $subscription->save();
 
-            // También actualizar el plan del broker si se especifica
+            // --- Actualizar broker directamente ---
+            $brokerChanged = false;
+
             if ($request->has('plan')) {
                 $broker->plan = $request->input('plan');
+                $brokerChanged = true;
+            }
+            if ($request->has('broker_status')) {
+                $broker->status = $request->input('broker_status');
+                $brokerChanged = true;
+            }
+            if ($request->has('features')) {
+                $broker->features = $request->input('features');
+                $subscription->modules = $request->input('features');
+                $subscription->save();
+                $brokerChanged = true;
+            }
+            if ($request->has('max_users')) {
+                $broker->max_users = intval($request->input('max_users'));
+                $brokerChanged = true;
+            }
+            if ($request->has('trial_ends_at')) {
+                $val = $request->input('trial_ends_at');
+                $broker->trial_ends_at = $val ?: null;
+                $brokerChanged = true;
+            }
+
+            if ($brokerChanged) {
                 $broker->save();
             }
+
+            $broker->refresh();
 
             return response()->json([
                 'success' => true,
@@ -1250,7 +1289,15 @@ class MasterDashboardController extends Controller
                         'totals' => $subscription->totals,
                         'starts_at' => $subscription->starts_at,
                         'current_period_end' => $subscription->current_period_end,
-                    ]
+                    ],
+                    'broker' => [
+                        'id' => $broker->id,
+                        'status' => $broker->status,
+                        'plan' => $broker->plan,
+                        'features' => $broker->features,
+                        'max_users' => $broker->max_users,
+                        'trial_ends_at' => optional($broker->trial_ends_at)->toISOString(),
+                    ],
                 ]
             ]);
 
@@ -1259,6 +1306,131 @@ class MasterDashboardController extends Controller
                 'success' => false,
                 'message' => 'Error al actualizar suscripción: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Crear un nuevo broker desde el master panel
+     */
+    public function createBroker(Request $request)
+    {
+        try {
+            $user = $request->user();
+            if (!$user || $user->role !== 'superadmin') {
+                return response()->json(['success' => false, 'message' => 'Acceso denegado'], 403);
+            }
+
+            $validator = \Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|max:255',
+                'phone' => 'nullable|string|max:32',
+                'city' => 'nullable|string|max:100',
+                'country' => 'nullable|string|max:100',
+                'plan' => 'nullable|string|max:50',
+                'status' => 'nullable|string|in:active,trial,suspended,inactive',
+                'max_users' => 'nullable|integer|min:1',
+                'features' => 'nullable|array',
+                'trial_days' => 'nullable|integer|min:0',
+                'document_type' => 'nullable|string|max:20',
+                'document_number' => 'nullable|string|max:50',
+                'legal_name' => 'nullable|string|max:255',
+                'address' => 'nullable|string|max:500',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+            }
+
+            // Generar subdominio
+            $baseSubdomain = \Str::slug($request->input('name'));
+            $subdomain = $baseSubdomain;
+            $counter = 1;
+            while (Broker::where('subdomain', $subdomain)->exists()) {
+                $subdomain = $baseSubdomain . '-' . $counter++;
+            }
+
+            $trialDays = $request->input('trial_days', 7);
+
+            $broker = Broker::create([
+                'name' => $request->input('name'),
+                'legal_name' => $request->input('legal_name', $request->input('name')),
+                'document_type' => $request->input('document_type', 'NIT'),
+                'document_number' => $request->input('document_number', 'PENDIENTE-' . time()),
+                'email' => $request->input('email'),
+                'phone' => $request->input('phone', ''),
+                'address' => $request->input('address', 'Por definir'),
+                'city' => $request->input('city', 'Por definir'),
+                'country' => $request->input('country', 'Colombia'),
+                'industry' => $request->input('industry', 'Seguros'),
+                'subdomain' => $subdomain,
+                'plan' => $request->input('plan', 'starter'),
+                'max_users' => $request->input('max_users', 5),
+                'max_clients' => 999999,
+                'max_policies' => 999999,
+                'features' => $request->input('features', []),
+                'status' => $request->input('status', 'trial'),
+                'trial_ends_at' => \Carbon\Carbon::now()->addDays($trialDays),
+                'settings' => [
+                    'timezone' => 'America/Bogota',
+                    'currency' => 'COP',
+                    'language' => 'es',
+                ],
+                'brand_colors' => [
+                    'primary' => '#3b82f6',
+                    'secondary' => '#64748b',
+                    'accent' => '#10b981',
+                ],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Broker creado correctamente',
+                'data' => ['broker' => $broker],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Actualizar un broker existente desde el master panel (incluye features)
+     */
+    public function updateBroker(Request $request, $brokerId)
+    {
+        try {
+            $user = $request->user();
+            if (!$user || $user->role !== 'superadmin') {
+                return response()->json(['success' => false, 'message' => 'Acceso denegado'], 403);
+            }
+
+            $broker = Broker::find($brokerId);
+            if (!$broker) {
+                return response()->json(['success' => false, 'message' => 'Broker no encontrado'], 404);
+            }
+
+            $allowed = [
+                'name', 'legal_name', 'document_type', 'document_number',
+                'email', 'phone', 'address', 'city', 'state', 'country', 'postal_code',
+                'website', 'plan', 'status', 'max_users', 'max_clients', 'max_policies',
+                'features', 'industry',
+            ];
+
+            $data = $request->only($allowed);
+
+            // Si se envía trial_days, actualizar trial_ends_at
+            if ($request->has('trial_days')) {
+                $data['trial_ends_at'] = \Carbon\Carbon::now()->addDays((int) $request->input('trial_days'));
+            }
+
+            $broker->update($data);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Broker actualizado correctamente',
+                'data' => ['broker' => $broker->fresh()],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
 

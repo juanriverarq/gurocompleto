@@ -28,6 +28,7 @@ class InformacionAgenciaController extends Controller
         $branding['primary_color'] = $branding['primary_color'] ?? null;
         $branding['logo'] = method_exists($broker, 'getLogoUrl') ? $broker->getLogoUrl() : ($branding['logo'] ?? null);
         $branding['favicon'] = method_exists($broker, 'getFaviconUrl') ? $broker->getFaviconUrl() : ($branding['favicon'] ?? null);
+        $branding['nombre_comercial'] = $branding['nombre_comercial'] ?? $broker->name;
 
         return response()->json([
             'success' => true,
@@ -136,7 +137,10 @@ class InformacionAgenciaController extends Controller
             $colorsUpdated = true;
         }
         
-        if ($colorsUpdated) {
+        // Always sync nombre_comercial from broker name
+        $branding['nombre_comercial'] = $broker->name;
+
+        if ($colorsUpdated || true) {
             $broker->branding = $branding;
         }
 
@@ -154,6 +158,7 @@ class InformacionAgenciaController extends Controller
                     'accent_color' => $broker->branding['accent_color'] ?? null,
                     'logo' => $broker->getLogoUrl(),
                     'favicon' => $broker->getFaviconUrl(),
+                    'nombre_comercial' => $broker->name,
                 ],
             ],
         ]);

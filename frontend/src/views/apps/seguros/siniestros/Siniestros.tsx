@@ -768,311 +768,184 @@ const Siniestros: React.FC = () => {
           ) : (
             <>
               {/* Vista de tabla para pantallas grandes */}
-              <div className="hidden lg:block overflow-x-auto table-container-with-dropdowns">
-                <Table hoverable>
-                  <Table.Head>
-                    {visibleColumns.includes('numero') && (
-                      <Table.HeadCell>
-                        <div
-                          className={`flex items-center gap-1 ${
-                            columnToApiField.numero ? 'cursor-pointer select-none' : ''
-                          }`}
-                          onClick={() => toggleSort('numero')}
-                        >
-                          <span>Número</span>
-                          {filters.sort_by === columnToApiField.numero && (
-                            <Icon
-                              icon={
-                                filters.sort_dir === 'asc'
-                                  ? 'solar:arrow-up-bold-duotone'
-                                  : 'solar:arrow-down-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    )}
-                    {visibleColumns.includes('cliente') && <Table.HeadCell>Cliente</Table.HeadCell>}
-                    {visibleColumns.includes('poliza') && (
-                      <Table.HeadCell>
-                        <div
-                          className={`flex items-center gap-1 ${
-                            columnToApiField.poliza ? 'cursor-pointer select-none' : ''
-                          }`}
-                          onClick={() => toggleSort('poliza')}
-                        >
-                          <span>Póliza</span>
-                          {filters.sort_by === columnToApiField.poliza && (
-                            <Icon
-                              icon={
-                                filters.sort_dir === 'asc'
-                                  ? 'solar:arrow-up-bold-duotone'
-                                  : 'solar:arrow-down-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    )}
-                    {visibleColumns.includes('tipo') && (
-                      <Table.HeadCell>
-                        <div
-                          className={`flex items-center gap-1 ${
-                            columnToApiField.tipo ? 'cursor-pointer select-none' : ''
-                          }`}
-                          onClick={() => toggleSort('tipo')}
-                        >
-                          <span>Tipo</span>
-                          {filters.sort_by === columnToApiField.tipo && (
-                            <Icon
-                              icon={
-                                filters.sort_dir === 'asc'
-                                  ? 'solar:arrow-up-bold-duotone'
-                                  : 'solar:arrow-down-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    )}
-                    {visibleColumns.includes('siniestro') && (
-                      <Table.HeadCell>
-                        <div
-                          className={`flex items-center gap-1 ${
-                            columnToApiField.siniestro ? 'cursor-pointer select-none' : ''
-                          }`}
-                          onClick={() => toggleSort('siniestro')}
-                        >
-                          <span>Siniestro</span>
-                          {filters.sort_by === columnToApiField.siniestro && (
-                            <Icon
-                              icon={
-                                filters.sort_dir === 'asc'
-                                  ? 'solar:arrow-up-bold-duotone'
-                                  : 'solar:arrow-down-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    )}
-                    {visibleColumns.includes('estado') && (
-                      <Table.HeadCell>
-                        <div
-                          className={`flex items-center gap-1 ${
-                            columnToApiField.estado ? 'cursor-pointer select-none' : ''
-                          }`}
-                          onClick={() => toggleSort('estado')}
-                        >
-                          <span>Estado</span>
-                          {filters.sort_by === columnToApiField.estado && (
-                            <Icon
-                              icon={
-                                filters.sort_dir === 'asc'
-                                  ? 'solar:arrow-up-bold-duotone'
-                                  : 'solar:arrow-down-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    )}
-                    {visibleColumns.includes('prioridad') && (
-                      <Table.HeadCell>
-                        <div
-                          className={`flex items-center gap-1 ${
-                            columnToApiField.prioridad ? 'cursor-pointer select-none' : ''
-                          }`}
-                          onClick={() => toggleSort('prioridad')}
-                        >
-                          <span>Prioridad</span>
-                          {filters.sort_by === columnToApiField.prioridad && (
-                            <Icon
-                              icon={
-                                filters.sort_dir === 'asc'
-                                  ? 'solar:arrow-up-bold-duotone'
-                                  : 'solar:arrow-down-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    )}
-                    {visibleColumns.includes('fecha') && (
-                      <Table.HeadCell>
-                        <div
-                          className={`flex items-center gap-1 ${
-                            columnToApiField.fecha ? 'cursor-pointer select-none' : ''
-                          }`}
-                          onClick={() => toggleSort('fecha')}
-                        >
-                          <span>Fecha Ocurrencia</span>
-                          {filters.sort_by === columnToApiField.fecha && (
-                            <Icon
-                              icon={
-                                filters.sort_dir === 'asc'
-                                  ? 'solar:arrow-up-bold-duotone'
-                                  : 'solar:arrow-down-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    )}
-                    {visibleColumns.includes('monto') && (
-                      <Table.HeadCell>
-                        <div
-                          className={`flex items-center gap-1 ${
-                            columnToApiField.monto ? 'cursor-pointer select-none' : ''
-                          }`}
-                          onClick={() => toggleSort('monto')}
-                        >
-                          <span>Monto Reclamado</span>
-                          {filters.sort_by === columnToApiField.monto && (
-                            <Icon
-                              icon={
-                                filters.sort_dir === 'asc'
-                                  ? 'solar:arrow-up-bold-duotone'
-                                  : 'solar:arrow-down-bold-duotone'
-                              }
-                              className="w-4 h-4 text-gray-400"
-                            />
-                          )}
-                        </div>
-                      </Table.HeadCell>
-                    )}
-                    {visibleColumns.includes('progreso') && (
-                      <Table.HeadCell>Progreso</Table.HeadCell>
-                    )}
-                    <Table.HeadCell>Acciones</Table.HeadCell>
-                  </Table.Head>
-                  <Table.Body className="">
-                    {paginatedSiniestros.map((siniestro) => (
-                      <Table.Row key={siniestro.id} className="">
+              <div className="hidden lg:block">
+                <div className="guro-table-wrap">
+                  <table className="guro-table">
+                    <thead>
+                      <tr>
                         {visibleColumns.includes('numero') && (
-                          <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
-                            {siniestro.numero_siniestro}
-                          </Table.Cell>
+                          <th className="whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${columnToApiField.numero ? 'cursor-pointer select-none' : ''}`} onClick={() => toggleSort('numero')}>
+                              <span>Número</span>
+                              {filters.sort_by === columnToApiField.numero && (
+                                <Icon icon={filters.sort_dir === 'asc' ? 'solar:arrow-up-bold-duotone' : 'solar:arrow-down-bold-duotone'} className="w-3.5 h-3.5 text-[#573CFF]" />
+                              )}
+                            </div>
+                          </th>
                         )}
-                        {visibleColumns.includes('cliente') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            {getClienteNombre(siniestro)}
-                          </Table.Cell>
-                        )}
+                        {visibleColumns.includes('cliente') && <th>Cliente</th>}
                         {visibleColumns.includes('poliza') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            {siniestro.numero_poliza}
-                          </Table.Cell>
+                          <th className="whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${columnToApiField.poliza ? 'cursor-pointer select-none' : ''}`} onClick={() => toggleSort('poliza')}>
+                              <span>Póliza</span>
+                              {filters.sort_by === columnToApiField.poliza && (
+                                <Icon icon={filters.sort_dir === 'asc' ? 'solar:arrow-up-bold-duotone' : 'solar:arrow-down-bold-duotone'} className="w-3.5 h-3.5 text-[#573CFF]" />
+                              )}
+                            </div>
+                          </th>
                         )}
                         {visibleColumns.includes('tipo') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              {getTipoIcon(siniestro.tipo_seguro)}
-                              <span className="capitalize">
-                                {(TIPOS_SEGURO as any)[siniestro.tipo_seguro] ||
-                                  siniestro.tipo_seguro}
-                              </span>
+                          <th className="whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${columnToApiField.tipo ? 'cursor-pointer select-none' : ''}`} onClick={() => toggleSort('tipo')}>
+                              <span>Tipo</span>
+                              {filters.sort_by === columnToApiField.tipo && (
+                                <Icon icon={filters.sort_dir === 'asc' ? 'solar:arrow-up-bold-duotone' : 'solar:arrow-down-bold-duotone'} className="w-3.5 h-3.5 text-[#573CFF]" />
+                              )}
                             </div>
-                          </Table.Cell>
+                          </th>
                         )}
                         {visibleColumns.includes('siniestro') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            {(TIPOS_SINIESTRO as any)[siniestro.tipo_siniestro] ||
-                              siniestro.tipo_siniestro}
-                          </Table.Cell>
+                          <th className="whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${columnToApiField.siniestro ? 'cursor-pointer select-none' : ''}`} onClick={() => toggleSort('siniestro')}>
+                              <span>Siniestro</span>
+                              {filters.sort_by === columnToApiField.siniestro && (
+                                <Icon icon={filters.sort_dir === 'asc' ? 'solar:arrow-up-bold-duotone' : 'solar:arrow-down-bold-duotone'} className="w-3.5 h-3.5 text-[#573CFF]" />
+                              )}
+                            </div>
+                          </th>
                         )}
                         {visibleColumns.includes('estado') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            <Badge color={getEstadoBadge(siniestro.estado)} className="capitalize">
-                              {(ESTADOS as any)[siniestro.estado] ||
-                                siniestro.estado.replace('_', ' ')}
-                            </Badge>
-                          </Table.Cell>
+                          <th className="whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${columnToApiField.estado ? 'cursor-pointer select-none' : ''}`} onClick={() => toggleSort('estado')}>
+                              <span>Estado</span>
+                              {filters.sort_by === columnToApiField.estado && (
+                                <Icon icon={filters.sort_dir === 'asc' ? 'solar:arrow-up-bold-duotone' : 'solar:arrow-down-bold-duotone'} className="w-3.5 h-3.5 text-[#573CFF]" />
+                              )}
+                            </div>
+                          </th>
                         )}
                         {visibleColumns.includes('prioridad') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            <Badge
-                              color={getPrioridadBadge(siniestro.prioridad)}
-                              className="capitalize"
-                            >
-                              {(PRIORIDADES as any)[siniestro.prioridad] || siniestro.prioridad}
-                            </Badge>
-                          </Table.Cell>
+                          <th className="whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${columnToApiField.prioridad ? 'cursor-pointer select-none' : ''}`} onClick={() => toggleSort('prioridad')}>
+                              <span>Prioridad</span>
+                              {filters.sort_by === columnToApiField.prioridad && (
+                                <Icon icon={filters.sort_dir === 'asc' ? 'solar:arrow-up-bold-duotone' : 'solar:arrow-down-bold-duotone'} className="w-3.5 h-3.5 text-[#573CFF]" />
+                              )}
+                            </div>
+                          </th>
                         )}
                         {visibleColumns.includes('fecha') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            {new Date(siniestro.fecha_ocurrencia).toLocaleDateString('es-CO')}
-                          </Table.Cell>
+                          <th className="whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${columnToApiField.fecha ? 'cursor-pointer select-none' : ''}`} onClick={() => toggleSort('fecha')}>
+                              <span>Fecha Ocurrencia</span>
+                              {filters.sort_by === columnToApiField.fecha && (
+                                <Icon icon={filters.sort_dir === 'asc' ? 'solar:arrow-up-bold-duotone' : 'solar:arrow-down-bold-duotone'} className="w-3.5 h-3.5 text-[#573CFF]" />
+                              )}
+                            </div>
+                          </th>
                         )}
                         {visibleColumns.includes('monto') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            {formatCurrency(siniestro.monto_reclamado)}
-                          </Table.Cell>
-                        )}
-                        {visibleColumns.includes('progreso') && (
-                          <Table.Cell className="whitespace-nowrap">
-                            <div className="w-24">
-                              <Progress
-                                progress={getProgressPercentage(siniestro.estado)}
-                                size="sm"
-                                color={siniestro.estado === 'rechazado' ? 'red' : 'blue'}
-                              />
+                          <th className="whitespace-nowrap">
+                            <div className={`flex items-center gap-1 ${columnToApiField.monto ? 'cursor-pointer select-none' : ''}`} onClick={() => toggleSort('monto')}>
+                              <span>Monto Reclamado</span>
+                              {filters.sort_by === columnToApiField.monto && (
+                                <Icon icon={filters.sort_dir === 'asc' ? 'solar:arrow-up-bold-duotone' : 'solar:arrow-down-bold-duotone'} className="w-3.5 h-3.5 text-[#573CFF]" />
+                              )}
                             </div>
-                          </Table.Cell>
+                          </th>
                         )}
-                        <Table.Cell className="whitespace-nowrap">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            renderTrigger={() => (
-                              <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                <IconDots size={22} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item
-                              className="flex gap-3"
-                              onClick={() => handleViewSiniestro(siniestro)}
-                            >
-                              <Icon icon="solar:eye-bold-duotone" height={18} />
-                              <span>Ver Detalles</span>
-                            </Dropdown.Item>
-                            {canEdit && (
-                              <Dropdown.Item
-                                className="flex gap-3"
-                                onClick={() => handleEditSiniestro(siniestro)}
+                        {visibleColumns.includes('progreso') && <th>Progreso</th>}
+                        <th className="sticky-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedSiniestros.map((siniestro) => (
+                        <tr key={siniestro.id} className="group">
+                          {visibleColumns.includes('numero') && (
+                            <td className="whitespace-nowrap font-medium">{siniestro.numero_siniestro}</td>
+                          )}
+                          {visibleColumns.includes('cliente') && (
+                            <td className="whitespace-nowrap">{getClienteNombre(siniestro)}</td>
+                          )}
+                          {visibleColumns.includes('poliza') && (
+                            <td className="whitespace-nowrap">{siniestro.numero_poliza}</td>
+                          )}
+                          {visibleColumns.includes('tipo') && (
+                            <td className="whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                {getTipoIcon(siniestro.tipo_seguro)}
+                                <span className="capitalize">{(TIPOS_SEGURO as any)[siniestro.tipo_seguro] || siniestro.tipo_seguro}</span>
+                              </div>
+                            </td>
+                          )}
+                          {visibleColumns.includes('siniestro') && (
+                            <td className="whitespace-nowrap">{(TIPOS_SINIESTRO as any)[siniestro.tipo_siniestro] || siniestro.tipo_siniestro}</td>
+                          )}
+                          {visibleColumns.includes('estado') && (
+                            <td className="whitespace-nowrap">
+                              <Badge color={getEstadoBadge(siniestro.estado)} className="capitalize">
+                                {(ESTADOS as any)[siniestro.estado] || siniestro.estado.replace('_', ' ')}
+                              </Badge>
+                            </td>
+                          )}
+                          {visibleColumns.includes('prioridad') && (
+                            <td className="whitespace-nowrap">
+                              <Badge color={getPrioridadBadge(siniestro.prioridad)} className="capitalize">
+                                {(PRIORIDADES as any)[siniestro.prioridad] || siniestro.prioridad}
+                              </Badge>
+                            </td>
+                          )}
+                          {visibleColumns.includes('fecha') && (
+                            <td className="whitespace-nowrap">{new Date(siniestro.fecha_ocurrencia).toLocaleDateString('es-CO')}</td>
+                          )}
+                          {visibleColumns.includes('monto') && (
+                            <td className="whitespace-nowrap">{formatCurrency(siniestro.monto_reclamado)}</td>
+                          )}
+                          {visibleColumns.includes('progreso') && (
+                            <td className="whitespace-nowrap">
+                              <div className="w-24">
+                                <Progress progress={getProgressPercentage(siniestro.estado)} size="sm" color={siniestro.estado === 'rechazado' ? 'red' : 'blue'} />
+                              </div>
+                            </td>
+                          )}
+                          <td className="sticky-right">
+                            <div className="relative inline-block">
+                              <Dropdown
+                                label=""
+                                dismissOnClick={false}
+                                placement="left-start"
+                                className="z-50"
+                                style={{ minWidth: '220px' }}
+                                renderTrigger={() => (
+                                  <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
+                                    <IconDots size={18} />
+                                  </span>
+                                )}
                               >
-                                <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
-                                <span>Editar</span>
-                              </Dropdown.Item>
-                            )}
-                            {canDelete && (
-                              <Dropdown.Item
-                                className="flex gap-3 text-red-600 hover:text-red-700"
-                                onClick={() => handleDeleteSiniestro(siniestro)}
-                              >
-                                <Icon
-                                  icon="solar:trash-bin-minimalistic-bold-duotone"
-                                  height={18}
-                                />
-                                <span>Eliminar</span>
-                              </Dropdown.Item>
-                            )}
-                          </Dropdown>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table>
+                                <Dropdown.Item className="flex gap-3" onClick={() => handleViewSiniestro(siniestro)}>
+                                  <Icon icon="solar:eye-bold-duotone" height={18} />
+                                  <span>Ver Detalles</span>
+                                </Dropdown.Item>
+                                {canEdit && (
+                                  <Dropdown.Item className="flex gap-3" onClick={() => handleEditSiniestro(siniestro)}>
+                                    <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
+                                    <span>Editar</span>
+                                  </Dropdown.Item>
+                                )}
+                                {canDelete && (
+                                  <Dropdown.Item className="flex gap-3 text-red-600 hover:text-red-700" onClick={() => handleDeleteSiniestro(siniestro)}>
+                                    <Icon icon="solar:trash-bin-minimalistic-bold-duotone" height={18} />
+                                    <span>Eliminar</span>
+                                  </Dropdown.Item>
+                                )}
+                              </Dropdown>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Vista de cards para tablets y móviles */}

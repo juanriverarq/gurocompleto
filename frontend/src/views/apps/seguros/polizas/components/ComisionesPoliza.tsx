@@ -706,7 +706,7 @@ const ComisionesPoliza: React.FC<Props> = ({
                         <th className="px-2 py-2 text-left" style={{ minWidth: '70px' }}>Anexo</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '120px' }}>PRIMA</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '90px' }}>COMISION %</th>
-                        <th className="px-2 py-2 text-right bg-purple-50 dark:bg-purple-900/30" style={{ minWidth: '110px' }}>TOTAL PRIMA</th>
+                        <th className="px-2 py-2 text-right bg-purple-50 dark:bg-purple-900/30" style={{ minWidth: '110px' }}>COMISIÓN PRIMA</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '80px' }}>% Agencia</th>
                         <th className="px-2 py-2 text-right" style={{ minWidth: '90px' }}>% ASESOR</th>
                         <th className="px-2 py-2 text-right bg-blue-50 dark:bg-blue-900/30" style={{ minWidth: '110px' }}>COM. ASESOR</th>

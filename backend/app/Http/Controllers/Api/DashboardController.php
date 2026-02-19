@@ -263,7 +263,7 @@ class DashboardController extends Controller
                         'name' => $broker->name,
                         'legal_name' => $broker->legal_name,
                         'status' => $broker->status,
-                        'plan' => $broker->plan ?? 'basic'
+                        'plan' => $broker->plan ?? 'starter'
                     ],
                     'resumen_polizas' => [
                         'total' => $totalPolizas,

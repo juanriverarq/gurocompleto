@@ -136,8 +136,8 @@ const FlowEditorInner: React.FC = () => {
       },
     }));
 
-    // Crear edges basados en next_node_id
-    const flowEdges: Edge[] = flow.nodes
+    // Edges from next_node_id (linear connections)
+    const linearEdges: Edge[] = flow.nodes
       .filter(node => node.next_node_id)
       .map(node => ({
         id: `e${node.id}-${node.next_node_id}`,
@@ -147,8 +147,62 @@ const FlowEditorInner: React.FC = () => {
         style: { stroke: '#6b7280' },
       }));
 
+    // Edges from options[].next_node_id (branching connections)
+    const optionEdges: Edge[] = flow.nodes.flatMap(node => {
+      const options = node.config?.options || [];
+      return options
+        .filter((opt: any) => opt.next_node_id)
+        .map((opt: any, idx: number) => ({
+          id: `e${node.id}-opt${idx}-${opt.next_node_id}`,
+          source: String(node.id),
+          target: String(opt.next_node_id),
+          animated: true,
+          label: opt.text || `Opción ${idx + 1}`,
+          style: { stroke: '#8b5cf6', strokeWidth: 2 },
+          labelStyle: { fontSize: 10, fill: '#8b5cf6', fontWeight: 500 },
+          labelBgStyle: { fill: '#f5f3ff', fillOpacity: 0.9 },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
+        }));
+    });
+
+    // Edges from condition true_node_id / false_node_id
+    const conditionEdges: Edge[] = flow.nodes.flatMap(node => {
+      const config = node.config || {};
+      const edges: Edge[] = [];
+      if (config.true_node_id) {
+        edges.push({
+          id: `e${node.id}-true-${config.true_node_id}`,
+          source: String(node.id),
+          target: String(config.true_node_id),
+          animated: true,
+          label: 'Sí',
+          style: { stroke: '#22c55e', strokeWidth: 2 },
+          labelStyle: { fontSize: 10, fill: '#22c55e', fontWeight: 600 },
+          labelBgStyle: { fill: '#f0fdf4', fillOpacity: 0.9 },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
+        });
+      }
+      if (config.false_node_id) {
+        edges.push({
+          id: `e${node.id}-false-${config.false_node_id}`,
+          source: String(node.id),
+          target: String(config.false_node_id),
+          animated: true,
+          label: 'No',
+          style: { stroke: '#ef4444', strokeWidth: 2 },
+          labelStyle: { fontSize: 10, fill: '#ef4444', fontWeight: 600 },
+          labelBgStyle: { fill: '#fef2f2', fillOpacity: 0.9 },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
+        });
+      }
+      return edges;
+    });
+
     setNodes(flowNodes);
-    setEdges(flowEdges);
+    setEdges([...linearEdges, ...optionEdges, ...conditionEdges]);
   };
 
   const getNodeLabel = (type: NodeType): string => {
@@ -232,20 +286,50 @@ const FlowEditorInner: React.FC = () => {
     try {
       setSaving(true);
 
+      // Crear mapa de IDs temporales a índices
+      const nodeIdToIndex = new Map<string, number>();
+      nodes.forEach((n, i) => nodeIdToIndex.set(n.id, i));
+
       // Convertir nodos de React Flow a formato API
-      const nodesToSave = nodes.map(node => ({
-        id: node.id.startsWith('start-') || node.id.includes('-') ? undefined : Number(node.id),
-        node_type: node.type as NodeType,
-        name: node.data.label,
-        position_x: Math.round(node.position.x),
-        position_y: Math.round(node.position.y),
-        config: node.data.config || {},
-        next_node_id: edges.find(e => e.source === node.id)?.target 
-          ? (edges.find(e => e.source === node.id)?.target?.includes('-') 
-              ? undefined 
-              : Number(edges.find(e => e.source === node.id)?.target))
-          : undefined,
-      }));
+      const nodesToSave = nodes.map((node, index) => {
+        const config = JSON.parse(JSON.stringify(node.data.config || {}));
+
+        // Classify outgoing edges by sourceHandle
+        const outgoingEdges = edges.filter(e => e.source === node.id);
+        
+        const linearEdge = outgoingEdges.find(e => 
+          !e.sourceHandle || (!e.sourceHandle.startsWith('opt-') && !e.sourceHandle.startsWith('condition-'))
+        );
+        const nextNodeIndex = linearEdge ? nodeIdToIndex.get(linearEdge.target) : undefined;
+
+        // Map option edges back to options[].next_node_index using sourceHandle
+        if (config.options && Array.isArray(config.options)) {
+          config.options = config.options.map((opt: any, optIdx: number) => {
+            const optEdge = outgoingEdges.find(e => e.sourceHandle === `opt-${optIdx}`);
+            return {
+              ...opt,
+              next_node_index: optEdge ? nodeIdToIndex.get(optEdge.target) : undefined,
+            };
+          });
+        }
+
+        // Map condition edges
+        const trueEdge = outgoingEdges.find(e => e.sourceHandle === 'condition-true');
+        const falseEdge = outgoingEdges.find(e => e.sourceHandle === 'condition-false');
+        if (trueEdge) config.true_node_index = nodeIdToIndex.get(trueEdge.target);
+        if (falseEdge) config.false_node_index = nodeIdToIndex.get(falseEdge.target);
+
+        return {
+          temp_id: node.id,
+          temp_index: index,
+          node_type: node.type as NodeType,
+          name: node.data.label,
+          position_x: Math.round(node.position.x),
+          position_y: Math.round(node.position.y),
+          config,
+          next_node_index: nextNodeIndex,
+        };
+      });
 
       // Guardar nodos en lote
       const result = await chatbotService.updateNodesBulk(currentFlow.id, nodesToSave);

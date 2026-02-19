@@ -14,6 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/shadcn-ui/Default-Ui/tabs';
 import { Icon as IconifyIcon } from '@iconify/react';
 import masterPanelService from '../../services/masterPanelService';
+import { MODULES } from '../../components/landingpage/pricing-calculator/modules';
 
 interface BrokerDetail {
   id: number;
@@ -34,6 +35,7 @@ interface BrokerDetail {
   max_users: number;
   max_clients: number;
   max_policies: number;
+  features: string[];
   trial_ends_at: string | null;
   subscription_ends_at: string | null;
   created_at: string;
@@ -69,12 +71,13 @@ const MasterBrokerEditPage: React.FC = () => {
     country: 'Colombia',
     postal_code: '',
     website: '',
-    plan: 'basic',
+    plan: 'starter',
     status: 'active',
     max_users: 5,
     max_clients: 100,
     max_policies: 500,
   });
+  const [selectedFeatures, setSelectedFeatures] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (id) {
@@ -102,12 +105,13 @@ const MasterBrokerEditPage: React.FC = () => {
           country: b.country || 'Colombia',
           postal_code: b.postal_code || '',
           website: b.website || '',
-          plan: b.plan || 'basic',
+          plan: b.plan || 'starter',
           status: b.status || 'active',
           max_users: b.max_users || 5,
           max_clients: b.max_clients || 100,
           max_policies: b.max_policies || 500,
         });
+        setSelectedFeatures(new Set(b.features || []));
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al cargar broker');
@@ -125,6 +129,15 @@ const MasterBrokerEditPage: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const toggleFeature = (key: string) => {
+    setSelectedFeatures(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -132,8 +145,16 @@ const MasterBrokerEditPage: React.FC = () => {
     setSuccess('');
 
     try {
-      setSuccess('Broker actualizado correctamente');
-      setTimeout(() => navigate('/master-panel/brokers'), 1500);
+      const response = await masterPanelService.updateBroker(Number(id), {
+        ...formData,
+        features: Array.from(selectedFeatures),
+      });
+      if (response.success) {
+        setSuccess('Broker actualizado correctamente');
+        setTimeout(() => navigate('/master-panel/brokers'), 1500);
+      } else {
+        setError(response.message || 'Error al guardar');
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al guardar');
     } finally {
@@ -231,11 +252,12 @@ const MasterBrokerEditPage: React.FC = () => {
                 </div>
                 <div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    broker.plan === 'pro' ? 'bg-purple-100 text-purple-700' :
-                    broker.plan === 'enterprise' ? 'bg-indigo-100 text-indigo-700' :
+                    broker.plan === 'professional' ? 'bg-blue-100 text-blue-700' :
+                    broker.plan === 'business' ? 'bg-purple-100 text-purple-700' :
+                    broker.plan === 'custom' ? 'bg-indigo-100 text-indigo-700' :
                     'bg-gray-100 text-gray-700'
                   }`}>
-                    {broker.plan?.toUpperCase() || 'BASIC'}
+                    {{ starter: 'Starter', professional: 'Professional', business: 'Business', custom: 'A tu medida' }[broker.plan || ''] || broker.plan?.toUpperCase() || 'STARTER'}
                   </span>
                   <p className="text-sm text-gray-500 mt-1">Plan Actual</p>
                 </div>
@@ -348,9 +370,10 @@ const MasterBrokerEditPage: React.FC = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="basic">Basic</SelectItem>
-                        <SelectItem value="pro">Pro</SelectItem>
-                        <SelectItem value="enterprise">Enterprise</SelectItem>
+                        <SelectItem value="starter">Starter</SelectItem>
+                        <SelectItem value="professional">Professional</SelectItem>
+                        <SelectItem value="business">Business</SelectItem>
+                        <SelectItem value="custom">A tu medida</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -379,6 +402,64 @@ const MasterBrokerEditPage: React.FC = () => {
                   <div className="space-y-2">
                     <Label htmlFor="max_policies">Máximo de Pólizas</Label>
                     <Input id="max_policies" name="max_policies" type="number" value={formData.max_policies} onChange={handleChange} />
+                  </div>
+                </div>
+
+                {/* Módulos / Features */}
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <IconifyIcon icon="solar:widget-5-bold" className="w-5 h-5 text-purple-600" />
+                      Módulos Activos ({selectedFeatures.size} de {MODULES.length})
+                    </h3>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedFeatures(new Set(MODULES.map(m => m.key)))}
+                      >
+                        Todos
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedFeatures(new Set())}
+                      >
+                        Ninguno
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {MODULES.map((mod) => {
+                      const active = selectedFeatures.has(mod.key);
+                      return (
+                        <button
+                          key={mod.key}
+                          type="button"
+                          onClick={() => toggleFeature(mod.key)}
+                          className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                            active
+                              ? 'border-purple-400 bg-purple-50 dark:bg-purple-900/20 dark:border-purple-600'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
+                            active ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+                          }`}>
+                            {active && <IconifyIcon icon="solar:check-read-linear" className="w-3.5 h-3.5" />}
+                          </div>
+                          <IconifyIcon icon={mod.icon} className={`w-5 h-5 flex-shrink-0 ${active ? 'text-purple-600' : 'text-gray-400'}`} />
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium truncate ${active ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
+                              {mod.name}
+                            </p>
+                            <p className="text-[11px] text-gray-400 truncate">{mod.description}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

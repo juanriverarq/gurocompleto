@@ -108,8 +108,9 @@ export const Customizer = () => {
                     : "dark:hover:bg-darkminisidebar "
                 }`}
                 onClick={() => {
-                  setActiveMode("light");
+                  document.documentElement.className = 'light';
                   try { localStorage.setItem('guro_active_mode', 'light'); } catch {}
+                  setActiveMode('light');
                 }}
               >
                 <span className="flex items-center">
@@ -129,8 +130,9 @@ export const Customizer = () => {
                     : "hover:bg-lightprimary hover:text-primary"
                 }`}
                 onClick={() => {
-                  setActiveMode("dark");
+                  document.documentElement.className = 'dark';
                   try { localStorage.setItem('guro_active_mode', 'dark'); } catch {}
+                  setActiveMode('dark');
                 }}
               >
                 <span className="flex items-center">

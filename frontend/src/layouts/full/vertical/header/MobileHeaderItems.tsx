@@ -13,9 +13,10 @@ const MobileHeaderItems = () => {
   const { activeMode, setActiveMode } = useContext(CustomizerContext);
 
   const toggleMode = () => {
-    setActiveMode((prevMode: string) =>
-      prevMode === "light" ? "dark" : "light"
-    );
+    const newMode = activeMode === "light" ? "dark" : "light";
+    document.documentElement.className = newMode;
+    try { localStorage.setItem('guro_active_mode', newMode); } catch {}
+    setActiveMode(newMode);
   };
   return (
     <Navbar

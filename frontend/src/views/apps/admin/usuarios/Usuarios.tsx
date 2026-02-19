@@ -17,7 +17,9 @@ import { Icon } from '@iconify/react';
 import { useEmpleadosBroker, useRolesBroker } from 'src/hooks/useAdminCrudApi';
 import type { EmpleadoBroker as EmpleadoBrokerType, EmpleadoBrokerCreate } from 'src/types/admin';
 import { usePagePermissions, PermissionButton } from 'src/components/PermissionGate';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import { Progress } from 'flowbite-react';
 
 const tiposDocumento = [
   { value: 'cedula', label: 'Cédula de Ciudadanía' },
@@ -42,7 +44,9 @@ const tiposVinculacion = [
 
 const Usuarios = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentRoute = location.pathname;
+  const { tenant } = useUnifiedAuth();
 
   // Verificar permisos para esta página
   const { canView, canCreate, canEdit } = usePagePermissions(currentRoute);
@@ -50,6 +54,13 @@ const Usuarios = () => {
   const { empleados, loading, error, createEmpleado, updateEmpleado, deleteEmpleado } =
     useEmpleadosBroker();
   const { roles } = useRolesBroker();
+
+  // Límite de usuarios
+  const maxUsers = (tenant as any)?.max_users || 5;
+  const activeUsers = empleados.filter(e => e.estado === 'activo').length + 1; // +1 por el usuario MASTER
+  const remainingUsers = Math.max(maxUsers - activeUsers, 0);
+  const usagePercent = Math.min((activeUsers / maxUsers) * 100, 100);
+  const limitReached = activeUsers >= maxUsers;
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<EmpleadoBrokerType | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -81,6 +92,7 @@ const Usuarios = () => {
   });
 
   const handleCreate = () => {
+    if (limitReached) return;
     setSelectedItem(null);
     setIsEditing(false);
     setFormData({
@@ -249,16 +261,59 @@ const Usuarios = () => {
               Administra los empleados y sus accesos al sistema.
             </p>
           </div>
-          <PermissionButton
-            route={currentRoute}
-            action="crear"
-            onClick={handleCreate}
-            variant="primary"
-            icon={<Icon icon="solar:add-circle-bold-duotone" width={20} />}
-          >
-            Nuevo Usuario
-          </PermissionButton>
+          {limitReached ? (
+            <Button color="gray" disabled className="opacity-60 cursor-not-allowed">
+              <Icon icon="solar:lock-keyhole-bold" width={18} className="mr-2" />
+              Límite alcanzado
+            </Button>
+          ) : (
+            <PermissionButton
+              route={currentRoute}
+              action="crear"
+              onClick={handleCreate}
+              variant="primary"
+              icon={<Icon icon="solar:add-circle-bold-duotone" width={20} />}
+            >
+              Nuevo Usuario
+            </PermissionButton>
+          )}
         </div>
+
+        {/* Indicador de uso de usuarios */}
+        <Card className="mb-4 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Icon icon="solar:users-group-rounded-bold-duotone" height={20} className="text-primary" />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white">Usuarios</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-gray-900 dark:text-white">{activeUsers}</span>
+              <span className="text-sm text-gray-500">/ {maxUsers}</span>
+              {remainingUsers > 0 ? (
+                <Badge color="info" size="sm">{remainingUsers} disponibles</Badge>
+              ) : (
+                <Badge color="failure" size="sm">Sin cupos</Badge>
+              )}
+            </div>
+          </div>
+          <Progress
+            progress={usagePercent}
+            size="sm"
+            color={usagePercent >= 100 ? 'red' : usagePercent >= 80 ? 'yellow' : 'blue'}
+          />
+          {limitReached && (
+            <div className="mt-3 flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Icon icon="solar:danger-triangle-bold" className="text-red-500" height={16} />
+                <span className="text-sm text-red-600 dark:text-red-400">Has alcanzado el límite de usuarios de tu plan.</span>
+              </div>
+              <Button size="xs" color="purple" onClick={() => navigate('/comenzar')}>
+                <Icon icon="solar:rocket-bold" className="mr-1" height={14} />
+                Ampliar plan
+              </Button>
+            </div>
+          )}
+        </Card>
 
         {error && (
           <Alert color="failure" className="mb-4">
@@ -269,65 +324,60 @@ const Usuarios = () => {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
-          <Table hoverable>
-            <Table.Head>
-              <Table.HeadCell>Empleado</Table.HeadCell>
-              <Table.HeadCell>Contacto</Table.HeadCell>
-              <Table.HeadCell>Cargo</Table.HeadCell>
-              <Table.HeadCell>Rol</Table.HeadCell>
-              <Table.HeadCell>Estado</Table.HeadCell>
-              <Table.HeadCell>Acceso</Table.HeadCell>
-              <Table.HeadCell>Acciones</Table.HeadCell>
-            </Table.Head>
-            <Table.Body>
+        <div className="guro-table-wrap">
+          <table className="guro-table">
+            <thead>
+              <tr>
+                <th>Empleado</th>
+                <th>Contacto</th>
+                <th>Cargo</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Acceso</th>
+                <th className="sticky-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
               {empleados.map((empleado) => (
-                <Table.Row
-                  key={empleado.id}
-                  className="bg-white dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <Table.Cell>
+                <tr key={empleado.id} className="group">
+                  <td>
                     <div>
-                      <div className="font-medium text-gray-900 dark:text-white">
-                        {empleado.nombres} {empleado.apellidos}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {empleado.numero_documento} • @{empleado.usuario}
-                      </div>
+                      <div className="font-medium">{empleado.nombres} {empleado.apellidos}</div>
+                      <div className="text-xs text-gray-500">{empleado.numero_documento} • @{empleado.usuario}</div>
                     </div>
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     <div className="text-sm">
                       <div>📧 {empleado.email}</div>
                       {empleado.celular && <div>📱 {empleado.celular}</div>}
                       {empleado.telefono && <div>📞 {empleado.telefono}</div>}
                     </div>
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     <div className="text-sm">
                       <div className="font-medium">{empleado.cargo || 'Sin cargo'}</div>
                       {empleado.departamento && (
                         <div className="text-gray-500">{empleado.departamento}</div>
                       )}
                     </div>
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     {empleado.rol ? (
                       <Badge color="info">{empleado.rol.nombre}</Badge>
                     ) : (
                       <span className="text-gray-500">Sin rol</span>
                     )}
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     <Badge color={getEstadoBadgeColor(empleado.estado)}>{empleado.estado}</Badge>
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     <Badge color={empleado.acceso_activo ? 'success' : 'failure'}>
                       {empleado.acceso_activo ? 'Activo' : 'Bloqueado'}
                     </Badge>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex gap-2">
+                  </td>
+                  <td className="sticky-right">
+                    <div className="flex gap-2 justify-center">
                       <PermissionButton
                         route={currentRoute}
                         action="editar"
@@ -351,25 +401,21 @@ const Usuarios = () => {
                         Eliminar
                       </PermissionButton>
                     </div>
-                  </Table.Cell>
-                </Table.Row>
+                  </td>
+                </tr>
               ))}
               {empleados.length === 0 && (
-                <Table.Row>
-                  <Table.Cell colSpan={7} className="text-center py-8">
+                <tr>
+                  <td colSpan={7} className="text-center py-8">
                     <div className="flex flex-col items-center justify-center text-gray-500">
-                      <Icon
-                        icon="solar:users-group-two-rounded-bold-duotone"
-                        width={48}
-                        className="mb-2"
-                      />
+                      <Icon icon="solar:users-group-two-rounded-bold-duotone" width={48} className="mb-2" />
                       <p>No hay usuarios registrados</p>
                     </div>
-                  </Table.Cell>
-                </Table.Row>
+                  </td>
+                </tr>
               )}
-            </Table.Body>
-          </Table>
+            </tbody>
+          </table>
         </div>
       </Card>
 

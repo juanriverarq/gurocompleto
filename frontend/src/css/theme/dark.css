@@ -3,7 +3,13 @@
 }
 
 .dark:root {
-    --color-surface-ld: #1A2537;
+    --color-surface-ld: #1c1c1c;
+    --color-dark: #0f0f0f;
+    --color-darkgray: #1c1c1c;
+    --color-darkborder: #2a2a2a;
+    --color-darkmuted: #1a1a1a;
+    --color-darklink: #1a1a1a;
+    --color-sky: #0a0a0a;
 }
 
 .dark .timeline-tabs .timeline .timeline-icon:after {

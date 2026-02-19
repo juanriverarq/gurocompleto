@@ -1,9 +1,10 @@
-import { Flowbite, ThemeModeScript } from 'flowbite-react';
+import { Flowbite } from 'flowbite-react';
 import customTheme from './utils/theme/custom-theme';
 import router from './routes/Router';
 import { RouterProvider } from 'react-router';
 import { Toaster } from './components/shadcn-ui/Default-Ui/toaster';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useContext } from 'react';
+import { CustomizerContext } from './context/CustomizerContext';
 import Spinner from './views/spinner/Spinner';
 
 // Lazy load del AuthProvider para diferir la carga de Firebase
@@ -18,14 +19,15 @@ const LazyWhatsAppNotificationProvider = lazy(() =>
 );
 
 function App() {
+  const { activeMode } = useContext(CustomizerContext);
+
   return (
     <>
-      <ThemeModeScript />
       <Suspense fallback={<Spinner />}>
         <LazyAuthProvider>
           <LazyTerminologiaProvider>
             <LazyWhatsAppNotificationProvider>
-              <Flowbite theme={{ theme: customTheme }}>
+              <Flowbite theme={{ theme: customTheme, mode: activeMode as 'light' | 'dark' }}>
                 <RouterProvider router={router} />
               </Flowbite>
             </LazyWhatsAppNotificationProvider>

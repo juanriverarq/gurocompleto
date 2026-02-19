@@ -21,6 +21,14 @@ import {
 } from '../../components/shadcn-ui/Default-Ui/dialog';
 import { Icon as IconifyIcon } from '@iconify/react';
 import masterPanelService from '../../services/masterPanelService';
+import { MODULES } from '../../components/landingpage/pricing-calculator/modules';
+
+const PLAN_PRESETS: Record<string, string[]> = {
+  starter: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','crm','cartera'],
+  professional: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','crm','cartera','whatsapp','email','miniweb','ia_chatbot','lector_pdf_ia'],
+  business: MODULES.map(m => m.key),
+  custom: [],
+};
 
 const MasterBrokerDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -42,7 +50,10 @@ const MasterBrokerDetailPage: React.FC = () => {
     users_count: '',
     storage_gb: '',
     plan: '',
+    broker_status: '',
+    trial_ends_at: '',
   });
+  const [subFeatures, setSubFeatures] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (id) loadData();
@@ -63,31 +74,40 @@ const MasterBrokerDetailPage: React.FC = () => {
   };
 
   const openSubscriptionModal = () => {
-    if (data?.subscription) {
-      setSubscriptionForm({
-        status: data.subscription.status || '',
-        period: data.subscription.period || '',
-        monthly_amount: data.subscription.totals?.monthly?.toString() || data.subscription.totals?.total?.toString() || '',
-        current_period_end: data.subscription.current_period_end ? new Date(data.subscription.current_period_end).toISOString().split('T')[0] : '',
-        users_count: data.subscription.users_count?.toString() || '',
-        storage_gb: data.subscription.storage_gb?.toString() || '',
-        plan: data.broker.plan || '',
-      });
-    }
+    const b = data?.broker;
+    setSubscriptionForm({
+      status: data?.subscription?.status || 'active',
+      period: data?.subscription?.period || 'monthly',
+      monthly_amount: data?.subscription?.totals?.monthly?.toString() || data?.subscription?.totals?.total?.toString() || '0',
+      current_period_end: data?.subscription?.current_period_end ? new Date(data.subscription.current_period_end).toISOString().split('T')[0] : '',
+      users_count: data?.subscription?.users_count?.toString() || b?.max_users?.toString() || '5',
+      storage_gb: data?.subscription?.storage_gb?.toString() || '10',
+      plan: b?.plan || 'starter',
+      broker_status: b?.status || 'trial',
+      trial_ends_at: b?.trial_ends_at ? new Date(b.trial_ends_at).toISOString().split('T')[0] : '',
+    });
+    setSubFeatures(new Set(b?.features || []));
     setShowSubscriptionModal(true);
   };
 
   const handleSubscriptionUpdate = async () => {
     setSubscriptionLoading(true);
     try {
-      const updateData: any = {};
-      if (subscriptionForm.status) updateData.status = subscriptionForm.status;
-      if (subscriptionForm.period) updateData.period = subscriptionForm.period;
+      const updateData: any = {
+        status: subscriptionForm.status,
+        period: subscriptionForm.period,
+        plan: subscriptionForm.plan,
+        broker_status: subscriptionForm.broker_status,
+        features: Array.from(subFeatures),
+        max_users: parseInt(subscriptionForm.users_count) || 5,
+      };
       if (subscriptionForm.monthly_amount) updateData.monthly_amount = parseFloat(subscriptionForm.monthly_amount);
       if (subscriptionForm.current_period_end) updateData.current_period_end = subscriptionForm.current_period_end;
       if (subscriptionForm.users_count) updateData.users_count = parseInt(subscriptionForm.users_count);
       if (subscriptionForm.storage_gb) updateData.storage_gb = parseInt(subscriptionForm.storage_gb);
-      if (subscriptionForm.plan) updateData.plan = subscriptionForm.plan;
+      updateData.trial_ends_at = subscriptionForm.broker_status === 'trial' && subscriptionForm.trial_ends_at
+        ? subscriptionForm.trial_ends_at
+        : null;
 
       const response = await masterPanelService.updateBrokerSubscription(Number(id), updateData);
       if (response.success) {
@@ -828,7 +848,7 @@ const MasterBrokerDetailPage: React.FC = () => {
                   <div className="space-y-4">
                     <div className="text-center p-6 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl">
                       <IconifyIcon icon="solar:crown-bold-duotone" className="w-12 h-12 mx-auto text-yellow-600 mb-2" />
-                      <p className="text-2xl font-bold uppercase">{broker.plan || 'Basic'}</p>
+                      <p className="text-2xl font-bold uppercase">{({ starter: 'Starter', professional: 'Professional', business: 'Business', custom: 'A tu medida' } as Record<string, string>)[broker.plan || ''] || broker.plan || 'Starter'}</p>
                       <p className="text-sm text-gray-500 mt-1">
                         {data.subscription.period === 'monthly' ? 'Mensual' : 'Anual'}
                       </p>
@@ -1001,95 +1021,196 @@ const MasterBrokerDetailPage: React.FC = () => {
 
       {/* Subscription Modal */}
       <Dialog open={showSubscriptionModal} onOpenChange={setShowSubscriptionModal}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <IconifyIcon icon="solar:crown-bold-duotone" className="w-5 h-5 text-yellow-600" />
-              Modificar Suscripción
+              Gestión de Plan — {broker?.name}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Plan</Label>
-                <select
-                  value={subscriptionForm.plan}
-                  onChange={(e) => setSubscriptionForm({...subscriptionForm, plan: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
-                >
-                  <option value="basic">Basic</option>
-                  <option value="pro">Pro</option>
-                  <option value="enterprise">Enterprise</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>Estado</Label>
-                <select
-                  value={subscriptionForm.status}
-                  onChange={(e) => setSubscriptionForm({...subscriptionForm, status: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
-                >
-                  <option value="active">Activo</option>
-                  <option value="trialing">En Trial</option>
-                  <option value="canceled">Cancelado</option>
-                  <option value="incomplete">Incompleto</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Periodicidad</Label>
-                <select
-                  value={subscriptionForm.period}
-                  onChange={(e) => setSubscriptionForm({...subscriptionForm, period: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
-                >
-                  <option value="monthly">Mensual</option>
-                  <option value="annual">Anual</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>Monto a Cobrar (COP)</Label>
-                <Input
-                  type="number"
-                  value={subscriptionForm.monthly_amount}
-                  onChange={(e) => setSubscriptionForm({...subscriptionForm, monthly_amount: e.target.value})}
-                  placeholder="0"
-                />
+          <div className="space-y-5">
+
+            {/* Estado del Broker */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+              <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <IconifyIcon icon="solar:shield-check-bold" className="w-4 h-4 text-green-600" />
+                Estado del Broker
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Estado</Label>
+                  <select
+                    value={subscriptionForm.broker_status}
+                    onChange={(e) => setSubscriptionForm({...subscriptionForm, broker_status: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-lg text-sm dark:bg-gray-900 dark:border-gray-700"
+                  >
+                    <option value="active">Activo</option>
+                    <option value="trial">Trial</option>
+                    <option value="suspended">Suspendido</option>
+                    <option value="inactive">Inactivo</option>
+                  </select>
+                </div>
+                {subscriptionForm.broker_status === 'trial' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Fin del Trial</Label>
+                    <Input
+                      type="date"
+                      value={subscriptionForm.trial_ends_at}
+                      onChange={(e) => setSubscriptionForm({...subscriptionForm, trial_ends_at: e.target.value})}
+                      className="text-sm"
+                    />
+                  </div>
+                )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Usuarios Permitidos</Label>
-                <Input
-                  type="number"
-                  value={subscriptionForm.users_count}
-                  onChange={(e) => setSubscriptionForm({...subscriptionForm, users_count: e.target.value})}
-                  placeholder="1"
-                />
+
+            {/* Plan y Facturación */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+              <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <IconifyIcon icon="solar:crown-bold" className="w-4 h-4 text-yellow-600" />
+                Plan y Facturación
+              </h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Plan</Label>
+                  <select
+                    value={subscriptionForm.plan}
+                    onChange={(e) => {
+                      const plan = e.target.value;
+                      setSubscriptionForm({...subscriptionForm, plan});
+                      if (plan !== 'custom' && PLAN_PRESETS[plan]) {
+                        setSubFeatures(new Set(PLAN_PRESETS[plan]));
+                      }
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg text-sm dark:bg-gray-900 dark:border-gray-700"
+                  >
+                    <option value="starter">Starter</option>
+                    <option value="professional">Professional</option>
+                    <option value="business">Business</option>
+                    <option value="custom">A tu medida</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Periodicidad</Label>
+                  <select
+                    value={subscriptionForm.period}
+                    onChange={(e) => setSubscriptionForm({...subscriptionForm, period: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-lg text-sm dark:bg-gray-900 dark:border-gray-700"
+                  >
+                    <option value="monthly">Mensual</option>
+                    <option value="annual">Anual</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Estado Suscripción</Label>
+                  <select
+                    value={subscriptionForm.status}
+                    onChange={(e) => setSubscriptionForm({...subscriptionForm, status: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-lg text-sm dark:bg-gray-900 dark:border-gray-700"
+                  >
+                    <option value="active">Activo</option>
+                    <option value="trialing">En Trial</option>
+                    <option value="canceled">Cancelado</option>
+                    <option value="incomplete">Incompleto</option>
+                  </select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Almacenamiento (GB)</Label>
-                <Input
-                  type="number"
-                  value={subscriptionForm.storage_gb}
-                  onChange={(e) => setSubscriptionForm({...subscriptionForm, storage_gb: e.target.value})}
-                  placeholder="5"
-                />
+              <div className="grid grid-cols-4 gap-3 mt-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Monto Fijo (COP)</Label>
+                  <Input
+                    type="number"
+                    value={subscriptionForm.monthly_amount}
+                    onChange={(e) => setSubscriptionForm({...subscriptionForm, monthly_amount: e.target.value})}
+                    placeholder="0"
+                    className="text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Usuarios</Label>
+                  <Input
+                    type="number"
+                    value={subscriptionForm.users_count}
+                    onChange={(e) => setSubscriptionForm({...subscriptionForm, users_count: e.target.value})}
+                    placeholder="5"
+                    className="text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Storage (GB)</Label>
+                  <Input
+                    type="number"
+                    value={subscriptionForm.storage_gb}
+                    onChange={(e) => setSubscriptionForm({...subscriptionForm, storage_gb: e.target.value})}
+                    placeholder="10"
+                    className="text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Próximo Cobro</Label>
+                  <Input
+                    type="date"
+                    value={subscriptionForm.current_period_end}
+                    onChange={(e) => setSubscriptionForm({...subscriptionForm, current_period_end: e.target.value})}
+                    className="text-sm"
+                  />
+                </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Próximo Cobro</Label>
-              <Input
-                type="date"
-                value={subscriptionForm.current_period_end}
-                onChange={(e) => setSubscriptionForm({...subscriptionForm, current_period_end: e.target.value})}
-              />
+
+            {/* Módulos */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <IconifyIcon icon="solar:widget-5-bold" className="w-4 h-4 text-purple-600" />
+                  Módulos ({subFeatures.size})
+                </h4>
+                <div className="flex gap-1.5">
+                  <button type="button" onClick={() => setSubFeatures(new Set(MODULES.map(m => m.key)))}
+                    className="px-2 py-1 text-[10px] font-medium bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                    Todos
+                  </button>
+                  <button type="button" onClick={() => setSubFeatures(new Set())}
+                    className="px-2 py-1 text-[10px] font-medium bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                    Ninguno
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-[200px] overflow-y-auto">
+                {MODULES.map((mod) => {
+                  const active = subFeatures.has(mod.key);
+                  return (
+                    <button
+                      key={mod.key}
+                      type="button"
+                      onClick={() => {
+                        setSubFeatures(prev => {
+                          const next = new Set(prev);
+                          if (next.has(mod.key)) next.delete(mod.key);
+                          else next.add(mod.key);
+                          return next;
+                        });
+                      }}
+                      className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all text-xs ${
+                        active
+                          ? 'border-purple-400 bg-purple-50 dark:bg-purple-900/20 dark:border-purple-600'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0 ${
+                        active ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+                      }`}>
+                        {active && <IconifyIcon icon="solar:check-read-linear" className="w-2.5 h-2.5" />}
+                      </div>
+                      <span className={`truncate ${active ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500'}`}>
+                        {mod.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-sm text-yellow-700 dark:text-yellow-400">
-              <IconifyIcon icon="solar:info-circle-bold" className="w-4 h-4 inline mr-1" />
-              Los cambios en el monto aplicarán desde el próximo ciclo de facturación.
-            </div>
+
             <Button onClick={handleSubscriptionUpdate} disabled={subscriptionLoading} className="w-full">
               {subscriptionLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>}
               Guardar Cambios
