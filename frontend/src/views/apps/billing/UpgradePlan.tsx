@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import guroToast from 'src/components/GuroToast/GuroToast';
 import { Icon } from '@iconify/react';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import { MODULES, calculateTotals, numberFormat, ModuleKey, BillingPeriod } from 'src/components/landingpage/pricing-calculator/modules';
@@ -120,7 +121,7 @@ const UpgradePlan = () => {
       }
     } catch (e: any) {
       console.error('Error al procesar pago:', e);
-      alert(e?.response?.data?.message || e?.message || 'Error al procesar el pago. Intenta nuevamente.');
+      guroToast.error('Error de pago', e?.response?.data?.message || e?.message || 'Error al procesar el pago. Intenta nuevamente.');
     } finally {
       setIsLoading(false);
     }

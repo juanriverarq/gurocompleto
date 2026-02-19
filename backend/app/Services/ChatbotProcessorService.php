@@ -419,18 +419,39 @@ class ChatbotProcessorService
         
         // Preparar variables incluyendo estado interno
         $variables = $session['variables'] ?? [];
+        
+        // Sincronizar estado de opciones (guardar o limpiar)
         if (!empty($session['expected_options'])) {
             $variables['_expected_options'] = $session['expected_options'];
+        } else {
+            unset($variables['_expected_options']);
         }
         if (!empty($session['expected_buttons'])) {
             $variables['_expected_buttons'] = $session['expected_buttons'];
+        } else {
+            unset($variables['_expected_buttons']);
         }
         if (!empty($session['expected_sections'])) {
             $variables['_expected_sections'] = $session['expected_sections'];
+        } else {
+            unset($variables['_expected_sections']);
         }
         if (!empty($session['interactive_type'])) {
             $variables['_interactive_type'] = $session['interactive_type'];
+        } else {
+            unset($variables['_interactive_type']);
         }
+        if (!empty($session['options_node_id'])) {
+            $variables['_options_node_id'] = $session['options_node_id'];
+        } else {
+            unset($variables['_options_node_id']);
+        }
+        if (!empty($session['options_error_message'])) {
+            $variables['_options_error_message'] = $session['options_error_message'];
+        } else {
+            unset($variables['_options_error_message']);
+        }
+        
         // Campos para nodo de entrada de datos
         if (!empty($session['waiting_for_input'])) {
             $variables['_waiting_for_input'] = true;
@@ -438,12 +459,12 @@ class ChatbotProcessorService
             $variables['_input_validation'] = $session['input_validation'] ?? null;
             $variables['_input_node_id'] = $session['input_node_id'] ?? null;
             $variables['_input_contact_field'] = $session['input_contact_field'] ?? null;
-        }
-        if (!empty($session['options_node_id'])) {
-            $variables['_options_node_id'] = $session['options_node_id'];
-        }
-        if (!empty($session['options_error_message'])) {
-            $variables['_options_error_message'] = $session['options_error_message'];
+        } else {
+            unset($variables['_waiting_for_input']);
+            unset($variables['_input_variable_name']);
+            unset($variables['_input_validation']);
+            unset($variables['_input_node_id']);
+            unset($variables['_input_contact_field']);
         }
 
         $status = ($session['waiting_for_response'] ?? false) 
@@ -638,6 +659,14 @@ class ChatbotProcessorService
                     ]);
                     $response = $text;
                     
+                    // Limpiar estado de opciones previas para que no interfieran
+                    $session['expected_options'] = null;
+                    $session['expected_buttons'] = null;
+                    $session['expected_sections'] = null;
+                    $session['interactive_type'] = null;
+                    $session['options_node_id'] = null;
+                    $session['options_error_message'] = null;
+                    
                     // Marcar que esperamos entrada de datos
                     $session['waiting_for_response'] = true;
                     $session['waiting_for_input'] = true;
@@ -720,9 +749,21 @@ class ChatbotProcessorService
 
             case 'end':
                 // Fin del flujo
-                $endMessage = $config['message'] ?? null;
+                $endMessage = $config['goodbye_message'] ?? $config['text'] ?? $config['message'] ?? null;
                 if ($endMessage) {
-                    $this->bridge->sendMessage($instanceId, $phone, $endMessage);
+                    $endMessage = $this->replaceVariables($endMessage, $session['variables']);
+                    $result = $this->bridge->sendMessage($instanceId, $phone, $endMessage);
+                    if ($result['success']) {
+                        $conversation->addMessage([
+                            'message_id' => $result['messageId'] ?? null,
+                            'direction' => 'outgoing',
+                            'sender_type' => 'bot',
+                            'message_type' => 'text',
+                            'content' => $endMessage,
+                            'status' => 'sent',
+                        ]);
+                        $response = $endMessage;
+                    }
                 }
                 $stop = true;
                 break;

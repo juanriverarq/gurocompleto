@@ -11,9 +11,19 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Services\WhatsAppCloudApiService;
+use App\Http\Middleware\UnifiedAuthMiddleware;
+use App\Models\EmpleadoBroker;
 
 class WhatsAppInstanceController extends Controller
 {
+    private function resolveUserAndBroker(Request $request): array
+    {
+        $user = UnifiedAuthMiddleware::getAuthenticatedUser($request);
+        if (!$user) return [null, null];
+        $broker = ($user instanceof EmpleadoBroker) ? $user->broker : $user->getPrimaryBroker();
+        return [$user, $broker];
+    }
+
     private string $whatsappMicroserviceUrl;
 
     public function __construct()
@@ -27,8 +37,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function index(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker) {
             return response(['error' => 'No broker found for user'], 404);
@@ -46,8 +55,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function store(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker) {
             return response(['error' => 'No broker found for user'], 404);
@@ -228,8 +236,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function embeddedSignup(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
 
         if (!$broker) {
             return response(['error' => 'No broker found for user'], 404);
@@ -414,8 +421,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function show(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
@@ -429,8 +435,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function update(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
@@ -451,8 +456,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function destroy(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
@@ -477,8 +481,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function getQrCode(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
@@ -550,8 +553,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function getStatus(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
@@ -718,8 +720,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function restart(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
@@ -754,8 +755,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function disconnect(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
@@ -785,8 +785,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function refreshAllStatuses(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker) {
             return response(['error' => 'No broker found for user'], 404);
@@ -916,8 +915,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function sendCloudApiMessage(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
@@ -975,8 +973,7 @@ class WhatsAppInstanceController extends Controller
      */
     public function testCloudApiConnection(Request $request, WhatsAppInstance $whatsAppInstance): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker] = $this->resolveUserAndBroker($request);
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);

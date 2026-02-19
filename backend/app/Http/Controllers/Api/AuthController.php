@@ -406,7 +406,7 @@ class AuthController extends Controller
             $broker = Broker::create(array_merge($validator->validated(), [
                 'owner_id' => $user->id,
                 'status' => 'trial',
-                'plan' => 'basic',
+                'plan' => 'starter',
                 'country' => $request->country ?? 'Colombia',
                 // Cambiado a 7 días de prueba
                 'trial_ends_at' => now()->addDays(7),

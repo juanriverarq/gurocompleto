@@ -11,6 +11,7 @@ use Kreait\Firebase\Contract\Storage as FirebaseStorageContract;
 
 class InternalDocumentsController extends Controller
 {
+    use \App\Traits\ChecksStorageLimit;
     public function __construct(private FirebaseStorageContract $firebaseStorage) {}
 
     private function getBrokerId(Request $request)
@@ -148,6 +149,13 @@ class InternalDocumentsController extends Controller
                 return response()->json(['success' => false, 'message' => 'No se pudo acceder al almacenamiento'], 500);
             }
             
+            // Verificar límite de almacenamiento
+            $uploadSize = 0;
+            if ($request->hasFile('file')) $uploadSize += $request->file('file')->getSize();
+            if ($request->hasFile('files')) foreach ($request->file('files') as $f) $uploadSize += $f->getSize();
+            $storageCheck = $this->checkStorageLimit($brokerId, $uploadSize);
+            if ($storageCheck) return $storageCheck;
+
             $files = [];
             if ($request->hasFile('file')) $files[] = $request->file('file');
             if ($request->hasFile('files')) foreach ($request->file('files') as $f) $files[] = $f;

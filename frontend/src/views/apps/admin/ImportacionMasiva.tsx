@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Button, Select, Badge, Table, Alert, Progress } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import * as XLSX from 'xlsx';
 import {
   getMeta,
   dryRunImport,
@@ -229,6 +230,19 @@ const ImportacionMasiva: React.FC = () => {
     a.download = `plantilla_${normalize(ent)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadXlsxTemplate = (ent: string) => {
+    const cols = templateColumns[normalize(ent)] || [];
+    if (!cols.length) return;
+    const rows = templateSamples[normalize(ent)] || [];
+    const data = [cols, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    // Auto-size columns
+    ws['!cols'] = cols.map((c) => ({ wch: Math.max(c.length + 2, 14) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, normalize(ent));
+    XLSX.writeFile(wb, `plantilla_${normalize(ent)}.xlsx`);
   };
 
   // Helpers: normalización y sinónimos para autocompletar mapeo
@@ -985,16 +999,14 @@ const ImportacionMasiva: React.FC = () => {
                         <Icon icon="solar:document-text-bold" className="w-4 h-4 mr-2" />
                         Plantilla CSV
                       </Button>
-                      <a
-                        href={`${import.meta.env.VITE_API_URL || 'http://localhost:8081/api'}/saas/imports/template?entity=${entity}&format=xlsx`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <Button
+                        size="sm"
+                        color="light"
+                        onClick={() => downloadXlsxTemplate(entity)}
                       >
-                        <Button size="sm" color="light">
-                          <Icon icon="solar:document-bold" className="w-4 h-4 mr-2" />
-                          Plantilla XLSX
-                        </Button>
-                      </a>
+                        <Icon icon="solar:document-bold" className="w-4 h-4 mr-2" />
+                        Plantilla XLSX
+                      </Button>
                     </div>
                   </div>
 

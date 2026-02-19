@@ -6,6 +6,7 @@ import Spinner from './views/spinner/Spinner.tsx'
 import { CustomizerContextProvider } from './context/CustomizerContext.tsx'
 import './utils/i18n';
 import { DashboardContextProvider } from './context/DashboardContext/DashboardContext.tsx'
+import { trackAIReferral } from './utils/analytics'
 
 /**
  * Fuerza que los tooltips (Flowbite/Tippy/Floating-UI) se rendericen fuera de contenedores
@@ -88,6 +89,9 @@ async function deferRender(){
 deferRender().then(() => {
   // Asegurar tooltips por delante de todo en toda la app
   setupGlobalTooltipPortal();
+
+  // Detectar y registrar tráfico proveniente de LLMs/AI search (ChatGPT, Perplexity, etc.)
+  trackAIReferral();
 
   createRoot(document.getElementById('root')!).render(
     <DashboardContextProvider>

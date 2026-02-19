@@ -659,9 +659,12 @@ class WhatsAppWebhookController extends Controller
                 ], 404);
             }
 
-            // Buscar o crear la conversación
+            // Buscar la conversación activa más reciente (priorizar activas sobre cerradas)
             $conversation = WhatsAppConversation::where('whatsapp_instance_id', $instance->id)
                 ->where('phone', $phone)
+                ->whereNotIn('status', ['closed'])
+                ->orderByRaw("CASE WHEN status = 'in_progress' THEN 0 WHEN status = 'assigned' THEN 1 ELSE 2 END")
+                ->orderBy('last_message_at', 'desc')
                 ->first();
 
             if (!$conversation) {
@@ -762,6 +765,9 @@ class WhatsAppWebhookController extends Controller
 
             $conversation = WhatsAppConversation::where('whatsapp_instance_id', $instance->id)
                 ->where('phone', $data['phone'])
+                ->whereNotIn('status', ['closed'])
+                ->orderByRaw("CASE WHEN status = 'in_progress' THEN 0 WHEN status = 'assigned' THEN 1 ELSE 2 END")
+                ->orderBy('last_message_at', 'desc')
                 ->first();
 
             if (!$conversation) return;
@@ -1019,21 +1025,15 @@ class WhatsAppWebhookController extends Controller
                 'content_preview' => substr($content, 0, 50)
             ]);
 
-            // Buscar o crear conversación
-            $conversation = WhatsAppConversation::firstOrCreate(
-                [
-                    'whatsapp_instance_id' => $instance->id,
-                    'phone' => $phone
-                ],
-                [
-                    'broker_id' => $instance->broker_id,
-                    'contact_name' => $contactName,
-                    'status' => 'pending',
-                    'last_message_at' => now()
-                ]
+            // Buscar o crear conversación (usar findOrCreateByPhone para excluir cerradas y priorizar activas)
+            $conversation = WhatsAppConversation::findOrCreateByPhone(
+                $instance->broker_id,
+                $instance->id,
+                $phone,
+                $contactName
             );
 
-            // Actualizar nombre si viene
+            // Actualizar contact_name si viene y no lo tiene
             if ($contactName && !$conversation->contact_name) {
                 $conversation->update(['contact_name' => $contactName]);
             }

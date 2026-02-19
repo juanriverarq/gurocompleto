@@ -79,6 +79,23 @@ class WhatsAppChatbotController extends Controller
                 return response()->json(['success' => false, 'message' => 'Broker no identificado'], 401);
             }
 
+            // Validar que no haya otro chatbot activo en la misma línea
+            if ($request->instance_id) {
+                $existingActive = Chatbot::forBroker($brokerId)
+                    ->where('instance_id', $request->instance_id)
+                    ->where('is_active', true)
+                    ->first();
+
+                if ($existingActive) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Ya existe un chatbot activo en esta línea: \"{$existingActive->name}\". Solo puede haber un chatbot activo por línea. Desactívalo primero.",
+                        'active_chatbot_id' => $existingActive->id,
+                        'active_chatbot_name' => $existingActive->name,
+                    ], 409);
+                }
+            }
+
             DB::beginTransaction();
 
             $chatbot = Chatbot::create([
@@ -214,6 +231,27 @@ class WhatsAppChatbotController extends Controller
         try {
             $brokerId = $this->getBrokerId($request);
             $chatbot = Chatbot::forBroker($brokerId)->findOrFail($id);
+
+            // Validar que no haya otro chatbot activo en la misma línea
+            $willBeActive = $request->has('is_active') ? $request->is_active : $chatbot->is_active;
+            $instanceId = $request->has('instance_id') ? $request->instance_id : $chatbot->instance_id;
+
+            if ($willBeActive && $instanceId) {
+                $existingActive = Chatbot::forBroker($brokerId)
+                    ->where('instance_id', $instanceId)
+                    ->where('is_active', true)
+                    ->where('id', '!=', $chatbot->id)
+                    ->first();
+
+                if ($existingActive) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Ya existe un chatbot activo en esta línea: \"{$existingActive->name}\". Solo puede haber un chatbot activo por línea. Desactívalo primero.",
+                        'active_chatbot_id' => $existingActive->id,
+                        'active_chatbot_name' => $existingActive->name,
+                    ], 409);
+                }
+            }
             
             $chatbot->update($request->only([
                 'name', 'description', 'instance_id', 'is_active',
@@ -552,12 +590,15 @@ class WhatsAppChatbotController extends Controller
         $validator = Validator::make($request->all(), [
             'nodes' => 'required|array',
             'nodes.*.id' => 'nullable|integer',
+            'nodes.*.temp_id' => 'nullable|string',
+            'nodes.*.temp_index' => 'nullable|integer',
             'nodes.*.node_type' => 'required|string',
             'nodes.*.name' => 'nullable|string|max:100',
             'nodes.*.position_x' => 'required|integer',
             'nodes.*.position_y' => 'required|integer',
             'nodes.*.config' => 'nullable|array',
             'nodes.*.next_node_id' => 'nullable|integer',
+            'nodes.*.next_node_index' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {
@@ -591,15 +632,52 @@ class WhatsAppChatbotController extends Controller
 
             // Actualizar conexiones (next_node_id) basándose en next_node_index
             foreach ($request->nodes as $index => $nodeData) {
+                $updates = [];
+                $configUpdated = false;
+                $config = $createdNodes[$index]->config ?? [];
+
+                // 1) Linear connection: next_node_index → next_node_id
                 if (isset($nodeData['next_node_index']) && isset($createdNodes[$nodeData['next_node_index']])) {
-                    $nextNodeId = $createdNodes[$nodeData['next_node_index']]->id;
-                    $createdNodes[$index]->update([
-                        'next_node_id' => $nextNodeId
-                    ]);
-                    Log::info("🔗 [CHATBOT] Conexión guardada", [
+                    $updates['next_node_id'] = $createdNodes[$nodeData['next_node_index']]->id;
+                }
+
+                // 2) Options: remap options[].next_node_index → options[].next_node_id
+                if (!empty($config['options']) && is_array($config['options'])) {
+                    foreach ($config['options'] as $optIdx => &$opt) {
+                        if (isset($opt['next_node_index']) && isset($createdNodes[$opt['next_node_index']])) {
+                            $opt['next_node_id'] = (string) $createdNodes[$opt['next_node_index']]->id;
+                            $configUpdated = true;
+                        }
+                        // Clean up temp field
+                        unset($opt['next_node_index']);
+                    }
+                    unset($opt);
+                }
+
+                // 3) Conditions: remap true_node_index/false_node_index → true_node_id/false_node_id
+                if (isset($config['true_node_index']) && isset($createdNodes[$config['true_node_index']])) {
+                    $config['true_node_id'] = (string) $createdNodes[$config['true_node_index']]->id;
+                    unset($config['true_node_index']);
+                    $configUpdated = true;
+                }
+                if (isset($config['false_node_index']) && isset($createdNodes[$config['false_node_index']])) {
+                    $config['false_node_id'] = (string) $createdNodes[$config['false_node_index']]->id;
+                    unset($config['false_node_index']);
+                    $configUpdated = true;
+                }
+
+                if ($configUpdated) {
+                    $updates['config'] = $config;
+                }
+
+                if (!empty($updates)) {
+                    $createdNodes[$index]->update($updates);
+                    Log::info("🔗 [CHATBOT] Conexiones guardadas", [
                         'node_id' => $createdNodes[$index]->id,
                         'node_type' => $createdNodes[$index]->node_type,
-                        'next_node_id' => $nextNodeId
+                        'next_node_id' => $updates['next_node_id'] ?? null,
+                        'options_remapped' => !empty($config['options']),
+                        'conditions_remapped' => isset($updates['config']['true_node_id']) || isset($updates['config']['false_node_id']),
                     ]);
                 }
             }

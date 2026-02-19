@@ -1,6 +1,5 @@
 import Navbar from './Navbar';
 import Hero from './Hero';
-import LogoStrip from './LogoStrip';
 import Features from './Features';
 import ToolsCarousel from './ToolsCarousel';
 import StatsMarquee from './StatsMarquee';
@@ -12,10 +11,9 @@ import Footer from './Footer';
 
 const FramerLanding = () => {
   return (
-    <div className="min-h-screen bg-white overflow-x-hidden" style={{ fontFamily: "'General Sans', sans-serif" }}>
+    <div className="light min-h-screen bg-white overflow-x-hidden" data-theme="light" style={{ fontFamily: "'General Sans', sans-serif", colorScheme: 'light' }}>
       <Navbar />
       <Hero />
-      <LogoStrip />
       <Features />
       <ToolsCarousel />
       <StatsMarquee />

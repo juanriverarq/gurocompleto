@@ -568,73 +568,77 @@ const WhatsAppConexiones: React.FC = () => {
       ) : (
         /* Table View */
         <Card>
-          <Table hoverable>
-            <Table.Head>
-              <Table.HeadCell>Conexión</Table.HeadCell>
-              <Table.HeadCell>Teléfono</Table.HeadCell>
-              <Table.HeadCell>Estado</Table.HeadCell>
-              <Table.HeadCell>Última Actividad</Table.HeadCell>
-              <Table.HeadCell className="text-right">Acciones</Table.HeadCell>
-            </Table.Head>
-            <Table.Body className="divide-y">
-              {instances.map((instance) => {
-                const connected = instance.status === 'connected' || instance.status === 'authenticated';
-                
-                return (
-                  <Table.Row key={instance.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                    <Table.Cell className="font-medium text-gray-900 dark:text-white">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${connected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
-                          <Icon 
-                            icon="solar:smartphone-bold-duotone" 
-                            className={connected ? 'text-green-500' : 'text-gray-400'} 
-                            width={20} 
-                          />
+          <div className="guro-table-wrap">
+            <table className="guro-table">
+              <thead>
+                <tr>
+                  <th>Conexión</th>
+                  <th>Teléfono</th>
+                  <th>Estado</th>
+                  <th>Última Actividad</th>
+                  <th className="sticky-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.map((instance) => {
+                  const connected = instance.status === 'connected' || instance.status === 'authenticated';
+                  
+                  return (
+                    <tr key={instance.id} className="group">
+                      <td className="font-medium">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${connected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                            <Icon 
+                              icon="solar:smartphone-bold-duotone" 
+                              className={connected ? 'text-green-500' : 'text-gray-400'} 
+                              width={20} 
+                            />
+                          </div>
+                          <div>
+                            <span className="block">Conexión {instance.instance_id?.split('_').slice(-1)[0]?.toUpperCase() || instance.id}</span>
+                            <span className="text-xs text-gray-400 font-mono">{instance.instance_id}</span>
+                          </div>
                         </div>
-                        <div>
-                          <span className="block">Conexión {instance.instance_id?.split('_').slice(-1)[0]?.toUpperCase() || instance.id}</span>
-                          <span className="text-xs text-gray-400 font-mono">{instance.instance_id}</span>
+                      </td>
+                      <td>{instance.phone_number || 'Sin número'}</td>
+                      <td>
+                        <Badge color={connected ? 'success' : 'gray'}>
+                          {getStatusText(instance.status)}
+                        </Badge>
+                      </td>
+                      <td className="text-sm text-gray-500">
+                        {instance.last_activity_at ? new Date(instance.last_activity_at).toLocaleString() : 'N/A'}
+                      </td>
+                      <td className="sticky-right">
+                        <div className="flex justify-center gap-2">
+                          <Button 
+                            size="xs" 
+                            color="light" 
+                            onClick={() => handleRefreshStatus(instance.id)}
+                            disabled={refreshingInstances.includes(instance.id)}
+                          >
+                            {refreshingInstances.includes(instance.id) ? (
+                              <Spinner size="xs" />
+                            ) : (
+                              <Icon icon="solar:refresh-bold" width={14} />
+                            )}
+                          </Button>
+                          <Button 
+                            size="xs" 
+                            color="light" 
+                            onClick={() => handleDeleteInstance(instance.id)}
+                            disabled={refreshingInstances.includes(instance.id)}
+                          >
+                            <Icon icon="solar:trash-bin-trash-bold" className="text-red-500" width={14} />
+                          </Button>
                         </div>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>{instance.phone_number || 'Sin número'}</Table.Cell>
-                    <Table.Cell>
-                      <Badge color={connected ? 'success' : 'gray'}>
-                        {getStatusText(instance.status)}
-                      </Badge>
-                    </Table.Cell>
-                    <Table.Cell className="text-sm text-gray-500">
-                      {instance.last_activity_at ? new Date(instance.last_activity_at).toLocaleString() : 'N/A'}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          size="xs" 
-                          color="light" 
-                          onClick={() => handleRefreshStatus(instance.id)}
-                          disabled={refreshingInstances.includes(instance.id)}
-                        >
-                          {refreshingInstances.includes(instance.id) ? (
-                            <Spinner size="xs" />
-                          ) : (
-                            <Icon icon="solar:refresh-bold" width={14} />
-                          )}
-                        </Button>
-                        <Button 
-                          size="xs" 
-                          color="light" 
-                          onClick={() => handleDeleteInstance(instance.id)}
-                          disabled={refreshingInstances.includes(instance.id)}
-                        >
-                          <Icon icon="solar:trash-bin-trash-bold" className="text-red-500" width={14} />
-                        </Button>
-                      </div>
-                    </Table.Cell>
-                  </Table.Row>
-                );
-              })}
-            </Table.Body>
-          </Table>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 

@@ -1,53 +1,53 @@
 import { useContext, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 import Miniicons from './MiniSidebar';
+import { getFilteredMenuItems } from './Sidebaritems';
 import SimpleBar from 'simplebar-react';
 import { Button, HR, Tooltip } from 'flowbite-react';
 import { Link } from 'react-router';
 import { CustomizerContext } from 'src/context/CustomizerContext';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import { useTerminologia } from 'src/context/TerminologiaContext';
 
 export const IconSidebar = () => {
   const { selectedIconId, setSelectedIconId, setIsCollapse, isCollapse } =
     useContext(CustomizerContext) || {};
-  const { canAccessModule } = useUnifiedAuth();
+  const { hasPermission, canAccessModule, isEmpleado, isModuleInPlan } = useUnifiedAuth();
+  const { terminologia } = useTerminologia();
 
-  // Mapeo de íconos a módulos que habilitan su visibilidad
-  const iconAccessMap: Record<number, string[]> = {
-    1: ['dashboard'],
-    2: ['clientes', 'polizas', 'siniestros', 'renovaciones', 'automoviles'],
-    3: ['embudo_ventas', 'seguimiento_comercial', 'metas_objetivos', 'analisis_rendimiento'],
-    4: ['cartera_clientes', 'comisiones', 'reportes_financieros'],
-    5: ['whatsapp_business', 'email_marketing', 'enlaces_cotizacion', 'mini_web'],
-    6: ['asistentes_ia', 'voice_ai', 'analytics_predictivo'],
-    7: ['documentos_clientes', 'documentos_poliza', 'documentos_siniestro', 'cumplimiento_legal'],
-    8: [
-      'gestion_usuarios',
-      'roles_permisos',
-      'informacion_agencia',
-      'sedes',
-      'aseguradoras',
-      'ramos',
-      'vendedores',
-      'coberturas',
-      'tipos_afiliacion',
-      'estados_siniestros',
-      'motivos_estados_poliza',
-      'mensajeros',
-      'configuracion_sistema',
-      'integraciones_externas',
-      'sincronizacion',
-    ],
-  };
-
+  // For employees: hide mini-sidebar icons for sections with zero visible pages.
+  // For owners/admins: show all icons so they can see ModuleGate blur+modal.
   const visibleIcons = useMemo(() => {
-    return Miniicons.filter((mi) => {
-      const modules = iconAccessMap[mi.id] || [];
+    if (!isEmpleado) return Miniicons;
 
-      if (modules.length === 0) return true;
-      return modules.some((m) => canAccessModule(m));
-    });
-  }, [canAccessModule]);
+    const filteredMenu = getFilteredMenuItems(hasPermission, canAccessModule, terminologia, isModuleInPlan);
+
+    // Map section names to mini-sidebar icon IDs
+    const sectionMap: Record<string, number> = {
+      'Inicio': 1,
+      'Seguros': 2,
+      'Comercial': 3,
+      'Finanzas': 4,
+      'Comunicaciones': 5,
+      'Inteligencia Artificial': 6,
+      'Documentos': 7,
+      'Configuración': 8,
+    };
+
+    // Determine which sections have at least one non-label item
+    const sectionsWithContent = new Set<number>();
+    sectionsWithContent.add(1); // Inicio always visible
+    let currentSectionId = 0;
+    for (const item of filteredMenu) {
+      if (item.navlabel) {
+        currentSectionId = sectionMap[item.subheader || ''] || 0;
+      } else if (currentSectionId) {
+        sectionsWithContent.add(currentSectionId);
+      }
+    }
+
+    return Miniicons.filter((icon) => sectionsWithContent.has(icon.id));
+  }, [isEmpleado, hasPermission, canAccessModule, terminologia, isModuleInPlan]);
 
   // Handle icon click
   const handleClick = (id: any) => {

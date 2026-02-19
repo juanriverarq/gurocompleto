@@ -13,6 +13,7 @@
 @import './override/reboot.css';
 @import './layouts/rtl.css';
 @import './polizas-form.css';
+@import './components/guro-table.css';
 
 @tailwind base;
 @tailwind components;
@@ -1118,6 +1119,18 @@ input[data-plate-input]:active {
   border: none !important;
 }
 
+/* ==== Animated gradient wave for wallet button ==== */
+@keyframes gradient-wave {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+/* animate-glow-pulse: gradient animation handled via inline styles in WalletWidget */
+
 /* ==== Animación para toast de WhatsApp ==== */
 @keyframes shrink-width {
   from {
@@ -1130,4 +1143,44 @@ input[data-plate-input]:active {
 
 .animate-shrink-width {
   animation: shrink-width linear forwards;
+}
+
+/* ==== Landing page: force light mode even when html.dark is active ==== */
+[data-theme="light"],
+[data-theme="light"] * {
+  color-scheme: light;
+}
+html.dark [data-theme="light"] label,
+html.dark [data-theme="light"] form label,
+.dark [data-theme="light"] label,
+.dark [data-theme="light"] form label {
+  color: inherit !important;
+}
+html.dark [data-theme="light"] input,
+html.dark [data-theme="light"] input:focus,
+html.dark [data-theme="light"] input:hover,
+html.dark [data-theme="light"] input:active,
+html.dark [data-theme="light"] form input,
+html.dark [data-theme="light"] form input:focus,
+html.dark [data-theme="light"] form input:hover,
+html.dark [data-theme="light"] form input:active,
+.dark [data-theme="light"] input,
+.dark [data-theme="light"] input:focus,
+.dark [data-theme="light"] input:hover,
+.dark [data-theme="light"] input:active {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+html.dark [data-theme="light"] select,
+html.dark [data-theme="light"] select:focus,
+html.dark [data-theme="light"] textarea,
+html.dark [data-theme="light"] textarea:focus,
+.dark [data-theme="light"] select,
+.dark [data-theme="light"] select:focus,
+.dark [data-theme="light"] textarea,
+.dark [data-theme="light"] textarea:focus {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
 }

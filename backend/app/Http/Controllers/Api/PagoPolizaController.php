@@ -945,19 +945,17 @@ class PagoPolizaController extends Controller
             $brokerId = $request->get('authenticated_broker_id');
             $numeroPoliza = trim($request->numero_poliza);
 
-            // Buscar la póliza por número exacto primero
+            // Buscar la póliza por número exacto primero (cualquier estado)
             $poliza = Poliza::where('broker_id', $brokerId)
                 ->where('policy_number', $numeroPoliza)
-                ->where('status', 'active')
                 ->first();
 
             $matchType = 'exacto';
 
-            // Si no se encuentra, buscar por últimos 5 dígitos
+            // Si no se encuentra, buscar por últimos 5 dígitos (cualquier estado)
             if (!$poliza && strlen($numeroPoliza) >= 5) {
                 $ultimos5 = substr($numeroPoliza, -5);
                 $polizasPosibles = Poliza::where('broker_id', $brokerId)
-                    ->where('status', 'active')
                     ->where('policy_number', 'LIKE', '%' . $ultimos5)
                     ->get();
 
@@ -1257,6 +1255,7 @@ class PagoPolizaController extends Controller
                         'exitosos' => $import->exitosos,
                         'fallidos' => $import->fallidos,
                         'monto_total_importado' => $import->monto_total_importado,
+                        'errores' => $import->errores ?? [],
                         'pagos_count' => $import->getPagosCount(),
                         'can_revert' => $import->canRevert(),
                         'created_at' => $import->created_at->format('Y-m-d H:i:s'),

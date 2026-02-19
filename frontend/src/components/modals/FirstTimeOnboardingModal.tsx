@@ -97,11 +97,11 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
 
   if (!isOpen) return null;
 
-  const inputClass = "w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#fafafa] focus:bg-white focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition text-sm text-[#0d0d0d] placeholder:text-gray-400";
+  const inputClass = "w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-[#fafafa] dark:bg-gray-800 focus:bg-white dark:focus:bg-gray-700 focus:border-[#573CFF] focus:ring-1 focus:ring-[#573CFF]/20 outline-none transition text-sm text-[#0d0d0d] dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500";
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" style={{ fontFamily: "'General Sans', sans-serif" }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
         {/* Header with background image */}
         <div className="relative overflow-hidden" style={{ minHeight: '160px' }}>
           <div
@@ -132,7 +132,7 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                <label className="block text-xs font-semibold text-[#0d0d0d] dark:text-gray-200 mb-1.5">
                   Nombre comercial <span className="text-[#573CFF]">*</span>
                 </label>
                 <input
@@ -145,7 +145,7 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                <label className="block text-xs font-semibold text-[#0d0d0d] dark:text-gray-200 mb-1.5">
                   Razón social
                 </label>
                 <input
@@ -161,7 +161,7 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                <label className="block text-xs font-semibold text-[#0d0d0d] dark:text-gray-200 mb-1.5">
                   Tipo documento
                 </label>
                 <select
@@ -170,13 +170,13 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                   onChange={handleChange}
                   className={inputClass}
                 >
-                  <option value="NIT">NIT</option>
-                  <option value="CC">Cédula</option>
-                  <option value="CE">Cédula Extranjería</option>
+                  <option value="NIT" className="dark:bg-gray-800">NIT</option>
+                  <option value="CC" className="dark:bg-gray-800">Cédula</option>
+                  <option value="CE" className="dark:bg-gray-800">Cédula Extranjería</option>
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                <label className="block text-xs font-semibold text-[#0d0d0d] dark:text-gray-200 mb-1.5">
                   Número de documento <span className="text-[#573CFF]">*</span>
                 </label>
                 <input
@@ -192,7 +192,7 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                <label className="block text-xs font-semibold text-[#0d0d0d] dark:text-gray-200 mb-1.5">
                   Teléfono <span className="text-[#573CFF]">*</span>
                 </label>
                 <input
@@ -205,7 +205,7 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+                <label className="block text-xs font-semibold text-[#0d0d0d] dark:text-gray-200 mb-1.5">
                   Ciudad <span className="text-[#573CFF]">*</span>
                 </label>
                 <input
@@ -220,7 +220,7 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#0d0d0d] mb-1.5">
+              <label className="block text-xs font-semibold text-[#0d0d0d] dark:text-gray-200 mb-1.5">
                 Dirección
               </label>
               <input
@@ -236,7 +236,7 @@ const FirstTimeOnboardingModal: React.FC<FirstTimeOnboardingModalProps> = ({
 
           {/* Error message */}
           {formError && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex items-center gap-2">
+            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
               <Icon icon="solar:danger-triangle-bold" className="text-lg flex-shrink-0" />
               {formError}
             </div>

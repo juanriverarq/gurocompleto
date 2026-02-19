@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/shadcn-ui/Default-Ui/card';
 import { Button } from '../../components/shadcn-ui/Default-Ui/button';
 import { Input } from '../../components/shadcn-ui/Default-Ui/input';
+import { Label } from '../../components/shadcn-ui/Default-Ui/label';
 import { 
   Select, 
   SelectContent, 
@@ -18,8 +19,15 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/shadcn-ui/Default-Ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/shadcn-ui/Default-Ui/dialog';
 import { Icon as IconifyIcon } from '@iconify/react';
 import masterPanelService from '../../services/masterPanelService';
+import { MODULES } from '../../components/landingpage/pricing-calculator/modules';
 
 interface Broker {
   id: number;
@@ -38,6 +46,14 @@ interface Broker {
   trial_ends_at: string | null;
 }
 
+// Presets de plan → módulos (mismos que en Pricing.tsx)
+const PLAN_PRESETS: Record<string, string[]> = {
+  starter: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm'],
+  professional: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm','comisiones','reportes','miniweb','ia_chatbot','lector_pdf_ia'],
+  business: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm','comisiones','reportes','miniweb','ia_chatbot','lector_pdf_ia','ia_chatbot_sura','marca_blanca','sitio_web','ia_predicciones','ia_ventas_cruzadas'],
+  custom: MODULES.map(m => m.key),
+};
+
 const MasterBrokersPage: React.FC = () => {
   const navigate = useNavigate();
   const [brokers, setBrokers] = useState<Broker[]>([]);
@@ -49,6 +65,17 @@ const MasterBrokersPage: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalBrokers, setTotalBrokers] = useState(0);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+
+  // Create broker modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createForm, setCreateForm] = useState({
+    name: '', email: '', phone: '', city: '', country: 'Colombia',
+    plan: 'starter', status: 'trial', max_users: 5, trial_days: 7,
+  });
+  const [createFeatures, setCreateFeatures] = useState<Set<string>>(new Set(PLAN_PRESETS.starter));
+  const [featureMode, setFeatureMode] = useState<'plan' | 'manual'>('plan');
 
   const loadBrokers = useCallback(async () => {
     setLoading(true);
@@ -107,13 +134,15 @@ const MasterBrokersPage: React.FC = () => {
 
   const getPlanBadge = (plan: string) => {
     const styles: Record<string, string> = {
-      basic: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
-      pro: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-      enterprise: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+      starter: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
+      professional: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      business: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+      custom: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
     };
+    const labels: Record<string, string> = { starter: 'Starter', professional: 'Professional', business: 'Business', custom: 'A tu medida' };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[plan] || styles.basic}`}>
-        {plan?.toUpperCase() || 'BASIC'}
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[plan] || styles.starter}`}>
+        {labels[plan] || plan?.toUpperCase() || 'STARTER'}
       </span>
     );
   };
@@ -164,7 +193,7 @@ const MasterBrokersPage: React.FC = () => {
             <IconifyIcon icon="solar:download-linear" className="w-4 h-4 mr-2" />
             Exportar
           </Button>
-          <Button className="bg-purple-600 hover:bg-purple-700">
+          <Button className="bg-purple-600 hover:bg-purple-700" onClick={() => setShowCreateModal(true)}>
             <IconifyIcon icon="solar:add-circle-linear" className="w-4 h-4 mr-2" />
             Nuevo Broker
           </Button>
@@ -210,9 +239,10 @@ const MasterBrokersPage: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los planes</SelectItem>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
-                  <SelectItem value="enterprise">Enterprise</SelectItem>
+                  <SelectItem value="starter">Starter</SelectItem>
+                  <SelectItem value="professional">Professional</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
+                  <SelectItem value="custom">A tu medida</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -368,6 +398,207 @@ const MasterBrokersPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Create Broker Modal */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <IconifyIcon icon="solar:buildings-2-bold" className="text-purple-600" />
+              Crear Nuevo Broker
+            </DialogTitle>
+          </DialogHeader>
+
+          {createError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2 text-sm">
+              <IconifyIcon icon="solar:danger-circle-bold" className="w-4 h-4 text-red-600 flex-shrink-0" />
+              <span className="text-red-700">{createError}</span>
+            </div>
+          )}
+
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            setCreateLoading(true);
+            setCreateError('');
+            try {
+              const response = await masterPanelService.createBroker({
+                ...createForm,
+                features: Array.from(createFeatures),
+              });
+              if (response.success) {
+                setShowCreateModal(false);
+                setCreateForm({ name: '', email: '', phone: '', city: '', country: 'Colombia', plan: 'starter', status: 'trial', max_users: 5, trial_days: 7 });
+                setCreateFeatures(new Set(PLAN_PRESETS.starter));
+                loadBrokers();
+              } else {
+                setCreateError(response.message || 'Error al crear broker');
+              }
+            } catch (err: any) {
+              setCreateError(err.response?.data?.message || 'Error al crear broker');
+            } finally {
+              setCreateLoading(false);
+            }
+          }} className="space-y-5">
+            {/* Datos básicos */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Nombre *</Label>
+                <Input value={createForm.name} onChange={(e) => setCreateForm(p => ({ ...p, name: e.target.value }))} required placeholder="Nombre del broker" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email *</Label>
+                <Input type="email" value={createForm.email} onChange={(e) => setCreateForm(p => ({ ...p, email: e.target.value }))} required placeholder="email@ejemplo.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Teléfono</Label>
+                <Input value={createForm.phone} onChange={(e) => setCreateForm(p => ({ ...p, phone: e.target.value }))} placeholder="+57..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Ciudad</Label>
+                <Input value={createForm.city} onChange={(e) => setCreateForm(p => ({ ...p, city: e.target.value }))} placeholder="Bogotá" />
+              </div>
+            </div>
+
+            {/* Plan y configuración */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label>Estado</Label>
+                <Select value={createForm.status} onValueChange={(v) => setCreateForm(p => ({ ...p, status: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Activo</SelectItem>
+                    <SelectItem value="trial">Trial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Máx. Usuarios</Label>
+                <Input type="number" min={1} value={createForm.max_users} onChange={(e) => setCreateForm(p => ({ ...p, max_users: Number(e.target.value) }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Días de Trial</Label>
+                <Input type="number" min={0} value={createForm.trial_days} onChange={(e) => setCreateForm(p => ({ ...p, trial_days: Number(e.target.value) }))} />
+              </div>
+            </div>
+
+            {/* Modo de asignación de módulos */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <IconifyIcon icon="solar:widget-5-bold" className="w-5 h-5 text-purple-600" />
+                  Módulos ({createFeatures.size} de {MODULES.length})
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFeatureMode('plan')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      featureMode === 'plan' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    Por Plan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeatureMode('manual')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      featureMode === 'manual' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    Manual
+                  </button>
+                </div>
+              </div>
+
+              {featureMode === 'plan' ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {(['starter', 'professional', 'business', 'custom'] as const).map((plan) => {
+                    const count = PLAN_PRESETS[plan].length;
+                    const isSelected = createForm.plan === plan || (
+                      PLAN_PRESETS[plan].length === createFeatures.size &&
+                      PLAN_PRESETS[plan].every(k => createFeatures.has(k))
+                    );
+                    return (
+                      <button
+                        key={plan}
+                        type="button"
+                        onClick={() => {
+                          setCreateForm(p => ({ ...p, plan }));
+                          setCreateFeatures(new Set(PLAN_PRESETS[plan]));
+                        }}
+                        className={`p-3 rounded-lg border text-center transition-all ${
+                          isSelected
+                            ? 'border-purple-400 bg-purple-50 dark:bg-purple-900/20'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        <p className="font-semibold text-sm capitalize">{plan}</p>
+                        <p className="text-[11px] text-gray-400">{count} módulos</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2 mb-3">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setCreateFeatures(new Set(MODULES.map(m => m.key)))}>
+                      Todos
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setCreateFeatures(new Set())}>
+                      Ninguno
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto">
+                    {MODULES.map((mod) => {
+                      const active = createFeatures.has(mod.key);
+                      return (
+                        <button
+                          key={mod.key}
+                          type="button"
+                          onClick={() => {
+                            setCreateFeatures(prev => {
+                              const next = new Set(prev);
+                              if (next.has(mod.key)) next.delete(mod.key);
+                              else next.add(mod.key);
+                              return next;
+                            });
+                          }}
+                          className={`flex items-center gap-2 p-2.5 rounded-lg border text-left transition-all ${
+                            active
+                              ? 'border-purple-400 bg-purple-50 dark:bg-purple-900/20'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${
+                            active ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700'
+                          }`}>
+                            {active && <IconifyIcon icon="solar:check-read-linear" className="w-3 h-3" />}
+                          </div>
+                          <IconifyIcon icon={mod.icon} className={`w-4 h-4 flex-shrink-0 ${active ? 'text-purple-600' : 'text-gray-400'}`} />
+                          <span className={`text-xs font-medium truncate ${active ? 'text-gray-900 dark:text-white' : 'text-gray-500'}`}>
+                            {mod.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t">
+              <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={createLoading} className="bg-purple-600 hover:bg-purple-700">
+                {createLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />}
+                <IconifyIcon icon="solar:add-circle-linear" className="w-4 h-4 mr-2" />
+                Crear Broker
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

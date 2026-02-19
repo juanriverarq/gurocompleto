@@ -607,30 +607,31 @@ const PolizasNew: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <Table hoverable className="shadow-md dark:shadow-none bg-white dark:bg-darkgray rounded-[10px]">
-                <Table.Head>
-                  {visibleColumns.map((columnKey) => (
-                    <Table.HeadCell key={columnKey} className="text-sm font-semibold py-2">
-                      {getColumnName(columnKey)}
-                    </Table.HeadCell>
-                  ))}
-                  <Table.HeadCell className="text-sm font-semibold py-2">Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    {visibleColumns.map((columnKey) => (
+                      <th key={columnKey}>{getColumnName(columnKey)}</th>
+                    ))}
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {polizas.map((poliza) => (
-                    <Table.Row key={poliza.id}>
+                    <tr key={poliza.id} className="group">
                       {visibleColumns.map((columnKey) => (
-                        <Table.Cell key={columnKey} className="whitespace-nowrap">
+                        <td key={columnKey} className="whitespace-nowrap">
                           {renderTableCell(poliza, columnKey)}
-                        </Table.Cell>
+                        </td>
                       ))}
-                      <Table.Cell className="whitespace-nowrap">
+                      <td className="sticky-right">
                         <Dropdown
                           label=""
                           dismissOnClick={false}
+                          placement="left-start"
                           renderTrigger={() => (
-                            <span className="h-8 w-8 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
+                            <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
                               <IconDots size={18} />
                             </span>
                           )}
@@ -649,7 +650,6 @@ const PolizasNew: React.FC = () => {
                             className="flex gap-2 text-sm"
                             onClick={() => {
                               setSelectedPoliza(poliza);
-                              // Si el estado actual es PENDIENTE, sugerimos ACTIVA por defecto
                               setNewEstado((poliza.estado === 'PENDIENTE' ? 'ACTIVA' : poliza.estado) as EstadoCambio);
                               setMotivoCambio('');
                               setShowChangeStateModal(true);
@@ -677,11 +677,11 @@ const PolizasNew: React.FC = () => {
                             <span>Eliminar</span>
                           </Dropdown.Item>
                         </Dropdown>
-                      </Table.Cell>
-                    </Table.Row>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
             </div>
           </>
         )}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import guroToast from 'src/components/GuroToast/GuroToast';
 import { useNavigate } from 'react-router-dom';
 import { useUnifiedAuth } from '../context/UnifiedAuthContext';
 import { auth } from '../config/firebase';
@@ -30,7 +31,7 @@ const VerificationPrompt: React.FC = () => {
     const handleResendEmailVerification = async () => {
         if (user) {
             await user.sendEmailVerification();
-            alert('Email de verificación reenviado. Revisa tu bandeja de entrada.');
+            guroToast.success('Email reenviado', 'Revisa tu bandeja de entrada.');
         }
     };
     
@@ -44,7 +45,7 @@ const VerificationPrompt: React.FC = () => {
                 // Email verificado, recargar la página para actualizar el estado
                 window.location.reload();
             } else {
-                alert('El email aún no ha sido verificado. Por favor revisa tu bandeja de entrada.');
+                guroToast.warning('No verificado', 'El email aún no ha sido verificado. Revisa tu bandeja de entrada.');
             }
         } catch (error) {
         } finally {

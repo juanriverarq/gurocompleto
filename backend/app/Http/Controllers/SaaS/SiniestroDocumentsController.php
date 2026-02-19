@@ -12,6 +12,7 @@ use Kreait\Firebase\Contract\Storage as FirebaseStorageContract;
 
 class SiniestroDocumentsController extends Controller
 {
+    use \App\Traits\ChecksStorageLimit;
     public function __construct(private FirebaseStorageContract $firebaseStorage) {}
 
     private function getBucket()
@@ -218,6 +219,13 @@ class SiniestroDocumentsController extends Controller
             if (!$siniestro) {
                 return response()->json(['success' => false, 'message' => 'Siniestro no encontrado'], 404);
             }
+
+            // Verificar límite de almacenamiento
+            $uploadSize = 0;
+            if ($request->hasFile('file')) $uploadSize += $request->file('file')->getSize();
+            if ($request->hasFile('files')) foreach ($request->file('files') as $f) $uploadSize += $f->getSize();
+            $storageCheck = $this->checkStorageLimit($brokerId, $uploadSize);
+            if ($storageCheck) return $storageCheck;
 
             try { $bucket = $this->getBucket(); } catch (\Throwable $e) {
                 Log::error(' [SINIESTROS_UPLOAD] Error obteniendo bucket', ['siniestro_id'=>$id,'error'=>$e->getMessage()]);

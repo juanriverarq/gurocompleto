@@ -17,10 +17,13 @@ import { useAseguradoras } from 'src/hooks/useAdminCrudApi';
 import type { Aseguradora as AseguradoraType, AseguradoraCreate } from 'src/types/admin';
 import { COLOMBIA_INSURERS } from 'src/data/colombia_insurers';
 import { PermissionGate } from 'src/components/PermissionGate';
+import { useAutoTour } from 'src/components/GuroTour/useAutoTour';
+import { TOUR_ASEGURADORAS } from 'src/components/GuroTour/tourConfigs';
 import { saasApi } from 'src/services/saasApi';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 
 const Aseguradoras = () => {
+  useAutoTour(TOUR_ASEGURADORAS);
   const { aseguradoras, loading, error, createAseguradora, updateAseguradora, deleteAseguradora } =
     useAseguradoras();
   const [showModal, setShowModal] = useState(false);
@@ -300,7 +303,7 @@ const Aseguradoras = () => {
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-dark dark:text-white mb-2">
+            <h1 data-tour="aseguradoras-page-title" className="text-2xl font-bold text-dark dark:text-white mb-2">
               Gestión de Aseguradoras
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
@@ -325,7 +328,7 @@ const Aseguradoras = () => {
               </PermissionGate>
             )}
             <PermissionGate route="/apps/admin/aseguradoras" action="crear">
-              <HeroButton icon="solar:shield-plus-bold" onClick={handleCreate}>Nueva Aseguradora</HeroButton>
+              <span data-tour="aseguradoras-create-btn"><HeroButton icon="solar:shield-plus-bold" onClick={handleCreate}>Nueva Aseguradora</HeroButton></span>
             </PermissionGate>
           </div>
         </div>
@@ -365,36 +368,38 @@ const Aseguradoras = () => {
         </Card>
       ) : (
         <Card>
-          <div className="overflow-x-auto">
-            <Table striped>
-              <Table.Head>
-                <Table.HeadCell className="w-10">
-                  <Checkbox
-                    checked={selectedForDelete.size === aseguradoras.length && aseguradoras.length > 0}
-                    onChange={selectAllForDelete}
-                  />
-                </Table.HeadCell>
-                <Table.HeadCell>Aseguradora</Table.HeadCell>
-                <Table.HeadCell>NIT</Table.HeadCell>
-                <Table.HeadCell>Email</Table.HeadCell>
-                <Table.HeadCell>Contactos</Table.HeadCell>
-                <Table.HeadCell>Porcentajes</Table.HeadCell>
-                <Table.HeadCell>Fecha de Creación</Table.HeadCell>
-                <Table.HeadCell>Acciones</Table.HeadCell>
-              </Table.Head>
-              <Table.Body className="divide-y">
+          <div className="guro-table-wrap">
+            <table className="guro-table">
+              <thead>
+                <tr>
+                  <th className="w-10">
+                    <Checkbox
+                      checked={selectedForDelete.size === aseguradoras.length && aseguradoras.length > 0}
+                      onChange={selectAllForDelete}
+                    />
+                  </th>
+                  <th>Aseguradora</th>
+                  <th>NIT</th>
+                  <th>Email</th>
+                  <th>Contactos</th>
+                  <th>Porcentajes</th>
+                  <th>Fecha de Creación</th>
+                  <th className="sticky-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
                 {aseguradoras.map((item) => (
-                  <Table.Row
+                  <tr
                     key={item.id}
-                    className={`bg-white dark:border-gray-700 dark:bg-gray-800 ${selectedForDelete.has(item.id) ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
+                    className={`group ${selectedForDelete.has(item.id) ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
                   >
-                    <Table.Cell>
+                    <td>
                       <Checkbox
                         checked={selectedForDelete.has(item.id)}
                         onChange={() => toggleSelectForDelete(item.id)}
                       />
-                    </Table.Cell>
-                    <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                    </td>
+                    <td className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       <div className="flex items-center gap-2">
                         <Icon icon="solar:shield-check-bold" className="w-5 h-5 text-blue-600" />
                         <div>
@@ -404,22 +409,22 @@ const Aseguradoras = () => {
                           </div>
                         </div>
                       </div>
-                    </Table.Cell>
-                    <Table.Cell className="text-gray-500 dark:text-gray-400">
+                    </td>
+                    <td className="text-gray-500 dark:text-gray-400">
                       {item.cuit}
-                    </Table.Cell>
-                    <Table.Cell className="text-gray-500 dark:text-gray-400">
+                    </td>
+                    <td className="text-gray-500 dark:text-gray-400">
                       {item.email}
-                    </Table.Cell>
-                    <Table.Cell className="text-gray-500 dark:text-gray-400">
+                    </td>
+                    <td className="text-gray-500 dark:text-gray-400">
                       <div className="text-sm">
                         <div>📞 {item.telefono}</div>
                         <div className="text-xs text-gray-400 mt-1 max-w-32 truncate">
                           📍 {item.direccion}
                         </div>
                       </div>
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td>
                       <div className="space-y-1">
                         <Badge color="green" size="sm">
                           IVA: {item.iva}%
@@ -431,11 +436,11 @@ const Aseguradoras = () => {
                           Ret.IVA: {item.retencion_iva}%
                         </Badge>
                       </div>
-                    </Table.Cell>
-                    <Table.Cell className="text-gray-500 dark:text-gray-400">
+                    </td>
+                    <td className="text-gray-500 dark:text-gray-400">
                       {new Date(item.created_at).toLocaleDateString()}
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td className="sticky-right">
                       <div className="flex items-center gap-2">
                         <PermissionGate route="/apps/admin/aseguradoras" action="editar">
                           <Button size="sm" color="gray" onClick={() => handleEdit(item)}>
@@ -448,11 +453,11 @@ const Aseguradoras = () => {
                           </Button>
                         </PermissionGate>
                       </div>
-                    </Table.Cell>
-                  </Table.Row>
+                    </td>
+                  </tr>
                 ))}
-              </Table.Body>
-            </Table>
+              </tbody>
+            </table>
           </div>
         </Card>
       )}
@@ -478,7 +483,7 @@ const Aseguradoras = () => {
 
             {/* Paso 0: Elegir modo */}
             {!isEditing && creationMode === null && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+              <div data-tour="aseguradoras-modal-template" className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <Card
                   className="cursor-pointer hover:ring-2 hover:ring-blue-500"
                   onClick={() => setCreationMode('blank')}

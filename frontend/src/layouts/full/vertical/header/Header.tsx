@@ -1,4 +1,4 @@
-import  { useState, useEffect, useContext } from "react";
+import  { useState, useContext } from "react";
 import { Navbar, Tooltip } from "flowbite-react";
 import { useUnifiedAuth } from "src/context/UnifiedAuthContext";
 import Search from "./Search";
@@ -21,23 +21,7 @@ interface HeaderPropsType {
 }
 
 const Header = ({ layoutType }: HeaderPropsType) => {
-  const [isSticky, setIsSticky] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 50) {
-        setIsSticky(true);
-      } else {
-        setIsSticky(false);
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll);
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
+  // Header is static (not sticky)
 
   const {  isLayout, activeMode, setActiveMode } =
     useContext(CustomizerContext);
@@ -100,9 +84,10 @@ const Header = ({ layoutType }: HeaderPropsType) => {
   };
 
   const toggleMode = () => {
-    setActiveMode((prevMode: string) =>
-      prevMode === "light" ? "dark" : "light"
-    );
+    const newMode = activeMode === "light" ? "dark" : "light";
+    document.documentElement.className = newMode;
+    try { localStorage.setItem('guro_active_mode', newMode); } catch {}
+    setActiveMode(newMode);
   };
 
   // mobile-sidebar
@@ -116,11 +101,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
   return (
     <>
       <header
-        className={`top-0 z-[10]  ${
-          isSticky
-            ? "bg-white dark:bg-darkgray sticky"
-            : "bg-transparent"
-        }`}
+        className={`z-[10] bg-transparent dark:bg-transparent`}
       >
         {/* Banner superior de trial o suscripción */}
         {(() => {

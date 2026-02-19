@@ -381,14 +381,9 @@ class SubscriptionController extends Controller
 
             // Determinar límites según suscripción o valores por defecto del broker
             $maxUsers = $subscription->users_count ?? $broker->max_users ?? 5;
-            $storageGb = $subscription->storage_gb ?? 5;
             
-            // Si hay suscripción, usar los límites del plan según el periodo
-            if ($subscription) {
-                // Los límites pueden variar según el periodo (mensual/anual)
-                // Por ahora usamos los valores de la suscripción directamente
+            if ($subscription && $subscription->users_count) {
                 $maxUsers = $subscription->users_count;
-                $storageGb = $subscription->storage_gb;
             }
 
             // Contar usuarios activos
@@ -402,24 +397,59 @@ class SubscriptionController extends Controller
             // Contar pólizas
             $policiesCount = \App\Models\Poliza::where('broker_id', $broker->id)->count();
 
-            // Calcular almacenamiento usado (aproximado basado en archivos adjuntos)
-            $storageUsedMB = 0;
+            // Calcular almacenamiento real usado desde los documentos en BD
+            $storageUsedBytes = 0;
+            $fileCount = 0;
             try {
-                // Contar archivos en la tabla de adjuntos si existe
-                if (\Schema::hasTable('adjuntos')) {
-                    $adjuntosCount = \DB::table('adjuntos')
-                        ->whereIn('poliza_id', function($query) use ($broker) {
-                            $query->select('id')
-                                ->from('polizas')
-                                ->where('broker_id', $broker->id);
-                        })
-                        ->count();
-                    $storageUsedMB = $adjuntosCount * 2; // Estimado 2MB por documento
+                // 1. Documentos de pólizas
+                $polizaDocs = \App\Models\Poliza::where('broker_id', $broker->id)
+                    ->whereNotNull('documents')
+                    ->pluck('documents');
+                foreach ($polizaDocs as $docs) {
+                    $arr = is_array($docs) ? $docs : (is_string($docs) ? json_decode($docs, true) : []);
+                    if (!is_array($arr)) continue;
+                    foreach ($arr as $doc) {
+                        if (is_object($doc)) $doc = (array) $doc;
+                        if (isset($doc['size'])) { $storageUsedBytes += (int) $doc['size']; $fileCount++; }
+                    }
+                }
+
+                // 2. Documentos de clientes
+                $clienteDocs = \App\Models\Cliente::where('broker_id', $broker->id)
+                    ->whereNotNull('documents')
+                    ->pluck('documents');
+                foreach ($clienteDocs as $docs) {
+                    $arr = is_array($docs) ? $docs : (is_string($docs) ? json_decode($docs, true) : []);
+                    if (!is_array($arr)) continue;
+                    foreach ($arr as $doc) {
+                        if (is_object($doc)) $doc = (array) $doc;
+                        if (isset($doc['size'])) { $storageUsedBytes += (int) $doc['size']; $fileCount++; }
+                    }
+                }
+
+                // 3. Archivos adjuntos de siniestros
+                if (\Schema::hasTable('siniestros')) {
+                    $siniestroDocs = \App\Models\Siniestro::where('broker_id', $broker->id)
+                        ->whereNotNull('archivos_adjuntos')
+                        ->pluck('archivos_adjuntos');
+                    foreach ($siniestroDocs as $docs) {
+                        $arr = is_array($docs) ? $docs : (is_string($docs) ? json_decode($docs, true) : []);
+                        if (!is_array($arr)) continue;
+                        foreach ($arr as $doc) {
+                            if (is_object($doc)) $doc = (array) $doc;
+                            if (isset($doc['size'])) { $storageUsedBytes += (int) $doc['size']; $fileCount++; }
+                        }
+                    }
                 }
             } catch (\Exception $e) {
-                // Si hay error, ignorar
                 Log::warning('Error calculando almacenamiento', ['error' => $e->getMessage()]);
             }
+            $storageUsedMB = round($storageUsedBytes / (1024 * 1024), 2);
+
+            // Obtener límite de storage del broker settings o suscripción
+            $brokerSettings = $broker->settings ?? [];
+            $storageGb = $subscription->storage_gb 
+                ?? (is_array($brokerSettings) ? ($brokerSettings['storage_gb'] ?? 10) : 10);
 
             // Calcular límites de clientes y pólizas según el plan
             $maxClients = $broker->max_clients ?? 100;
@@ -450,8 +480,11 @@ class SubscriptionController extends Controller
                             : 0
                     ],
                     'storage' => [
+                        'used_bytes' => $storageUsedBytes,
                         'used_mb' => $storageUsedMB,
+                        'used_gb' => round($storageUsedBytes / (1024 * 1024 * 1024), 3),
                         'limit_gb' => $storageGb,
+                        'file_count' => $fileCount,
                         'percentage' => $storageGb > 0 
                             ? round(($storageUsedMB / 1024 / $storageGb) * 100, 1) 
                             : 0

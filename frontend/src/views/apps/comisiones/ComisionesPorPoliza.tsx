@@ -401,68 +401,71 @@ const ComisionesPorPoliza = () => {
                 </Card>
               </div>
 
-              <div className="overflow-x-auto">
-                <Table hoverable>
-                  <Table.Head>
-                    <Table.HeadCell>Póliza</Table.HeadCell>
-                    <Table.HeadCell>Cliente</Table.HeadCell>
-                    <Table.HeadCell>Aseguradora</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Prima Neta</Table.HeadCell>
-                    <Table.HeadCell className="text-right">% Comisión</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Comisión</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Pendiente</Table.HeadCell>
-                    <Table.HeadCell>Vencimiento</Table.HeadCell>
-                    <Table.HeadCell>Estado</Table.HeadCell>
-                    <Table.HeadCell>Acciones</Table.HeadCell>
-                  </Table.Head>
-                  <Table.Body className="divide-y">
+              <div className="guro-table-wrap">
+                <table className="guro-table">
+                  <thead>
+                    <tr>
+                      <th>Póliza</th>
+                      <th>Cliente</th>
+                      <th>Aseguradora</th>
+                      <th className="text-right">Prima Neta</th>
+                      <th className="text-right">% Comisión</th>
+                      <th className="text-right">Comisión</th>
+                      <th className="text-right">Pendiente</th>
+                      <th>Vencimiento</th>
+                      <th>Estado</th>
+                      <th className="sticky-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {comisionesPorCobrarPaginadas.map((poliza) => {
                       const porcentaje = poliza.prima_neta > 0 
                         ? ((poliza.comision / poliza.prima_neta) * 100).toFixed(1)
                         : '0';
                       
                       return (
-                        <Table.Row key={poliza.id}>
-                          <Table.Cell className="font-medium">{poliza.numero_poliza}</Table.Cell>
-                          <Table.Cell>
+                        <tr key={poliza.id} className="group">
+                          <td className="font-medium">{poliza.numero_poliza}</td>
+                          <td>
                             <div>
                               <div className="font-medium">
                                 {poliza.nombres_cliente} {poliza.apellidos_cliente}
                               </div>
                               <div className="text-xs text-gray-500">{poliza.dni_cliente}</div>
                             </div>
-                          </Table.Cell>
-                          <Table.Cell>{poliza.aseguradora_nombre}</Table.Cell>
-                          <Table.Cell className="text-right font-semibold">
+                          </td>
+                          <td>{poliza.aseguradora_nombre}</td>
+                          <td className="text-right font-semibold">
                             {formatCurrency(poliza.prima_neta)}
-                          </Table.Cell>
-                          <Table.Cell className="text-right text-gray-600">
+                          </td>
+                          <td className="text-right text-gray-600">
                             {porcentaje}%
-                          </Table.Cell>
-                          <Table.Cell className="text-right font-semibold text-green-600">
+                          </td>
+                          <td className="text-right font-semibold text-green-600">
                             {formatCurrency(poliza.comision)}
-                          </Table.Cell>
-                          <Table.Cell className="text-right font-semibold text-blue-600">
+                          </td>
+                          <td className="text-right font-semibold text-blue-600">
                             {formatCurrency(poliza.comisionPendiente)}
-                          </Table.Cell>
-                          <Table.Cell>
+                          </td>
+                          <td>
                             {formatDate(poliza.fecha_fin)}
-                          </Table.Cell>
-                          <Table.Cell>
+                          </td>
+                          <td>
                             <Badge color="warning" size="sm">
                               Pendiente
                             </Badge>
-                          </Table.Cell>
-                          <Table.Cell>
+                          </td>
+                          <td className="sticky-right">
                             <div className="relative inline-block">
                               <Dropdown
                                 label=""
                                 dismissOnClick={false}
                                 placement="left-start"
                                 className="z-50"
+                                style={{ minWidth: '220px' }}
                                 renderTrigger={() => (
-                                  <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                                    <IconDots size={22} />
+                                  <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
+                                    <IconDots size={18} />
                                   </span>
                                 )}
                               >
@@ -475,12 +478,12 @@ const ComisionesPorPoliza = () => {
                                 </Dropdown.Item>
                               </Dropdown>
                             </div>
-                          </Table.Cell>
-                        </Table.Row>
+                          </td>
+                        </tr>
                       );
                     })}
-                  </Table.Body>
-                </Table>
+                  </tbody>
+                </table>
 
                 {comisionesPorCobrarFiltradas.length === 0 && (
                   <div className="text-center py-12">
@@ -492,7 +495,7 @@ const ComisionesPorPoliza = () => {
 
               {/* Paginación Por Cobrar */}
               {totalPaginasPorCobrar > 1 && (
-                <div className="flex items-center justify-between p-4 border-t">
+                <div className="flex items-center justify-between p-4">
                   <div className="text-sm text-gray-600">
                     Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, comisionesPorCobrarFiltradas.length)} de {comisionesPorCobrarFiltradas.length} comisiones
                   </div>
@@ -578,53 +581,55 @@ const ComisionesPorPoliza = () => {
                 </Card>
               </div>
 
-              <div className="overflow-x-auto">
-                <Table hoverable>
-                  <Table.Head>
-                    <Table.HeadCell>Póliza</Table.HeadCell>
-                    <Table.HeadCell>Cliente</Table.HeadCell>
-                    <Table.HeadCell>Aseguradora</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Prima Neta</Table.HeadCell>
-                    <Table.HeadCell className="text-right">% Comisión</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Comisión</Table.HeadCell>
-                    <Table.HeadCell className="text-right">Cobrado</Table.HeadCell>
-                    <Table.HeadCell>Fecha Cobro</Table.HeadCell>
-                    <Table.HeadCell>Estado</Table.HeadCell>
-                  </Table.Head>
-                  <Table.Body className="divide-y">
+              <div className="guro-table-wrap">
+                <table className="guro-table">
+                  <thead>
+                    <tr>
+                      <th>Póliza</th>
+                      <th>Cliente</th>
+                      <th>Aseguradora</th>
+                      <th className="text-right">Prima Neta</th>
+                      <th className="text-right">% Comisión</th>
+                      <th className="text-right">Comisión</th>
+                      <th className="text-right">Cobrado</th>
+                      <th>Fecha Cobro</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {comisionesCobradasPaginadas.map((poliza) => {
                       const porcentaje = poliza.prima_neta > 0 
                         ? ((poliza.comision / poliza.prima_neta) * 100).toFixed(1)
                         : '0';
                       
                       return (
-                        <Table.Row key={poliza.id}>
-                          <Table.Cell className="font-medium">{poliza.numero_poliza}</Table.Cell>
-                          <Table.Cell>
+                        <tr key={poliza.id} className="group">
+                          <td className="font-medium">{poliza.numero_poliza}</td>
+                          <td>
                             <div>
                               <div className="font-medium">
                                 {poliza.nombres_cliente} {poliza.apellidos_cliente}
                               </div>
                               <div className="text-xs text-gray-500">{poliza.dni_cliente}</div>
                             </div>
-                          </Table.Cell>
-                          <Table.Cell>{poliza.aseguradora_nombre}</Table.Cell>
-                          <Table.Cell className="text-right font-semibold">
+                          </td>
+                          <td>{poliza.aseguradora_nombre}</td>
+                          <td className="text-right font-semibold">
                             {formatCurrency(poliza.prima_neta)}
-                          </Table.Cell>
-                          <Table.Cell className="text-right text-gray-600">
+                          </td>
+                          <td className="text-right text-gray-600">
                             {porcentaje}%
-                          </Table.Cell>
-                          <Table.Cell className="text-right font-semibold text-green-600">
+                          </td>
+                          <td className="text-right font-semibold text-green-600">
                             {formatCurrency(poliza.comision)}
-                          </Table.Cell>
-                          <Table.Cell className="text-right font-semibold text-green-600">
+                          </td>
+                          <td className="text-right font-semibold text-green-600">
                             {formatCurrency(poliza.comisionCobrada)}
-                          </Table.Cell>
-                          <Table.Cell>
+                          </td>
+                          <td>
                             {formatDate(poliza.fecha_fin)}
-                          </Table.Cell>
-                          <Table.Cell>
+                          </td>
+                          <td>
                             <div className="flex items-center gap-2">
                               <Badge color="success" size="sm">
                                 Cobrada
@@ -640,12 +645,12 @@ const ComisionesPorPoliza = () => {
                                 </Button>
                               )}
                             </div>
-                          </Table.Cell>
-                        </Table.Row>
+                          </td>
+                        </tr>
                       );
                     })}
-                  </Table.Body>
-                </Table>
+                  </tbody>
+                </table>
 
                 {comisionesCobradasFiltradas.length === 0 && (
                   <div className="text-center py-12">
@@ -657,7 +662,7 @@ const ComisionesPorPoliza = () => {
 
               {/* Paginación Cobradas */}
               {totalPaginasCobradas > 1 && (
-                <div className="flex items-center justify-between p-4 border-t">
+                <div className="flex items-center justify-between p-4">
                   <div className="text-sm text-gray-600">
                     Mostrando {((paginaActual - 1) * elementosPorPagina) + 1} a {Math.min(paginaActual * elementosPorPagina, comisionesCobradasFiltradas.length)} de {comisionesCobradasFiltradas.length} comisiones
                   </div>

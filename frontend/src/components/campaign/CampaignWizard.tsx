@@ -11,7 +11,7 @@ import {
   getAgentTemplatesByCategory
 } from '../../data/campaignAgentTemplates';
 import { clienteService, Cliente } from '../../services/clienteService';
-import voiceCampaignService, { VoiceCampaignTriggerInput } from '../../services/voiceCampaignService';
+import voiceCampaignService, { VoiceCampaignTriggerInput, PhoneNumberEntry } from '../../services/voiceCampaignService';
 import whatsappInstanceService from '../../services/whatsappInstanceService';
 import { testVoice } from '../../services/elevenLabsService';
 import { createPortal } from 'react-dom';
@@ -250,6 +250,8 @@ export const CampaignWizard: React.FC<CampaignWizardProps> = ({ onComplete, onCa
   const [loadingVoices, setLoadingVoices] = useState(false);
   const [selectedRealVoice, setSelectedRealVoice] = useState<string>('YPh7OporwNAJ28F5IQrm'); // Angie por defecto
   const [waInstances, setWaInstances] = useState<Array<{ id?: number; instance_id: string; status?: string }>>([]);
+  const [brokerPhoneLines, setBrokerPhoneLines] = useState<PhoneNumberEntry[]>([]);
+  const [selectedPhoneNumberId, setSelectedPhoneNumberId] = useState<string>('');
 
   const [triggersConfig, setTriggersConfig] = useState({
     types: {
@@ -387,12 +389,29 @@ const brokerClientsFiltered = React.useMemo(() => {
     );
   };
 
-  // Cargar clientes del broker y voces al montar el componente
+  // Cargar clientes del broker, voces y líneas telefónicas al montar el componente
   useEffect(() => {
     loadBrokerClients();
-    loadElevenLabsVoices(); // Cargar voces específicas automáticamente
+    loadElevenLabsVoices();
     loadWhatsAppInstances();
+    loadPhoneLines();
   }, []);
+
+  const loadPhoneLines = async () => {
+    try {
+      const result = await voiceCampaignService.getPhoneNumbers();
+      if (result.success && result.phone_numbers.length > 0) {
+        setBrokerPhoneLines(result.phone_numbers);
+        // Pre-select the first registered line
+        const first = result.phone_numbers[0];
+        if (first.phone_number_id) {
+          setSelectedPhoneNumberId(first.phone_number_id);
+        }
+      }
+    } catch (e) {
+      // No phone lines available — will use default from backend
+    }
+  };
 
   // Aplicar enabledOptions del template seleccionado automáticamente
   useEffect(() => {
@@ -1654,11 +1673,15 @@ const brokerClientsFiltered = React.useMemo(() => {
   };
 
   // Función para ejecutar llamada de prueba
+  const testCallLockRef = useRef(false);
   const handleTestCall = async () => {
     if (!testCallPhone || testCallPhone.length < 10) {
       setTestCallResult({ success: false, message: 'Ingresa un número de teléfono válido (mínimo 10 dígitos)' });
       return;
     }
+    // Prevent double execution
+    if (testCallLockRef.current || isTestingCall) return;
+    testCallLockRef.current = true;
     
     setIsTestingCall(true);
     setTestCallResult(null);
@@ -1688,9 +1711,24 @@ const brokerClientsFiltered = React.useMemo(() => {
         testCallName
       );
       
+      // Resolver agent_id real para la prueba
+      const getAgentIdForTemplate = (templateId: string): string => {
+        const agentMapping: Record<string, string> = {
+          'pcp_cobro': 'agent_01k02pehqgfywb54fz2z8ts74h',
+          'pcp_renovacion': 'agent_01k02pehqgfywb54fz2z8ts74h',
+          'pcp_bienvenida': 'agent_01k02pehqgfywb54fz2z8ts74h',
+          'pcp_encuesta': 'agent_01k02pehqgfywb54fz2z8ts74h',
+          'pcp_siniestro': 'agent_01k02pehqgfywb54fz2z8ts74h',
+        };
+        return agentMapping[templateId] || 'agent_01k02pehqgfywb54fz2z8ts74h';
+      };
+      const testAgentId = campaignData.selectedTemplate ? getAgentIdForTemplate(campaignData.selectedTemplate.id) : 'agent_01k02pehqgfywb54fz2z8ts74h';
+
       const response = await voiceCampaignService.createImmediateVoiceCampaign({
         name: `Prueba - ${campaignData.selectedTemplate?.name || 'Test'} - ${new Date().toLocaleTimeString()}`,
         description: 'Llamada de prueba desde el wizard',
+        elevenlabs_agent_id: testAgentId,
+        ...(selectedPhoneNumberId ? { elevenlabs_phone_number_id: selectedPhoneNumberId } : {}),
         priority: 'high',
         contacts: [testContact],
         agent_name: campaignData.agentName || campaignData.selectedTemplate?.agentPersona.name || 'Agente de Prueba',
@@ -1717,6 +1755,7 @@ const brokerClientsFiltered = React.useMemo(() => {
       setTestCallResult({ success: false, message: error.message || 'Error al ejecutar la llamada de prueba' });
     } finally {
       setIsTestingCall(false);
+      testCallLockRef.current = false;
     }
   };
 
@@ -1796,6 +1835,7 @@ const brokerClientsFiltered = React.useMemo(() => {
             // Ventas - usar Sofia
             'lead_followup': 'agent_6301k1m98143epst5bf9qxch742q',
             'cross_sell': 'agent_6301k1m98143epst5bf9qxch742q',
+            'pcp_credit_protection': 'agent_6301k1m98143epst5bf9qxch742q', // PCP - Plan Crédito Protegido
             
             // Servicio - usar Marcela
             'welcome_onboarding': 'agent_01k02pehqgfywb54fz2z8ts74h',
@@ -1826,6 +1866,7 @@ const brokerClientsFiltered = React.useMemo(() => {
             ? `Campaña con disparadores automáticos de ${campaignData.selectedTemplate.category}`
             : `Campaña automática de ${campaignData.selectedTemplate.category} ejecutada inmediatamente`),
           elevenlabs_agent_id: realAgentId,      // id del agente en ElevenLabs
+          ...(selectedPhoneNumberId ? { elevenlabs_phone_number_id: selectedPhoneNumberId } : {}),
           type: 'immediate',                     // tipo de campaña
           priority: 'medium',
           contacts,                              // con phone_number y custom_data
@@ -2068,6 +2109,31 @@ const brokerClientsFiltered = React.useMemo(() => {
             </div>
           </div>
         </Card>
+
+        {/* Selector de línea telefónica */}
+        {brokerPhoneLines.length > 0 && (
+          <Card className="border border-gray-200 dark:border-gray-700">
+            <div className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Icon icon="solar:phone-bold-duotone" className="w-5 h-5 text-primary" />
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Línea telefónica</h4>
+              </div>
+              <ShadSelect value={selectedPhoneNumberId} onValueChange={setSelectedPhoneNumberId}>
+                <ShadSelectTrigger className="w-full">
+                  <ShadSelectValue placeholder="Seleccionar línea..." />
+                </ShadSelectTrigger>
+                <ShadSelectContent>
+                  {brokerPhoneLines.filter(p => p.phone_number_id).map((p) => (
+                    <ShadSelectItem key={p.phone_number_id!} value={p.phone_number_id!}>
+                      {p.phone_number} {p.label ? `— ${p.label}` : ''}
+                    </ShadSelectItem>
+                  ))}
+                </ShadSelectContent>
+              </ShadSelect>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Las llamadas saldrán desde esta línea</p>
+            </div>
+          </Card>
+        )}
 
         {/* Estado de ejecución o CTA */}
         {isExecuting ? (
@@ -3068,6 +3134,7 @@ const brokerClientsFiltered = React.useMemo(() => {
                           name: draftName,
                           description: campaignData.campaignDescription || `Campaña automática de ${campaignData.selectedTemplate.category} (borrador)`,
                           elevenlabs_agent_id: realAgentId,
+                          ...(selectedPhoneNumberId ? { elevenlabs_phone_number_id: selectedPhoneNumberId } : {}),
                           type: 'immediate',
                           priority: 'medium',
                           contacts,

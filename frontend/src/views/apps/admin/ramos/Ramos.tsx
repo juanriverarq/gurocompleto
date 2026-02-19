@@ -26,10 +26,13 @@ import type {
 } from 'src/types/admin';
 import { COLOMBIA_RAMOS } from 'src/data/colombia_ramos';
 import { PermissionGate } from 'src/components/PermissionGate';
+import { useAutoTour } from 'src/components/GuroTour/useAutoTour';
+import { TOUR_RAMOS } from 'src/components/GuroTour/tourConfigs';
 import { saasApi } from 'src/services/saasApi';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 
 const Ramos = () => {
+  useAutoTour(TOUR_RAMOS);
   const { ramos, loading, error, createRamo, updateRamo, deleteRamo } = useRamos();
   const { aseguradoras } = useAseguradoras();
   const [showModal, setShowModal] = useState(false);
@@ -345,7 +348,7 @@ const Ramos = () => {
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-dark dark:text-white mb-2">Gestión de Ramos</h1>
+            <h1 data-tour="ramos-page-title" className="text-2xl font-bold text-dark dark:text-white mb-2">Gestión de Ramos</h1>
             <p className="text-gray-600 dark:text-gray-400">
               Administra los ramos de seguros disponibles.
             </p>
@@ -368,7 +371,7 @@ const Ramos = () => {
               </PermissionGate>
             )}
             <PermissionGate route="/apps/admin/ramos" action="crear">
-              <HeroButton icon="solar:document-add-bold" onClick={handleCreate}>Nuevo Ramo</HeroButton>
+              <span data-tour="ramos-create-btn"><HeroButton icon="solar:document-add-bold" onClick={handleCreate}>Nuevo Ramo</HeroButton></span>
             </PermissionGate>
           </div>
         </div>
@@ -408,34 +411,36 @@ const Ramos = () => {
         </Card>
       ) : (
         <Card>
-          <div className="overflow-x-auto">
-            <Table striped>
-              <Table.Head>
-                <Table.HeadCell className="w-10">
-                  <FlowbiteCheckbox
-                    checked={selectedForDelete.size === ramos.length && ramos.length > 0}
-                    onChange={selectAllForDelete}
-                  />
-                </Table.HeadCell>
-                <Table.HeadCell>Ramo</Table.HeadCell>
-                <Table.HeadCell>Características</Table.HeadCell>
-                <Table.HeadCell>Aseguradoras</Table.HeadCell>
-                <Table.HeadCell>Fecha de Creación</Table.HeadCell>
-                <Table.HeadCell>Acciones</Table.HeadCell>
-              </Table.Head>
-              <Table.Body className="divide-y">
+          <div className="guro-table-wrap">
+            <table className="guro-table">
+              <thead>
+                <tr>
+                  <th className="w-10">
+                    <FlowbiteCheckbox
+                      checked={selectedForDelete.size === ramos.length && ramos.length > 0}
+                      onChange={selectAllForDelete}
+                    />
+                  </th>
+                  <th>Ramo</th>
+                  <th>Características</th>
+                  <th>Aseguradoras</th>
+                  <th>Fecha de Creación</th>
+                  <th className="sticky-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
                 {ramos.map((item) => (
-                  <Table.Row
+                  <tr
                     key={item.id}
-                    className={`bg-white dark:border-gray-700 dark:bg-gray-800 ${selectedForDelete.has(item.id) ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
+                    className={`group ${selectedForDelete.has(item.id) ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
                   >
-                    <Table.Cell>
+                    <td>
                       <FlowbiteCheckbox
                         checked={selectedForDelete.has(item.id)}
                         onChange={() => toggleSelectForDelete(item.id)}
                       />
-                    </Table.Cell>
-                    <Table.Cell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                    </td>
+                    <td className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       <div className="flex items-center gap-2">
                         <Icon icon="solar:document-bold" className="w-5 h-5 text-blue-600" />
                         <div>
@@ -443,8 +448,8 @@ const Ramos = () => {
                           <div className="text-xs text-gray-500">{item.subramo}</div>
                         </div>
                       </div>
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td>
                       <div className="space-y-1">
                         {item.calcular_iva_pri_a_pre && (
                           <Badge color="green" size="sm">
@@ -457,16 +462,16 @@ const Ramos = () => {
                           </Badge>
                         )}
                       </div>
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td>
                       <div className="text-sm text-gray-500">
                         {item.comisiones_aseguradoras.length} aseguradoras configuradas
                       </div>
-                    </Table.Cell>
-                    <Table.Cell className="text-gray-500 dark:text-gray-400">
+                    </td>
+                    <td className="text-gray-500 dark:text-gray-400">
                       {new Date(item.created_at).toLocaleDateString()}
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td className="sticky-right">
                       <div className="flex items-center gap-2">
                         <PermissionGate route="/apps/admin/ramos" action="editar">
                           <Button size="sm" color="gray" onClick={() => handleEdit(item)}>
@@ -479,11 +484,11 @@ const Ramos = () => {
                           </Button>
                         </PermissionGate>
                       </div>
-                    </Table.Cell>
-                  </Table.Row>
+                    </td>
+                  </tr>
                 ))}
-              </Table.Body>
-            </Table>
+              </tbody>
+            </table>
           </div>
         </Card>
       )}
@@ -503,7 +508,7 @@ const Ramos = () => {
           <Modal.Body className="max-h-[70vh] overflow-y-auto">
             {/* Paso 0: Elegir modo */}
             {!isEditing && creationMode === null && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+              <div data-tour="ramos-modal-template" className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <Card
                   className="cursor-pointer hover:ring-2 hover:ring-blue-500"
                   onClick={() => setCreationMode('blank')}
@@ -703,23 +708,22 @@ const Ramos = () => {
                           <p>No hay datos</p>
                         </div>
                       ) : (
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <Table.Head>
-                              <Table.HeadCell>Aseguradora</Table.HeadCell>
-                              <Table.HeadCell>Porcentaje de IVA</Table.HeadCell>
-                              <Table.HeadCell>Porcentaje de comisión</Table.HeadCell>
-                              <Table.HeadCell>(Pri a Pre) por defecto</Table.HeadCell>
-                              <Table.HeadCell>Acciones</Table.HeadCell>
-                            </Table.Head>
-                            <Table.Body>
+                        <div className="guro-table-wrap">
+                          <table className="guro-table">
+                            <thead>
+                              <tr>
+                                <th>Aseguradora</th>
+                                <th>Porcentaje de IVA</th>
+                                <th>Porcentaje de comisión</th>
+                                <th>(Pri a Pre) por defecto</th>
+                                <th>Acciones</th>
+                              </tr>
+                            </thead>
+                            <tbody>
                               {formData.comisiones_aseguradoras.map((comision) => {
-                                const aseguradora = aseguradoras.find(
-                                  (a) => a.id === comision.aseguradora_id,
-                                );
                                 return (
-                                  <Table.Row key={comision.aseguradora_id}>
-                                    <Table.Cell className="font-medium">
+                                  <tr key={comision.aseguradora_id} className="group">
+                                    <td className="font-medium">
                                       <select
                                         value={comision.aseguradora_id}
                                         onChange={(e) => {
@@ -742,8 +746,8 @@ const Ramos = () => {
                                           </option>
                                         ))}
                                       </select>
-                                    </Table.Cell>
-                                    <Table.Cell>
+                                    </td>
+                                    <td>
                                       <div className="relative">
                                         <TextInput
                                           type="number"
@@ -764,8 +768,8 @@ const Ramos = () => {
                                           %
                                         </span>
                                       </div>
-                                    </Table.Cell>
-                                    <Table.Cell>
+                                    </td>
+                                    <td>
                                       <div className="relative">
                                         <TextInput
                                           type="number"
@@ -786,8 +790,8 @@ const Ramos = () => {
                                           %
                                         </span>
                                       </div>
-                                    </Table.Cell>
-                                    <Table.Cell>
+                                    </td>
+                                    <td>
                                       <div className="relative">
                                         <TextInput
                                           type="number"
@@ -808,8 +812,8 @@ const Ramos = () => {
                                           %
                                         </span>
                                       </div>
-                                    </Table.Cell>
-                                    <Table.Cell>
+                                    </td>
+                                    <td>
                                       <Button
                                         type="button"
                                         size="sm"
@@ -821,12 +825,12 @@ const Ramos = () => {
                                           className="w-4 h-4"
                                         />
                                       </Button>
-                                    </Table.Cell>
-                                  </Table.Row>
+                                    </td>
+                                  </tr>
                                 );
                               })}
-                            </Table.Body>
-                          </Table>
+                            </tbody>
+                          </table>
                         </div>
                       )}
                     </div>

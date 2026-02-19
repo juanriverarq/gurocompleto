@@ -2415,21 +2415,52 @@ class VoiceCampaignController extends Controller
     ): array {
         try {
             $vapiApiKey = env('VAPI_PRIVATE_KEY');
-            // IMPORTANTE: Siempre usar el phoneNumberId de VAPI, no el de ElevenLabs
-            $phoneNumberId = env('VAPI_PHONE_NUMBER_ID');
             $voiceId = $voiceId ?: 'YPh7OporwNAJ28F5IQrm'; // Angie por defecto
             $backgroundSound = 'office'; // Sonido de oficina por defecto
 
-            if (!$vapiApiKey || !$phoneNumberId) {
-                throw new \Exception('VAPI configuration missing (VAPI_PRIVATE_KEY or VAPI_PHONE_NUMBER_ID)');
-            }
-
-            // Obtener nombre comercial del broker
+            // Obtener nombre comercial del broker y resolver VAPI phone number ID
             $broker = null;
             if ($campaign && $campaign->broker_id) {
                 $broker = Broker::find($campaign->broker_id);
             }
             $brokerCommercialName = $broker?->name ?? env('DEFAULT_COMPANY_NAME', 'GURO Seguros');
+
+            // Resolver VAPI phone number ID: buscar en las líneas del broker
+            $vapiPhoneNumberId = env('VAPI_PHONE_NUMBER_ID'); // fallback global
+            if ($broker && $campaign) {
+                $brokerSettings = is_array($broker->settings) ? $broker->settings : [];
+                $brokerPhoneLines = $brokerSettings['voice_phone_numbers'] ?? [];
+                $campaignPhoneId = $campaign->elevenlabs_phone_number_id ?? null;
+
+                foreach ($brokerPhoneLines as $line) {
+                    // Si la campaña tiene un phone_number_id de ElevenLabs, buscar la línea que coincida
+                    if ($campaignPhoneId && ($line['phone_number_id'] ?? '') === $campaignPhoneId) {
+                        if (!empty($line['vapi_phone_number_id'])) {
+                            $vapiPhoneNumberId = $line['vapi_phone_number_id'];
+                            Log::info('📞 [VAPI] Using broker phone line', [
+                                'vapi_id' => $vapiPhoneNumberId,
+                                'phone'   => $line['phone_number'] ?? '',
+                            ]);
+                        }
+                        break;
+                    }
+                }
+
+                // Si no se encontró por campaignPhoneId, usar la primera línea del broker que tenga VAPI ID
+                if ($vapiPhoneNumberId === env('VAPI_PHONE_NUMBER_ID') && !empty($brokerPhoneLines)) {
+                    foreach ($brokerPhoneLines as $line) {
+                        if (!empty($line['vapi_phone_number_id'])) {
+                            $vapiPhoneNumberId = $line['vapi_phone_number_id'];
+                            break;
+                        }
+                    }
+                }
+            }
+            $phoneNumberId = $vapiPhoneNumberId;
+
+            if (!$vapiApiKey || !$phoneNumberId) {
+                throw new \Exception('VAPI configuration missing (VAPI_PRIVATE_KEY or VAPI_PHONE_NUMBER_ID)');
+            }
             
             // IMPORTANTE: Usar siempre el nombre del broker, no el del contacto
             // El contacto puede tener company_name de la aseguradora, no de la agencia

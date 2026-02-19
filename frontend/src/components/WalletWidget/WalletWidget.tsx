@@ -89,7 +89,14 @@ const WalletWidget: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="bg-lightprimary hover:bg-primary hover:text-white text-primary px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md">
+      <div
+        className="relative text-white px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-md"
+        style={{
+          backgroundImage: 'linear-gradient(135deg, #222283, #573CFF, #a25dae, #fa8e5b, #a25dae, #222283)',
+          backgroundSize: '200% 200%',
+          animation: 'hero-shimmer 16s ease-in-out infinite',
+        }}
+      >
         <Icon icon="solar:wallet-bold-duotone" width="20" />
         <div className="flex flex-col text-left">
           <span className="font-medium text-xs opacity-70">Cargando...</span>
@@ -102,13 +109,18 @@ const WalletWidget: React.FC = () => {
   if (error) {
     return (
       <div 
-        className="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md"
+        className="relative text-white px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-md"
+        style={{
+          backgroundImage: 'linear-gradient(135deg, #222283, #573CFF, #a25dae, #fa8e5b, #a25dae, #222283)',
+          backgroundSize: '200% 200%',
+          animation: 'hero-shimmer 16s ease-in-out infinite',
+        }}
         onClick={loadWalletData}
         title="Click para reintentar"
       >
         <Icon icon="solar:wallet-bold-duotone" width="20" />
         <div className="flex flex-col text-left">
-          <span className="font-medium text-xs">Error</span>
+          <span className="font-medium text-xs opacity-70">Error</span>
           <span className="font-bold text-sm">Reintentar</span>
         </div>
       </div>
@@ -116,17 +128,30 @@ const WalletWidget: React.FC = () => {
   }
 
   return (
-    <div
-      className="bg-lightprimary hover:bg-primary text-primary hover:text-white px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md group"
-      onClick={handleWalletClick}
-      title="Ver detalles del wallet"
-    >
-      <Icon icon="solar:wallet-bold-duotone" width="20" className="group-hover:text-white" />
+    <>
+      <style>{`
+        @keyframes hero-shimmer {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+      `}</style>
+      <div
+        className="relative text-white px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-lg dark:shadow-purple-900/30 group animate-glow-pulse"
+        style={{
+          backgroundImage: 'linear-gradient(135deg, #222283, #573CFF, #a25dae, #fa8e5b, #a25dae, #222283)',
+          backgroundSize: '200% 200%',
+          animation: 'hero-shimmer 16s ease-in-out infinite',
+        }}
+        onClick={handleWalletClick}
+        title="Ver detalles del wallet"
+      >
+      <Icon icon="solar:wallet-bold-duotone" width="20" className="group-hover:text-white text-white" />
       <div className="flex flex-col text-left">
-        <span className="font-medium text-xs opacity-70 group-hover:opacity-100 group-hover:text-white">
+        <span className="font-medium text-xs opacity-70 group-hover:opacity-100 group-hover:text-white dark:text-white dark:opacity-90">
           Mi Wallet
         </span>
-        <span className="font-bold text-sm whitespace-nowrap group-hover:text-white">
+        <span className="font-bold text-sm whitespace-nowrap group-hover:text-white dark:text-white">
           {walletData
             ? `${formatBalance(
                 walletData.display_balance ?? walletData.balance_cop,
@@ -151,7 +176,8 @@ const WalletWidget: React.FC = () => {
         walletData={walletData}
         onWalletUpdate={handleWalletUpdate}
       />
-    </div>
+      </div>
+    </>
   );
 };
 

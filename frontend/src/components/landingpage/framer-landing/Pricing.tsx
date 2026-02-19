@@ -1,6 +1,8 @@
 import { motion, useInView } from 'framer-motion';
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { Icon } from '@iconify/react';
+import { useNavigate } from 'react-router';
+import { ModuleKey, BillingPeriod, MODULES, calculateTotals, BASE_PLATFORM_FEE, getMonthlyPricePerUser, numberFormat } from '../pricing-calculator/modules';
 import CalendlyModal from './CalendlyModal';
 
 /* ── Feature items matching /comenzar (modules.ts) exactly ── */
@@ -49,81 +51,125 @@ const starterFeatures: FeatureItem[] = [
   { name: 'Automóviles' },
   { name: 'Seguimiento' },
   { name: 'Documentos' },
-  { name: 'WhatsApp Marketing', note: 'Envíos masivos · $70/envío' },
-  { name: 'Email Marketing', note: '$80/email enviado' },
-  { name: 'IA Call Center', note: '$1,200/min · baja según consumo' },
+  { name: 'Negocios (CRM)' },
+  { name: 'Cartera' },
 ];
 const starterSet = new Set(starterFeatures.map(f => f.name));
 
 const professionalFeatures: FeatureItem[] = [
   ...starterFeatures,
-  { name: 'Negocios (CRM)' },
-  { name: 'Cartera' },
+  { name: 'WhatsApp Marketing', note: 'Envíos masivos · $70/envío' },
+  { name: 'Email Marketing', note: '$80/email enviado' },
+  { name: 'IA Call Center', note: '$1,200/min · baja según consumo' },
   { name: 'Comisiones' },
   { name: 'Reportes Avanzados' },
   { name: 'Mini Web' },
   { name: 'Asistente IA' },
   { name: 'Lector PDF con IA' },
-  { name: 'Chatbot WhatsApp' },
 ];
 const professionalSet = new Set(professionalFeatures.map(f => f.name));
 
-const enterpriseExtras: FeatureItem[] = [
+const businessFeatures: FeatureItem[] = [
+  ...professionalFeatures,
+  { name: 'Chatbot WhatsApp' },
   { name: 'Marca Blanca' },
-  { name: 'App Móvil' },
   { name: 'Sitio Web' },
-  { name: 'Facturación electrónica' },
-  { name: 'Nómina electrónica' },
   { name: 'IA Predicciones' },
   { name: 'IA Ventas Cruzadas' },
 ];
-const enterpriseFeatures: FeatureItem[] = [
-  ...professionalFeatures,
-  ...enterpriseExtras,
+const businessSet = new Set(businessFeatures.map(f => f.name));
+
+const customExtras: FeatureItem[] = [
+  { name: 'App Móvil' },
+  { name: 'Facturación electrónica' },
+  { name: 'Nómina electrónica' },
 ];
-const enterpriseSet = new Set(enterpriseFeatures.map(f => f.name));
+const customFeatures: FeatureItem[] = [
+  ...businessFeatures,
+  ...customExtras,
+];
+const customSet = new Set(customFeatures.map(f => f.name));
 
 const ANNUAL_DISCOUNT = 0.12; // 12%
+
+/* Mandatory module keys (always included) */
+const mandatoryKeys: ModuleKey[] = MODULES.filter(m => m.mandatory).map(m => m.key);
+
+/* Keys excluded from Starter plan */
+const starterExcluded: ModuleKey[] = ['whatsapp', 'email', 'ia_callcenter'];
+
+/* Pre-configured module sets per plan */
+const starterModules: ModuleKey[] = [
+  ...mandatoryKeys.filter(k => !starterExcluded.includes(k)),
+  'crm', 'cartera',
+];
+const professionalModules: ModuleKey[] = [
+  ...mandatoryKeys,
+  'crm', 'cartera', 'comisiones', 'reportes', 'miniweb', 'ia_chatbot', 'lector_pdf_ia',
+];
+const businessModules: ModuleKey[] = [
+  ...professionalModules,
+  'ia_chatbot_sura', 'marca_blanca', 'sitio_web', 'ia_predicciones', 'ia_ventas_cruzadas',
+];
 
 const plans = [
   {
     name: 'Starter',
     description: 'Para agentes independientes que quieren empezar.',
-    monthlyPrice: 83500,
-    users: '1 usuario incluido',
     popular: false,
     features: starterFeatures,
     includedSet: starterSet,
     cta: 'Comenzar',
-    href: '/comenzar',
+    minUsers: 1,
+    presetStorageGB: 10,
+    presetModules: starterModules,
   },
   {
     name: 'Professional',
     description: 'Para agencias en crecimiento que necesitan más.',
-    monthlyPrice: 149000,
-    users: 'Hasta 5 usuarios',
     popular: true,
     features: professionalFeatures,
     includedSet: professionalSet,
     cta: 'Comenzar',
-    href: '/comenzar',
+    minUsers: 3,
+    presetStorageGB: 30,
+    presetModules: professionalModules,
   },
   {
-    name: 'Enterprise',
-    description: 'Personaliza tu plan para grandes operaciones.',
-    monthlyPrice: null as number | null,
-    users: 'Más de 5 usuarios',
+    name: 'Business',
+    description: 'Para agencias consolidadas con operación completa.',
     popular: false,
-    features: enterpriseExtras,
-    includedSet: enterpriseSet,
-    isEnterprise: true,
+    features: businessFeatures,
+    includedSet: businessSet,
     cta: 'Comenzar',
-    href: '/comenzar',
+    minUsers: 5,
+    presetStorageGB: 50,
+    presetModules: businessModules,
+  },
+  {
+    name: 'A tu medida',
+    description: 'Arma tu plan con las apps que necesites.',
+    popular: false,
+    features: customExtras,
+    includedSet: customSet,
+    isEnterprise: true,
+    cta: 'Armar mi plan',
+    minUsers: 1,
+    presetStorageGB: 10,
+    presetModules: businessModules,
   },
 ];
 
-const formatPrice = (price: number) =>
-  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(price);
+/** Compute monthly price for a plan given user count */
+function computePlanPrice(plan: typeof plans[number], users: number): number {
+  const selected = new Set<ModuleKey>(plan.presetModules);
+  const totals = calculateTotals(selected, users, 'monthly');
+  const extraGB = Math.max(plan.presetStorageGB - 10, 0);
+  const storageCost = extraGB * 2000;
+  return (totals as any).subtotalMonthly + storageCost;
+}
+
+const formatPrice = numberFormat;
 
 const VISIBLE_COUNT = 5;
 
@@ -192,6 +238,39 @@ const Pricing = () => {
   const isInView = useInView(ref, { once: true, margin: '-100px' });
   const [isAnnual, setIsAnnual] = useState(true);
   const [showCalendly, setShowCalendly] = useState(false);
+  const navigate = useNavigate();
+
+  // Per-plan user counts (initialized to each plan's minimum)
+  const [planUsers, setPlanUsers] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {};
+    plans.forEach(p => { init[p.name] = p.minUsers; });
+    return init;
+  });
+
+  const setUsersForPlan = (planName: string, min: number, delta: number) => {
+    setPlanUsers(prev => ({
+      ...prev,
+      [planName]: Math.max(min, (prev[planName] || min) + delta),
+    }));
+  };
+
+  const handlePlanClick = (plan: typeof plans[number]) => {
+    const users = planUsers[plan.name] || plan.minUsers;
+    const period: BillingPeriod = isAnnual ? 'annual' : 'monthly';
+    const selected = new Set<ModuleKey>(plan.presetModules);
+    const totals = calculateTotals(selected, users, period);
+    const payload = {
+      users,
+      modules: plan.presetModules,
+      totals,
+      storageGB: plan.presetStorageGB,
+      period,
+    };
+    localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
+    localStorage.setItem('guro_selected_apps', JSON.stringify(plan.presetModules));
+    localStorage.removeItem('guro_sura_flow');
+    navigate('/comenzar/registro');
+  };
 
   return (
     <section ref={ref} id="precios" className="py-14 sm:py-28 bg-white">
@@ -257,15 +336,18 @@ const Pricing = () => {
         </motion.div>
 
         {/* Cards */}
-        <div className="grid lg:grid-cols-3 gap-0 border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="grid lg:grid-cols-4 gap-0 border border-gray-200 rounded-2xl overflow-hidden">
           {plans.map((plan, index) => {
-            const monthlyDisplay = plan.monthlyPrice
+            const isCustom = 'isEnterprise' in plan && plan.isEnterprise;
+            const users = planUsers[plan.name] || plan.minUsers;
+            const monthlyPrice = isCustom ? null : computePlanPrice(plan, users);
+            const monthlyDisplay = monthlyPrice
               ? isAnnual
-                ? Math.round(plan.monthlyPrice * (1 - ANNUAL_DISCOUNT))
-                : plan.monthlyPrice
+                ? Math.round(monthlyPrice * (1 - ANNUAL_DISCOUNT))
+                : monthlyPrice
               : null;
-            const annualTotal = plan.monthlyPrice
-              ? Math.round(plan.monthlyPrice * 12 * (1 - ANNUAL_DISCOUNT))
+            const annualTotal = monthlyPrice
+              ? Math.round(monthlyPrice * 12 * (1 - ANNUAL_DISCOUNT))
               : null;
 
             return (
@@ -296,7 +378,32 @@ const Pricing = () => {
 
                 {/* Description */}
                 <p className="text-sm text-gray-400 mb-1 leading-relaxed">{plan.description}</p>
-                <p className="text-xs text-gray-400 mb-5">{plan.users}</p>
+
+                {/* User selector */}
+                {!isCustom && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <button
+                      onClick={() => setUsersForPlan(plan.name, plan.minUsers, -1)}
+                      disabled={users <= plan.minUsers}
+                      className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                    >
+                      <Icon icon="solar:minus-circle-linear" className="text-sm" />
+                    </button>
+                    <span className="text-sm font-semibold text-[#0d0d0d] min-w-[60px] text-center">
+                      {users} {users === 1 ? 'usuario' : 'usuarios'}
+                    </span>
+                    <button
+                      onClick={() => setUsersForPlan(plan.name, plan.minUsers, 1)}
+                      className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 transition"
+                    >
+                      <Icon icon="solar:add-circle-linear" className="text-sm" />
+                    </button>
+                    <span className="text-[10px] text-gray-300 ml-1">· {plan.presetStorageGB} GB</span>
+                  </div>
+                )}
+                {isCustom && (
+                  <p className="text-xs text-gray-400 mb-4">Usuarios y almacenamiento a tu medida</p>
+                )}
 
                 {/* Price */}
                 <div className="mb-6">
@@ -321,9 +428,9 @@ const Pricing = () => {
                           </span>
                         </div>
                       )}
-                      {!isAnnual && plan.monthlyPrice && (
+                      {!isAnnual && monthlyPrice && (
                         <p className="text-xs text-gray-400 mt-1">
-                          {formatPrice(plan.monthlyPrice * 12)}/año sin descuento
+                          {formatPrice(monthlyPrice * 12)}/año sin descuento
                         </p>
                       )}
                     </>
@@ -338,16 +445,16 @@ const Pricing = () => {
                 </div>
 
                 {/* CTA button */}
-                {'isEnterprise' in plan && plan.isEnterprise ? (
+                {isCustom ? (
                   <button
-                    onClick={() => setShowCalendly(true)}
+                    onClick={() => navigate('/comenzar')}
                     className="block w-full py-3 rounded-xl font-bold text-center text-sm uppercase tracking-wider transition-colors mb-7 bg-[#0d0d0d] text-white hover:bg-[#1a1a2e]"
                   >
-                    Hablar con ventas
+                    {plan.cta}
                   </button>
                 ) : (
-                  <a
-                    href={`${plan.href}?billing=${isAnnual ? 'annual' : 'monthly'}`}
+                  <button
+                    onClick={() => handlePlanClick(plan)}
                     className={`block w-full py-3 rounded-xl font-bold text-center text-sm uppercase tracking-wider transition-colors mb-7 ${
                       plan.popular
                         ? 'bg-[#573CFF] text-white hover:bg-[#4530cc]'
@@ -355,7 +462,7 @@ const Pricing = () => {
                     }`}
                   >
                     {plan.cta}
-                  </a>
+                  </button>
                 )}
 
                 <PlanFeatures plan={plan} />

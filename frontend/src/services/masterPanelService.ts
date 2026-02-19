@@ -207,8 +207,57 @@ export const masterPanelService = {
     monthly_amount?: number;
     annual_amount?: number;
     plan?: string;
+    broker_status?: string;
+    features?: string[];
+    max_users?: number;
+    trial_ends_at?: string | null;
   }) => {
     const response = await masterPanelApi.put(`/brokers/${brokerId}/subscription`, data);
+    return response.data;
+  },
+
+  createBroker: async (data: {
+    name: string;
+    email: string;
+    phone?: string;
+    city?: string;
+    country?: string;
+    plan?: string;
+    status?: string;
+    max_users?: number;
+    features?: string[];
+    trial_days?: number;
+    document_type?: string;
+    document_number?: string;
+    legal_name?: string;
+    address?: string;
+  }) => {
+    const response = await masterPanelApi.post('/brokers', data);
+    return response.data;
+  },
+
+  updateBroker: async (brokerId: number, data: {
+    name?: string;
+    legal_name?: string;
+    document_type?: string;
+    document_number?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    postal_code?: string;
+    website?: string;
+    plan?: string;
+    status?: string;
+    max_users?: number;
+    max_clients?: number;
+    max_policies?: number;
+    features?: string[];
+    trial_days?: number;
+  }) => {
+    const response = await masterPanelApi.put(`/brokers/${brokerId}`, data);
     return response.data;
   },
 

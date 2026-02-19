@@ -8,6 +8,7 @@ import { MenuitemsType } from '../layouts/full/vertical/sidebar/Sidebaritems';
 export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   // Panel de Control
   '/apps/': 'dashboard',
+  '/apps/dashboard': 'dashboard',
 
   // Operaciones de Seguros
   '/apps/seguros/clientes': 'clientes',
@@ -35,6 +36,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
 
   // WhatsApp
   '/apps/whatsapp/dashboard': 'whatsapp_business',
+  '/apps/whatsapp/inbox': 'whatsapp_business',
+  '/apps/whatsapp/contacts': 'whatsapp_business',
   '/apps/whatsapp/conexiones': 'whatsapp_business',
   '/apps/whatsapp/campanas': 'whatsapp_business',
   '/apps/whatsapp/campanas/nueva': 'whatsapp_business',
@@ -51,7 +54,9 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
   '/apps/marketing/plantillas': 'email_marketing',
   '/apps/marketing/mini-web': 'mini_web',
+  '/apps/marketing/mi-web': 'mini_web',
   '/apps/marketing/comparador-seguros': 'whatsapp_business',
+  '/apps/marketing/creador-contenido': 'creador_contenido',
   '/apps/saas/configuracion-masiva': 'whatsapp_business',
 
   // Inteligencia Artificial
@@ -158,10 +163,14 @@ export const canPerformAction = (
 };
 
 // Función para filtrar elementos del menú basado en permisos
+// Items de módulos no contratados (feature gate) se mantienen visibles para que
+// el ModuleGate muestre la modal de desenfoque al intentar acceder.
+// Solo se ocultan items bloqueados por permisos de rol del empleado.
 export const filterMenuItemsByPermissions = (
   menuItems: MenuitemsType[],
   hasPermission: (module: string, action: string) => boolean,
   canAccessModule: (module: string) => boolean,
+  isModuleInPlan?: (module: string) => boolean,
 ): MenuitemsType[] => {
   return menuItems.filter((item) => {
     // Mantener labels de sección si hay elementos válidos después (se limpia abajo)
@@ -176,14 +185,24 @@ export const filterMenuItemsByPermissions = (
         item.children,
         hasPermission,
         canAccessModule,
+        isModuleInPlan,
       );
       if (filteredChildren.length === 0) return false;
       item.children = filteredChildren;
       return true;
     }
 
-    // Si es una ruta, verificar permiso requerido (default 'ver')
+    // Si es una ruta, verificar acceso
     if (item.href) {
+      const module = ROUTE_PERMISSION_MAP[item.href];
+      if (!module) return true;
+
+      // Si el módulo NO está en el plan, mantener visible (ModuleGate mostrará la modal)
+      if (isModuleInPlan && !isModuleInPlan(module)) {
+        return true;
+      }
+
+      // Si el módulo SÍ está en el plan, verificar permisos de rol normalmente
       const requiredAction = (item as any).requiredAction || 'ver';
       return canAccessRouteWithAction(item.href, requiredAction, hasPermission, canAccessModule);
     }

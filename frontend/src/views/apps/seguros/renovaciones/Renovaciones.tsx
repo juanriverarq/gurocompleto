@@ -786,92 +786,98 @@ const Renovaciones: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <Table hoverable className="shadow-md dark:shadow-none bg-white dark:bg-darkgray rounded-[10px]">
-                <Table.Head>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Número</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Cliente</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Aseguradora</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Ramo</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Vencimiento</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Estado</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Prima</Table.HeadCell>
-                  <Table.HeadCell className="text-sm font-semibold py-2">Acciones</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="">
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Número</th>
+                    <th>Cliente</th>
+                    <th>Aseguradora</th>
+                    <th>Ramo</th>
+                    <th>Vencimiento</th>
+                    <th>Estado</th>
+                    <th>Prima</th>
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {renovaciones.map((renovacion) => (
-                    <Table.Row key={renovacion.id}>
-                      <Table.Cell className="whitespace-nowrap">
+                    <tr key={renovacion.id} className="group">
+                      <td className="whitespace-nowrap">
                         <h6 className="text-sm font-medium">{renovacion.numeroPoliza}</h6>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
+                      </td>
+                      <td className="whitespace-nowrap">
                         <div className="truncate line-clamp-2 max-w-44">
                           <h6 className="text-sm uppercase">{renovacion.cliente}</h6>
                           <p className="text-xs text-bodytext">{renovacion.dni_cliente || 'N/A'}</p>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
+                      </td>
+                      <td className="whitespace-nowrap">
                         <p className="text-bodytext text-sm">{renovacion.aseguradora}</p>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
+                      </td>
+                      <td className="whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           {getTipoIcon(renovacion.tipoSeguro)}
                           <span className="text-sm font-medium">{tiposSeguro.find(t => t.value === renovacion.tipoSeguro)?.label || renovacion.tipoSeguro}</span>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
+                      </td>
+                      <td className="whitespace-nowrap">
                         <div>
                           <h6 className="text-sm">{new Date(renovacion.fechaVencimiento).toLocaleDateString('es-CO')}</h6>
                           <p className={`text-xs ${getDiasVencimientoColor(renovacion.diasVencimiento)}`}>
                             {formatDiasVencimiento(renovacion.diasVencimiento)}
                           </p>
                         </div>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
+                      </td>
+                      <td className="whitespace-nowrap">
                         <Badge
                           color={activeTab === 'renovadas' && renovacion.estado === 'RENOVADO' ? 'success' : `light${getEstadoBadge(renovacion.estado)}`}
                           className="capitalize text-xs"
                         >
                           {estadosRenovacion.find(e => e.value === renovacion.estado)?.label || renovacion.estado}
                         </Badge>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
+                      </td>
+                      <td className="whitespace-nowrap">
                         <h6 className="text-sm">{formatCurrency(renovacion.valorPrima)}</h6>
-                      </Table.Cell>
-                      <Table.Cell className="whitespace-nowrap">
-                        <Dropdown
-                          label=""
-                          dismissOnClick={false}
-                          renderTrigger={() => (
-                            <span className="h-8 w-8 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                              <IconDots size={18} />
-                            </span>
-                          )}
-                        >
-                          <Dropdown.Item onClick={() => handleViewRenovacion(renovacion)} className="flex gap-2 text-sm">
-                            <Icon icon="solar:eye-bold" height={16} />
-                            <span>Ver Detalles</span>
-                          </Dropdown.Item>
-                          <Dropdown.Item onClick={() => handleViewPoliza(renovacion)} className="flex gap-2 text-sm text-blue-600">
-                            <Icon icon="solar:document-bold" height={16} />
-                            <span>Ver Póliza</span>
-                          </Dropdown.Item>
-                          <Dropdown.Item onClick={() => handleRegistrarContacto(renovacion)} className="flex gap-2 text-sm">
-                            <Icon icon="solar:phone-bold" height={16} />
-                            <span>Registrar Contacto</span>
-                          </Dropdown.Item>
-                          {renovacion.estado !== 'RENOVADO' && (
-                            <Dropdown.Item onClick={() => handleRenovar(renovacion)} className="flex gap-2 text-sm text-green-600">
-                              <Icon icon="solar:refresh-bold" height={16} />
-                              <span>Renovar</span>
+                      </td>
+                      <td className="sticky-right">
+                        <div className="relative inline-block">
+                          <Dropdown
+                            label=""
+                            dismissOnClick={false}
+                            placement="left-start"
+                            style={{ minWidth: '220px' }}
+                            renderTrigger={() => (
+                              <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
+                                <IconDots size={18} />
+                              </span>
+                            )}
+                          >
+                            <Dropdown.Item onClick={() => handleViewRenovacion(renovacion)} className="flex gap-2 text-sm">
+                              <Icon icon="solar:eye-bold" height={16} />
+                              <span>Ver Detalles</span>
                             </Dropdown.Item>
-                          )}
-                        </Dropdown>
-                      </Table.Cell>
-                    </Table.Row>
+                            <Dropdown.Item onClick={() => handleViewPoliza(renovacion)} className="flex gap-2 text-sm text-blue-600">
+                              <Icon icon="solar:document-bold" height={16} />
+                              <span>Ver Póliza</span>
+                            </Dropdown.Item>
+                            <Dropdown.Item onClick={() => handleRegistrarContacto(renovacion)} className="flex gap-2 text-sm">
+                              <Icon icon="solar:phone-bold" height={16} />
+                              <span>Registrar Contacto</span>
+                            </Dropdown.Item>
+                            {renovacion.estado !== 'RENOVADO' && (
+                              <Dropdown.Item onClick={() => handleRenovar(renovacion)} className="flex gap-2 text-sm text-green-600">
+                                <Icon icon="solar:refresh-bold" height={16} />
+                                <span>Renovar</span>
+                              </Dropdown.Item>
+                            )}
+                          </Dropdown>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </Table.Body>
-              </Table>
+                </tbody>
+              </table>
             </div>
           </>
         )}

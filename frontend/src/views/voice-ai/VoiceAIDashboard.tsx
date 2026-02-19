@@ -9,6 +9,7 @@ import CallHistoryWidget from './components/dashboard/CallHistoryWidget';
 import AgentsManagementWidget from './components/dashboard/AgentsManagementWidget';
 
 import CampaignsManagementWidget from './components/CampaignsManagementWidget';
+import VoiceSettings from './components/VoiceSettings';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const VoiceAIDashboard = () => {
@@ -168,6 +169,16 @@ const VoiceAIDashboard = () => {
               >
                 <div className="mt-6">
                   <CampaignsManagementWidget />
+                </div>
+              </Tabs.Item>
+
+              <Tabs.Item
+                active={activeTabKey === 'settings'}
+                title="Configuración"
+                icon={() => <Icon icon="solar:settings-outline" height={20} />}
+              >
+                <div className="mt-6">
+                  <VoiceSettings />
                 </div>
               </Tabs.Item>
             </Tabs>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Badge, Button, Spinner, Alert, Avatar, Dropdown, TextInput, Textarea } from 'flowbite-react';
 import { Icon } from '@iconify/react';
+import { Link } from 'react-router-dom';
 import CardBox from 'src/components/shared/CardBox';
 import whatsappInboxService, { 
   WhatsAppConversation, 
@@ -8,6 +9,7 @@ import whatsappInboxService, {
   WhatsAppDepartment,
   InboxStats 
 } from 'src/services/whatsappInboxService';
+import whatsappInstanceService from 'src/services/whatsappInstanceService';
 
 const WhatsAppInbox: React.FC = () => {
   // Estados principales
@@ -25,6 +27,7 @@ const WhatsAppInbox: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [filter, setFilter] = useState<'all' | 'mine' | 'unassigned' | 'pending'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [hasConnections, setHasConnections] = useState<boolean | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -39,6 +42,18 @@ const WhatsAppInbox: React.FC = () => {
     loadConversations();
   }, [filter, searchTerm]);
 
+  // Polling: refrescar conversaciones y mensajes cada 5s
+  useEffect(() => {
+    if (!hasConnections) return;
+    const interval = setInterval(() => {
+      loadConversations();
+      if (selectedConversation) {
+        loadMessages(selectedConversation.id);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [hasConnections, selectedConversation, filter, searchTerm]);
+
   // Scroll al final cuando hay nuevos mensajes
   useEffect(() => {
     scrollToBottom();
@@ -47,6 +62,23 @@ const WhatsAppInbox: React.FC = () => {
   const loadInitialData = async () => {
     try {
       setLoading(true);
+      // Check if there are any WhatsApp connections first
+      try {
+        const instancesRes = await whatsappInstanceService.getInstances();
+        console.log('[INBOX DEBUG] getInstances response:', instancesRes);
+        const connected = instancesRes.success && instancesRes.data && instancesRes.data.length > 0;
+        console.log('[INBOX DEBUG] hasConnections:', connected);
+        setHasConnections(connected);
+        if (!connected) {
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.error('[INBOX DEBUG] getInstances FAILED:', e);
+        setHasConnections(false);
+        setLoading(false);
+        return;
+      }
       const [depts, statsData] = await Promise.all([
         whatsappInboxService.getDepartments(),
         whatsappInboxService.getStats(),
@@ -188,6 +220,32 @@ const WhatsAppInbox: React.FC = () => {
     );
   }
 
+  // Empty state when no WhatsApp connections
+  if (hasConnections === false) {
+    return (
+      <div className="h-[calc(100vh-180px)] flex flex-col items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 mx-auto bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mb-6">
+            <Icon icon="logos:whatsapp-icon" width={40} />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Conecta tu línea de WhatsApp</h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-6">
+            Para usar el inbox necesitas conectar al menos una línea de WhatsApp Business. Configura tu conexión y empieza a gestionar las conversaciones de tus clientes.
+          </p>
+          <Link to="/apps/whatsapp/conexiones">
+            <Button color="primary" size="lg">
+              <Icon icon="solar:smartphone-bold-duotone" className="mr-2" width={20} />
+              Conectar línea de WhatsApp
+            </Button>
+          </Link>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
+            Necesitas una cuenta de WhatsApp Business con Cloud API de Meta
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[calc(100vh-180px)] flex flex-col">
       {/* Header con estadísticas */}
@@ -209,31 +267,31 @@ const WhatsAppInbox: React.FC = () => {
         {/* Stats Cards */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-darkgray rounded-lg p-3 border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.my_conversations}</div>
               <div className="text-xs text-gray-500">Mis conversaciones</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-darkgray rounded-lg p-3 border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold text-orange-500">{stats.my_unread}</div>
               <div className="text-xs text-gray-500">Sin leer</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-darkgray rounded-lg p-3 border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold text-yellow-500">{stats.pending}</div>
               <div className="text-xs text-gray-500">Pendientes</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-darkgray rounded-lg p-3 border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold text-blue-500">{stats.in_progress}</div>
               <div className="text-xs text-gray-500">En progreso</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-darkgray rounded-lg p-3 border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold text-red-500">{stats.unassigned}</div>
               <div className="text-xs text-gray-500">Sin asignar</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-darkgray rounded-lg p-3 border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold text-green-500">{stats.resolved_today}</div>
               <div className="text-xs text-gray-500">Resueltas hoy</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-darkgray rounded-lg p-3 border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold text-gray-500">{stats.total_conversations}</div>
               <div className="text-xs text-gray-500">Total</div>
             </div>
@@ -298,7 +356,7 @@ const WhatsAppInbox: React.FC = () => {
                     className={`p-3 border-b border-gray-100 dark:border-gray-700 cursor-pointer transition-colors ${
                       selectedConversation?.id === conv.id
                         ? 'bg-primary/10'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -396,7 +454,7 @@ const WhatsAppInbox: React.FC = () => {
                 {/* Mensajes */}
                 <div 
                   ref={chatContainerRef}
-                  className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900"
+                  className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-[#141414]"
                 >
                   {loadingMessages ? (
                     <div className="flex items-center justify-center h-full">
@@ -419,7 +477,7 @@ const WhatsAppInbox: React.FC = () => {
                           className={`max-w-[70%] rounded-2xl px-4 py-2 ${
                             msg.direction === 'outgoing'
                               ? 'bg-primary text-white rounded-br-sm'
-                              : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-bl-sm shadow-sm'
+                              : 'bg-white dark:bg-darkgray text-gray-900 dark:text-white rounded-bl-sm shadow-sm'
                           }`}
                         >
                           {msg.sender_type === 'agent' && msg.sender && (

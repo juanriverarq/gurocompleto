@@ -155,6 +155,7 @@ export interface CreateVoiceCampaignRequest {
   name: string;
   description?: string;
   agent_id: string;
+  elevenlabs_phone_number_id?: string;
   type: 'immediate' | 'scheduled';
   priority: 'low' | 'medium' | 'high';
   scheduled_at?: string;
@@ -312,7 +313,7 @@ class VoiceCampaignService {
       headers,
     };
 
-    if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+    if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
       options.body = JSON.stringify(data);
     }
 
@@ -1247,6 +1248,81 @@ class VoiceCampaignService {
       };
     }
   }
+
+  // ─── Phone Number Management ──────────────────────────────
+
+  /**
+   * Get broker's registered phone numbers for Voice AI
+   */
+  async getPhoneNumbers(): Promise<{ success: boolean; phone_numbers: PhoneNumberEntry[] }> {
+    try {
+      const response = await this.makeRequest('/saas/voice-campaigns/phone-numbers', 'GET');
+      return { success: true, phone_numbers: response.phone_numbers || [] };
+    } catch {
+      return { success: true, phone_numbers: [] };
+    }
+  }
+
+  /**
+   * Step 1: Initiate Twilio Caller ID verification (Twilio calls the user)
+   */
+  async initiatePhoneVerification(phoneNumber: string, friendlyName?: string): Promise<{
+    success: boolean;
+    message: string;
+    validation_code?: string;
+    already_verified?: boolean;
+  }> {
+    try {
+      return await this.makeRequest('/saas/voice-campaigns/phone-numbers/verify', 'POST', {
+        phone_number: phoneNumber,
+        friendly_name: friendlyName,
+      });
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Error al iniciar verificación' };
+    }
+  }
+
+  /**
+   * Step 2: Poll to check if Twilio Caller ID verification completed
+   */
+  async checkPhoneVerification(phoneNumber: string): Promise<{
+    success: boolean;
+    verified?: boolean;
+    message: string;
+    phone_number_id?: string;
+  }> {
+    try {
+      return await this.makeRequest('/saas/voice-campaigns/phone-numbers/check', 'POST', {
+        phone_number: phoneNumber,
+      });
+    } catch (error: any) {
+      return { success: false, verified: false, message: error.message || 'Error al verificar' };
+    }
+  }
+
+  /**
+   * Delete a registered phone number
+   */
+  async deletePhoneNumber(phoneNumberId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      return await this.makeRequest('/saas/voice-campaigns/phone-numbers', 'DELETE', {
+        phone_number_id: phoneNumberId,
+      });
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Error al eliminar número' };
+    }
+  }
+}
+
+// Interface para números de teléfono registrados
+export interface PhoneNumberEntry {
+  phone_number: string;
+  phone_number_id: string | null;
+  vapi_phone_number_id?: string | null;
+  label: string;
+  verified: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // Interfaces para llamadas programadas

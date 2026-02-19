@@ -6,7 +6,7 @@ import Navbar from 'src/components/landingpage/framer-landing/Navbar';
 import Footer from 'src/components/landingpage/framer-landing/Footer';
 import { segurosArticles } from 'src/data/blog/segurosFaq';
 
-const canonicalUrl = 'https://www.guro.com.co/blog';
+const canonicalUrl = 'https://guro.co/blog';
 
 const tagStyle = 'bg-white/[0.05] text-white/50 border-white/[0.08]';
 
@@ -26,7 +26,16 @@ const BlogIndex = () => {
           name="description"
           content="Explora artículos sobre software de seguros en Colombia: integraciones contables, nube, siniestros en línea, costos y cumplimiento."
         />
+        <meta name="keywords" content="blog software seguros, artículos seguros colombia, guía software pólizas, insurtech colombia, CRM seguros" />
         <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="Blog de software de seguros | Guro" />
+        <meta property="og:description" content="Explora artículos sobre software de seguros en Colombia: integraciones contables, nube, siniestros en línea, costos y cumplimiento." />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:locale" content="es_CO" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Blog de software de seguros | Guro" />
+        <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large" />
       </Helmet>
 
       <Navbar />

@@ -213,47 +213,44 @@ const Mensajeros = () => {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
-          <Table hoverable>
-            <Table.Head>
-              <Table.HeadCell>Nombre</Table.HeadCell>
-              <Table.HeadCell>Contacto</Table.HeadCell>
-              <Table.HeadCell>Ciudad</Table.HeadCell>
-              <Table.HeadCell>Vehículo</Table.HeadCell>
-              <Table.HeadCell>Tarifa Base</Table.HeadCell>
-              <Table.HeadCell>Estado</Table.HeadCell>
-              <Table.HeadCell>Acciones</Table.HeadCell>
-            </Table.Head>
-            <Table.Body>
+        <div className="guro-table-wrap">
+          <table className="guro-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Contacto</th>
+                <th>Ciudad</th>
+                <th>Vehículo</th>
+                <th>Tarifa Base</th>
+                <th>Estado</th>
+                <th className="sticky-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
               {mensajeros.map((mensajero) => (
-                <Table.Row
-                  key={mensajero.id}
-                  className="bg-white dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <Table.Cell className="font-medium text-gray-900 dark:text-white">
-                    {mensajero.nombre}
-                  </Table.Cell>
-                  <Table.Cell>
+                <tr key={mensajero.id} className="group">
+                  <td className="font-medium">{mensajero.nombre}</td>
+                  <td>
                     <div className="text-sm">
                       {mensajero.celular && <div>📱 {mensajero.celular}</div>}
                       {mensajero.telefono && <div>📞 {mensajero.telefono}</div>}
                       {mensajero.email && <div>✉️ {mensajero.email}</div>}
                     </div>
-                  </Table.Cell>
-                  <Table.Cell>{mensajero.ciudad || 'No especificada'}</Table.Cell>
-                  <Table.Cell>{mensajero.vehiculo_nombre || 'No especificado'}</Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>{mensajero.ciudad || 'No especificada'}</td>
+                  <td>{mensajero.vehiculo_nombre || 'No especificado'}</td>
+                  <td>
                     {mensajero.tarifa_base
                       ? `$${mensajero.tarifa_base.toLocaleString()}`
                       : 'No definida'}
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     <Badge color={mensajero.activo ? 'success' : 'failure'}>
                       {mensajero.activo ? 'Activo' : 'Inactivo'}
                     </Badge>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex gap-2">
+                  </td>
+                  <td className="sticky-right">
+                    <div className="flex gap-2 justify-center">
                       <PermissionGate route="/apps/admin/mensajeros" action="editar">
                         <Button
                           size="sm"
@@ -275,21 +272,21 @@ const Mensajeros = () => {
                         </Button>
                       </PermissionGate>
                     </div>
-                  </Table.Cell>
-                </Table.Row>
+                  </td>
+                </tr>
               ))}
               {mensajeros.length === 0 && (
-                <Table.Row>
-                  <Table.Cell colSpan={7} className="text-center py-8">
+                <tr>
+                  <td colSpan={7} className="text-center py-8">
                     <div className="flex flex-col items-center justify-center text-gray-500">
                       <Icon icon="solar:delivery-bold-duotone" width={48} className="mb-2" />
                       <p>No hay mensajeros registrados</p>
                     </div>
-                  </Table.Cell>
-                </Table.Row>
+                  </td>
+                </tr>
               )}
-            </Table.Body>
-          </Table>
+            </tbody>
+          </table>
         </div>
       </Card>
 

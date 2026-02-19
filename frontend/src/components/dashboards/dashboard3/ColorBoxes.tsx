@@ -7,13 +7,13 @@ interface ColorBoxesProps {
   endDate?: string | null;
 }
 
-const CARD_STYLES: Record<string, { iconBg: string; iconColor: string; accent: string }> = {
-  polizas:     { iconBg: 'bg-[#573CFF]/10', iconColor: 'text-[#573CFF]', accent: 'hover:border-[#573CFF]/30' },
-  siniestros:  { iconBg: 'bg-amber-100',    iconColor: 'text-amber-600', accent: 'hover:border-amber-300' },
-  clientes:    { iconBg: 'bg-blue-100',      iconColor: 'text-blue-600',  accent: 'hover:border-blue-300' },
-  vencer:      { iconBg: 'bg-red-100',       iconColor: 'text-red-500',   accent: 'hover:border-red-300' },
-  primas:      { iconBg: 'bg-emerald-100',   iconColor: 'text-emerald-600', accent: 'hover:border-emerald-300' },
-  comisiones:  { iconBg: 'bg-indigo-100',    iconColor: 'text-indigo-600', accent: 'hover:border-indigo-300' },
+const CARD_STYLES: Record<string, { iconBg: string; iconColor: string; accent: string; valueColor: string }> = {
+  polizas:     { iconBg: 'bg-[#573CFF]/10 dark:bg-[#573CFF]/20', iconColor: 'text-[#573CFF]', accent: 'hover:border-[#573CFF]/30', valueColor: 'text-[#573CFF]' },
+  siniestros:  { iconBg: 'bg-amber-500/10 dark:bg-amber-500/20', iconColor: 'text-amber-500', accent: 'hover:border-amber-500/30', valueColor: 'text-amber-600 dark:text-amber-400' },
+  clientes:    { iconBg: 'bg-[#573CFF]/10 dark:bg-[#573CFF]/20', iconColor: 'text-[#573CFF]', accent: 'hover:border-[#573CFF]/30', valueColor: 'text-[#573CFF]' },
+  vencer:      { iconBg: 'bg-rose-500/10 dark:bg-rose-500/20',   iconColor: 'text-rose-500',  accent: 'hover:border-rose-500/30', valueColor: 'text-rose-600 dark:text-rose-400' },
+  primas:      { iconBg: 'bg-emerald-500/10 dark:bg-emerald-500/20', iconColor: 'text-emerald-500', accent: 'hover:border-emerald-500/30', valueColor: 'text-emerald-600 dark:text-emerald-400' },
+  comisiones:  { iconBg: 'bg-violet-500/10 dark:bg-violet-500/20', iconColor: 'text-violet-500', accent: 'hover:border-violet-500/30', valueColor: 'text-violet-600 dark:text-violet-400' },
 };
 
 const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
@@ -78,11 +78,11 @@ const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
 
   if (error) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-8 text-center">
         <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-red-50 flex items-center justify-center">
           <Icon icon="solar:danger-triangle-bold" className="text-red-500 text-xl" />
         </div>
-        <p className="text-sm font-semibold text-[#0d0d0d]">Error al cargar datos</p>
+        <p className="text-sm font-semibold text-[#0d0d0d] dark:text-white">Error al cargar datos</p>
         <p className="text-xs text-gray-400 mt-1">{error}</p>
       </div>
     );
@@ -96,7 +96,7 @@ const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
           <Link
             key={card.id}
             to={card.link}
-            className={`group bg-white rounded-2xl border border-gray-100 p-5 transition-all duration-200 hover:shadow-md ${style.accent}`}
+            className={`group bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 transition-all duration-200 hover:shadow-md dark:hover:shadow-none ${style.accent}`}
           >
             {/* Icon */}
             <div className={`w-11 h-11 rounded-xl ${style.iconBg} flex items-center justify-center mb-4`}>
@@ -107,9 +107,9 @@ const ColorBoxes = ({ startDate, endDate }: ColorBoxesProps) => {
             <p className="text-xs font-medium text-gray-400 mb-1">{card.title}</p>
 
             {/* Value */}
-            <h3 className="text-xl font-bold text-[#0d0d0d] tracking-[-0.02em]">
+            <h3 className={`text-xl font-bold tracking-[-0.02em] ${style.valueColor}`}>
               {loading ? (
-                <span className="inline-block w-16 h-6 bg-gray-100 rounded-lg animate-pulse" />
+                <span className="inline-block w-16 h-6 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse" />
               ) : (
                 card.value
               )}

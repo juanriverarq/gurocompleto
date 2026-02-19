@@ -140,11 +140,26 @@ const SignupFlow = () => {
         
         // Crear el broker directamente con los datos del formulario
         try {
+          // Leer pricing selection para enviar users_count, storage_gb, period
+          let pricingExtra: Record<string, any> = {};
+          try {
+            const ps = localStorage.getItem('guro_pricing_selection');
+            if (ps) {
+              const parsed = JSON.parse(ps);
+              pricingExtra = {
+                users_count: parsed.users,
+                storage_gb: parsed.storageGB,
+                period: parsed.period,
+              };
+            }
+          } catch {}
+
           const brokerResponse = await api.post('/saas/onboarding/create-broker-simple', {
             phone: formData.phone,
             employeeCount: formData.employeeCount,
             businessType: formData.businessType,
             modules: selectedApps,
+            ...pricingExtra,
           });
 
           if (!brokerResponse.data.success) {

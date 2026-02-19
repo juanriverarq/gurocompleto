@@ -254,6 +254,7 @@ class OnboardingController extends Controller
                 }
                 if ($request->filled('modules')) {
                     $updateData['features'] = $request->input('modules');
+                    $updateData['plan'] = $this->inferPlanFromModules($request->input('modules'));
                 }
                 
                 if (!empty($updateData)) {
@@ -278,6 +279,9 @@ class OnboardingController extends Controller
                 'businessType' => 'required|string|max:64',
                 'employeeCount' => 'required|string|max:16',
                 'modules' => 'required|array|min:1',
+                'users_count' => 'nullable|integer|min:1',
+                'storage_gb' => 'nullable|integer|min:1',
+                'period' => 'nullable|string|in:monthly,annual',
             ]);
 
             if ($validator->fails()) {
@@ -288,12 +292,16 @@ class OnboardingController extends Controller
                 ], 422);
             }
 
-            // Mapear empleados a max_users
-            $employeeMap = [
-                '1' => 1, '2-5' => 5, '6-10' => 10,
-                '11-20' => 20, '21-50' => 50, '50+' => 100,
-            ];
-            $maxUsers = $employeeMap[$request->input('employeeCount')] ?? 5;
+            // Usar users_count del pricing si viene, sino mapear employeeCount
+            if ($request->filled('users_count')) {
+                $maxUsers = (int) $request->input('users_count');
+            } else {
+                $employeeMap = [
+                    '1' => 1, '2-5' => 5, '6-10' => 10,
+                    '11-20' => 20, '21-50' => 50, '50+' => 100,
+                ];
+                $maxUsers = $employeeMap[$request->input('employeeCount')] ?? 5;
+            }
 
             // Generar nombre del broker basado en el nombre del usuario
             $brokerName = $user->name ? $user->name . ' - Agencia' : 'Mi Agencia';
@@ -307,6 +315,10 @@ class OnboardingController extends Controller
                 $subdomain = $baseSubdomain . '-' . $counter;
                 $counter++;
             }
+
+            // Determinar plan basado en los módulos seleccionados
+            $selectedModules = $request->input('modules', []);
+            $plan = $this->inferPlanFromModules($selectedModules);
 
             DB::beginTransaction();
 
@@ -323,10 +335,10 @@ class OnboardingController extends Controller
                     'country' => 'Colombia',
                     'industry' => $request->input('businessType'),
                     'subdomain' => $subdomain,
-                    'plan' => 'basic',
+                    'plan' => $plan,
                     'max_users' => $maxUsers,
-                    'max_clients' => 100,
-                    'max_policies' => 500,
+                    'max_clients' => 999999,
+                    'max_policies' => 999999,
                     'features' => $request->input('modules', []),
                     'status' => 'trial',
                     'trial_ends_at' => Carbon::now()->addDays(7),
@@ -336,6 +348,8 @@ class OnboardingController extends Controller
                         'currency' => 'COP',
                         'language' => 'es',
                         'onboarding_completed' => false,
+                        'storage_gb' => $request->input('storage_gb', 10),
+                        'billing_period' => $request->input('period', 'monthly'),
                     ],
                     'brand_colors' => [
                         'primary' => '#3b82f6',
@@ -716,5 +730,49 @@ class OnboardingController extends Controller
                 ]);
             }
         });
+    }
+
+    /**
+     * Inferir el plan basado en los módulos seleccionados.
+     * Coincide con PLAN_PRESETS del frontend.
+     */
+    private function inferPlanFromModules(array $modules): string
+    {
+        $starterModules = ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm'];
+        $professionalExtras = ['comisiones','reportes','miniweb','ia_chatbot','lector_pdf_ia'];
+        $businessExtras = ['ia_chatbot_sura','marca_blanca','sitio_web','ia_predicciones','ia_ventas_cruzadas'];
+        $enterpriseExtras = ['facturacion_electronica','nomina_electronica','app_movil'];
+
+        $hasAll = function (array $keys) use ($modules) {
+            foreach ($keys as $k) {
+                if (!in_array($k, $modules)) return false;
+            }
+            return true;
+        };
+
+        // A tu medida (custom): tiene módulos exclusivos o todos
+        if ($hasAll($enterpriseExtras) || count($modules) >= 25) {
+            return 'custom';
+        }
+
+        // Business: tiene extras de business
+        $businessHits = 0;
+        foreach ($businessExtras as $k) {
+            if (in_array($k, $modules)) $businessHits++;
+        }
+        if ($businessHits >= 2) {
+            return 'business';
+        }
+
+        // Professional: tiene extras de professional
+        $proHits = 0;
+        foreach ($professionalExtras as $k) {
+            if (in_array($k, $modules)) $proHits++;
+        }
+        if ($proHits >= 2) {
+            return 'professional';
+        }
+
+        return 'starter';
     }
 }

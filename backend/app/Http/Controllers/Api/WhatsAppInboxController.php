@@ -13,17 +13,34 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use App\Http\Middleware\UnifiedAuthMiddleware;
+use App\Models\EmpleadoBroker;
 
 class WhatsAppInboxController extends Controller
 {
+    /**
+     * Obtener usuario autenticado y su broker (compatible con Firebase + Empleados)
+     */
+    private function resolveUserAndBroker(Request $request): array
+    {
+        $user = UnifiedAuthMiddleware::getAuthenticatedUser($request);
+        if (!$user) {
+            return [null, null];
+        }
+        $broker = ($user instanceof EmpleadoBroker)
+            ? $user->broker
+            : $user->getPrimaryBroker();
+        return [$user, $broker];
+    }
+
     // ==========================================
     // DEPARTAMENTOS
     // ==========================================
 
     public function getDepartments(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -42,8 +59,8 @@ class WhatsAppInboxController extends Controller
 
     public function createDepartment(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -67,8 +84,8 @@ class WhatsAppInboxController extends Controller
 
     public function updateDepartment(Request $request, WhatsAppDepartment $department): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $department->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -90,8 +107,8 @@ class WhatsAppInboxController extends Controller
 
     public function deleteDepartment(WhatsAppDepartment $department, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $department->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -104,8 +121,8 @@ class WhatsAppInboxController extends Controller
 
     public function addMemberToDepartment(Request $request, WhatsAppDepartment $department): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $department->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -134,8 +151,8 @@ class WhatsAppInboxController extends Controller
 
     public function removeMemberFromDepartment(Request $request, WhatsAppDepartment $department, int $userId): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $department->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -154,8 +171,14 @@ class WhatsAppInboxController extends Controller
 
     public function getConversations(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        Log::info('📋 [INBOX DEBUG] getConversations', [
+            'user_class' => $user ? get_class($user) : 'null',
+            'user_id' => $user->id ?? null,
+            'broker_id' => $broker->id ?? null,
+        ]);
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -206,8 +229,8 @@ class WhatsAppInboxController extends Controller
 
     public function getMyConversations(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -226,8 +249,8 @@ class WhatsAppInboxController extends Controller
 
     public function getConversation(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -240,8 +263,8 @@ class WhatsAppInboxController extends Controller
 
     public function getConversationMessages(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -263,8 +286,8 @@ class WhatsAppInboxController extends Controller
 
     public function assignConversation(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -315,8 +338,8 @@ class WhatsAppInboxController extends Controller
 
     public function assignToDepartment(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -347,8 +370,8 @@ class WhatsAppInboxController extends Controller
 
     public function sendMessage(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -412,8 +435,8 @@ class WhatsAppInboxController extends Controller
 
     public function sendMediaMessage(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -533,8 +556,8 @@ class WhatsAppInboxController extends Controller
 
     public function resolveConversation(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -574,8 +597,8 @@ class WhatsAppInboxController extends Controller
 
     public function updateConversation(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -600,8 +623,8 @@ class WhatsAppInboxController extends Controller
 
     public function addNote(WhatsAppConversation $conversation, Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker || $conversation->broker_id !== $broker->id) {
             return response(['error' => 'No autorizado'], 403);
@@ -627,8 +650,8 @@ class WhatsAppInboxController extends Controller
 
     public function getQuickReplies(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -651,8 +674,8 @@ class WhatsAppInboxController extends Controller
 
     public function createQuickReply(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -679,8 +702,8 @@ class WhatsAppInboxController extends Controller
 
     public function getStats(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -722,8 +745,8 @@ class WhatsAppInboxController extends Controller
      */
     public function getContacts(Request $request): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -819,8 +842,8 @@ class WhatsAppInboxController extends Controller
      */
     public function getContact(Request $request, string $phone): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);
@@ -876,8 +899,8 @@ class WhatsAppInboxController extends Controller
      */
     public function updateContact(Request $request, string $phone): Response
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
 
         if (!$broker) {
             return response(['error' => 'Broker no encontrado'], 403);

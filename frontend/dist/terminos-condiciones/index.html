@@ -1,8 +1,22 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.png" />
+    <script>
+      // Apply theme BEFORE any CSS/JS loads to prevent flash
+      (function(){
+        try {
+          var m = localStorage.getItem('guro_active_mode');
+          if (m === 'light') {
+            document.documentElement.className = 'light';
+          }
+          // else stays 'dark' (set on <html> tag)
+          // Sync Flowbite's own key so it doesn't override our choice
+          localStorage.setItem('flowbite-theme-mode', m || 'dark');
+        } catch(e) {}
+      })();
+    </script>
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Términos y Condiciones | Guro</title>
     <meta name="description" content="Términos y condiciones de uso del software de seguros Guro. Conoce tus derechos y obligaciones como usuario." />
@@ -30,7 +44,7 @@
     <meta property="og:image" content="/favicon.png" />
     <meta property="og:url" content="https://guro.co/terminos-condiciones" />
     <meta property="og:site_name" content="Guro" />
-    <meta property="og:locale" content="es_ES" />
+    <meta property="og:locale" content="es_CO" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -41,7 +55,7 @@
     <meta name="twitter:creator" content="@GuroSeguros" />
     
     <!-- Additional SEO -->
-    <meta name="theme-color" content="#3B82F6" />
+    <meta name="theme-color" content="#573CFF" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -62,21 +76,84 @@
     <meta name="rating" content="general" />
     <meta name="target" content="all" />
     
-    <!-- Structured Data -->
+    <!-- Structured Data: Organization (E-E-A-T + LLM visibility) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Guro",
+      "url": "https://guro.co",
+      "logo": "https://guro.co/favicon.png",
+      "description": "Software de seguros con inteligencia artificial para agencias de seguros en Colombia y Latinoamérica. Gestión integral de pólizas, siniestros, clientes, facturación electrónica y CRM especializado.",
+      "foundingDate": "2024",
+      "areaServed": {
+        "@type": "Country",
+        "name": "Colombia"
+      },
+      "address": {
+        "@type": "PostalAddress",
+        "addressCountry": "CO",
+        "addressLocality": "Colombia"
+      },
+      "sameAs": [
+        "https://www.linkedin.com/company/gurotecnologia",
+        "https://twitter.com/GuroSeguros",
+        "https://www.instagram.com/guro.tecnologia",
+        "https://www.wikidata.org/wiki/Q138223107",
+        "https://www.crunchbase.com/organization/guro"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer service",
+        "availableLanguage": "Spanish",
+        "url": "https://wa.me/573105360658"
+      },
+      "knowsAbout": [
+        "Software de seguros",
+        "InsurTech",
+        "Inteligencia artificial en seguros",
+        "Gestión de pólizas",
+        "CRM para seguros",
+        "Automatización de agencias de seguros"
+      ]
+    }
+    </script>
+
+    <!-- Structured Data: WebSite -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Guro",
+      "url": "https://guro.co",
+      "description": "Software de seguros con inteligencia artificial para agencias de seguros",
+      "inLanguage": "es",
+      "publisher": {
+        "@type": "Organization",
+        "name": "Guro",
+        "url": "https://guro.co"
+      }
+    }
+    </script>
+
+    <!-- Structured Data: SoftwareApplication -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "Guro",
-      "description": "Software de seguros con inteligencia artificial para agencias de seguros. Gestión automatizada de pólizas, siniestros, clientes y análisis predictivo.",
+      "description": "Software de seguros con inteligencia artificial para agencias de seguros. Gestión automatizada de pólizas, siniestros, clientes, facturación electrónica, CRM y análisis predictivo.",
       "url": "https://guro.co",
       "applicationCategory": "BusinessApplication",
+      "applicationSubCategory": "Insurance Management Software",
       "operatingSystem": "Web",
+      "inLanguage": "es",
       "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD",
-        "description": "Prueba gratuita de 7 días"
+        "@type": "AggregateOffer",
+        "lowPrice": "0",
+        "priceCurrency": "COP",
+        "availability": "https://schema.org/OnlineOnly",
+        "description": "Prueba gratuita de 7 días. Planes desde básico hasta enterprise."
       },
       "provider": {
         "@type": "Organization",
@@ -84,23 +161,31 @@
         "url": "https://guro.co"
       },
       "featureList": [
-        "Gestión de pólizas de seguros",
-        "Procesamiento de siniestros",
-        "Inteligencia artificial",
-        "Automatización de procesos",
-        "Análisis predictivo",
-        "CRM para seguros",
-        "Cotizaciones automáticas"
+        "Gestión integral de pólizas de seguros",
+        "Procesamiento y seguimiento de siniestros",
+        "Inteligencia artificial generativa",
+        "CRM especializado para seguros",
+        "Cotizador de autos conectado a +10 aseguradoras",
+        "Facturación electrónica DIAN",
+        "Nómina electrónica integrada",
+        "Chatbot con IA 24/7",
+        "Call center con IA",
+        "Gestión de renovaciones automáticas",
+        "Embudo de ventas y leads",
+        "Gestión documental",
+        "Reportes y analítica avanzada",
+        "App móvil para agentes"
       ],
-      "screenshot": "/favicon.png"
+      "screenshot": "https://guro.co/favicon.png"
     }
     </script>
     
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
-    <script type="module" crossorigin src="/assets/index-uAepNJO3.js"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=general-sans@200,300,400,500,600,700&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="/assets/index-DPMFCO37.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-charts-CIqHj9iK.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-fuDYChmy.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-CJJdCrsr.css">
   </head>
   <body>
     <div id="root"></div>

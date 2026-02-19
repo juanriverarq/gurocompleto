@@ -11,6 +11,7 @@ import {
 import { CardContent } from 'src/components/shadcn-ui/Default-Ui/card';
 import { Button as ShButton } from 'src/components/shadcn-ui/Default-Ui/button';
 import { Icon } from '@iconify/react';
+import guroToast from 'src/components/GuroToast/GuroToast';
 import HeroButton from 'src/components/HeroButton';
 import CardBox from 'src/components/shared/CardBox';
 import Chart from 'react-apexcharts';
@@ -361,7 +362,7 @@ const Plantillas = () => {
 
   const handleSaveFromVisualEditor = async (html: string) => {
     if (!editorNombre.trim()) {
-      alert('Ingresa un nombre para la plantilla antes de guardar.');
+      guroToast.warning('Campo requerido', 'Ingresa un nombre para la plantilla antes de guardar.');
       return;
     }
     try {
@@ -387,13 +388,14 @@ const Plantillas = () => {
       setMostrarEditorVisual(false);
       resetEditorForm();
       setPlantillaSeleccionada(null);
-      alert(
+      guroToast.success(
         plantillaSeleccionada
-          ? 'Plantilla actualizada correctamente'
-          : 'Plantilla creada correctamente',
+          ? 'Plantilla actualizada'
+          : 'Plantilla creada',
+        'La plantilla se ha guardado correctamente',
       );
     } catch (e: any) {
-      alert(e?.message || 'Error al guardar la plantilla');
+      guroToast.error('Error', e?.message || 'Error al guardar la plantilla');
     } finally {
       setEditorGuardando(false);
     }
@@ -401,7 +403,7 @@ const Plantillas = () => {
 
   const handleGuardarPlantilla = async () => {
     if (!editorNombre.trim() || !editorContenido.trim()) {
-      alert('Completa al menos Nombre y Contenido.');
+      guroToast.warning('Campos requeridos', 'Completa al menos Nombre y Contenido.');
       return;
     }
     try {
@@ -422,9 +424,9 @@ const Plantillas = () => {
       await loadPlantillas();
       setMostrarEditor(false);
       resetEditorForm();
-      alert('Plantilla creada correctamente');
+      guroToast.success('Plantilla creada', 'La plantilla se ha guardado correctamente');
     } catch (e: any) {
-      alert(e?.message || 'Error al guardar la plantilla');
+      guroToast.error('Error', e?.message || 'Error al guardar la plantilla');
     } finally {
       setEditorGuardando(false);
     }
@@ -550,7 +552,7 @@ const Plantillas = () => {
       if (!startResp?.success) {
         throw new Error(startResp?.message || 'No se pudo iniciar la campaña');
       }
-      alert(`Campaña iniciada. Recipientes resueltos: ${startResp.resolved_recipients ?? 'N/D'}`);
+      guroToast.success('¡Campaña iniciada!', `Recipientes resueltos: ${startResp.resolved_recipients ?? 'N/D'}`);
       setMostrarWizardCampania(false);
       await loadCampaigns();
       await loadCampaigns();
@@ -905,12 +907,10 @@ const Plantillas = () => {
       if (resp?.success) {
         await loadPlantillas();
       } else {
-        // eslint-disable-next-line no-alert
-        alert(resp?.message || 'No se pudo duplicar la plantilla');
+        guroToast.error('Error', resp?.message || 'No se pudo duplicar la plantilla');
       }
     } catch (e: any) {
-      // eslint-disable-next-line no-alert
-      alert(e?.message || 'Error al duplicar la plantilla');
+      guroToast.error('Error', e?.message || 'Error al duplicar la plantilla');
     }
   };
 
@@ -1163,7 +1163,8 @@ const Plantillas = () => {
                                 const ids = Array.from(selectedCampaigns);
                                 const resp = await emailCampaignService.bulkDeleteCampaigns(ids);
                                 if (resp?.success) {
-                                  alert(
+                                  guroToast.success(
+                                    'Campañas eliminadas',
                                     `${count} campaña${
                                       count !== 1 ? 's eliminadas' : ' eliminada'
                                     } correctamente`,
@@ -1172,10 +1173,10 @@ const Plantillas = () => {
                                   setSelectAll(false);
                                   await loadCampaigns();
                                 } else {
-                                  alert(resp?.message || 'Error al eliminar las campañas');
+                                  guroToast.error('Error', resp?.message || 'Error al eliminar las campañas');
                                 }
                               } catch (e: any) {
-                                alert(e?.message || 'Error al eliminar las campañas');
+                                guroToast.error('Error', e?.message || 'Error al eliminar las campañas');
                               }
                             }}
                           >
@@ -1410,15 +1411,13 @@ const Plantillas = () => {
                                               const resp =
                                                 await emailCampaignService.deleteCampaign(c.id);
                                               if (resp?.success) {
-                                                alert('Campaña eliminada correctamente');
+                                                guroToast.success('Campaña eliminada', 'La campaña se ha eliminado correctamente');
                                                 await loadCampaigns();
                                               } else {
-                                                alert(
-                                                  resp?.message || 'Error al eliminar la campaña',
-                                                );
+                                                guroToast.error('Error', resp?.message || 'Error al eliminar la campaña');
                                               }
                                             } catch (e: any) {
-                                              alert(e?.message || 'Error al eliminar la campaña');
+                                              guroToast.error('Error', e?.message || 'Error al eliminar la campaña');
                                             }
                                           }}
                                           title="Eliminar campaña"
@@ -1742,12 +1741,12 @@ const Plantillas = () => {
                                       );
                                       if (resp?.success) {
                                         await loadPlantillas();
-                                        alert('Plantilla eliminada');
+                                        guroToast.success('Plantilla eliminada', 'La plantilla se ha eliminado correctamente');
                                       } else {
-                                        alert(resp?.message || 'Error al eliminar');
+                                        guroToast.error('Error', resp?.message || 'Error al eliminar');
                                       }
                                     } catch (e: any) {
-                                      alert(e?.message || 'Error');
+                                      guroToast.error('Error', e?.message || 'Error al eliminar');
                                     }
                                   }}
                                   title="Eliminar plantilla"
@@ -1877,12 +1876,12 @@ const Plantillas = () => {
                             await loadPlantillas();
                             setMostrarModal(false);
                             setPlantillaSeleccionada(null);
-                            alert('Plantilla eliminada correctamente');
+                            guroToast.success('Plantilla eliminada', 'La plantilla se ha eliminado correctamente');
                           } else {
-                            alert(resp?.message || 'No se pudo eliminar la plantilla');
+                            guroToast.error('Error', resp?.message || 'No se pudo eliminar la plantilla');
                           }
                         } catch (e: any) {
-                          alert(e?.message || 'Error al eliminar la plantilla');
+                          guroToast.error('Error', e?.message || 'Error al eliminar la plantilla');
                         }
                       }}
                     >

@@ -92,6 +92,9 @@ const WhatsAppCampanas: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<any>(null);
 
+  // Retry
+  const [retrying, setRetrying] = useState(false);
+
   // Campaign detail
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
@@ -315,6 +318,28 @@ const WhatsAppCampanas: React.FC = () => {
     }
   };
 
+  // Retry failed messages
+  const handleRetryFailed = async (campaignId: number) => {
+    try {
+      setRetrying(true);
+      setError('');
+      const data = await apiFetch(`/saas/campaigns/${campaignId}/retry-failed`, { method: 'POST' });
+      if (data.success) {
+        // Update the selected campaign with fresh data
+        if (data.campaign) {
+          setSelectedCampaign(data.campaign);
+        }
+        await loadCampaigns();
+      } else {
+        setError(data.message || 'Error al reintentar');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   // Status badge
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
@@ -368,40 +393,51 @@ const WhatsAppCampanas: React.FC = () => {
           </Button>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <Table hoverable>
-            <Table.Head>
-              <Table.HeadCell>Campaña</Table.HeadCell>
-              <Table.HeadCell>Plantilla</Table.HeadCell>
-              <Table.HeadCell>Estado</Table.HeadCell>
-              <Table.HeadCell>Destinatarios</Table.HeadCell>
-              <Table.HeadCell>Enviados</Table.HeadCell>
-              <Table.HeadCell>Entregados</Table.HeadCell>
-              <Table.HeadCell>Fallidos</Table.HeadCell>
-              <Table.HeadCell>Fecha</Table.HeadCell>
-            </Table.Head>
-            <Table.Body className="divide-y">
+        <div className="guro-table-wrap">
+          <table className="guro-table">
+            <thead>
+              <tr>
+                <th>Campaña</th>
+                <th>Plantilla</th>
+                <th>Estado</th>
+                <th>Destinatarios</th>
+                <th>Enviados</th>
+                <th>Entregados</th>
+                <th>Fallidos</th>
+                <th>Fecha</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
               {campaigns.map(c => (
-                <Table.Row key={c.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800" onClick={() => setSelectedCampaign(c)}>
-                  <Table.Cell>
+                <tr key={c.id} className="cursor-pointer group" onClick={() => setSelectedCampaign(c)}>
+                  <td>
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{c.name}</p>
+                      <p className="font-medium">{c.name}</p>
                       {c.description && <p className="text-xs text-gray-500 truncate max-w-[200px]">{c.description}</p>}
                     </div>
-                  </Table.Cell>
-                  <Table.Cell>
+                  </td>
+                  <td>
                     <span className="font-mono text-xs text-blue-600 dark:text-blue-400">{c.template_name || '—'}</span>
-                  </Table.Cell>
-                  <Table.Cell>{statusBadge(c.status)}</Table.Cell>
-                  <Table.Cell>{c.total_targets}</Table.Cell>
-                  <Table.Cell className="text-green-600">{c.stats?.sent || c.sent_count || 0}</Table.Cell>
-                  <Table.Cell className="text-blue-600">{c.stats?.delivered || c.delivered_count || 0}</Table.Cell>
-                  <Table.Cell className="text-red-600">{c.stats?.failed || c.failed_count || 0}</Table.Cell>
-                  <Table.Cell className="text-xs text-gray-500">{new Date(c.created_at).toLocaleDateString('es-CO')}</Table.Cell>
-                </Table.Row>
+                  </td>
+                  <td>{statusBadge(c.status)}</td>
+                  <td>{c.total_targets}</td>
+                  <td className="text-green-600">{c.stats?.sent || c.sent_count || 0}</td>
+                  <td className="text-blue-600">{c.stats?.delivered || c.delivered_count || 0}</td>
+                  <td className="text-red-600">{c.stats?.failed || c.failed_count || 0}</td>
+                  <td className="text-xs text-gray-500">{new Date(c.created_at).toLocaleDateString('es-CO')}</td>
+                  <td>
+                    {((c.failed_count || 0) > 0 || (c.stats?.failed || 0) > 0) && c.status !== 'sending' && (
+                      <Button size="xs" color="warning" onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleRetryFailed(c.id); }} disabled={retrying}>
+                        {retrying ? <Spinner size="xs" className="mr-1" /> : <Icon icon="solar:refresh-bold" width={14} className="mr-1" />}
+                        Reintentar
+                      </Button>
+                    )}
+                  </td>
+                </tr>
               ))}
-            </Table.Body>
-          </Table>
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -639,38 +675,40 @@ const WhatsAppCampanas: React.FC = () => {
                     {loadingClients ? (
                       <div className="flex items-center justify-center py-8"><Spinner /></div>
                     ) : (
-                      <Table hoverable>
-                        <Table.Head>
-                          <Table.HeadCell className="w-10"></Table.HeadCell>
-                          <Table.HeadCell>Nombre</Table.HeadCell>
-                          <Table.HeadCell>Teléfono</Table.HeadCell>
-                          <Table.HeadCell>Ciudad</Table.HeadCell>
-                        </Table.Head>
-                        <Table.Body className="divide-y">
+                      <table className="guro-table">
+                        <thead>
+                          <tr>
+                            <th className="w-10"></th>
+                            <th>Nombre</th>
+                            <th>Teléfono</th>
+                            <th>Ciudad</th>
+                          </tr>
+                        </thead>
+                        <tbody>
                           {filteredClients.slice(0, 100).map(c => (
-                            <Table.Row key={c.id}>
-                              <Table.Cell>
+                            <tr key={c.id}>
+                              <td>
                                 <Checkbox
                                   checked={selectedClientIds.has(c.id)}
                                   onChange={() => toggleClient(c.id)}
                                   disabled={!c.celular_principal}
                                 />
-                              </Table.Cell>
-                              <Table.Cell>
+                              </td>
+                              <td>
                                 <span className={!c.celular_principal ? 'text-gray-400' : ''}>
                                   {c.nombre} {c.apellidos}
                                 </span>
-                              </Table.Cell>
-                              <Table.Cell>
+                              </td>
+                              <td>
                                 <span className={!c.celular_principal ? 'text-gray-400 italic' : 'font-mono text-xs'}>
                                   {c.celular_principal || 'Sin teléfono'}
                                 </span>
-                              </Table.Cell>
-                              <Table.Cell className="text-xs text-gray-500">{c.ciudad || '—'}</Table.Cell>
-                            </Table.Row>
+                              </td>
+                              <td className="text-xs text-gray-500">{c.ciudad || '—'}</td>
+                            </tr>
                           ))}
-                        </Table.Body>
-                      </Table>
+                        </tbody>
+                      </table>
                     )}
                   </div>
                   <p className="text-xs text-gray-500">
@@ -813,6 +851,23 @@ const WhatsAppCampanas: React.FC = () => {
                   />
                 </div>
               )}
+              {/* Retry failed button */}
+              {((selectedCampaign.failed_count || 0) > 0 || (selectedCampaign.stats?.failed || 0) > 0) && selectedCampaign.status !== 'sending' && (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                  <Icon icon="solar:danger-triangle-bold-duotone" width={20} className="text-amber-500 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      {(selectedCampaign.stats?.failed || selectedCampaign.failed_count || 0)} mensaje(s) fallido(s)
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Puedes reintentar el envío de los mensajes que no se entregaron</p>
+                  </div>
+                  <Button size="sm" color="warning" onClick={() => handleRetryFailed(selectedCampaign.id)} disabled={retrying}>
+                    {retrying ? <Spinner size="sm" className="mr-1" /> : <Icon icon="solar:refresh-bold" width={16} className="mr-1" />}
+                    {retrying ? 'Reintentando...' : 'Reintentar fallidos'}
+                  </Button>
+                </div>
+              )}
+
               <p className="text-xs text-gray-400">Creada: {new Date(selectedCampaign.created_at).toLocaleString('es-CO')}</p>
             </div>
           )}

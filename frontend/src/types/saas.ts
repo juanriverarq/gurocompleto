@@ -31,7 +31,11 @@ export interface BrokerTenant {
     nombre_comercial?: string;
     slogan?: string;
   };
-  plan: 'basic' | 'professional' | 'enterprise';
+  features?: string[]; // Active module keys (e.g. 'clientes', 'polizas', 'crm', etc.)
+  max_users?: number;
+  max_clients?: number;
+  max_policies?: number;
+  plan: 'starter' | 'professional' | 'business' | 'custom';
   configuraciones?: {
     modulos_activos: string[];
     limites: {

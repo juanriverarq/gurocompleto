@@ -397,75 +397,79 @@ const WhatsAppPlantillas: React.FC = () => {
             )}
           </div>
         ) : (
-          <Table hoverable>
-            <Table.Head>
-              <Table.HeadCell>Plantilla</Table.HeadCell>
-              <Table.HeadCell>Estado</Table.HeadCell>
-              <Table.HeadCell>Categoría</Table.HeadCell>
-              <Table.HeadCell>Idioma</Table.HeadCell>
-              <Table.HeadCell>Calidad</Table.HeadCell>
-              <Table.HeadCell className="text-right">Acciones</Table.HeadCell>
-            </Table.Head>
-            <Table.Body className="divide-y">
-              {templates.map((template) => (
-                <Table.Row key={template.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
-                  <Table.Cell>
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white text-sm font-mono">{template.name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
-                        {template.parsed.body || '—'}
-                      </p>
-                      {template.parsed.buttons.length > 0 && (
-                        <div className="flex gap-1 mt-1">
-                          {template.parsed.buttons.map((btn, i) => (
-                            <span key={i} className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
-                              {btn.text}
-                            </span>
-                          ))}
-                        </div>
+          <div className="guro-table-wrap">
+            <table className="guro-table">
+              <thead>
+                <tr>
+                  <th>Plantilla</th>
+                  <th>Estado</th>
+                  <th>Categoría</th>
+                  <th>Idioma</th>
+                  <th>Calidad</th>
+                  <th className="sticky-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {templates.map((template) => (
+                  <tr key={template.id} className="group">
+                    <td>
+                      <div>
+                        <p className="font-medium text-sm font-mono">{template.name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                          {template.parsed.body || '—'}
+                        </p>
+                        {template.parsed.buttons.length > 0 && (
+                          <div className="flex gap-1 mt-1">
+                            {template.parsed.buttons.map((btn, i) => (
+                              <span key={i} className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+                                {btn.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td>{getStatusBadge(template.status)}</td>
+                    <td>{getCategoryBadge(template.category)}</td>
+                    <td>
+                      <span className="text-xs text-gray-500">{getLanguageLabel(template.language)}</span>
+                    </td>
+                    <td>
+                      {template.quality_score?.score ? (
+                        <Badge color={template.quality_score.score === 'GREEN' ? 'success' : template.quality_score.score === 'YELLOW' ? 'warning' : 'failure'} size="sm">
+                          {template.quality_score.score === 'GREEN' ? 'Alta' : template.quality_score.score === 'YELLOW' ? 'Media' : 'Baja'}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
                       )}
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>{getStatusBadge(template.status)}</Table.Cell>
-                  <Table.Cell>{getCategoryBadge(template.category)}</Table.Cell>
-                  <Table.Cell>
-                    <span className="text-xs text-gray-500">{getLanguageLabel(template.language)}</span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    {template.quality_score?.score ? (
-                      <Badge color={template.quality_score.score === 'GREEN' ? 'success' : template.quality_score.score === 'YELLOW' ? 'warning' : 'failure'} size="sm">
-                        {template.quality_score.score === 'GREEN' ? 'Alta' : template.quality_score.score === 'YELLOW' ? 'Media' : 'Baja'}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex justify-end gap-1.5">
-                      <Tooltip content="Vista previa" trigger="hover">
-                        <Button size="xs" color="light" onClick={() => { setSelectedTemplate(template); setShowPreviewModal(true); }}>
-                          <Icon icon="solar:eye-bold" width={14} className="text-blue-500" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Eliminar" trigger="hover">
-                        <Button
-                          size="xs"
-                          color="light"
-                          onClick={() => handleDelete(template.name)}
-                          disabled={deleting === template.name}
-                        >
-                          {deleting === template.name
-                            ? <Spinner size="xs" />
-                            : <Icon icon="solar:trash-bin-trash-bold" width={14} className="text-red-500" />
-                          }
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
+                    </td>
+                    <td className="sticky-right">
+                      <div className="flex justify-center gap-1.5">
+                        <Tooltip content="Vista previa" trigger="hover">
+                          <Button size="xs" color="light" onClick={() => { setSelectedTemplate(template); setShowPreviewModal(true); }}>
+                            <Icon icon="solar:eye-bold" width={14} className="text-blue-500" />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Eliminar" trigger="hover">
+                          <Button
+                            size="xs"
+                            color="light"
+                            onClick={() => handleDelete(template.name)}
+                            disabled={deleting === template.name}
+                          >
+                            {deleting === template.name
+                              ? <Spinner size="xs" />
+                              : <Icon icon="solar:trash-bin-trash-bold" width={14} className="text-red-500" />
+                            }
+                          </Button>
+                        </Tooltip>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
