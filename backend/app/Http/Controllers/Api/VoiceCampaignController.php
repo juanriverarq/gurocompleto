@@ -2583,7 +2583,7 @@ class VoiceCampaignController extends Controller
             $templateId = $campaignSettings['template_id'] ?? null;
             $isCrossSell = $templateId === 'cross_sell';
 
-            $personalizedFirstMessage = "!Hola¡, ¿Tengo el gusto de hablar con " . $customerName . "?";
+            $personalizedFirstMessage = "¡Hola!, ¿Tengo el gusto de hablar con " . $customerName . "?";
             
             // if ($isCrossSell) {
                 // Venta cruzada: saludo con empresa pero sin mencionar pólizas
