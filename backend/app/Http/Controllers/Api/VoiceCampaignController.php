@@ -2583,7 +2583,7 @@ class VoiceCampaignController extends Controller
             $templateId = $campaignSettings['template_id'] ?? null;
             $isCrossSell = $templateId === 'cross_sell';
 
-            $personalizedFirstMessage = "¡Hola!, ¿Tengo el gusto de hablar con " . $customerName . "?";
+            $personalizedFirstMessage = "Hola, ¿Tengo el gusto de hablar con " . $customerName . "?";
             
             // if ($isCrossSell) {
                 // Venta cruzada: saludo con empresa pero sin mencionar pólizas
@@ -2885,7 +2885,7 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
                         'voiceId' => $voiceId,
                         'stability' => 0.5, // Balance entre consistencia y expresividad
                         'similarityBoost' => 0.75,
-                        'style' => 0.4, // Más expresividad emocional
+                        'style' => 0.15, // 0.15 para que no repita las vocales al saludar 
                         'useSpeakerBoost' => true, // Mejora claridad
                     ],
                     'language' => 'es',
