@@ -888,6 +888,23 @@ class VoiceCampaignController extends Controller
             $arguments = $toolCall['function']['arguments'] ?? [];
             $toolCallId = $toolCall['id'];
 
+            // Si la tool de Vapi se llama "cotizar_seguro_pcp"
+            if ($name === 'cotizar_seguro_pcp') {
+                $args = $toolCall['function']['arguments'];
+                if (is_string($args)) {
+                    $args = json_decode($args, true);
+                }
+
+                // Calculas la lógica del Excel
+                $respuestaTexto = $this->calculatePcpQuote($args);
+
+                // Devuelves el texto natural para que lo diga el Agente de IA
+                $results[] = [
+                    'toolCallId' => $toolCall['id'],
+                    'result' => $respuestaTexto
+                ];
+            }
+
             if ($name === 'scheduleCallback') {
                 $datetime = $arguments['datetime'] ?? null;
                 $resultText = "No se pudo reagendar.";
@@ -948,6 +965,65 @@ class VoiceCampaignController extends Controller
         return response()->json([
             'results' => $results
         ]);
+    }
+
+
+
+    /**
+     * Lógica extraída del Cotizador PCP (2025)
+     */
+    private function calculatePcpQuote(array $data): string
+    {
+        $edad = (int) ($data['edad'] ?? 0);
+        $monto = (float) ($data['monto_desembolsado'] ?? 0);
+        $entidad = strtoupper($data['entidad_financiera'] ?? '');
+        
+        // Tasas por edad
+        $tasasSura = [
+            18 => 0.764, 19 => 0.764, 20 => 0.764, 21 => 0.821, 22 => 0.883, 23 => 0.948,
+            24 => 1.019, 25 => 1.095, 26 => 1.177, 27 => 1.265, 28 => 1.360, 29 => 1.461,
+            30 => 1.570, 31 => 1.687, 32 => 1.813, 33 => 1.949, 34 => 2.094, 35 => 2.251,
+            36 => 2.419, 37 => 2.599, 38 => 2.793, 39 => 3.002, 40 => 3.226, 41 => 3.467,
+            42 => 3.726, 43 => 3.979, 44 => 4.144, 45 => 4.324, 46 => 4.521, 47 => 4.735,
+            48 => 4.970, 49 => 5.229, 50 => 5.507, 51 => 5.717, 52 => 5.997, 53 => 6.357,
+            54 => 6.827, 55 => 7.377, 56 => 7.842, 57 => 8.339, 58 => 8.868, 59 => 9.432,
+            60 => 10.034, 61 => 10.676, 62 => 11.362, 63 => 12.141, 64 => 13.026, 65 => 14.032,
+            66 => 15.178, 67 => 16.484, 68 => 17.977, 69 => 19.685, 70 => 21.643
+        ];
+        
+        if (!isset($tasasSura[$edad])) {
+            return "Lo siento, este plan solo aplica para edades entre 18 y 70 años.";
+        }
+
+        // Costo actual según la entidad financiera (por cada millón)
+        $tasasEntidades = [
+            'SUFI' => 1290, 'TOYOTA FINANCIAL' => 1650, 'FINANDINA' => 0,
+            'BANCO OCCIDENTE' => 1000, 'BANCO BOGOTA' => 1000, 'BBVA' => 0,
+            'BANCO SANTANDER' => 1200, 'PORSCHE MOVILIDAD' => 0, 'GM FINANCIAL' => 0,
+            'BANCOLOMBIA' => 1000, 'DAVIVIENDA' => 0
+        ];
+        
+        // 1. Calcular Cuota Actual
+        $tasaBanco = $tasasEntidades[$entidad] ?? 1000;
+        $cuotaActual = $data['valor_seguro_actual'] ?? (($monto / 1000000) * $tasaBanco);
+        
+        // 2. Calcular Cotización SURA
+        $primaAnualSura = ($monto / 1000) * $tasasSura[$edad];
+        $primaMensualSura = $primaAnualSura * 0.091; // Factor equivalente al Excel para mensualizar
+        
+        // 3. Calcular Ahorros
+        $ahorroMensual = $cuotaActual - $primaMensualSura;
+        $ahorroAnual = $ahorroMensual * 12;
+        
+        // Retornamos la frase en texto natural para que el agente de VAPI la diga en la llamada
+        return sprintf(
+            "Con SURA pagarías mensualmente %s pesos, mientras que actualmente pagas %s pesos. " .
+            "Esto significa un ahorro mensual de %s pesos, y un ahorro total al año de %s pesos.",
+            number_format($primaMensualSura, 0, ',', '.'),
+            number_format($cuotaActual, 0, ',', '.'),
+            number_format($ahorroMensual, 0, ',', '.'),
+            number_format($ahorroAnual, 0, ',', '.')
+        );
     }
 
     /**
@@ -2478,6 +2554,9 @@ class VoiceCampaignController extends Controller
             $debtAmountRaw = $contact['debt_amount'] ?? data_get($contact, 'custom_data.debt_amount') ?? 0;
             $dueDateRaw    = $contact['payment_due_date'] ?? data_get($contact, 'custom_data.payment_due_date') ?? Carbon::now()->addDays(5)->format('Y-m-d');
             $customerName  = $contact['name'] ?? data_get($contact, 'custom_data.customer_name') ?? 'Cliente';
+            $customerDocument = $contact['document'] ?? data_get($contact, 'custom_data.customer_document') ?? '1234567890';
+            $debtEntity = $contact['debt_entity'] ?? data_get($contact, 'custom_data.debt_entity') ?? 'Un banco';
+            $customerAge = $contact['customer_age'] ?? data_get($contact, 'custom_data.customer_age') ?? '43';
             
             // Formatear fecha en español (sin año)
             $dueDate = $this->formatDateInSpanish($dueDateRaw);
@@ -2494,7 +2573,11 @@ class VoiceCampaignController extends Controller
                 'plate_number'     => (string) $plateNumber,
                 'policy_type'      => (string) $policyType,
                 'debt_amount'      => $debtAmountFormatted,
+                'debt_entity'      => $debtEntity,
                 'payment_due_date' => (string) $dueDate,
+                'customer_document'=> $customerDocument,
+                'customer_age'     => $customerAge,
+
                 // aliases más comunes para compatibilidad con distintos agentes (camelCase y variantes)
                 'user_name'        => $customerName,
                 'client_name'      => $customerName,
@@ -2582,6 +2665,7 @@ class VoiceCampaignController extends Controller
             // Detectar si es campaña de venta cruzada
             $templateId = $campaignSettings['template_id'] ?? null;
             $isCrossSell = $templateId === 'cross_sell';
+            $isPCPCreditProtection = $templateId == 'pcp_credit_protection';
 
             $personalizedFirstMessage = "Hola, ¿Tengo el gusto de hablar con " . $customerName . "?";
             
@@ -2605,6 +2689,49 @@ class VoiceCampaignController extends Controller
                 $plateInfo = (!empty($plateNumber)) ? " del vehículo placa {$plateNumber}" : "";
                 $firstIntroduction = "Le habla " . $agentDisplayName . " de " . $safeCompany . ". " .
                                             "Quería hablar contigo sobre " . $policyTypeLabel . $plateInfo . ". ¿Tienes un momento?";
+            }
+
+            //Si es una campaña de pcp_credit_protection agregamos la tool para cotizar
+            $AditionalTools = [];
+
+            if ($isPCPCreditProtection){
+                $AditionalTools = [
+                    [
+                        'type'=> 'function',
+                        'function'=> [
+                            'name'=> 'cotizar_seguro_pcp',
+                            'description'=> 'Calcula el costo del seguro SURA y el ahorro mensual del cliente basándose en el monto de la deuda, edad y banco.',
+                            'parameters'=> [
+                                'type'=> 'object',
+                                'required'=> ['edad', 'monto_desembolsado', 'entidad_financiera'],
+                                'properties'=> [
+                                    'edad'=> [
+                                        'type'=> 'integer',
+                                        'description'=> 'La edad actual del cliente.'
+                                    ],
+                                    'monto_desembolsado'=> [
+                                        'type'=> 'number',
+                                        'description'=> 'El valor total de la deuda. IMPORTANTE=> Solo el número, sin comas, ni puntos, ni el símbolo de pesos.'
+                                    ],
+                                    'entidad_financiera'=> [
+                                        'type'=> 'string',
+                                        'description'=> 'El banco con el que tiene la deuda, por ejemplo, "BANCOLOMBIA".'
+                                    ]
+                                ]
+                            ]
+                        ],
+                        'messages'=> [
+                            [
+                                'type'=> 'request-start',
+                                'content'=> 'Regáleme un segundito en la línea mientras el sistema me calcula el valor exacto de su ahorro.'
+                            ],
+                            [
+                                'type'=> 'request-failed',
+                                'content'=> 'Qué pena con usted, el sistema está un poco lento para calcular el valor exacto en este momento. Sin embargo, sé que el ahorro es considerable. ¿Le gustaría que un asesor le envíe la simulación por WhatsApp?'
+                            ]
+                        ]
+                    ]
+                ];
             }
             
             // Obtener system_prompt personalizado de la campaña si existe
@@ -2753,8 +2880,8 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
             } elseif (!empty($customSystemPrompt)) {
                 // Usar system_prompt personalizado de la campaña si existe
                 $finalPrompt = str_replace(
-                    ['{{customer_name}}', '{{company_name}}', '{{agent_name}}', '{{payment_due_date}}', '{{debt_amount}}'],
-                    [$customerName, $safeCompany, $agentDisplayName, $dueDate, $debtAmountFormatted],
+                    ['{{customer_name}}', '{{company_name}}', '{{agent_name}}', '{{payment_due_date}}', '{{debt_amount}}', '{{customer_document}}', '{{plate_number}}', '{{debt_entity}}', '{{customer_age}}'],
+                    [$customerName, $safeCompany, $agentDisplayName, $dueDate, $debtAmountFormatted, $customerDocument, $plateNumber, $debtEntity, $customerAge],
                     $customSystemPrompt
                 );
                 // Agregar contexto de fecha actual al inicio
@@ -2877,7 +3004,10 @@ NO sigas hablando después de despedirte. Invoca endCall y la llamada terminará
                                         'content' => 'Ay, qué pena con usted. Tuve un pequeño inconveniente técnico guardando la cita en el sistema, pero no se preocupe que ya tomé nota manualmente.'
                                     ]
                                 ]
-                            ]
+                            ],
+                            // Se agregan gerramientas personalizadas para el tipo de agente
+                            ...$AditionalTools,
+                                    
                         ]
                     ],
                     'voice' => [
