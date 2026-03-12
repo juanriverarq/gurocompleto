@@ -12,6 +12,7 @@ import saasApi from 'src/services/saasApi';
 import type { Vendedor as VendedorType, VendedorCreate } from 'src/types/admin';
 import ReportesVendedores from './ReportesVendedores';
 import ReporteLiquidaciones from './ReporteLiquidaciones';
+import ReporteProduccion from './ReporteProduccion';
 
 const tiposDocumento = [
   { value: 'CC', label: 'Cédula de Ciudadanía' },
@@ -59,7 +60,7 @@ const Vendedores = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<VendedorType | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'lista' | 'reportes' | 'liquidaciones'>('lista');
+  const [activeTab, setActiveTab] = useState<'lista' | 'reportes' | 'liquidaciones' | 'produccion'>('lista');
   
   // Abrir vendedor desde query param (búsqueda global)
   useEffect(() => {
@@ -474,6 +475,17 @@ const Vendedores = () => {
             Reportes
           </button>
           <button
+            onClick={() => setActiveTab('produccion')}
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+              activeTab === 'produccion'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Icon icon="solar:graph-up-bold" className="w-4 h-4 inline mr-2" />
+            Producción
+          </button>
+          <button
             onClick={() => setActiveTab('liquidaciones')}
             className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
               activeTab === 'liquidaciones'
@@ -490,6 +502,8 @@ const Vendedores = () => {
       {/* Contenido según tab activo */}
       {activeTab === 'reportes' ? (
         <ReportesVendedores />
+      ) : activeTab === 'produccion' ? (
+        <ReporteProduccion />
       ) : activeTab === 'liquidaciones' ? (
         <ReporteLiquidaciones />
       ) : (

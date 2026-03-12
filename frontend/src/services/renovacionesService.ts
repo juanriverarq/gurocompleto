@@ -29,6 +29,7 @@ export interface Renovacion {
   tipoSeguro: string;
   ramo?: string;
   placa?: string;
+  fechaInicio?: string;
   fechaVencimiento: string;
   diasVencimiento: number;
   valorPrima: number;
@@ -39,6 +40,9 @@ export interface Renovacion {
   intentosContacto: number;
   observaciones: string;
   poliza_id: number;
+  numeroRenovacion?: number;
+  comisionPorcentaje?: number;
+  isRenewal?: boolean;
 }
 
 export interface RenovacionesResponse {
@@ -215,8 +219,10 @@ class RenovacionesService {
        nuevoValorPrima: number;
        observaciones: string;
        nuevoNumeroPoliza?: string;
+       nuevaAseguradora?: string;
+       nuevoRamoId?: string;
      },
-   ): Promise<{ success: boolean; message: string }> {
+   ): Promise<{ success: boolean; message: string; data?: any }> {
      try {
        // Validaciones del lado cliente
        const fechaVencimiento = new Date(datos.nuevaFechaVencimiento);
@@ -239,9 +245,9 @@ class RenovacionesService {
          throw new Error('El valor de la prima debe ser mayor o igual a 0');
        }
 
-       // Validar formato de número de póliza si se proporciona
-       if (datos.nuevoNumeroPoliza && !/^[A-Z]{3}-\d{4}-\d{4}$/.test(datos.nuevoNumeroPoliza)) {
-         throw new Error('El formato del número de póliza debe ser AAA-0000-0000');
+       // Validar longitud mínima de número de póliza si se proporciona
+       if (datos.nuevoNumeroPoliza && datos.nuevoNumeroPoliza.trim().length < 3) {
+         throw new Error('El número de póliza debe tener al menos 3 caracteres');
        }
 
        const response = await fetch(`${API_BASE_URL}/saas/renovaciones/${renovacionId}/procesar`, {
@@ -259,6 +265,7 @@ class RenovacionesService {
        return {
          success: true,
          message: data.message || 'Renovación procesada exitosamente',
+         data: data.data || null,
        };
      } catch (error) {
        console.error('Error al procesar renovación:', error);

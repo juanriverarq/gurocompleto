@@ -127,7 +127,7 @@ const CreateCampaignWizard: React.FC<CreateCampaignWizardProps> = ({ open, onClo
       loadWhatsAppInstances();
       loadClients(true);
       loadSegments();
-      loadMetaTemplates();
+      loadMetaTemplates(campaignData.whatsapp_instance_id);
       resetForm();
     }
   }, [open]);
@@ -201,25 +201,38 @@ const CreateCampaignWizard: React.FC<CreateCampaignWizardProps> = ({ open, onClo
     }
   };
 
-  // Load approved Meta templates
-  const loadMetaTemplates = async () => {
+  // Load approved Meta templates (filtered by instance if provided)
+  const loadMetaTemplates = async (instanceId?: number) => {
     try {
       setLoadingTemplates(true);
       const user = (await import('src/config/firebase')).auth.currentUser;
       if (!user) return;
       const token = await user.getIdToken();
       const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
-      const res = await fetch(`${API_BASE}/saas/whatsapp-inbox/templates?status=APPROVED`, {
+      const queryParts = ['status=APPROVED'];
+      if (instanceId) queryParts.push(`instance_id=${instanceId}`);
+      const res = await fetch(`${API_BASE}/saas/whatsapp-inbox/templates?${queryParts.join('&')}`, {
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
       const data = await res.json();
       setMetaTemplates(data.templates || []);
+      // Reset selected template when instance changes
+      if (instanceId) {
+        setSelectedMetaTemplate(null);
+      }
     } catch (error) {
       console.error('Error loading Meta templates:', error);
     } finally {
       setLoadingTemplates(false);
     }
   };
+
+  // Reload templates when instance changes
+  useEffect(() => {
+    if (open && campaignData.whatsapp_instance_id) {
+      loadMetaTemplates(campaignData.whatsapp_instance_id);
+    }
+  }, [campaignData.whatsapp_instance_id]);
 
   // Handle selecting a Meta template
   const handleSelectMetaTemplate = (tpl: MetaTemplate) => {

@@ -866,38 +866,95 @@ class WhatsAppWebhookController extends Controller
                 if (!isset($entry['changes'])) continue;
 
                 foreach ($entry['changes'] as $change) {
-                    if ($change['field'] !== 'messages') continue;
-
-                    $value = $change['value'];
+                    $field = $change['field'] ?? '';
+                    $value = $change['value'] ?? [];
                     $phoneNumberId = $value['metadata']['phone_number_id'] ?? null;
 
-                    if (!$phoneNumberId) {
-                        Log::warning('⚠️ [META WEBHOOK] No phone_number_id en payload');
-                        continue;
+                    // ── Standard messages webhook ──
+                    if ($field === 'messages') {
+                        if (!$phoneNumberId) {
+                            Log::warning('⚠️ [META WEBHOOK] No phone_number_id en payload');
+                            continue;
+                        }
+
+                        $instance = WhatsAppInstance::where('cloud_api_phone_id', $phoneNumberId)->first();
+                        if (!$instance) {
+                            Log::warning('⚠️ [META WEBHOOK] Instancia no encontrada', ['phone_number_id' => $phoneNumberId]);
+                            continue;
+                        }
+
+                        if (isset($value['messages'])) {
+                            foreach ($value['messages'] as $message) {
+                                $this->processMetaIncomingMessage($instance, $message, $value['contacts'] ?? []);
+                            }
+                        }
+                        if (isset($value['statuses'])) {
+                            foreach ($value['statuses'] as $status) {
+                                $this->processMetaStatusUpdate($instance, $status);
+                            }
+                        }
                     }
 
-                    // Buscar la instancia por phone_number_id
-                    $instance = WhatsAppInstance::where('cloud_api_phone_id', $phoneNumberId)->first();
+                    // ── Coexistence: Message Echoes (messages sent from WhatsApp Business App) ──
+                    elseif ($field === 'smb_message_echoes') {
+                        Log::info('📱 [META COEX] smb_message_echoes recibido', ['phone_number_id' => $phoneNumberId]);
+                        $instance = $phoneNumberId ? WhatsAppInstance::where('cloud_api_phone_id', $phoneNumberId)->first() : null;
+                        if (!$instance) {
+                            Log::warning('⚠️ [META COEX] No instance para message echo', ['phone_number_id' => $phoneNumberId]);
+                            continue;
+                        }
+                        $echoes = $value['message_echoes'] ?? [];
+                        foreach ($echoes as $echo) {
+                            $this->processMetaMessageEcho($instance, $echo);
+                        }
+                    }
 
-                    if (!$instance) {
-                        Log::warning('⚠️ [META WEBHOOK] Instancia no encontrada', [
-                            'phone_number_id' => $phoneNumberId
+                    // ── Coexistence: App State Sync (contacts from WhatsApp Business App) ──
+                    elseif ($field === 'smb_app_state_sync') {
+                        Log::info('📱 [META COEX] smb_app_state_sync recibido', ['phone_number_id' => $phoneNumberId]);
+                        $instance = $phoneNumberId ? WhatsAppInstance::where('cloud_api_phone_id', $phoneNumberId)->first() : null;
+                        if (!$instance) {
+                            Log::warning('⚠️ [META COEX] No instance para state sync', ['phone_number_id' => $phoneNumberId]);
+                            continue;
+                        }
+                        $stateSync = $value['state_sync'] ?? [];
+                        foreach ($stateSync as $syncItem) {
+                            $this->processMetaStateSync($instance, $syncItem);
+                        }
+                    }
+
+                    // ── Coexistence: History Sync (chat history from WhatsApp Business App) ──
+                    elseif ($field === 'history') {
+                        Log::info('📱 [META COEX] history webhook recibido', [
+                            'phone_number_id' => $phoneNumberId,
+                            'value_keys' => array_keys($value),
                         ]);
-                        continue;
-                    }
 
-                    // Procesar mensajes entrantes
-                    if (isset($value['messages'])) {
-                        foreach ($value['messages'] as $message) {
-                            $this->processMetaIncomingMessage($instance, $message, $value['contacts'] ?? []);
+                        // Try to find instance — phone_number_id may be in value.metadata or entry.id for WABA-level
+                        $instance = $phoneNumberId ? WhatsAppInstance::where('cloud_api_phone_id', $phoneNumberId)->first() : null;
+                        if (!$instance) {
+                            // Fallback: try to find by WABA ID (entry.id)
+                            $wabaId = $entry['id'] ?? null;
+                            if ($wabaId) {
+                                $instance = WhatsAppInstance::where('cloud_api_business_id', $wabaId)->first();
+                            }
+                        }
+                        if (!$instance) {
+                            Log::warning('⚠️ [META COEX] No instance para history', [
+                                'phone_number_id' => $phoneNumberId,
+                                'waba_id' => $entry['id'] ?? null,
+                            ]);
+                            continue;
+                        }
+
+                        $historyItems = $value['history'] ?? [];
+                        foreach ($historyItems as $historyItem) {
+                            $this->processMetaHistorySync($instance, $historyItem);
                         }
                     }
 
-                    // Procesar actualizaciones de estado
-                    if (isset($value['statuses'])) {
-                        foreach ($value['statuses'] as $status) {
-                            $this->processMetaStatusUpdate($instance, $status);
-                        }
+                    else {
+                        Log::info('📥 [META WEBHOOK] Campo no manejado', ['field' => $field]);
                     }
                 }
             }
@@ -950,7 +1007,9 @@ class WhatsAppWebhookController extends Controller
                     $content = $message['image']['caption'] ?? '[Imagen]';
                     $mediaId = $message['image']['id'] ?? null;
                     $mimeType = $message['image']['mime_type'] ?? null;
+                    Log::info('📥 [MEDIA DOWNLOAD] Descargando imagen', ['mediaId' => substr($mediaId ?? '', 0, 80), 'mimeType' => $mimeType]);
                     $mediaUrl = $mediaId ? $cloudApiService->downloadMedia($instance, $mediaId, $mimeType) : null;
+                    Log::info('📥 [MEDIA DOWNLOAD] Resultado imagen', ['url' => $mediaUrl]);
                     $media = [
                         'type' => 'image',
                         'id' => $mediaId,
@@ -962,7 +1021,9 @@ class WhatsAppWebhookController extends Controller
                     $content = '[Audio]';
                     $mediaId = $message['audio']['id'] ?? null;
                     $mimeType = $message['audio']['mime_type'] ?? null;
+                    Log::info('📥 [MEDIA DOWNLOAD] Descargando audio', ['mediaId' => substr($mediaId ?? '', 0, 80), 'mimeType' => $mimeType]);
                     $mediaUrl = $mediaId ? $cloudApiService->downloadMedia($instance, $mediaId, $mimeType) : null;
+                    Log::info('📥 [MEDIA DOWNLOAD] Resultado audio', ['url' => $mediaUrl]);
                     $media = [
                         'type' => 'audio',
                         'id' => $mediaId,
@@ -974,7 +1035,9 @@ class WhatsAppWebhookController extends Controller
                     $content = $message['video']['caption'] ?? '[Video]';
                     $mediaId = $message['video']['id'] ?? null;
                     $mimeType = $message['video']['mime_type'] ?? null;
+                    Log::info('📥 [MEDIA DOWNLOAD] Descargando video', ['mediaId' => substr($mediaId ?? '', 0, 80), 'mimeType' => $mimeType]);
                     $mediaUrl = $mediaId ? $cloudApiService->downloadMedia($instance, $mediaId, $mimeType) : null;
+                    Log::info('📥 [MEDIA DOWNLOAD] Resultado video', ['url' => $mediaUrl]);
                     $media = [
                         'type' => 'video',
                         'id' => $mediaId,
@@ -986,7 +1049,9 @@ class WhatsAppWebhookController extends Controller
                     $content = $message['document']['filename'] ?? '[Documento]';
                     $mediaId = $message['document']['id'] ?? null;
                     $mimeType = $message['document']['mime_type'] ?? null;
+                    Log::info('📥 [MEDIA DOWNLOAD] Descargando documento', ['mediaId' => substr($mediaId ?? '', 0, 80), 'mimeType' => $mimeType]);
                     $mediaUrl = $mediaId ? $cloudApiService->downloadMedia($instance, $mediaId, $mimeType) : null;
+                    Log::info('📥 [MEDIA DOWNLOAD] Resultado documento', ['url' => $mediaUrl]);
                     $media = [
                         'type' => 'document',
                         'id' => $mediaId,
@@ -1173,5 +1238,796 @@ class WhatsAppWebhookController extends Controller
                 'status' => $status
             ]);
         }
+    }
+
+    // =========================================================================
+    // META COEXISTENCE HANDLERS
+    // =========================================================================
+
+    /**
+     * Process message echo from WhatsApp Business App (coexistence).
+     * These are messages the user sent FROM their phone that Meta mirrors to the API.
+     * We save them as outgoing messages in the inbox.
+     */
+    protected function processMetaMessageEcho(WhatsAppInstance $instance, array $echo): void
+    {
+        try {
+            $from = $echo['from'] ?? null; // Business phone number
+            $to = $echo['to'] ?? null;     // Customer phone number
+            $messageId = $echo['id'] ?? null;
+            $timestamp = $echo['timestamp'] ?? time();
+            $type = $echo['type'] ?? 'text';
+
+            if (!$to || !$messageId) {
+                Log::warning('⚠️ [META COEX] Echo sin datos suficientes', ['echo' => $echo]);
+                return;
+            }
+
+            // Extract content based on type
+            $content = '';
+            $media = null;
+
+            switch ($type) {
+                case 'text':
+                    $content = $echo['text']['body'] ?? '';
+                    break;
+                case 'image':
+                    $content = $echo['image']['caption'] ?? '[Imagen]';
+                    $media = ['type' => 'image', 'id' => $echo['image']['id'] ?? null, 'mime_type' => $echo['image']['mime_type'] ?? null];
+                    break;
+                case 'video':
+                    $content = $echo['video']['caption'] ?? '[Video]';
+                    $media = ['type' => 'video', 'id' => $echo['video']['id'] ?? null, 'mime_type' => $echo['video']['mime_type'] ?? null];
+                    break;
+                case 'audio':
+                    $content = '[Audio]';
+                    $media = ['type' => 'audio', 'id' => $echo['audio']['id'] ?? null, 'mime_type' => $echo['audio']['mime_type'] ?? null];
+                    break;
+                case 'document':
+                    $content = $echo['document']['filename'] ?? '[Documento]';
+                    $media = ['type' => 'document', 'id' => $echo['document']['id'] ?? null, 'mime_type' => $echo['document']['mime_type'] ?? null, 'filename' => $echo['document']['filename'] ?? null];
+                    break;
+                case 'location':
+                    $content = '[Ubicación]';
+                    $media = ['type' => 'location', 'latitude' => $echo['location']['latitude'] ?? null, 'longitude' => $echo['location']['longitude'] ?? null];
+                    break;
+                default:
+                    $content = "[{$type}]";
+            }
+
+            // Download media if available
+            if ($media && !empty($media['id'])) {
+                try {
+                    $cloudApiService = app(\App\Services\WhatsAppCloudApiService::class);
+                    $mediaUrl = $cloudApiService->downloadMedia($instance, $media['id'], $media['mime_type'] ?? null);
+                    if ($mediaUrl) {
+                        $media['url'] = $mediaUrl;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('⚠️ [META COEX] Error descargando media de echo', ['error' => $e->getMessage()]);
+                }
+            }
+
+            // Find or create conversation
+            $conversation = WhatsAppConversation::findOrCreateByPhone(
+                $instance->broker_id,
+                $instance->id,
+                $to,
+                null
+            );
+
+            // Avoid duplicates
+            $existing = $conversation->messages()->where('message_id', $messageId)->first();
+            if ($existing) {
+                Log::info('⚠️ [META COEX] Echo duplicado ignorado', ['message_id' => $messageId]);
+                return;
+            }
+
+            // Save as outgoing message (sent from Business App / phone)
+            $newMessage = $conversation->addMessage([
+                'message_id' => $messageId,
+                'direction' => 'outgoing',
+                'sender_type' => 'agent',
+                'message_type' => $type,
+                'content' => $content,
+                'media' => $media,
+                'status' => 'delivered',
+                'created_at' => \Carbon\Carbon::createFromTimestamp($timestamp),
+            ]);
+
+            $conversation->update([
+                'last_message_at' => now(),
+                'last_message_preview' => substr($content, 0, 100),
+            ]);
+
+            // Emit socket event
+            try {
+                $bridge = app(WhatsAppBridgeService::class);
+                $bridge->emitSocketEvent('inbox_message', [
+                    'conversationId' => $conversation->id,
+                    'message' => [
+                        'id' => $newMessage->id ?? null,
+                        'message_id' => $messageId,
+                        'direction' => 'outgoing',
+                        'sender_type' => 'agent',
+                        'message_type' => $type,
+                        'content' => $content,
+                        'media' => $media,
+                        'created_at' => now()->toIso8601String(),
+                    ],
+                    'phone' => $to,
+                    'instanceId' => $instance->instance_id,
+                ]);
+            } catch (\Exception $e) {
+                // Socket emission is non-critical
+            }
+
+            Log::info('📱 [META COEX] Echo sincronizado', [
+                'instance_id' => $instance->instance_id,
+                'to' => $to,
+                'type' => $type,
+                'content_preview' => substr($content, 0, 50),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [META COEX] Error procesando message echo', [
+                'error' => $e->getMessage(),
+                'echo_id' => $echo['id'] ?? 'unknown',
+            ]);
+        }
+    }
+
+    /**
+     * Process contact state sync from WhatsApp Business App (coexistence).
+     * When the user adds/edits/deletes contacts in their phone app, Meta mirrors it here.
+     */
+    protected function processMetaStateSync(WhatsAppInstance $instance, array $syncItem): void
+    {
+        try {
+            $type = $syncItem['type'] ?? '';
+            $action = $syncItem['action'] ?? '';
+
+            if ($type === 'contact') {
+                $contact = $syncItem['contact'] ?? [];
+                $phone = $contact['phone_number'] ?? null;
+                $fullName = $contact['full_name'] ?? null;
+                $firstName = $contact['first_name'] ?? null;
+                $name = $fullName ?: $firstName ?: null;
+
+                if (!$phone) {
+                    Log::warning('⚠️ [META COEX] State sync sin phone', ['syncItem' => $syncItem]);
+                    return;
+                }
+
+                Log::info('📱 [META COEX] Contact state sync', [
+                    'action' => $action,
+                    'phone' => $phone,
+                    'name' => $name,
+                    'instance_id' => $instance->instance_id,
+                ]);
+
+                // Update contact name in existing conversations for this instance
+                if ($name && in_array($action, ['add', 'update', 'edit'])) {
+                    $updated = WhatsAppConversation::where('broker_id', $instance->broker_id)
+                        ->where('whatsapp_instance_id', $instance->id)
+                        ->where('phone', $phone)
+                        ->whereNull('contact_name')
+                        ->orWhere(function ($q) use ($instance, $phone) {
+                            $q->where('broker_id', $instance->broker_id)
+                              ->where('whatsapp_instance_id', $instance->id)
+                              ->where('phone', $phone)
+                              ->where('contact_name', '');
+                        })
+                        ->update(['contact_name' => $name]);
+
+                    // Also update contact_push_name if it wasn't set
+                    WhatsAppConversation::where('broker_id', $instance->broker_id)
+                        ->where('whatsapp_instance_id', $instance->id)
+                        ->where('phone', $phone)
+                        ->whereNull('contact_push_name')
+                        ->update(['contact_push_name' => $name]);
+
+                    Log::info('✅ [META COEX] Nombre de contacto actualizado', [
+                        'phone' => $phone,
+                        'name' => $name,
+                        'conversations_updated' => $updated,
+                    ]);
+                }
+            } else {
+                Log::info('📱 [META COEX] State sync tipo no manejado', ['type' => $type, 'action' => $action]);
+            }
+        } catch (\Exception $e) {
+            Log::error('❌ [META COEX] Error procesando state sync', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Process history sync from WhatsApp Business App (coexistence).
+     * When coexistence is activated and the user shares their chat history,
+     * Meta sends historical messages in threads.
+     */
+    protected function processMetaHistorySync(WhatsAppInstance $instance, array $historyItem): void
+    {
+        try {
+            // Check for errors (e.g., user declined history sharing)
+            if (isset($historyItem['errors'])) {
+                foreach ($historyItem['errors'] as $error) {
+                    Log::warning('⚠️ [META COEX] History sync error from Meta', [
+                        'code' => $error['code'] ?? null,
+                        'title' => $error['title'] ?? null,
+                        'message' => $error['message'] ?? null,
+                    ]);
+                }
+                return;
+            }
+
+            $metadata = $historyItem['metadata'] ?? [];
+            $phase = $metadata['phase'] ?? 'unknown';
+            $chunkOrder = $metadata['chunk_order'] ?? 0;
+            $progress = $metadata['progress'] ?? null;
+
+            Log::info('📱 [META COEX] History sync chunk', [
+                'instance_id' => $instance->instance_id,
+                'phase' => $phase,
+                'chunk_order' => $chunkOrder,
+                'progress' => $progress,
+            ]);
+
+            $threads = $historyItem['threads'] ?? [];
+            $totalMessages = 0;
+
+            foreach ($threads as $thread) {
+                $customerPhone = $thread['id'] ?? null;
+                if (!$customerPhone) continue;
+
+                $messages = $thread['messages'] ?? [];
+                if (empty($messages)) continue;
+
+                // Find or create conversation
+                $conversation = WhatsAppConversation::findOrCreateByPhone(
+                    $instance->broker_id,
+                    $instance->id,
+                    $customerPhone,
+                    null
+                );
+
+                foreach ($messages as $msg) {
+                    $messageId = $msg['id'] ?? null;
+                    if (!$messageId) continue;
+
+                    // Skip if already exists
+                    if ($conversation->messages()->where('message_id', $messageId)->exists()) {
+                        continue;
+                    }
+
+                    $msgFrom = $msg['from'] ?? '';
+                    $msgTo = $msg['to'] ?? '';
+                    $msgTimestamp = $msg['timestamp'] ?? time();
+                    $msgType = $msg['type'] ?? 'text';
+                    $historyContext = $msg['history_context'] ?? [];
+
+                    // Determine direction: if 'from' is the business phone, it's outgoing
+                    $isFromBusiness = isset($msg['to']); // echoes have 'to' field
+                    $direction = $isFromBusiness ? 'outgoing' : 'incoming';
+
+                    // Extract content
+                    $content = '';
+                    $media = null;
+                    switch ($msgType) {
+                        case 'text':
+                            $content = $msg['text']['body'] ?? '';
+                            break;
+                        case 'image':
+                            $content = $msg['image']['caption'] ?? '[Imagen]';
+                            $media = ['type' => 'image', 'id' => $msg['image']['id'] ?? null];
+                            break;
+                        case 'video':
+                            $content = $msg['video']['caption'] ?? '[Video]';
+                            $media = ['type' => 'video', 'id' => $msg['video']['id'] ?? null];
+                            break;
+                        case 'audio':
+                            $content = '[Audio]';
+                            $media = ['type' => 'audio', 'id' => $msg['audio']['id'] ?? null];
+                            break;
+                        case 'document':
+                            $content = $msg['document']['filename'] ?? '[Documento]';
+                            $media = ['type' => 'document', 'id' => $msg['document']['id'] ?? null, 'filename' => $msg['document']['filename'] ?? null];
+                            break;
+                        default:
+                            $content = "[{$msgType}]";
+                    }
+
+                    $conversation->addMessage([
+                        'message_id' => $messageId,
+                        'direction' => $direction,
+                        'sender_type' => $direction === 'outgoing' ? 'agent' : 'client',
+                        'message_type' => $msgType,
+                        'content' => $content,
+                        'media' => $media,
+                        'status' => $historyContext['status'] ?? 'delivered',
+                        'created_at' => \Carbon\Carbon::createFromTimestamp($msgTimestamp),
+                    ]);
+
+                    $totalMessages++;
+                }
+
+                // Update conversation with latest message info
+                if (!empty($messages)) {
+                    $lastMsg = end($messages);
+                    $lastContent = '';
+                    $lastType = $lastMsg['type'] ?? 'text';
+                    switch ($lastType) {
+                        case 'text': $lastContent = $lastMsg['text']['body'] ?? ''; break;
+                        case 'image': $lastContent = $lastMsg['image']['caption'] ?? '[Imagen]'; break;
+                        case 'video': $lastContent = $lastMsg['video']['caption'] ?? '[Video]'; break;
+                        case 'audio': $lastContent = '[Audio]'; break;
+                        case 'document': $lastContent = $lastMsg['document']['filename'] ?? '[Documento]'; break;
+                        default: $lastContent = "[{$lastType}]";
+                    }
+                    $conversation->update([
+                        'last_message_at' => \Carbon\Carbon::createFromTimestamp($lastMsg['timestamp'] ?? time()),
+                        'last_message_preview' => substr($lastContent, 0, 100),
+                    ]);
+                }
+            }
+
+            Log::info('✅ [META COEX] History sync procesado', [
+                'instance_id' => $instance->instance_id,
+                'threads' => count($threads),
+                'messages_imported' => $totalMessages,
+                'phase' => $phase,
+                'progress' => $progress,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [META COEX] Error procesando history sync', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+    }
+
+    // =========================================================================
+    // YCLOUD WEBHOOK (Coexistencia)
+    // YCloud sends events to this endpoint. We translate them to the same
+    // format used by Meta Cloud API and reuse processMetaIncomingMessage /
+    // processMetaStatusUpdate so the entire Guro pipeline works identically.
+    // =========================================================================
+
+    /**
+     * Webhook para recibir eventos de YCloud (POST)
+     * Handles: whatsapp.inbound_message.received, whatsapp.message.updated
+     */
+    public function ycloudWebhookReceive(Request $request): JsonResponse
+    {
+        try {
+            $payload = $request->all();
+
+            Log::info('📥 [YCLOUD WEBHOOK] Payload recibido', [
+                'type' => $payload['type'] ?? 'unknown',
+                'id' => $payload['id'] ?? 'N/A',
+            ]);
+
+            $eventType = $payload['type'] ?? '';
+
+            // ── Inbound message ──
+            if ($eventType === 'whatsapp.inbound_message.received') {
+                $this->processYCloudInboundMessage($payload);
+            }
+
+            // ── Outbound message status update (sent/delivered/read/failed) ──
+            elseif ($eventType === 'whatsapp.message.updated') {
+                $this->processYCloudMessageUpdate($payload);
+            }
+
+            // ── Business App history sync (coexistence) ── real event name from YCloud
+            elseif (in_array($eventType, ['whatsapp.smb.history', 'whatsapp.business_app.history_message.received'])) {
+                $this->processYCloudInboundMessage($payload);
+            }
+
+            // ── Business App sent message echoes (coexistence) ──
+            elseif (in_array($eventType, ['whatsapp.smb.message.echoes', 'whatsapp.business_app.sent_message.synced'])) {
+                $this->processYCloudOutboundEcho($payload);
+            }
+
+            // ── Business App state sync ──
+            elseif ($eventType === 'whatsapp.smb.app.state.sync') {
+                Log::info('📱 [YCLOUD WEBHOOK] Business App state sync', [
+                    'payload' => json_encode($payload),
+                ]);
+            }
+
+            else {
+                Log::info('📥 [YCLOUD WEBHOOK] Evento no manejado', [
+                    'type' => $eventType,
+                    'payload_keys' => array_keys($payload),
+                ]);
+            }
+
+            return response()->json(['status' => 'ok']);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [YCLOUD WEBHOOK] Error procesando webhook', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            // Always respond 200 to prevent YCloud retries
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Process YCloud inbound message by translating to Meta format and reusing
+     * the existing processMetaIncomingMessage pipeline.
+     *
+     * YCloud payload structure for whatsapp.inbound_message.received:
+     * {
+     *   "id": "evt_...",
+     *   "type": "whatsapp.inbound_message.received",
+     *   "whatsappInboundMessage": {
+     *     "id": "ycloud_msg_id",
+     *     "wamid": "wamid.HB...",  ← WhatsApp message ID
+     *     "wabaId": "...",
+     *     "from": "573001234567",
+     *     "to": "573009876543",
+     *     "customerProfile": { "name": "Juan" },
+     *     "type": "text",
+     *     "text": { "body": "Hola" },
+     *     "image": { "id": "...", "link": "https://...", "caption": "...", "mimeType": "..." },
+     *     "document": { "id": "...", "link": "https://...", "filename": "...", "mimeType": "..." },
+     *     "audio": { "id": "...", "link": "https://...", "mimeType": "..." },
+     *     "video": { "id": "...", "link": "https://...", "caption": "...", "mimeType": "..." },
+     *     "location": { "latitude": ..., "longitude": ... },
+     *     "timestamp": "2026-02-25T20:00:00Z"
+     *   }
+     * }
+     */
+    protected function processYCloudInboundMessage(array $payload): void
+    {
+        $msg = $payload['whatsappInboundMessage'] ?? [];
+        if (empty($msg)) {
+            Log::warning('⚠️ [YCLOUD WEBHOOK] No whatsappInboundMessage in payload');
+            return;
+        }
+
+        $wabaId = $msg['wabaId'] ?? null;
+        $from = $msg['from'] ?? null;
+        $to = $msg['to'] ?? null;
+
+        if (!$from) {
+            Log::warning('⚠️ [YCLOUD WEBHOOK] No from number in message');
+            return;
+        }
+
+        // Normalize: YCloud sends +573... but Meta sends 573... — strip leading +
+        $from = ltrim($from, '+');
+        if ($to) $to = ltrim($to, '+');
+
+        // Find instance by WABA ID or by phone number (to field)
+        $instance = null;
+        if ($wabaId) {
+            $instance = WhatsAppInstance::where('cloud_api_business_id', $wabaId)
+                ->where('connection_type', 'ycloud')
+                ->first();
+        }
+        if (!$instance && $to) {
+            $normalizedTo = preg_replace('/[^0-9]/', '', $to);
+            $instance = WhatsAppInstance::where('connection_type', 'ycloud')
+                ->get()
+                ->first(function ($inst) use ($normalizedTo) {
+                    $instPhone = preg_replace('/[^0-9]/', '', $inst->phone_number ?? '');
+                    return $instPhone === $normalizedTo || str_ends_with($instPhone, $normalizedTo) || str_ends_with($normalizedTo, $instPhone);
+                });
+        }
+
+        if (!$instance) {
+            Log::warning('⚠️ [YCLOUD WEBHOOK] No YCloud instance found', [
+                'waba_id' => $wabaId,
+                'to' => $to,
+            ]);
+            return;
+        }
+
+        // Translate YCloud message to Meta format
+        $type = $msg['type'] ?? 'text';
+        $wamid = $msg['wamid'] ?? $msg['id'] ?? ('yc_' . uniqid());
+        $timestamp = isset($msg['timestamp'])
+            ? (string) strtotime($msg['timestamp'])
+            : (string) time();
+
+        $metaMessage = [
+            'id' => $wamid,
+            'from' => $from,
+            'timestamp' => $timestamp,
+            'type' => $type,
+        ];
+
+        // Map content fields — YCloud uses the same structure as Meta for most types
+        switch ($type) {
+            case 'text':
+                $metaMessage['text'] = ['body' => $msg['text']['body'] ?? ''];
+                break;
+            case 'image':
+                $img = $msg['image'] ?? [];
+                $metaMessage['image'] = [
+                    'id' => $img['link'] ?? $img['id'] ?? null, // YCloud provides direct link
+                    'mime_type' => $img['mimeType'] ?? $img['mime_type'] ?? null,
+                    'caption' => $img['caption'] ?? null,
+                ];
+                break;
+            case 'audio':
+                $aud = $msg['audio'] ?? [];
+                $metaMessage['audio'] = [
+                    'id' => $aud['link'] ?? $aud['id'] ?? null,
+                    'mime_type' => $aud['mimeType'] ?? $aud['mime_type'] ?? null,
+                ];
+                break;
+            case 'video':
+                $vid = $msg['video'] ?? [];
+                $metaMessage['video'] = [
+                    'id' => $vid['link'] ?? $vid['id'] ?? null,
+                    'mime_type' => $vid['mimeType'] ?? $vid['mime_type'] ?? null,
+                    'caption' => $vid['caption'] ?? null,
+                ];
+                break;
+            case 'document':
+                $doc = $msg['document'] ?? [];
+                $metaMessage['document'] = [
+                    'id' => $doc['link'] ?? $doc['id'] ?? null,
+                    'mime_type' => $doc['mimeType'] ?? $doc['mime_type'] ?? null,
+                    'filename' => $doc['filename'] ?? null,
+                ];
+                break;
+            case 'location':
+                $loc = $msg['location'] ?? [];
+                $metaMessage['location'] = [
+                    'latitude' => $loc['latitude'] ?? null,
+                    'longitude' => $loc['longitude'] ?? null,
+                ];
+                break;
+            case 'interactive':
+                $metaMessage['interactive'] = $msg['interactive'] ?? [];
+                break;
+            case 'button':
+                $metaMessage['button'] = $msg['button'] ?? [];
+                break;
+            default:
+                $metaMessage['text'] = ['body' => "[{$type}]"];
+                $metaMessage['type'] = 'text';
+        }
+
+        // Build contacts array (same as Meta format)
+        $contacts = [];
+        $profileName = $msg['customerProfile']['name'] ?? null;
+        if ($profileName) {
+            $contacts[] = [
+                'wa_id' => $from,
+                'profile' => ['name' => $profileName],
+            ];
+        }
+
+        Log::info('📩 [YCLOUD WEBHOOK] Procesando mensaje entrante via pipeline Meta', [
+            'instance_id' => $instance->instance_id,
+            'from' => $from,
+            'type' => $type,
+            'wamid' => $wamid,
+        ]);
+
+        // Reuse the existing Meta processing pipeline
+        $this->processMetaIncomingMessage($instance, $metaMessage, $contacts);
+    }
+
+    /**
+     * Process YCloud message status update.
+     *
+     * YCloud payload for whatsapp.message.updated:
+     * {
+     *   "type": "whatsapp.message.updated",
+     *   "whatsappMessage": {
+     *     "id": "ycloud_msg_id",
+     *     "wamid": "wamid.HB...",
+     *     "status": "sent" | "delivered" | "read" | "failed",
+     *     "to": "573001234567",
+     *     "errorCode": "...",
+     *     "timestamp": "..."
+     *   }
+     * }
+     */
+    protected function processYCloudMessageUpdate(array $payload): void
+    {
+        $msg = $payload['whatsappMessage'] ?? [];
+        if (empty($msg)) return;
+
+        $wamid = $msg['wamid'] ?? $msg['id'] ?? null;
+        if (!$wamid) return;
+
+        $statusValue = $msg['status'] ?? null;
+        if (!$statusValue) return;
+
+        $to = $msg['to'] ?? '';
+        $timestamp = isset($msg['timestamp'])
+            ? (string) strtotime($msg['timestamp'])
+            : (string) time();
+
+        // Find the YCloud instance for this message
+        $wabaId = $msg['wabaId'] ?? null;
+        $instance = null;
+        if ($wabaId) {
+            $instance = WhatsAppInstance::where('cloud_api_business_id', $wabaId)
+                ->where('connection_type', 'ycloud')
+                ->first();
+        }
+        if (!$instance) {
+            // Try to find by any ycloud instance (in most setups there's just one)
+            $instance = WhatsAppInstance::where('connection_type', 'ycloud')->first();
+        }
+
+        if (!$instance) {
+            Log::warning('⚠️ [YCLOUD WEBHOOK] No instance for status update', ['wamid' => $wamid]);
+            return;
+        }
+
+        // Build Meta-compatible status and reuse existing pipeline
+        $metaStatus = [
+            'id' => $wamid,
+            'status' => $statusValue,
+            'timestamp' => $timestamp,
+            'recipient_id' => $to,
+            'errors' => null,
+        ];
+
+        if ($statusValue === 'failed') {
+            $metaStatus['errors'] = [
+                ['code' => $msg['errorCode'] ?? 'unknown', 'title' => 'YCloud delivery failed'],
+            ];
+        }
+
+        Log::info('📊 [YCLOUD WEBHOOK] Status update via pipeline Meta', [
+            'wamid' => $wamid,
+            'status' => $statusValue,
+        ]);
+
+        $this->processMetaStatusUpdate($instance, $metaStatus);
+    }
+
+    /**
+     * Process YCloud outbound echo — messages sent from the WhatsApp Business App
+     * that need to be synced into Guro's inbox as outgoing messages.
+     *
+     * Event types: whatsapp.smb.message.echoes, whatsapp.business_app.sent_message.synced
+     */
+    protected function processYCloudOutboundEcho(array $payload): void
+    {
+        // YCloud echoes may use whatsappMessage or whatsappInboundMessage key
+        $msg = $payload['whatsappMessage'] ?? $payload['whatsappInboundMessage'] ?? [];
+        if (empty($msg)) {
+            Log::info('📱 [YCLOUD WEBHOOK] Echo vacío, ignorando');
+            return;
+        }
+
+        $wabaId = $msg['wabaId'] ?? null;
+        $to = $msg['to'] ?? $msg['from'] ?? null;
+        $from = $msg['from'] ?? null;
+
+        if (!$to) {
+            Log::warning('⚠️ [YCLOUD WEBHOOK] Echo sin destinatario');
+            return;
+        }
+
+        // Normalize: strip leading +
+        $to = ltrim($to, '+');
+        if ($from) $from = ltrim($from, '+');
+
+        // Find YCloud instance
+        $instance = null;
+        if ($wabaId) {
+            $instance = WhatsAppInstance::where('cloud_api_business_id', $wabaId)
+                ->where('connection_type', 'ycloud')
+                ->first();
+        }
+        if (!$instance) {
+            $instance = WhatsAppInstance::where('connection_type', 'ycloud')->first();
+        }
+        if (!$instance) {
+            Log::warning('⚠️ [YCLOUD WEBHOOK] No instance para echo outbound');
+            return;
+        }
+
+        // Extract message content
+        $type = $msg['type'] ?? 'text';
+        $wamid = $msg['wamid'] ?? $msg['id'] ?? ('yc_echo_' . uniqid());
+
+        $content = '';
+        $media = null;
+
+        switch ($type) {
+            case 'text':
+                $content = $msg['text']['body'] ?? '';
+                break;
+            case 'image':
+                $content = $msg['image']['caption'] ?? '[Imagen]';
+                $media = ['type' => 'image', 'url' => $msg['image']['link'] ?? null, 'mime_type' => $msg['image']['mimeType'] ?? null];
+                break;
+            case 'audio':
+                $content = '[Audio]';
+                $media = ['type' => 'audio', 'url' => $msg['audio']['link'] ?? null, 'mime_type' => $msg['audio']['mimeType'] ?? null];
+                break;
+            case 'video':
+                $content = $msg['video']['caption'] ?? '[Video]';
+                $media = ['type' => 'video', 'url' => $msg['video']['link'] ?? null, 'mime_type' => $msg['video']['mimeType'] ?? null];
+                break;
+            case 'document':
+                $content = $msg['document']['filename'] ?? '[Documento]';
+                $media = ['type' => 'document', 'url' => $msg['document']['link'] ?? null, 'filename' => $msg['document']['filename'] ?? null];
+                break;
+            case 'template':
+                $content = '[Plantilla: ' . ($msg['template']['name'] ?? 'N/A') . ']';
+                break;
+            default:
+                $content = "[{$type}]";
+        }
+
+        // Determine the recipient phone (the customer)
+        $customerPhone = $to;
+
+        // Find or create conversation
+        $conversation = WhatsAppConversation::findOrCreateByPhone(
+            $instance->broker_id,
+            $instance->id,
+            $customerPhone,
+            null
+        );
+
+        // Check for duplicate
+        $existing = $conversation->messages()->where('message_id', $wamid)->first();
+        if ($existing) {
+            return;
+        }
+
+        // Save as outgoing message (sent from Business App)
+        $newMessage = $conversation->addMessage([
+            'message_id' => $wamid,
+            'direction' => 'outgoing',
+            'sender_type' => 'agent',
+            'message_type' => $type,
+            'content' => $content,
+            'media' => $media,
+            'status' => 'sent',
+            'created_at' => isset($msg['timestamp']) ? \Carbon\Carbon::parse($msg['timestamp']) : now(),
+        ]);
+
+        // Update conversation
+        $conversation->update([
+            'last_message_at' => now(),
+            'last_message_preview' => substr($content, 0, 100),
+        ]);
+
+        // Emit socket event so the inbox UI updates in real-time
+        $bridge = app(WhatsAppBridgeService::class);
+        $bridge->emitSocketEvent('inbox_message', [
+            'conversationId' => $conversation->id,
+            'message' => [
+                'id' => $newMessage->id ?? null,
+                'message_id' => $wamid,
+                'direction' => 'outgoing',
+                'sender_type' => 'agent',
+                'message_type' => $type,
+                'content' => $content,
+                'media' => $media,
+                'created_at' => now()->toIso8601String(),
+            ],
+            'phone' => $customerPhone,
+            'instanceId' => $instance->instance_id,
+        ]);
+
+        Log::info('📱 [YCLOUD WEBHOOK] Echo outbound sincronizado', [
+            'instance_id' => $instance->instance_id,
+            'to' => $customerPhone,
+            'type' => $type,
+            'wamid' => $wamid,
+        ]);
     }
 }

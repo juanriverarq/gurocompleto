@@ -293,216 +293,207 @@ const AnexosPoliza: React.FC<Props> = ({ polizaId, numeroPoliza }) => {
           </div>
         )}
 
-        <Modal show={modalOpen} onClose={()=>setModalOpen(false)} size="lg">
+        <Modal show={modalOpen} onClose={()=>setModalOpen(false)} size="7xl">
           <Modal.Header>{editing ? 'Editar anexo' : 'Nuevo anexo'}</Modal.Header>
           <Modal.Body>
-            <div className="space-y-5">
-              {/* Información del anexo */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Información del anexo</h4>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 mt-1" />
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Número <span className="text-red-600">*</span></label>
-                    <TextInput value={form.anexo} onChange={(e)=>setForm(f=>({...f, anexo: e.target.value}))} required />
-                    {formErrors.anexo && (<div className="text-xs text-red-600 mt-1">{formErrors.anexo}</div>)}
-                  </div>
-                  <div className="md:col-span-1 xl:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Riesgo</label>
-                    <TextInput value={form.riesgo} onChange={(e)=>setForm(f=>({...f, riesgo: e.target.value}))} required />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Renovable</label>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Checkbox checked={!!form.renovable} onChange={(e)=>setForm(f=>({...f, renovable: e.target.checked}))} />
-                      <span className="text-sm">Sí</span>
+            <div className="space-y-4">
+
+              {/* Two-column top layout: Info + Vigencia side by side */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+                {/* Información del anexo */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide pb-1.5 mb-2.5 border-b border-gray-200 dark:border-gray-700">Información del anexo</h4>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Número <span className="text-red-500">*</span></label>
+                      <TextInput sizing="sm" value={form.anexo} onChange={(e)=>setForm(f=>({...f, anexo: e.target.value}))} required />
+                      {formErrors.anexo && (<div className="text-[10px] text-red-600 mt-0.5">{formErrors.anexo}</div>)}
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Riesgo</label>
+                      <TextInput sizing="sm" value={form.riesgo} onChange={(e)=>setForm(f=>({...f, riesgo: e.target.value}))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Renovable</label>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Checkbox checked={!!form.renovable} onChange={(e)=>setForm(f=>({...f, renovable: e.target.checked}))} />
+                        <span className="text-xs">Sí</span>
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Motivo</label>
+                      <TextInput sizing="sm" value={form.motivo} onChange={(e)=>setForm(f=>({...f, motivo: e.target.value}))} />
                     </div>
                   </div>
-                  <div className="md:col-span-2 xl:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Motivo</label>
-                    <TextInput value={form.motivo} onChange={(e)=>setForm(f=>({...f, motivo: e.target.value}))} />
+                </div>
+
+                {/* Vigencia */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide pb-1.5 mb-2.5 border-b border-gray-200 dark:border-gray-700">Vigencia</h4>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Expedición <span className="text-red-500">*</span></label>
+                      <TextInput sizing="sm" type="date" value={form.fecha_expedicion} onChange={(e)=>setForm(f=>({...f, fecha_expedicion: e.target.value}))} />
+                      {formErrors.fecha_expedicion && (<div className="text-[10px] text-red-600 mt-0.5">{formErrors.fecha_expedicion}</div>)}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Inicio <span className="text-red-500">*</span></label>
+                      <TextInput sizing="sm" type="date" value={form.fecha_inicio} onChange={(e)=>setForm(f=>({...f, fecha_inicio: e.target.value}))} />
+                      {formErrors.fecha_inicio && (<div className="text-[10px] text-red-600 mt-0.5">{formErrors.fecha_inicio}</div>)}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fin <span className="text-red-500">*</span></label>
+                      <TextInput sizing="sm" type="date" value={form.fecha_fin} onChange={(e)=>setForm(f=>({...f, fecha_fin: e.target.value}))} />
+                      {formErrors.fecha_fin && (<div className="text-[10px] text-red-600 mt-0.5">{formErrors.fecha_fin}</div>)}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Recepción</label>
+                      <TextInput sizing="sm" type="date" value={form.fecha_recepcion} onChange={(e)=>setForm(f=>({...f, fecha_recepcion: e.target.value}))} />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Montos e impuestos - full width */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide pb-1.5 mb-2.5 border-b border-gray-200 dark:border-gray-700">Montos e impuestos</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Prima neta</label>
+                    <TextInput sizing="sm" type="number" min="0" value={String(form.prima ?? '')} onChange={(e)=>setForm(f=>({...f, prima: (e.target.value as unknown as number)}))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">% IVA</label>
+                    <TextInput sizing="sm" type="number" step="0.01" min="0" max="100" value={String(form.porcentaje_iva ?? '')} onChange={(e)=>setForm(f=>({...f, porcentaje_iva: (e.target.value as unknown as number)}))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Pri a Pre</label>
+                    <TextInput sizing="sm" type="number" min="0" value={String(form.pri_a_pre ?? '')} onChange={(e)=>setForm(f=>({...f, pri_a_pre: (e.target.value as unknown as number)}))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Gastos exp.</label>
+                    <TextInput sizing="sm" type="number" min="0" value={String((form as any).gastos_expedicion ?? '')} onChange={(e)=>setForm(f=>({...f, gastos_expedicion: (e.target.value as unknown as number)}))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">IVA</label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"><TextInput sizing="sm" disabled={autoCalcularIva} type="number" min="0" value={String(form.iva ?? '')} onChange={(e)=>setForm(f=>({...f, iva: (e.target.value as unknown as number)}))} /></div>
+                      <div className="flex items-center gap-1"><Checkbox checked={autoCalcularIva} onChange={(e)=>setAutoCalcularIva(e.target.checked)} /><span className="text-[10px]">Auto</span></div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">% Comisión</label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"><TextInput sizing="sm" disabled={!editarPorcentajeComision} type="number" step="0.01" min="0" max="100" value={String(form.porcentaje_comision ?? '')} onChange={(e)=>setForm(f=>({...f, porcentaje_comision: (e.target.value as unknown as number)}))} /></div>
+                      <div className="flex items-center gap-1"><Checkbox checked={editarPorcentajeComision} onChange={(e)=>setEditarPorcentajeComision(e.target.checked)} /><span className="text-[10px]">Edit</span></div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Comisión</label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"><TextInput sizing="sm" disabled={!editarComision} type="number" min="0" value={String(form.comision ?? '')} onChange={(e)=>setForm(f=>({...f, comision: (e.target.value as unknown as number)}))} /></div>
+                      <div className="flex items-center gap-1"><Checkbox checked={editarComision} onChange={(e)=>setEditarComision(e.target.checked)} /><span className="text-[10px]">Edit</span></div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Total</label>
+                    <TextInput sizing="sm" type="number" min="0" value={String(form.total ?? '')} onChange={(e)=>setForm(f=>({...f, total: (e.target.value as unknown as number)}))} />
                   </div>
                 </div>
               </div>
 
-              {/* Vigencia */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Vigencia</h4>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 mt-1" />
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha de expedición <span className="text-red-600">*</span></label>
-                    <TextInput type="date" value={form.fecha_expedicion} onChange={(e)=>setForm(f=>({...f, fecha_expedicion: e.target.value}))} required />
-                    {formErrors.fecha_expedicion && (<div className="text-xs text-red-600 mt-1">{formErrors.fecha_expedicion}</div>)}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha inicio <span className="text-red-600">*</span></label>
-                    <TextInput type="date" value={form.fecha_inicio} onChange={(e)=>setForm(f=>({...f, fecha_inicio: e.target.value}))} required />
-                    {formErrors.fecha_inicio && (<div className="text-xs text-red-600 mt-1">{formErrors.fecha_inicio}</div>)}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha fin <span className="text-red-600">*</span></label>
-                    <TextInput type="date" value={form.fecha_fin} onChange={(e)=>setForm(f=>({...f, fecha_fin: e.target.value}))} required />
-                    {formErrors.fecha_fin && (<div className="text-xs text-red-600 mt-1">{formErrors.fecha_fin}</div>)}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha de recepción</label>
-                    <TextInput type="date" value={form.fecha_recepcion} onChange={(e)=>setForm(f=>({...f, fecha_recepcion: e.target.value}))} />
-                  </div>
-                </div>
-              </div>
+              {/* Three-column bottom: Pago+Estado | Notas | Archivos */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
-              {/* Montos e impuestos */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Montos e impuestos</h4>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 mt-1" />
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Prima neta</label>
-                    <TextInput type="number" min="0" value={String(form.prima ?? '')} onChange={(e)=>setForm(f=>({...f, prima: (e.target.value as unknown as number)}))} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">% IVA Prima</label>
-                    <TextInput type="number" step="0.01" min="0" max="100" value={String(form.porcentaje_iva ?? '')} onChange={(e)=>setForm(f=>({...f, porcentaje_iva: (e.target.value as unknown as number)}))} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pri a Pre</label>
-                    <TextInput type="number" min="0" value={String(form.pri_a_pre ?? '')} onChange={(e)=>setForm(f=>({...f, pri_a_pre: (e.target.value as unknown as number)}))} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gastos expedición</label>
-                    <TextInput type="number" min="0" value={String((form as any).gastos_expedicion ?? '')} onChange={(e)=>setForm(f=>({...f, gastos_expedicion: (e.target.value as unknown as number)}))} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IVA</label>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <TextInput disabled={autoCalcularIva} type="number" min="0" value={String(form.iva ?? '')} onChange={(e)=>setForm(f=>({...f, iva: (e.target.value as unknown as number)}))} />
+                {/* Pago y estado */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide pb-1.5 mb-2.5 border-b border-gray-200 dark:border-gray-700">Pago y estado</h4>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Periodicidad</label>
+                        <Select sizing="sm" value={form.periodicidad_pago as any} onChange={(e)=>setForm(f=>({...f, periodicidad_pago: e.target.value as any}))}>
+                          <option value="">Seleccione</option>
+                          <option value="mensual">Mensual</option>
+                          <option value="trimestral">Trimestral</option>
+                          <option value="semestral">Semestral</option>
+                          <option value="anual">Anual</option>
+                        </Select>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={autoCalcularIva} onChange={(e)=>setAutoCalcularIva(e.target.checked)} />
-                        <span className="text-sm">Calcular</span>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Forma pago</label>
+                        <Select sizing="sm" value={form.forma_pago as any} onChange={(e)=>setForm(f=>({...f, forma_pago: e.target.value as any}))}>
+                          <option value="">Seleccione</option>
+                          <option value="efectivo">Efectivo</option>
+                          <option value="transferencia">Transferencia</option>
+                          <option value="cheque">Cheque</option>
+                          <option value="tarjeta">Tarjeta</option>
+                          <option value="financiacion">Financiación</option>
+                        </Select>
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">% Comisión</label>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <TextInput disabled={!editarPorcentajeComision} type="number" step="0.01" min="0" max="100" value={String(form.porcentaje_comision ?? '')} onChange={(e)=>setForm(f=>({...f, porcentaje_comision: (e.target.value as unknown as number)}))} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={editarPorcentajeComision} onChange={(e)=>setEditarPorcentajeComision(e.target.checked)} />
-                        <span className="text-sm">Editar</span>
-                      </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Estado <span className="text-red-500">*</span></label>
+                      <Select sizing="sm" value={form.estado} onChange={(e)=>setForm(f=>({...f, estado: e.target.value as any}))}>
+                        {Estados.map(e=> <option key={e} value={e}>{e}</option>)}
+                      </Select>
+                      {formErrors.estado && (<div className="text-[10px] text-red-600 mt-0.5">{formErrors.estado}</div>)}
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comisión</label>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <TextInput disabled={!editarComision} type="number" min="0" value={String(form.comision ?? '')} onChange={(e)=>setForm(f=>({...f, comision: (e.target.value as unknown as number)}))} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={editarComision} onChange={(e)=>setEditarComision(e.target.checked)} />
-                        <span className="text-sm">Editar</span>
-                      </div>
+                </div>
+
+                {/* Notas */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide pb-1.5 mb-2.5 border-b border-gray-200 dark:border-gray-700">Notas</h4>
+                  <div className="space-y-2.5">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Observaciones</label>
+                      <Textarea rows={2} value={form.observaciones} onChange={(e)=>setForm(f=>({...f, observaciones: e.target.value}))} className="text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Accesorios</label>
+                      <Textarea rows={2} value={form.accesorios} onChange={(e)=>setForm(f=>({...f, accesorios: e.target.value}))} className="text-sm" />
                     </div>
                   </div>
+                </div>
+
+                {/* Archivos */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide pb-1.5 mb-2.5 border-b border-gray-200 dark:border-gray-700">Archivos</h4>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Total</label>
-                    <TextInput type="number" min="0" value={String(form.total ?? '')} onChange={(e)=>setForm(f=>({...f, total: (e.target.value as unknown as number)}))} />
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(e)=> setFiles(e.target.files ? Array.from(e.target.files) : [])}
+                      className="block w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-0.5">PDF, imágenes, Office, CSV • Máx 20MB</p>
+                    {files.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {files.map((file, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1 text-[10px] text-gray-600 bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded">
+                            <span className="truncate max-w-[100px]">{file.name}</span>
+                            <span className="text-gray-400">({(file.size / 1024).toFixed(0)}K)</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
+
               </div>
 
-              {/* Pago y estado */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Pago y estado</h4>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 mt-1" />
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Periodicidad del pago</label>
-                    <Select value={form.periodicidad_pago as any} onChange={(e)=>setForm(f=>({...f, periodicidad_pago: e.target.value as any}))}>
-                      <option value="">Seleccione</option>
-                      <option value="mensual">Mensual</option>
-                      <option value="trimestral">Trimestral</option>
-                      <option value="semestral">Semestral</option>
-                      <option value="anual">Anual</option>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Forma Pago</label>
-                    <Select value={form.forma_pago as any} onChange={(e)=>setForm(f=>({...f, forma_pago: e.target.value as any}))}>
-                      <option value="">Seleccione</option>
-                      <option value="efectivo">Efectivo</option>
-                      <option value="transferencia">Transferencia</option>
-                      <option value="cheque">Cheque</option>
-                      <option value="tarjeta">Tarjeta</option>
-                      <option value="financiacion">Financiación</option>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Estado <span className="text-red-600">*</span></label>
-                    <Select value={form.estado} onChange={(e)=>setForm(f=>({...f, estado: e.target.value as any}))}>
-                      {Estados.map(e=> <option key={e} value={e}>{e}</option>)}
-                    </Select>
-                    {formErrors.estado && (<div className="text-xs text-red-600 mt-1">{formErrors.estado}</div>)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Notas */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Notas</h4>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 mt-1" />
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Observaciones</label>
-                    <Textarea rows={3} value={form.observaciones} onChange={(e)=>setForm(f=>({...f, observaciones: e.target.value}))} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Accesorios</label>
-                    <Textarea rows={3} value={form.accesorios} onChange={(e)=>setForm(f=>({...f, accesorios: e.target.value}))} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Archivos */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Carga de archivos</h4>
-                <div className="h-px bg-gray-200 dark:bg-gray-700 mt-1" />
-                <div className="mt-3">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Seleccionar archivo(s)</label>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e)=> setFiles(e.target.files ? Array.from(e.target.files) : [])}
-                    className="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">PDF, imágenes, Office, CSV • Máx 20MB</p>
-                  {files.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      <p className="text-xs font-medium text-gray-600">Archivos seleccionados:</p>
-                      {files.map((file, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-xs text-gray-600">
-                          <span className="truncate">{file.name}</span>
-                          <span className="text-gray-400">({(file.size / 1024).toFixed(1)} KB)</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           </Modal.Body>
           <Modal.Footer>
-            <Button color="light" onClick={()=>setModalOpen(false)} disabled={saving}>Cancelar</Button>
-            <Button color="primary" onClick={save} disabled={saving}>
+            <Button size="sm" color="light" onClick={()=>setModalOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button size="sm" color="primary" onClick={save} disabled={saving}>
               {saving ? (
                 <>
-                  <Spinner size="sm" className="mr-2" />
-                  {files.length > 0 ? 'Guardando y subiendo archivos...' : 'Guardando...'}
+                  <Spinner size="sm" className="mr-1" />
+                  {files.length > 0 ? 'Guardando...' : 'Guardando...'}
                 </>
               ) : (
                 editing ? 'Guardar cambios' : 'Crear anexo'

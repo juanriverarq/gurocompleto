@@ -9,6 +9,7 @@ import { useToast } from 'src/hooks/use-toast';
 // Meta App ID for Embedded Signup
 const META_APP_ID = '1851158175529745';
 const META_CONFIG_ID = '894753990185576';
+const META_COEXISTENCE_CONFIG_ID = '945655401296054';
 
 interface LocalInstance {
   id: number;
@@ -47,10 +48,11 @@ const WhatsAppConexiones: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [refreshingInstances, setRefreshingInstances] = useState<number[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [connectionMethod, setConnectionMethod] = useState<'embedded' | 'manual'>('embedded');
+  const [connectionMethod, setConnectionMethod] = useState<'embedded' | 'coexistence' | 'manual'>('embedded');
   const [embeddedSignupLoading, setEmbeddedSignupLoading] = useState(false);
   const [fbSdkReady, setFbSdkReady] = useState(false);
   const fbInitRef = useRef(false);
+  const sessionInfoRef = useRef<{ waba_id?: string; phone_number_id?: string }>({});
   const [cloudApiForm, setCloudApiForm] = useState<CloudApiFormData>({
     phone_id: '',
     business_id: '',
@@ -164,13 +166,129 @@ const WhatsAppConexiones: React.FC = () => {
     loadInstances();
   }, [loadInstances]);
 
+  // Listen for Meta Embedded Signup sessionInfo (sessionInfoVersion: 3)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        console.log('📩 [SESSION INFO] Message from Meta:', data);
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          if (data.event === 'FINISH') {
+            sessionInfoRef.current = {
+              phone_number_id: data.data?.phone_number_id,
+              waba_id: data.data?.waba_id,
+            };
+            console.log('✅ [SESSION INFO] Captured:', sessionInfoRef.current);
+          } else if (data.event === 'CANCEL') {
+            console.log('⚠️ [SESSION INFO] User cancelled signup');
+            sessionInfoRef.current = {};
+          } else if (data.event === 'ERROR') {
+            console.error('❌ [SESSION INFO] Error from Meta:', data.data);
+            sessionInfoRef.current = {};
+          }
+        }
+      } catch (e) {
+        // Not JSON or not relevant, ignore
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   // Abrir modal para crear conexión Cloud API
   const handleOpenCreateModal = () => {
     setShowCreateModal(true);
-    setConnectionMethod('embedded');
+    setConnectionMethod('coexistence');
     setCloudApiForm({ phone_id: '', business_id: '', token: '', verify_token: '' });
     setError(null);
     loadFbSdk();
+  };
+
+
+  // Coexistence Signup: Launch Facebook Login with WhatsApp Business App Onboarding
+  const handleCoexistenceSignup = () => {
+    if (!window.FB) {
+      setError('Facebook SDK no está cargado. Recarga la página e intenta de nuevo.');
+      return;
+    }
+
+    setEmbeddedSignupLoading(true);
+    setError(null);
+
+    console.log('🔗 [COEXISTENCE] Launching FB.login with whatsapp_business_app_onboarding featureType');
+    sessionInfoRef.current = {}; // Reset before launching
+
+    window.FB.login(
+      (response: any) => {
+        console.log('📥 [COEXISTENCE] FB.login response:', JSON.stringify(response));
+
+        if (response.authResponse) {
+          const code = response.authResponse.code;
+          if (code) {
+            // Wait for sessionInfo to arrive via postMessage (up to 5s)
+            const waitForSessionInfo = (): Promise<{ waba_id?: string; phone_number_id?: string }> => {
+              return new Promise((resolve) => {
+                let elapsed = 0;
+                const interval = setInterval(() => {
+                  elapsed += 200;
+                  const info = sessionInfoRef.current;
+                  if (info.waba_id || info.phone_number_id || elapsed >= 5000) {
+                    clearInterval(interval);
+                    console.log(`📋 [COEXISTENCE] SessionInfo after ${elapsed}ms:`, info);
+                    resolve(info);
+                  }
+                }, 200);
+              });
+            };
+
+            waitForSessionInfo().then(({ waba_id, phone_number_id }) => {
+              console.log('📋 [COEXISTENCE] Sending to backend:', { waba_id, phone_number_id, hasCode: true });
+              return whatsappInstanceService.embeddedSignup(code, waba_id, phone_number_id);
+            })
+              .then((result) => {
+                if (result.success) {
+                  setShowCreateModal(false);
+                  toast({
+                    title: 'WhatsApp Coexistencia Activada',
+                    description: result.message || 'Tu línea de WhatsApp ha sido conectada con coexistencia.',
+                  });
+                  loadInstances();
+                } else {
+                  setError(result.message || 'Error al completar la conexión');
+                }
+              })
+              .catch((err: any) => {
+                console.error('❌ [COEXISTENCE] Backend error:', err);
+                setError(err.message || 'Error procesando la respuesta de Meta');
+              })
+              .finally(() => {
+                setEmbeddedSignupLoading(false);
+              });
+            return;
+          } else {
+            setError('No se recibió código de autorización de Meta');
+          }
+        } else {
+          if (response.status === 'unknown') {
+            setError('El popup fue cerrado o bloqueado. Permite ventanas emergentes e intenta de nuevo.');
+          } else {
+            setError('El proceso de conexión fue cancelado. Intenta de nuevo.');
+          }
+        }
+        setEmbeddedSignupLoading(false);
+      },
+      {
+        config_id: META_COEXISTENCE_CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: 'whatsapp_business_app_onboarding',
+          sessionInfoVersion: '3',
+        },
+      }
+    );
   };
 
   // Embedded Signup: Launch Facebook Login with WhatsApp Embedded Signup
@@ -184,6 +302,7 @@ const WhatsAppConexiones: React.FC = () => {
     setError(null);
 
     console.log('🚀 [EMBEDDED SIGNUP] Launching FB.login with config_id:', META_CONFIG_ID);
+    sessionInfoRef.current = {}; // Reset before launching
 
     // FB.login callback MUST be a regular function (not async)
     window.FB.login(
@@ -195,8 +314,10 @@ const WhatsAppConexiones: React.FC = () => {
           console.log('✅ [EMBEDDED SIGNUP] Got code:', code ? 'yes' : 'no');
 
           if (code) {
+            const { waba_id, phone_number_id } = sessionInfoRef.current;
+            console.log('📋 [EMBEDDED SIGNUP] SessionInfo captured:', { waba_id, phone_number_id });
             // Handle async work outside the callback
-            whatsappInstanceService.embeddedSignup(code)
+            whatsappInstanceService.embeddedSignup(code, waba_id, phone_number_id)
               .then((result) => {
                 if (result.success) {
                   setShowCreateModal(false);
@@ -643,7 +764,7 @@ const WhatsAppConexiones: React.FC = () => {
       )}
 
       {/* Modal de Nueva Conexión */}
-      <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="lg">
+      <Modal show={showCreateModal} onClose={() => setShowCreateModal(false)} size="2xl">
         <Modal.Header>
           <div className="flex items-center gap-2">
             <Icon icon="logos:whatsapp-icon" width={24} />
@@ -653,28 +774,40 @@ const WhatsAppConexiones: React.FC = () => {
         <Modal.Body>
           <div className="space-y-5">
             {/* Method Selector */}
-            <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+            <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+              <button
+                onClick={() => setConnectionMethod('coexistence')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-medium transition-all relative ${
+                  connectionMethod === 'coexistence'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                <Icon icon="solar:smartphone-2-bold-duotone" width={14} />
+                Coexistencia
+                <span className="absolute -top-1.5 -right-1 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">Nuevo</span>
+              </button>
               <button
                 onClick={() => setConnectionMethod('embedded')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-medium transition-all ${
                   connectionMethod === 'embedded'
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
-                <Icon icon="logos:meta" width={16} />
-                Conexión automática
+                <Icon icon="logos:meta" width={14} />
+                Automática
               </button>
               <button
                 onClick={() => setConnectionMethod('manual')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-medium transition-all ${
                   connectionMethod === 'manual'
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
-                <Icon icon="solar:settings-bold" width={16} />
-                Configuración manual
+                <Icon icon="solar:settings-bold" width={14} />
+                Manual
               </button>
             </div>
 
@@ -737,6 +870,104 @@ const WhatsAppConexiones: React.FC = () => {
 
                 <p className="text-[10px] text-center text-gray-400">
                   Al conectar, autorizas a Guro a gestionar mensajes de WhatsApp Business en tu nombre.
+                </p>
+              </div>
+            )}
+
+            {/* ===== COEXISTENCE MODE ===== */}
+            {connectionMethod === 'coexistence' && (
+              <div className="space-y-4">
+                <div className="text-center py-4">
+                  <div className="w-20 h-20 mx-auto bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-2xl flex items-center justify-center mb-4">
+                    <div className="relative">
+                      <Icon icon="logos:whatsapp-icon" width={36} />
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                        <Icon icon="solar:link-bold" width={12} className="text-white" />
+                      </div>
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    Modo Coexistencia
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-sm mx-auto">
+                    Usa la <strong>app WhatsApp Business</strong> en tu teléfono y la <strong>API Cloud</strong> en Guro al mismo tiempo, con el mismo número.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { icon: 'solar:smartphone-bold-duotone', title: 'App + API', desc: 'Usa ambos simultáneamente', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
+                    { icon: 'solar:chat-round-dots-bold-duotone', title: 'Chats sincronizados', desc: 'Mensajes visibles en ambos', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
+                    { icon: 'solar:phone-calling-bold-duotone', title: 'Llamadas activas', desc: 'Voz y video desde la app', color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20' },
+                    { icon: 'solar:bot-bold-duotone', title: 'Automatización', desc: 'Chatbot y multi-agente en Guro', color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20' },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                      <div className={`p-2 rounded-lg flex-shrink-0 ${item.color}`}>
+                        <Icon icon={item.icon} width={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-900 dark:text-white">{item.title}</p>
+                        <p className="text-[10px] text-gray-400">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <Alert color="warning">
+                  <div className="text-xs">
+                    <p className="font-medium mb-1">Limitaciones del modo coexistencia:</p>
+                    <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                      <li>Velocidad: máx. 5 mensajes por segundo</li>
+                      <li>Mensajes que desaparecen deshabilitados</li>
+                      <li>"Ver una vez" deshabilitado</li>
+                      <li>Listas de difusión en modo solo lectura</li>
+                    </ul>
+                  </div>
+                </Alert>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { icon: 'solar:login-3-bold-duotone', title: '1. Inicia sesión', desc: 'Con Facebook Business' },
+                    { icon: 'solar:qr-code-bold-duotone', title: '2. Escanea QR', desc: 'Con tu app WhatsApp Business' },
+                    { icon: 'solar:check-circle-bold-duotone', title: '3. Listo', desc: 'App + API funcionando' },
+                  ].map((step, i) => (
+                    <div key={i} className="flex flex-col items-center text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                      <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center justify-center mb-2">
+                        <Icon icon={step.icon} width={22} className="text-green-500" />
+                      </div>
+                      <p className="text-xs font-semibold text-gray-900 dark:text-white">{step.title}</p>
+                      <p className="text-[10px] text-gray-400">{step.desc}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  color="success"
+                  size="lg"
+                  className="w-full"
+                  onClick={handleCoexistenceSignup}
+                  disabled={embeddedSignupLoading || !fbSdkReady}
+                >
+                  {embeddedSignupLoading ? (
+                    <>
+                      <Spinner size="sm" className="mr-2" />
+                      Activando coexistencia...
+                    </>
+                  ) : !fbSdkReady ? (
+                    <>
+                      <Spinner size="sm" className="mr-2" />
+                      Cargando Facebook SDK...
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon="solar:smartphone-2-bold-duotone" width={18} className="mr-2" />
+                      Activar Coexistencia
+                    </>
+                  )}
+                </Button>
+
+                <p className="text-[10px] text-center text-gray-400">
+                  Requiere WhatsApp Business App v2.24.17+ en tu teléfono. Tu número debe estar activo en la app.
                 </p>
               </div>
             )}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button, TextInput, Textarea, Select, ToggleSwitch, Tabs } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import chatbotService, { Chatbot } from 'src/services/chatbotService';
+import whatsappInstanceService, { WhatsAppInstance } from 'src/services/whatsappInstanceService';
 
 interface ChatbotSettingsProps {
   chatbot: Chatbot;
@@ -12,11 +13,19 @@ const ChatbotSettings: React.FC<ChatbotSettingsProps> = ({ chatbot, onUpdate }) 
   const [settings, setSettings] = useState<Partial<Chatbot>>({});
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
+
+  useEffect(() => {
+    whatsappInstanceService.getInstances().then(res => {
+      if (res.success && res.data) setInstances(res.data);
+    });
+  }, []);
 
   useEffect(() => {
     setSettings({
       name: chatbot.name,
       description: chatbot.description,
+      instance_id: chatbot.instance_id,
       welcome_message: chatbot.welcome_message,
       fallback_message: chatbot.fallback_message,
       goodbye_message: chatbot.goodbye_message,
@@ -32,7 +41,17 @@ const ChatbotSettings: React.FC<ChatbotSettingsProps> = ({ chatbot, onUpdate }) 
       ai_temperature: chatbot.ai_temperature,
       ai_max_tokens: chatbot.ai_max_tokens,
       business_hours_enabled: chatbot.business_hours_enabled,
+      business_hours: chatbot.business_hours,
       timezone: chatbot.timezone,
+      client_inactivity_enabled: chatbot.client_inactivity_enabled,
+      client_inactivity_minutes: chatbot.client_inactivity_minutes,
+      client_inactivity_message: chatbot.client_inactivity_message,
+      agent_inactivity_enabled: chatbot.agent_inactivity_enabled,
+      agent_inactivity_minutes: chatbot.agent_inactivity_minutes,
+      agent_inactivity_message: chatbot.agent_inactivity_message,
+      escape_enabled: chatbot.escape_enabled,
+      escape_keywords: chatbot.escape_keywords,
+      escape_message: chatbot.escape_message,
     });
   }, [chatbot]);
 
@@ -83,6 +102,29 @@ const ChatbotSettings: React.FC<ChatbotSettingsProps> = ({ chatbot, onUpdate }) 
                 placeholder="Describe el propósito de este chatbot..."
                 rows={2}
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <Icon icon="logos:whatsapp-icon" className="w-4 h-4 inline mr-1" />
+                Conexión WhatsApp
+              </label>
+              <Select
+                value={settings.instance_id || ''}
+                onChange={(e) => handleChange('instance_id', e.target.value || null)}
+              >
+                <option value="">Sin asignar (todas las conexiones)</option>
+                {instances.map((inst) => (
+                  <option key={inst.id} value={inst.instance_id}>
+                    {inst.phone_number || inst.instance_id}
+                    {inst.connection_type === 'cloud_api' ? ' (Cloud API)' : ''}
+                    {inst.status === 'connected' ? ' ✓' : ''}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                Línea de WhatsApp donde operará este chatbot. Cámbiala si migraste a otra conexión.
+              </p>
             </div>
 
             <div>
@@ -254,6 +296,215 @@ const ChatbotSettings: React.FC<ChatbotSettingsProps> = ({ chatbot, onUpdate }) 
                 <p className="font-medium text-gray-900 dark:text-white">Horario de atención</p>
                 <p className="text-sm text-gray-500">Responder solo en horario de atención</p>
               </div>
+            </div>
+
+            {settings.business_hours_enabled && (() => {
+              const days = [
+                { key: 'monday', label: 'Lunes' },
+                { key: 'tuesday', label: 'Martes' },
+                { key: 'wednesday', label: 'Miércoles' },
+                { key: 'thursday', label: 'Jueves' },
+                { key: 'friday', label: 'Viernes' },
+                { key: 'saturday', label: 'Sábado' },
+                { key: 'sunday', label: 'Domingo' },
+              ];
+              const bh = settings.business_hours || {};
+              const updateDay = (day: string, field: 'start' | 'end', value: string) => {
+                const current = { ...(bh as any) };
+                current[day] = { ...(current[day] || { start: '08:00', end: '18:00' }), [field]: value };
+                handleChange('business_hours', current);
+              };
+              const toggleDay = (day: string) => {
+                const current = { ...(bh as any) };
+                if (current[day]) {
+                  delete current[day];
+                } else {
+                  current[day] = { start: '08:00', end: '18:00' };
+                }
+                handleChange('business_hours', current);
+              };
+              return (
+                <div className="space-y-2 mt-3 p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Configurar horario por día</p>
+                  {days.map(({ key, label }) => {
+                    const dayData = (bh as any)[key];
+                    const isActive = !!dayData;
+                    return (
+                      <div key={key} className="flex items-center gap-3">
+                        <ToggleSwitch
+                          checked={isActive}
+                          onChange={() => toggleDay(key)}
+                          sizing="sm"
+                        />
+                        <span className="w-24 text-sm text-gray-700 dark:text-gray-300">{label}</span>
+                        {isActive ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="time"
+                              value={dayData?.start || '08:00'}
+                              onChange={(e) => updateDay(key, 'start', e.target.value)}
+                              className="text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white px-2 py-1"
+                            />
+                            <span className="text-gray-400">a</span>
+                            <input
+                              type="time"
+                              value={dayData?.end || '18:00'}
+                              onChange={(e) => updateDay(key, 'end', e.target.value)}
+                              className="text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white px-2 py-1"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">Cerrado</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </Tabs.Item>
+
+        {/* Tab: Automatización (Recordatorios de inactividad) */}
+        <Tabs.Item title="Automatización" icon={() => <Icon icon="solar:alarm-bold" className="w-4 h-4 mr-2" />}>
+          <div className="space-y-6 mt-4">
+            {/* Recordatorio inactividad del cliente */}
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg space-y-4">
+              <div className="flex items-center gap-4">
+                <ToggleSwitch
+                  checked={settings.client_inactivity_enabled || false}
+                  onChange={(checked) => handleChange('client_inactivity_enabled', checked)}
+                />
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">Recordatorio al cliente</p>
+                  <p className="text-sm text-gray-500">Enviar mensaje si el cliente no responde en X minutos</p>
+                </div>
+              </div>
+
+              {settings.client_inactivity_enabled && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Tiempo de inactividad (minutos)
+                    </label>
+                    <TextInput
+                      type="number"
+                      value={settings.client_inactivity_minutes || 10}
+                      onChange={(e) => handleChange('client_inactivity_minutes', parseInt(e.target.value))}
+                      min={1}
+                      max={1380}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Se envía el recordatorio si el cliente lleva inactivo este tiempo. Máximo 23 horas (1380 min) por ventana de WhatsApp.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Mensaje de recordatorio
+                    </label>
+                    <Textarea
+                      value={settings.client_inactivity_message || ''}
+                      onChange={(e) => handleChange('client_inactivity_message', e.target.value)}
+                      placeholder="Hola, notamos que no hemos recibido tu respuesta. ¿Podemos ayudarte en algo más?"
+                      rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Solo se envía 1 vez por conversación. Se reinicia cuando el cliente responde.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Recordatorio inactividad del agente */}
+            <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg space-y-4">
+              <div className="flex items-center gap-4">
+                <ToggleSwitch
+                  checked={settings.agent_inactivity_enabled || false}
+                  onChange={(checked) => handleChange('agent_inactivity_enabled', checked)}
+                />
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">Recordatorio al agente</p>
+                  <p className="text-sm text-gray-500">Enviar mensaje al cliente si el agente asignado no responde en X minutos</p>
+                </div>
+              </div>
+
+              {settings.agent_inactivity_enabled && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Tiempo de espera del agente (minutos)
+                    </label>
+                    <TextInput
+                      type="number"
+                      value={settings.agent_inactivity_minutes || 5}
+                      onChange={(e) => handleChange('agent_inactivity_minutes', parseInt(e.target.value))}
+                      min={1}
+                      max={1380}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Si el agente no responde en este tiempo, se envía un mensaje automático al cliente.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Mensaje de espera
+                    </label>
+                    <Textarea
+                      value={settings.agent_inactivity_message || ''}
+                      onChange={(e) => handleChange('agent_inactivity_message', e.target.value)}
+                      placeholder="Gracias por tu paciencia. Un asesor te atenderá en breve."
+                      rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Se envía al cliente cuando el agente asignado no ha respondido. Solo 1 vez por asignación.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Escape: Transferir a asesor cuando el usuario se atasca */}
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg space-y-4">
+              <div className="flex items-center gap-4">
+                <ToggleSwitch
+                  checked={settings.escape_enabled !== false}
+                  onChange={(checked) => handleChange('escape_enabled', checked)}
+                />
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">Transferir a asesor si el cliente se atasca</p>
+                  <p className="text-sm text-gray-500">Si el cliente escribe "asesor", "ayuda", etc. en cualquier paso del chatbot, se transfiere a un humano</p>
+                </div>
+              </div>
+
+              {(settings.escape_enabled !== false) && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Palabras clave (separadas por coma)
+                    </label>
+                    <TextInput
+                      value={settings.escape_keywords || ''}
+                      onChange={(e) => handleChange('escape_keywords', e.target.value)}
+                      placeholder="asesor, ayuda, agente, humano, no puedo, no sé, operador"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Si el mensaje del cliente contiene alguna de estas palabras, el bot se detiene y la conversación queda disponible para un asesor.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Mensaje al transferir
+                    </label>
+                    <Textarea
+                      value={settings.escape_message || ''}
+                      onChange={(e) => handleChange('escape_message', e.target.value)}
+                      placeholder="🙋 Entendido, te vamos a comunicar con un asesor que podrá ayudarte. Por favor espera un momento."
+                      rows={3}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </Tabs.Item>

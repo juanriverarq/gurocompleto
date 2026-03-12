@@ -71,6 +71,7 @@ export default defineConfig({
     server: {
         port: 5174,
         host: true,
+        allowedHosts: ['fe36-152-203-102-244.ngrok-free.app', '5e94-152-203-102-244.ngrok-free.app'],
         proxy: {
             '/freepik-api': {
                 target: 'https://api.freepik.com',

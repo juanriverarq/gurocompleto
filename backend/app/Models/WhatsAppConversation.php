@@ -45,6 +45,8 @@ class WhatsAppConversation extends Model
         'message_count',
         'metadata',
         'tags',
+        'client_reminder_sent_at',
+        'agent_reminder_sent_at',
     ];
 
     protected $casts = [
@@ -53,6 +55,8 @@ class WhatsAppConversation extends Model
         'assigned_at' => 'datetime',
         'first_response_at' => 'datetime',
         'resolved_at' => 'datetime',
+        'client_reminder_sent_at' => 'datetime',
+        'agent_reminder_sent_at' => 'datetime',
         'metadata' => 'array',
         'tags' => 'array',
         'contact_custom_fields' => 'array',
@@ -212,6 +216,9 @@ class WhatsAppConversation extends Model
 
         if ($data['direction'] === 'incoming') {
             $updates['unread_count'] = $this->unread_count + 1;
+            // Resetear flags de recordatorio cuando el cliente envía un nuevo mensaje
+            $updates['client_reminder_sent_at'] = null;
+            $updates['agent_reminder_sent_at'] = null;
             
             if (!$this->first_message_at) {
                 $updates['first_message_at'] = now();
@@ -249,6 +256,9 @@ class WhatsAppConversation extends Model
      */
     public static function findOrCreateByPhone(int $brokerId, int $instanceId, string $phone, ?string $pushName = null): self
     {
+        // Normalize phone: strip leading + to avoid duplicates (YCloud sends +57... Meta sends 57...)
+        $phone = ltrim($phone, '+');
+
         // Buscar conversación abierta más reciente (priorizar in_progress sobre pending)
         $conversation = self::where('broker_id', $brokerId)
             ->where('whatsapp_instance_id', $instanceId)
@@ -272,6 +282,57 @@ class WhatsAppConversation extends Model
         }
 
         return $conversation;
+    }
+
+    /**
+     * Calcular estado de la ventana de conversación de 24h de Meta.
+     * Según la política de Meta, solo se pueden enviar mensajes de texto libre
+     * dentro de las 24h del último mensaje entrante del cliente.
+     */
+    public function getConversationWindow(): array
+    {
+        $instance = $this->instance;
+        $connectionType = $instance->connection_type ?? 'baileys';
+
+        // Baileys no tiene restricción de ventana 24h de Meta
+        if ($connectionType === 'baileys') {
+            return [
+                'is_open' => true,
+                'hours_remaining' => 24,
+                'last_client_message_at' => null,
+                'closes_at' => null,
+                'connection_type' => 'baileys',
+            ];
+        }
+
+        $lastIncoming = $this->messages()
+            ->where('direction', 'incoming')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$lastIncoming) {
+            return [
+                'is_open' => false,
+                'hours_remaining' => 0,
+                'last_client_message_at' => null,
+                'closes_at' => null,
+                'connection_type' => $connectionType,
+            ];
+        }
+
+        $lastTime = $lastIncoming->created_at;
+        $closesAt = $lastTime->copy()->addHours(24);
+        $now = now();
+        $isOpen = $now->lt($closesAt);
+        $hoursRemaining = $isOpen ? round($now->diffInMinutes($closesAt) / 60, 1) : 0;
+
+        return [
+            'is_open' => $isOpen,
+            'hours_remaining' => $hoursRemaining,
+            'last_client_message_at' => $lastTime->toIso8601String(),
+            'closes_at' => $closesAt->toIso8601String(),
+            'connection_type' => $connectionType,
+        ];
     }
 
     /**

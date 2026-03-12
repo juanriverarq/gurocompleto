@@ -1,0 +1,1374 @@
+{
+  "ACCIDENTES": {
+    "subramos": [
+      "ACCIDENTE PERSONALES",
+      "ACCIDENTES PERSONALES INDIVIDUAL",
+      "RCE AUTOMOVILES"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 15.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BOLIVAR",
+        "comision": 15.0,
+        "iva": 0
+      }
+    ]
+  },
+  "ACCIDENTES PERSONALES": {
+    "subramos": [
+      "AP OBREROS",
+      "APE",
+      "Colectivo"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AURORA SEGUROS DE VIDA",
+        "comision": 0,
+        "iva": 0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 40.0,
+        "iva": 0
+      },
+      {
+        "aseg": "POSITIVA",
+        "comision": 40.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DE VIDA DEL ESTADO S.A",
+        "comision": 40.0,
+        "iva": 0
+      },
+      {
+        "aseg": "POSITIVA",
+        "comision": 27.5,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DE VIDA DEL ESTADO S.A",
+        "comision": 27.5,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 27.5,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DE VIDA DEL ESTADO S.A",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "ARL": {
+    "subramos": [
+      "ARL"
+    ],
+    "comisiones": [
+      {
+        "aseg": "POSITIVA",
+        "comision": 10.0,
+        "iva": 0
+      }
+    ]
+  },
+  "ARRENDAMIENTO": {
+    "subramos": [
+      "ARRENDAMIENTO"
+    ],
+    "comisiones": [
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "AUTOS/VEHÍCULOS": {
+    "subramos": [
+      "AUTOS",
+      "Livianos",
+      "MOTO",
+      "PESADOS DE CARGA",
+      "Pesados"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BOLIVAR",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SURA",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 13.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 12.5,
+        "iva": 19.0
+      }
+    ]
+  },
+  "CASCO": {
+    "subramos": [
+      "INTEGRAL DE NAVEGACION"
+    ],
+    "comisiones": [
+      {
+        "aseg": "MAPFRE",
+        "comision": 12.5,
+        "iva": 19.0
+      }
+    ]
+  },
+  "COPROPIEDADES": {
+    "subramos": [
+      "COOPROPIEDADES",
+      "COPROPIEDADES VIVIENDA",
+      "Copropiedades",
+      "SEGURO INTEGRAL"
+    ],
+    "comisiones": [
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "CUMPLIMIENTO": {
+    "subramos": [
+      "CUM ESTATAL",
+      "CUMPLIMIENTO A FAVOR PARTICULAR",
+      "CUMPLIMIENTO DISPOSICION LEGAL",
+      "CUMPLIMIENTO ENTIDADES ESTATALES DECRETO 1082",
+      "CUMPLIMIENTO ESTATAL",
+      "ESTATAL",
+      "ESTATALES",
+      "PARTICULAR",
+      "PARTICULARES",
+      "PÓLIZA DE SEGURO CUMPLIMIENTO PARTICULAR",
+      "SEGURO CUMPLIMIENTO ESTATAL",
+      "SEGURO CUMPLIMIENTO PARTICULAR"
+    ],
+    "comisiones": [
+      {
+        "aseg": "COLFIANZAS",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "CONFIANZA",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "COLFIANZAS",
+        "comision": 15.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "CONFIANZA",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 24.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 33.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BERKLEY",
+        "comision": 35.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BERKLEY",
+        "comision": 30.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "CUMPLIMIENTO DE CONTRATO": {
+    "subramos": [
+      "CUMPLIMIENTO A FAVOR DE ENTIDADES ESTATALES",
+      "ENTIDADES ESTATALES",
+      "FIANZA CUMPLIMIENTO"
+    ],
+    "comisiones": [
+      {
+        "aseg": "FIANZAS PATRIA",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SURA",
+        "comision": 0,
+        "iva": 0.3
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 30.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "DAÑOS MATERIALES": {
+    "subramos": [
+      "Daños materiales"
+    ],
+    "comisiones": [
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "EQUIPO Y MAQUINARIA DE CONTRATISTA": {
+    "subramos": [
+      "EQUIPO Y MAQUINARIA DE CONTRATISTA"
+    ],
+    "comisiones": [
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 12.5,
+        "iva": 19.0
+      }
+    ]
+  },
+  "GENERALES": {
+    "subramos": [
+      "SEGURO PELUDO"
+    ],
+    "comisiones": [
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 12.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "HOGAR": {
+    "subramos": [
+      "HOGAR",
+      "HOGAR PLUS",
+      "HOGAR VIVIENDA SEGURA"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 20.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BOLIVAR",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "INCENDIO Y LÍNEAS ALIADAS": {
+    "subramos": [
+      "INCENDIO",
+      "INCENDIO HIPOTECARIO"
+    ],
+    "comisiones": [
+      {
+        "aseg": "EQUIDAD",
+        "comision": 17.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "JURÍDICA": {
+    "subramos": [
+      "JUDICIAL"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 40.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "MANEJO": {
+    "subramos": [
+      "MANEJO",
+      "MANEJO GLOBAL. ENTIDAD ESTATAL",
+      "MANEJO IND",
+      "MANEJO SECTOR OFICIAL"
+    ],
+    "comisiones": [
+      {
+        "aseg": "PREVISORA",
+        "comision": 17.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 18.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 12.5,
+        "iva": 19.0
+      }
+    ]
+  },
+  "MULTIRIESGO": {
+    "subramos": [
+      "EQUIEMPRESAS",
+      "MULTIRRIESGOS",
+      "PREVIESTABLECIMIENTO"
+    ],
+    "comisiones": [
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "OTROS": {
+    "subramos": [
+      "POLIZA DE SEGURO JUDICIAL"
+    ],
+    "comisiones": [
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 30.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "PYME": {
+    "subramos": [
+      "PREVIPYME",
+      "PYME",
+      "PYMES",
+      "TODO RIESGO EMPRESARIAL"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BOLIVAR",
+        "comision": 10.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SURA",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "RESPONSABILIDAD CIVIL": {
+    "subramos": [
+      "R C C",
+      "RC CLINICAS Y HOSPITALES",
+      "RCC",
+      "RCE",
+      "RCE EVENTOS",
+      "RCE PLO",
+      "REC",
+      "RESPONSABILIDAD CIVIL ANTE TERCEROS",
+      "RESPONSABILIDAD CIVIL CLÍNICAS Y HOSPITALES",
+      "RESPONSABILIDAD CIVIL CONTRA TERCEROS",
+      "RESPONSABILIDAD CIVIL DERIVADA DE CUMPLIMIENTO",
+      "RESPONSABILIDAD CIVIL DERIVADA DE CUMPLIMIENTO MUNDIAL",
+      "RESPONSABILIDAD CIVIL DERIVADO DE CUMPLIMIENTO",
+      "RESPONSABILIDAD CIVIL EXT",
+      "RESPONSABILIDAD CIVIL EXTRACONTRACTUAL",
+      "RESPONSABILIDAD CIVIL PROFESIONAL CDA",
+      "RESPONSABILIDAD CIVIL PROFESIONAL CLÍNICAS, HOSPITALES",
+      "SEGURO DE RESPONSABILIDAD  EXTRACONTRACTUAL",
+      "SEGURO DE RESPONSABILIDAD CIVIL EXTRACONTRACTUA",
+      "SERVIDORES PUBLICOS"
+    ],
+    "comisiones": [
+      {
+        "aseg": "EQUIDAD",
+        "comision": 14.08,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "QBE",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SBS",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 14.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 14.08,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "QBE",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SBS",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 14.08,
+        "iva": 19.0
+      },
+      {
+        "aseg": "QBE",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SBS",
+        "comision": 17.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 14.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BERKLEY",
+        "comision": 22.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 22.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 22.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 10.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "COLFIANZAS",
+        "comision": 22.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 30.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "FIANZAS PATRIA",
+        "comision": 22.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 20.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "EQUIDAD",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 24.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "LIBERTY SEGUROS S.A.",
+        "comision": 18.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 20.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 12.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SURA",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "RESPONSABILIDAD CIVIL CONTRA Y EXTRA": {
+    "subramos": [
+      "RESPONSABILIDAD CIVIL CLINICAS Y CENTROS MEDICOS",
+      "RESPONSABILIDAD CIVIL CONTRA Y EXTRA"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 10.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BOLIVAR",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "RESPONSABILIDAD CIVIL DIRECTORES  Y ADMINISTRADORES": {
+    "subramos": [
+      "Responsabilidad civil directores y administradores"
+    ],
+    "comisiones": [
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "RESPONSABILIDAD CIVIL PARA PROFESIONALES MÉDICOS": {
+    "subramos": [
+      "PROFESIONALES DE LA SALUD",
+      "RC MEDICA",
+      "RESPONSABILIDAD CIVIL PROFESIONAL MEDICA",
+      "RM"
+    ],
+    "comisiones": [
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 10.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "CONFIANZA",
+        "comision": 22.5,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 22.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "CONFIANZA",
+        "comision": 22.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 22.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SURA",
+        "comision": 22.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "SERIEDAD DE OFERTA": {
+    "subramos": [
+      "SERIEDAD DE LA OFERTA"
+    ],
+    "comisiones": [
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 30.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "SOAT": {
+    "subramos": [
+      "Automoviles",
+      "Autos de negocios, taxis, microbuses hasta 12 pasajeros",
+      "Buses y Busetas urbanos",
+      "CAMPEROS/CAMIONETAS",
+      "Campero/camionetas",
+      "Carga o mixto",
+      "Especiales ambulacias bomberos",
+      "Motos",
+      "SEGURO OBLIGATORIO",
+      "SEGUROS OBLIGATORIO",
+      "SOAT",
+      "SOAT MIGRACIÓN",
+      "Servicio publico intermuniciales",
+      "Vehiculos de 6 o mas pasajeros"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BOLIVAR",
+        "comision": 5.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "LIBERTY",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 5.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SBS",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SURA",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 3.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 7.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 5.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 12.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 4.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 12.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 10.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 12.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 10.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 10.0,
+        "iva": 0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 17.0,
+        "iva": 0
+      },
+      {
+        "aseg": "AIG",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ALLIANZ SEGUROS S.A",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AXA COLPATRIA",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "POSITIVA",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 3.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA SEGUROS",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS BOLIVAR",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A.",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BOLIVAR",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 11.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 17.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "PREVISORA",
+        "comision": 7.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 11.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SURA",
+        "comision": 0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 5.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "TODO RIESGO": {
+    "subramos": [
+      "MAQUINARIA Y EQUIPO",
+      "TODO RIESGO DAÑOS MATERIALES"
+    ],
+    "comisiones": [
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "MAPFRE",
+        "comision": 12.5,
+        "iva": 19.0
+      }
+    ]
+  },
+  "TODO RIESGO CONSTRUCCIÓN": {
+    "subramos": [
+      "SEGURO DE TODO RIESGO CONSTRUCCIÓN"
+    ],
+    "comisiones": [
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "TODO RIESGO CONTRATISTA": {
+    "subramos": [
+      "Todo riesgo contratista"
+    ],
+    "comisiones": [
+      {
+        "aseg": "PREVISORA",
+        "comision": 12.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "TRANSPORTE": {
+    "subramos": [
+      "TRANSPORTE DE MERCANCIA",
+      "TRANSPORTE DE MERCANCIAS"
+    ],
+    "comisiones": [
+      {
+        "aseg": "PREVISORA",
+        "comision": 15.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SEGUROS DEL ESTADO S.A",
+        "comision": 12.0,
+        "iva": 19.0
+      },
+      {
+        "aseg": "SURA",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "TÍTULO CAPITALIZACIÓN": {
+    "subramos": [
+      "TITULOS CAPITALIZACION",
+      "Titulo capitalización"
+    ],
+    "comisiones": [
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 0.8,
+        "iva": 19.0
+      },
+      {
+        "aseg": "BOLIVAR",
+        "comision": 15.0,
+        "iva": 0
+      }
+    ]
+  },
+  "VIAJES/TURISMO": {
+    "subramos": [
+      "VIAJES/TURISMO"
+    ],
+    "comisiones": [
+      {
+        "aseg": "SURA",
+        "comision": 15.0,
+        "iva": 19.0
+      }
+    ]
+  },
+  "VIDA": {
+    "subramos": [
+      "SEGURO DE VIDA"
+    ],
+    "comisiones": [
+      {
+        "aseg": "BOLIVAR",
+        "comision": 17.0,
+        "iva": 0
+      }
+    ]
+  },
+  "VIDA DEUDORES": {
+    "subramos": [
+      "VIDA  MODALIDAD DEUDORES",
+      "Vida",
+      "Vida Deudores"
+    ],
+    "comisiones": [
+      {
+        "aseg": "POSITIVA",
+        "comision": 25.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DE VIDA DEL ESTADO S.A",
+        "comision": 25.0,
+        "iva": 0
+      },
+      {
+        "aseg": "ALLIANZ SEGUROS",
+        "comision": 100.0,
+        "iva": 0
+      },
+      {
+        "aseg": "AXA COLPATRIA SEGUROS S.A.",
+        "comision": 15.0,
+        "iva": 0
+      }
+    ]
+  },
+  "VIDA GRUPO": {
+    "subramos": [
+      "VIDA GRUPO DOCENTES",
+      "Vida grupo"
+    ],
+    "comisiones": [
+      {
+        "aseg": "ASEGURADORA SOLIDARIA DE COLOMBIA",
+        "comision": 0,
+        "iva": 0
+      },
+      {
+        "aseg": "MUNDIAL DE SEGUROS",
+        "comision": 30.0,
+        "iva": 0
+      },
+      {
+        "aseg": "POSITIVA",
+        "comision": 25.0,
+        "iva": 0
+      },
+      {
+        "aseg": "SEGUROS DE VIDA DEL ESTADO S.A",
+        "comision": 25.0,
+        "iva": 0
+      },
+      {
+        "aseg": "AURORA SEGUROS DE VIDA",
+        "comision": 30.0,
+        "iva": 0
+      }
+    ]
+  },
+  "VIDA INDIVIDUAL": {
+    "subramos": [
+      "VIDA INDIVIDUAL FLEXIVIDA"
+    ],
+    "comisiones": [
+      {
+        "aseg": "SEGUROS DE VIDA DEL ESTADO S.A",
+        "comision": 40.0,
+        "iva": 0
+      }
+    ]
+  }
+}

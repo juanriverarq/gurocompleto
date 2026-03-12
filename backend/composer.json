@@ -15,7 +15,7 @@
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.1",
         "laravel/tinker": "^2.10.1",
-        "phpoffice/phpspreadsheet": "^5.1",
+        "phpoffice/phpspreadsheet": "^5.5",
         "stancl/tenancy": "^3.9"
     },
     "require-dev": {

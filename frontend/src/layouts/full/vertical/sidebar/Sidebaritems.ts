@@ -96,6 +96,11 @@ const BaseMenuitems: MenuitemsType[] = [
         title: 'Automóviles',
         href: '/apps/seguros/automoviles',
       },
+      {
+        id: uniqueId(),
+        title: 'Cumplimiento',
+        href: '/apps/seguros/cumplimiento',
+      },
     ],
   },
   {
@@ -161,6 +166,12 @@ const BaseMenuitems: MenuitemsType[] = [
     title: 'Cartera',
     icon: 'solar:wallet-bold-duotone',
     href: '/apps/cartera/clientes',
+  },
+  {
+    id: uniqueId(),
+    title: 'Recibos y Cuadre de Caja',
+    icon: 'solar:bill-list-bold-duotone',
+    href: '/apps/cartera/recibos-caja',
   },
   {
     id: uniqueId(),
@@ -276,6 +287,12 @@ const BaseMenuitems: MenuitemsType[] = [
     chip: 'Nuevo',
     chipColor: 'success',
   },
+  // {
+  //   id: uniqueId(),
+  //   title: 'Comparador de Seguros',
+  //   icon: 'solar:car-bold-duotone',
+  //   href: '/apps/marketing/comparador-seguros',
+  // },
 
   // ═══════════════════════════════════════════════════════════════
   // 6. 🤖 INTELIGENCIA ARTIFICIAL
@@ -307,8 +324,6 @@ const BaseMenuitems: MenuitemsType[] = [
     title: 'Robots',
     icon: 'solar:robot-bold-duotone',
     href: '/apps/ia/robots',
-    chip: 'Próximamente',
-    chipColor: 'secondary',
   },
 
   // ═══════════════════════════════════════════════════════════════

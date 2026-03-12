@@ -168,6 +168,7 @@ export const clienteService = {
         d.representante_legal_tipo_documento || d.legal_representative_document_type || undefined,
       representante_legal_documento:
         d.representante_legal_documento || d.legal_representative_document_number || undefined,
+      etiquetas: d.etiquetas || d.tags || '',
     };
     return { success: true, data: mapped } as ApiResponse<Cliente>;
   },

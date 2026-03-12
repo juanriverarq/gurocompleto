@@ -89,6 +89,7 @@ async function deferRender(){
 deferRender().then(() => {
   // Asegurar tooltips por delante de todo en toda la app
   setupGlobalTooltipPortal();
+  if (typeof window !== 'undefined') (window as any).__GURO_BUILD__ = '20260306v2';
 
   // Detectar y registrar tráfico proveniente de LLMs/AI search (ChatGPT, Perplexity, etc.)
   trackAIReferral();

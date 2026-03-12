@@ -4,14 +4,11 @@ import {
   Button,
   Spinner,
   Badge,
-  Table,
   Tabs,
   Modal,
-  Dropdown,
 } from 'flowbite-react';
 import GuroLoader from 'src/components/GuroLoader';
 import { Icon } from '@iconify/react';
-import { IconDots } from '@tabler/icons-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { polizaService } from '../../../services/polizaService';
@@ -19,9 +16,76 @@ import { useToast } from 'src/hooks/use-toast';
 import { auth } from 'src/config/firebase';
 import api from 'src/config/api';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import TableActionMenu, { TableMenuItem } from 'src/components/TableActionMenu';
+import { printRecibo, type ReciboPrintData, type BrokerPrintData } from './printRecibo';
 
+interface CarteraItem {
+  id: number;
+  poliza_id: number | null;
+  cliente_id: number | null;
+  softseguros_pago_id: number | null;
+  numero_poliza: string;
+  numero_renovacion: number;
+  anexo_numero: string | null;
+  cliente: string;
+  documento: string;
+  aseguradora: string;
+  ramo: string;
+  subramo: string | null;
+  vendedor: string;
+  sede: string | null;
+  forma_pago: string;
+  numero_pago: string | null;
+  estado_cartera: 'por_cobrar' | 'por_pagar' | 'comision_por_cobrar' | 'comision_recibida';
+  // Financial
+  prima_neta: number;
+  valor_neto_a_pagar: number;
+  prima_total_pago: number;
+  prima_total: number;
+  saldo_pendiente_oficina: number;
+  saldo_pendiente_aseguradora: number;
+  valor_recaudado_oficina: number;
+  valor_pagado_aseguradora: number;
+  comision_a_recibir: number;
+  comision_recibida: number;
+  comision_vendedor: number;
+  porcentaje_comision: number | null;
+  // Dates
+  dias_vencidos: number;
+  fecha_limite_pago: string | null;
+  fecha_compromiso_pago: string | null;
+  fecha_recaudado_oficina: string | null;
+  fecha_pago_aseguradora: string | null;
+  fecha_comisionada: string | null;
+  fecha_inicio_vigencia: string | null;
+  fecha_fin_vigencia: string | null;
+  // Extra
+  numero_remision: string | null;
+  observacion_bitacora: string | null;
+  observaciones_pago: string | null;
+  // Recibo asociado
+  recibo: {
+    id: number;
+    numero_recibo: string;
+    fecha: string | null;
+    cliente_nombre: string | null;
+    cliente_documento: string | null;
+    poliza_numero: string | null;
+    aseguradora_nombre: string | null;
+    ramo_nombre: string | null;
+    forma_pago: string | null;
+    valor_recaudado_en_oficina: number;
+    valor_a_pagar: number;
+    es_anticipo: boolean;
+    tipo_recaudo: string | null;
+    observaciones: string | null;
+  } | null;
+}
+
+// Keep legacy interface for modals that still use it
 interface PolizaCartera {
   id: string;
+  carteraItemId?: number;
   numeroPoliza: string;
   cliente: string;
   clienteId: string;
@@ -48,50 +112,26 @@ interface PolizaCartera {
   diasMora: number;
   vendedor?: string;
   vendedor_id?: number;
-    // Nuevos campos para tipos de recaudo
-    recaudo_oficina?: {
-      recaudado: number;
-      pendiente: number;
-      total: number;
-      pago_id?: string;
-      historial?: {
-        id: number;
-        monto: number;
-        fecha: string;
-        metodo_pago: string;
-        referencia: string;
-        estado: string;
-        observaciones: string;
-      }[];
-    };
-    recaudo_aseguradora?: {
-      pagado: number;
-      pendiente: number;
-      total: number;
-      pago_id?: string;
-    };
-    cobro_comision?: {
-      cobrada: number;
-      pendiente: number;
-      total: number;
-    };
+  recaudo_oficina?: { recaudado: number; pendiente: number; total: number; };
+  recaudo_aseguradora?: { pagado: number; pendiente: number; total: number; };
+  cobro_comision?: { cobrada: number; pendiente: number; total: number; };
 }
 
 interface EstadisticasCartera {
   totalPolizas: number;
-  polizasActivas: number;
-  polizasVencidas: number;
-  polizasPorVencer: number;
+  totalItems: number;
   primaTotal: number;
   comisionesTotal: number;
-  porCobrarTotal: number;
-  porCobrarVencido: number;
   recaudadoTotal: number;
+  porCobrarTotal: number;
+  porPagarTotal: number;
+  comisionesRecibidasTotal: number;
   tasaRecaudo: number;
 }
 
 const CarteraClientes = () => {
   const [polizas, setPolizas] = useState<PolizaCartera[]>([]);
+  const [carteraItems, setCarteraItems] = useState<CarteraItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [estadisticas, setEstadisticas] = useState<EstadisticasCartera | null>(null);
   const { toast } = useToast();
@@ -115,7 +155,7 @@ const CarteraClientes = () => {
     ordenDireccion: 'asc' as 'asc' | 'desc',
   });
 
-  const [tabActivo, setTabActivo] = useState<'general' | 'porCobrar' | 'porPagar' | 'recaudosCompletados'>('general');
+  const [tabActivo, setTabActivo] = useState<'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida'>('porCobrar');
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [polizaSeleccionada, setPolizaSeleccionada] = useState<PolizaCartera | null>(null);
 
@@ -135,6 +175,11 @@ const CarteraClientes = () => {
   const [fechaPago, setFechaPago] = useState('');
   const [observacionesPago, setObservacionesPago] = useState('');
   const [procesandoPago, setProcesandoPago] = useState(false);
+
+  // Recibo print state
+  const [reciboParaImprimir, setReciboParaImprimir] = useState<any>(null);
+  const [printFormatRecibo, setPrintFormatRecibo] = useState<CarteraItem['recibo'] | null>(null);
+  const [brokerInfo, setBrokerInfo] = useState<BrokerPrintData | null>(null);
 
   // Estados para importación de recaudos masivos
   const [showRecaudoMasivoModal, setShowRecaudoMasivoModal] = useState(false);
@@ -188,29 +233,30 @@ const CarteraClientes = () => {
     general: number;
     porCobrar: number;
     porPagar: number;
-    recaudosCompletados: number;
-  }>({ general: 0, porCobrar: 0, porPagar: 0, recaudosCompletados: 0 });
+    comisionPorCobrar: number;
+    comisionRecibida: number;
+  }>({ general: 0, porCobrar: 0, porPagar: 0, comisionPorCobrar: 0, comisionRecibida: 0 });
 
-  // Cargar datos con paginación del servidor (solo pólizas)
+  // Cargar datos con paginación del servidor (cartera_items)
   const cargarCartera = async (
     page: number = 1,
     search: string = '',
-    tab: 'general' | 'porCobrar' | 'porPagar' | 'recaudosCompletados' = tabActivo,
+    tab: 'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida' = tabActivo,
   ) => {
     try {
       setLoading(true);
-      // Para tab "general" cargar más registros para consolidar todos los clientes
-      // Para otros tabs, usar paginación normal de 25
       const perPage = tab === 'general' ? 1000 : 25;
       
       const response = await polizaService.getCarteraPolizas(page, perPage, search, tab);
       
       if (!response.success || !response.data) {
+        setCarteraItems([]);
         setPolizas([]);
         return;
       }
 
-      const polizasData = Array.isArray(response.data) ? response.data : [];
+      const itemsData: CarteraItem[] = Array.isArray(response.data) ? response.data : [];
+      setCarteraItems(itemsData);
       
       // Actualizar paginación del servidor
       if (response.pagination) {
@@ -219,12 +265,7 @@ const CarteraClientes = () => {
 
       // Actualizar estadísticas si vienen en la respuesta
       if (response.estadisticas) {
-        setEstadisticas({
-          ...response.estadisticas,
-          polizasVencidas: 0,
-          polizasPorVencer: 0,
-          porCobrarVencido: 0,
-        });
+        setEstadisticas(response.estadisticas as EstadisticasCartera);
       }
 
       // Actualizar contadores de tabs si vienen en la respuesta
@@ -233,88 +274,57 @@ const CarteraClientes = () => {
           general: response.contadoresTabs.general ?? 0,
           porCobrar: response.contadoresTabs.porCobrar ?? 0,
           porPagar: response.contadoresTabs.porPagar ?? 0,
-          recaudosCompletados: response.contadoresTabs.recaudosCompletados ?? 0,
+          comisionPorCobrar: response.contadoresTabs.comisionPorCobrar ?? 0,
+          comisionRecibida: response.contadoresTabs.comisionRecibida ?? 0,
         });
       }
 
-      // OPTIMIZACIÓN: Procesamiento simplificado ya que los datos vienen optimizados del backend
-      const carteraPolizas: PolizaCartera[] = polizasData.map((poliza: any) => {
-        // Calcular valores financieros basados en datos del backend
-        const primaNeta = poliza.prima_neta;
-        const iva = poliza.iva;
-        const total = poliza.total;
-        const comision = poliza.comision;
-
-        // Calcular estado de pago basado en datos del backend
-        let estadoPago: 'Al día' | 'Pendiente' | 'Vencido' | 'Parcial' = poliza.estado_pago || 'Al día';
-        let valorRecaudado = total;
-        let valorPendienteCliente = 0;
-        let valorPagadoAseguradora = primaNeta;
-        let valorPendienteAseguradora = 0;
-        let diasMora = 0;
-
-        // Ajustar valores según estado de pago
-        switch (estadoPago) {
-          case 'Pendiente':
-            valorRecaudado = 0;
-            valorPendienteCliente = total;
-            valorPagadoAseguradora = 0;
-            valorPendienteAseguradora = primaNeta;
-            break;
-          case 'Parcial':
-            valorRecaudado = total * 0.5;
-            valorPendienteCliente = total * 0.5;
-            valorPagadoAseguradora = primaNeta * 0.5;
-            valorPendienteAseguradora = primaNeta * 0.5;
-            break;
-          case 'Vencido':
-            valorRecaudado = 0;
-            valorPendienteCliente = total;
-            valorPagadoAseguradora = 0;
-            valorPendienteAseguradora = primaNeta;
-            diasMora = Math.max(0, -poliza.dias_vencimiento);
-            break;
-        }
-
-        return {
-          id: String(poliza.id),
-          numeroPoliza: poliza.numero_poliza || poliza.policy_number || '',
-          cliente: poliza.cliente,
-          clienteId: String(poliza.cliente_id),
-          documento: poliza.documento,
-          aseguradora: poliza.aseguradora,
-          ramo: poliza.ramo,
-          estado: poliza.estado,
-          fechaInicio: poliza.fecha_inicio,
-          fechaVencimiento: poliza.fecha_vencimiento,
-          diasVencimiento: poliza.dias_vencimiento,
-          primaNeta,
-          iva,
-          total,
-          comision,
-          formaPago: poliza.forma_pago,
-          valorPendienteCliente,
-          valorPendienteAseguradora,
-          valorRecaudado,
-          valorPagadoAseguradora,
-          comisionReal: comision,
-          comisionPendiente: estadoPago !== 'Al día' ? comision * 0.5 : 0,
-          comisionCobrada: estadoPago === 'Al día' ? comision : 0,
-          estadoPago,
-          diasMora,
-          vendedor: poliza.vendedor,
-          vendedor_id: poliza.vendedor_id,
-          // Nuevos campos de tipos de recaudo
-          recaudo_oficina: poliza.recaudo_oficina,
-          recaudo_aseguradora: poliza.recaudo_aseguradora,
-          cobro_comision: poliza.cobro_comision,
-        };
-      });
-
-      // OPTIMIZACIÓN: Ya no necesitamos filtrar en frontend porque el backend filtra por estado ACTIVA
+      // Also map to legacy PolizaCartera for modals that still use it
+      const carteraPolizas: PolizaCartera[] = itemsData.map((item) => ({
+        id: String(item.poliza_id || item.id),
+        carteraItemId: item.id,
+        numeroPoliza: item.numero_poliza,
+        cliente: item.cliente,
+        clienteId: String(item.cliente_id || ''),
+        documento: item.documento,
+        aseguradora: item.aseguradora,
+        ramo: item.ramo,
+        estado: 'ACTIVA',
+        fechaInicio: item.fecha_inicio_vigencia || '',
+        fechaVencimiento: item.fecha_fin_vigencia || '',
+        diasVencimiento: -item.dias_vencidos,
+        primaNeta: item.prima_neta,
+        iva: 0,
+        total: item.prima_total_pago || item.valor_neto_a_pagar,
+        comision: item.comision_a_recibir,
+        comisionReal: item.comision_a_recibir,
+        formaPago: item.forma_pago,
+        valorPendienteCliente: item.saldo_pendiente_oficina,
+        valorPendienteAseguradora: item.saldo_pendiente_aseguradora,
+        valorRecaudado: item.valor_recaudado_oficina,
+        valorPagadoAseguradora: item.valor_pagado_aseguradora,
+        comisionPendiente: item.comision_a_recibir - item.comision_recibida,
+        comisionCobrada: item.comision_recibida,
+        estadoPago: item.saldo_pendiente_oficina > 0 ? 'Pendiente' : 'Al día',
+        diasMora: item.dias_vencidos,
+        vendedor: item.vendedor,
+        recaudo_oficina: {
+          recaudado: item.valor_recaudado_oficina || 0,
+          pendiente: item.saldo_pendiente_oficina || 0,
+          total: item.prima_total_pago || item.valor_neto_a_pagar || 0,
+        },
+        recaudo_aseguradora: {
+          pagado: item.valor_pagado_aseguradora || 0,
+          pendiente: item.saldo_pendiente_aseguradora || 0,
+          total: item.saldo_pendiente_aseguradora || 0,
+        },
+        cobro_comision: {
+          cobrada: item.comision_recibida || 0,
+          pendiente: (item.comision_a_recibir || 0) - (item.comision_recibida || 0),
+          total: item.comision_a_recibir || 0,
+        },
+      }));
       setPolizas(carteraPolizas);
-      // No recalculamos estadísticas aquí para mantener los totales globales del servidor
-      // calcularEstadisticas(carteraPolizas);
 
     } catch (error: any) {
       console.error('Error cargando cartera:', error);
@@ -361,8 +371,9 @@ const CarteraClientes = () => {
   // Recaudo directo por aseguradora (va directo a recaudos completados)
   const abrirModalRecaudoAseguradoraDirecto = (poliza: PolizaCartera) => {
     setPolizaSeleccionada(poliza);
-    // El monto es el total de la póliza ya que es recaudo directo
-    setMontoPago((poliza.total || 0).toString());
+    // Default to pending amount (total - already collected)
+    const pendiente = poliza.valorPendienteCliente || poliza.recaudo_oficina?.pendiente || poliza.total || 0;
+    setMontoPago(pendiente.toString());
     setMetodoPago('');
     setReferenciaPago('');
     setFechaPago(new Date().toISOString().split('T')[0]);
@@ -381,6 +392,16 @@ const CarteraClientes = () => {
 
   const registrarPagoOficina = async () => {
     if (!polizaSeleccionada || !montoPago) return;
+    const monto = parseFloat(montoPago);
+    const pendiente = polizaSeleccionada.recaudo_oficina?.pendiente ?? polizaSeleccionada.total ?? 0;
+    if (monto <= 0) {
+      toast({ title: 'Error', description: 'El monto debe ser mayor a 0', variant: 'destructive' });
+      return;
+    }
+    if (monto > pendiente + 0.01) {
+      toast({ title: 'Error', description: `El monto (${formatCurrency(monto)}) supera el saldo pendiente (${formatCurrency(pendiente)})`, variant: 'destructive' });
+      return;
+    }
 
     try {
       setProcesandoPago(true);
@@ -391,16 +412,19 @@ const CarteraClientes = () => {
         metodoPago,
         referenciaPago,
         observacionesPago,
-        fechaPago
+        fechaPago,
+        polizaSeleccionada.carteraItemId
       );
 
       if (response.success) {
+        const recibo = response.data?.recibo;
+        const numRecibo = response.data?.numero_recibo;
         toast({
           title: 'Recaudo registrado',
-          description: 'El recaudo por oficina ha sido registrado exitosamente',
+          description: `Recaudo por oficina registrado${numRecibo ? ` — Recibo #${numRecibo}` : ''}`,
         });
         setShowPagoOficinaModal(false);
-        // Recargar datos
+        if (recibo) setReciboParaImprimir(recibo);
         await cargarCartera();
       }
     } catch (error) {
@@ -412,6 +436,16 @@ const CarteraClientes = () => {
 
   const registrarPagoAseguradora = async () => {
     if (!polizaSeleccionada || !montoPago) return;
+    const monto = parseFloat(montoPago);
+    const pendiente = polizaSeleccionada.recaudo_aseguradora?.pendiente ?? polizaSeleccionada.valorPendienteAseguradora ?? 0;
+    if (monto <= 0) {
+      toast({ title: 'Error', description: 'El monto debe ser mayor a 0', variant: 'destructive' });
+      return;
+    }
+    if (monto > pendiente + 0.01) {
+      toast({ title: 'Error', description: `El monto (${formatCurrency(monto)}) supera el saldo pendiente a aseguradora (${formatCurrency(pendiente)})`, variant: 'destructive' });
+      return;
+    }
 
     try {
       setProcesandoPago(true);
@@ -422,16 +456,19 @@ const CarteraClientes = () => {
         metodoPago,
         referenciaPago,
         observacionesPago,
-        fechaPago
+        fechaPago,
+        polizaSeleccionada.carteraItemId
       );
 
       if (response.success) {
+        const recibo = response.data?.recibo;
+        const numRecibo = response.data?.numero_recibo;
         toast({
           title: 'Pago registrado',
-          description: 'El pago a la aseguradora ha sido registrado exitosamente',
+          description: `Pago a aseguradora registrado${numRecibo ? ` — Recibo #${numRecibo}` : ''}`,
         });
         setShowPagoAseguradoraModal(false);
-        // Recargar datos
+        if (recibo) setReciboParaImprimir(recibo);
         await cargarCartera();
       }
     } catch (error) {
@@ -781,6 +818,15 @@ const CarteraClientes = () => {
   // Registrar recaudo directo por aseguradora (va directo a recaudos completados)
   const registrarRecaudoAseguradoraDirecto = async () => {
     if (!polizaSeleccionada || !montoPago) return;
+    const monto = parseFloat(montoPago);
+    if (monto <= 0) {
+      toast({ title: 'Error', description: 'El monto debe ser mayor a 0', variant: 'destructive' });
+      return;
+    }
+    if (monto > (polizaSeleccionada.total || 0) + 0.01) {
+      toast({ title: 'Error', description: `El monto (${formatCurrency(monto)}) supera el total de la póliza (${formatCurrency(polizaSeleccionada.total)})`, variant: 'destructive' });
+      return;
+    }
 
     try {
       setProcesandoPago(true);
@@ -792,16 +838,19 @@ const CarteraClientes = () => {
         metodoPago,
         referenciaPago,
         observacionesPago,
-        fechaPago
+        fechaPago,
+        polizaSeleccionada.carteraItemId
       );
 
       if (response.success) {
+        const recibo = response.data?.recibo;
+        const numRecibo = response.data?.numero_recibo;
         toast({
           title: 'Recaudo registrado',
-          description: 'El recaudo por aseguradora ha sido registrado y la póliza está en recaudos completados',
+          description: `Recaudo directo registrado${numRecibo ? ` — Recibo #${numRecibo}` : ''}`,
         });
         setShowRecaudoAseguradoraDirectoModal(false);
-        // Recargar datos
+        if (recibo) setReciboParaImprimir(recibo);
         await cargarCartera();
       }
     } catch (error) {
@@ -813,6 +862,16 @@ const CarteraClientes = () => {
 
   const registrarCobroComision = async () => {
     if (!polizaSeleccionada || !montoPago) return;
+    const monto = parseFloat(montoPago);
+    const pendiente = polizaSeleccionada.cobro_comision?.pendiente ?? polizaSeleccionada.comisionPendiente ?? 0;
+    if (monto <= 0) {
+      toast({ title: 'Error', description: 'El monto debe ser mayor a 0', variant: 'destructive' });
+      return;
+    }
+    if (monto > pendiente + 0.01) {
+      toast({ title: 'Error', description: `El monto (${formatCurrency(monto)}) supera la comisión pendiente (${formatCurrency(pendiente)})`, variant: 'destructive' });
+      return;
+    }
 
     try {
       setProcesandoPago(true);
@@ -825,9 +884,11 @@ const CarteraClientes = () => {
       );
 
       if (response.success) {
+        const recibo = response.data?.recibo;
+        const numRecibo = response.data?.numero_recibo;
         toast({
           title: 'Cobro registrado',
-          description: 'El cobro de comisión ha sido registrado exitosamente',
+          description: `Cobro de comisión registrado${numRecibo ? ` — Recibo #${numRecibo}` : ''}`,
         });
         setShowCobroComisionModal(false);
         // Recargar datos
@@ -899,6 +960,37 @@ const CarteraClientes = () => {
     }
   };
 
+  // Revertir cobro de comisión (desde Comisiones Recibidas)
+  const revertirCobroComision = async (item: CarteraItem) => {
+    if (!item.poliza_id) return;
+    if (!confirm(`¿Está seguro de revertir el cobro de comisión de la póliza ${item.numero_poliza}? La comisión volverá a estado pendiente.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await api.delete(`/saas/polizas/${item.poliza_id}/cobrar-comision/ultimo`);
+      if (res.data?.success) {
+        toast({
+          title: 'Cobro revertido',
+          description: `El cobro de comisión de la póliza ${item.numero_poliza} ha sido revertido`,
+        });
+        await cargarCartera();
+      } else {
+        toast({ title: 'Error', description: res.data?.message || 'Error al revertir cobro', variant: 'destructive' });
+      }
+    } catch (error: any) {
+      console.error('Error revirtiendo cobro comisión:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || error.message || 'No se pudo revertir el cobro',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Escuchar cambios de autenticación de Firebase
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -912,29 +1004,54 @@ const CarteraClientes = () => {
   useEffect(() => {
     if (!authLoading && authUser) {
       cargarCartera(1, filtros.busqueda, tabActivo);
-      // Si estamos en tab recaudosCompletados, cargar pagos individuales
-      if (tabActivo === 'recaudosCompletados') {
-        cargarPagosAseguradora(1, filtros.busqueda);
-      }
+      // Load broker info for recibo printing
+      api.get('/saas/broker/profile').then(res => {
+        const b = res.data;
+        if (b?.success) {
+          setBrokerInfo({
+            nombre: b.legal_name || b.name || '',
+            legal_name: b.legal_name || '',
+            nit: b.document_number || '',
+            direccion: b.address || '',
+            ciudad: b.city || '',
+            telefono: b.phone || '',
+            email: b.email || '',
+            logo_url: b.logo_url || '',
+          });
+        }
+      }).catch(() => {});
     }
   }, [authLoading, authUser]);
 
-  // Cargar pagos de aseguradora cuando se cambia al tab recaudosCompletados
-  useEffect(() => {
-    if (tabActivo === 'recaudosCompletados' && authUser) {
-      cargarPagosAseguradora(1, filtros.busqueda);
-    }
-  }, [tabActivo]);
+  // Helper to print recibo from a cartera item
+  const imprimirReciboDeItem = (recibo: CarteraItem['recibo'], format: 'media_carta' | 'carta' = 'media_carta') => {
+    if (!recibo) return;
+    const data: ReciboPrintData = {
+      numero_recibo: recibo.numero_recibo,
+      fecha: recibo.fecha,
+      cliente_nombre: recibo.cliente_nombre,
+      cliente_documento: recibo.cliente_documento,
+      poliza_numero: recibo.poliza_numero,
+      aseguradora_nombre: recibo.aseguradora_nombre,
+      ramo_nombre: recibo.ramo_nombre,
+      forma_pago: recibo.forma_pago,
+      moneda: 'COP',
+      valor_recaudado_en_oficina: recibo.valor_recaudado_en_oficina || recibo.valor_a_pagar || 0,
+      es_anticipo: recibo.es_anticipo || false,
+      observaciones: recibo.observaciones,
+    };
+    const broker: BrokerPrintData = brokerInfo || { nombre: 'Agencia de Seguros', nit: '' };
+    printRecibo(data, broker, format);
+  };
 
-  // Recargar cuando cambie la búsqueda (con debounce implícito al escribir)
-  useEffect(() => {
+  // Tab change is handled by the existing useEffect on [tabActivo] below
+
+  // Buscar manualmente con Enter o botón (ya no es automático)
+  const ejecutarBusqueda = () => {
     if (!authLoading && authUser) {
-      const timeoutId = setTimeout(() => {
-        cargarCartera(1, filtros.busqueda, tabActivo);
-      }, 300);
-      return () => clearTimeout(timeoutId);
+      cargarCartera(1, filtros.busqueda, tabActivo);
     }
-  }, [filtros.busqueda]);
+  };
 
   useEffect(() => {
     // Al cambiar de tab: resetear paginación
@@ -1034,49 +1151,17 @@ const CarteraClientes = () => {
     setPaginaClientes(1);
   }, [filtros]);
 
-  // Tab "Por Cobrar": en servidor ya viene filtrado cuando tabActivo=porCobrar
-  const polizasPorCobrar = useMemo(() => {
-    if (tabActivo === 'porCobrar') return polizasFiltradas;
-    return polizasFiltradas.filter(p => {
-      const pendienteOficina = (p.recaudo_oficina?.pendiente || p.total || 0);
-      return pendienteOficina > 0;
-    });
-  }, [polizasFiltradas, tabActivo]);
-
-  // Tab "Por Pagar": Pólizas donde la oficina ya recaudó del cliente (pendiente oficina = 0) 
-  // pero aún debe pagar a la aseguradora (pendiente aseguradora > 0)
-  const polizasPorPagar = useMemo(() => {
-    if (tabActivo === 'porPagar') return polizasFiltradas;
-    return polizasFiltradas.filter(p => {
-      const pendienteOficina = (p.recaudo_oficina?.pendiente || 0);
-      const recaudadoOficina = (p.recaudo_oficina?.recaudado || 0);
-      const pendienteAseguradora = (p.recaudo_aseguradora?.pendiente || 0);
-      return pendienteOficina === 0 && recaudadoOficina > 0 && pendienteAseguradora > 0;
-    });
-  }, [polizasFiltradas, tabActivo]);
-
-  // Tab "Recaudos Completados": Pólizas donde ya se pagó a la aseguradora
-  const polizasRecaudosCompletados = useMemo(() => {
-    if (tabActivo === 'recaudosCompletados') return polizasFiltradas;
-    return polizasFiltradas.filter(p => {
-      const recaudadoOficina = (p.recaudo_oficina?.recaudado || 0);
-      const pagadoAseguradora = (p.recaudo_aseguradora?.pagado || 0);
-      return recaudadoOficina > 0 && pagadoAseguradora > 0;
-    });
-  }, [polizasFiltradas, tabActivo]);
-
-  const polizasPorCobrarPaginadas = polizasPorCobrar;
-  const polizasPorPagarPaginadas = polizasPorPagar;
-  const polizasRecaudosCompletadosPaginadas = polizasRecaudosCompletados;
-
+  // All tab data comes pre-filtered from the server via cartera_items
+  // For the "general" tab, consolidate by client
   const clientesConsolidados = useMemo(() => {
     return Object.entries(
-      polizasFiltradas.reduce((acc, p) => {
-        if (!acc[p.clienteId]) {
-          acc[p.clienteId] = {
-            cliente: p.cliente,
-            clienteId: p.clienteId,
-            documento: p.documento,
+      carteraItems.reduce((acc, item) => {
+        const key = item.cliente_id ? String(item.cliente_id) : item.documento || item.cliente;
+        if (!acc[key]) {
+          acc[key] = {
+            cliente: item.cliente,
+            clienteId: String(item.cliente_id || ''),
+            documento: item.documento,
             polizas: 0,
             primaTotal: 0,
             comisiones: 0,
@@ -1085,24 +1170,18 @@ const CarteraClientes = () => {
             proximoVenc: '',
           };
         }
-        acc[p.clienteId].polizas++;
-        if (p.estado === 'ACTIVA') {
-          acc[p.clienteId].primaTotal += p.primaNeta;
-          acc[p.clienteId].comisiones += p.comision;
-        }
-        // Calcular pendiente real descontando pagos de oficina y aseguradora
-        const total = p.total || 0;
-        const recaudadoOficina = p.recaudo_oficina?.recaudado || 0;
-        const pagadoAseguradora = p.recaudo_aseguradora?.pagado || 0;
-        acc[p.clienteId].porCobrar += Math.max(0, total - recaudadoOficina - pagadoAseguradora);
-        acc[p.clienteId].recaudado += recaudadoOficina + pagadoAseguradora;
-        if (!acc[p.clienteId].proximoVenc || p.fechaVencimiento < acc[p.clienteId].proximoVenc) {
-          acc[p.clienteId].proximoVenc = p.fechaVencimiento;
+        acc[key].polizas++;
+        acc[key].primaTotal += item.prima_neta || 0;
+        acc[key].comisiones += item.comision_a_recibir || 0;
+        acc[key].porCobrar += item.saldo_pendiente_oficina || 0;
+        acc[key].recaudado += item.valor_recaudado_oficina || 0;
+        if (item.fecha_fin_vigencia && (!acc[key].proximoVenc || item.fecha_fin_vigencia < acc[key].proximoVenc)) {
+          acc[key].proximoVenc = item.fecha_fin_vigencia;
         }
         return acc;
       }, {} as Record<string, any>)
     ).map(([id, data]) => ({ id, ...data }));
-  }, [polizasFiltradas]);
+  }, [carteraItems]);
 
   const clientesPaginados = useMemo(() => {
     const inicio = (paginaClientes - 1) * elementosPorPagina;
@@ -1179,55 +1258,87 @@ const CarteraClientes = () => {
 
   return (
     <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Cartera Clientes</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Gestión de cartera, recaudos y comisiones</p>
+        </div>
+        <Link to="/apps/cartera/recibos-caja">
+          <Button color="light" className="rounded-[10px]">
+            <Icon icon="solar:bill-list-bold-duotone" className="w-4 h-4 mr-2" />
+            Recibos de Caja
+          </Button>
+        </Link>
+      </div>
+
       {/* Estadísticas Principales */}
       {estadisticas && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-3 md:gap-4">
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Pólizas en Cartera</p>
-                <p className="text-lg md:text-2xl font-bold text-blue-600">{estadisticas.totalPolizas}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {estadisticas.polizasActivas} activas
-                </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+          <div className="bg-white dark:bg-darkgray rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                <Icon icon="solar:shield-check-bold-duotone" className="w-5 h-5 text-blue-600" />
               </div>
-              <Icon icon="solar:shield-check-bold-duotone" className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">Items Cartera</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">{estadisticas.totalItems.toLocaleString()}</p>
+                <p className="text-[11px] text-gray-400">{estadisticas.totalPolizas} pólizas</p>
+              </div>
             </div>
-          </Card>
+          </div>
 
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Por Cobrar</p>
-                <p className="text-lg md:text-2xl font-bold text-orange-600">
-                  {formatCurrency(estadisticas.porCobrarTotal)}
-                </p>
-                <p className="text-xs text-red-600 mt-1">
-                  Vencido: {formatCurrency(estadisticas.porCobrarVencido)}
-                </p>
+          <div className="bg-white dark:bg-darkgray rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center flex-shrink-0">
+                <Icon icon="solar:wallet-money-bold-duotone" className="w-5 h-5 text-orange-600" />
               </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 md:w-3 md:h-3 bg-orange-500 rounded-full"></div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">Por Cobrar</p>
+                <p className="text-lg font-bold text-orange-600">{formatCurrency(estadisticas.porCobrarTotal)}</p>
+                <p className="text-[11px] text-gray-400">{contadoresTabs.porCobrar} pagos</p>
               </div>
             </div>
-          </Card>
+          </div>
 
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-600">Comisiones</p>
-                <p className="text-lg md:text-2xl font-bold text-green-600">
-                  {formatCurrency(estadisticas.comisionesTotal)}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Recaudo: {estadisticas.tasaRecaudo.toFixed(1)}%
-                </p>
+          <div className="bg-white dark:bg-darkgray rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                <Icon icon="solar:card-transfer-bold-duotone" className="w-5 h-5 text-purple-600" />
               </div>
-              <div className="w-6 h-6 md:w-8 md:h-8 bg-green-100 rounded-full flex items-center justify-center">
-                <div className="w-2 h-2 md:w-3 md:h-3 bg-green-500 rounded-full"></div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">Por Pagar</p>
+                <p className="text-lg font-bold text-purple-600">{formatCurrency(estadisticas.porPagarTotal)}</p>
+                <p className="text-[11px] text-gray-400">{contadoresTabs.porPagar} pagos</p>
               </div>
             </div>
-          </Card>
+          </div>
+
+          <div className="bg-white dark:bg-darkgray rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-50 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                <Icon icon="solar:hand-money-bold-duotone" className="w-5 h-5 text-green-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">Comisiones</p>
+                <p className="text-lg font-bold text-green-600">{formatCurrency(estadisticas.comisionesTotal)}</p>
+                <p className="text-[11px] text-gray-400">Recibidas: {formatCurrency(estadisticas.comisionesRecibidasTotal)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-darkgray rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center flex-shrink-0">
+                <Icon icon="solar:chart-bold-duotone" className="w-5 h-5 text-teal-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">Recaudado</p>
+                <p className="text-lg font-bold text-teal-600">{formatCurrency(estadisticas.recaudadoTotal)}</p>
+                <p className="text-[11px] text-gray-400">Tasa: {estadisticas.tasaRecaudo.toFixed(1)}%</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1242,10 +1353,20 @@ const CarteraClientes = () => {
                   placeholder="Buscar por póliza, cliente o aseguradora..."
                   value={filtros.busqueda || ''}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFiltros({ ...filtros, busqueda: e.target.value })}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') ejecutarBusqueda(); }}
                   className="pl-10 h-10 text-sm rounded-[10px]"
                 />
               </div>
             </div>
+            <Button
+              color="primary"
+              onClick={ejecutarBusqueda}
+              disabled={loading}
+              className="h-10 px-4 rounded-[10px] flex items-center gap-2"
+            >
+              <Icon icon="solar:magnifer-bold-duotone" className="w-4 h-4" />
+              <span className="hidden sm:inline">Buscar</span>
+            </Button>
 
             <div className="w-52">
               <select
@@ -1289,13 +1410,14 @@ const CarteraClientes = () => {
       <Card>
         <Tabs
           onActiveTabChange={(tab) => {
-            const tabNames: ('general' | 'porCobrar' | 'porPagar' | 'recaudosCompletados')[] = ['general', 'porCobrar', 'porPagar', 'recaudosCompletados'];
+            const tabNames: ('general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida')[] = ['porCobrar', 'porPagar', 'comisionPorCobrar', 'comisionRecibida'];
             if (tabNames[tab] && tabNames[tab] !== tabActivo) {
               setTabActivo(tabNames[tab]);
             }
           }}
         >
-          <Tabs.Item
+          {/* TAB: Cartera General — OCULTO por ahora */}
+          {false && <Tabs.Item
             active={tabActivo === 'general'}
             title={`Cartera General (${contadoresTabs.general})`}
             icon={() => <Icon icon="solar:users-group-rounded-bold-duotone" />}
@@ -1305,7 +1427,7 @@ const CarteraClientes = () => {
                 <thead>
                   <tr>
                     <th>Cliente</th>
-                    <th className="text-center">Pólizas</th>
+                    <th className="text-center">Items</th>
                     <th className="text-right">Prima Total</th>
                     <th className="text-right">Recaudado</th>
                     <th className="text-right">Por Cobrar</th>
@@ -1341,43 +1463,21 @@ const CarteraClientes = () => {
                       <td>
                         {formatDate(data.proximoVenc)}
                       </td>
-                      <td className="sticky-right">
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            style={{ minWidth: '260px' }}
-                            renderTrigger={() => (
-                              <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
-                                <IconDots size={18} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item
-                              className="flex gap-3 w-full justify-start text-left text-blue-600"
-                              onClick={() => abrirCarteraCliente(data)}
-                            >
-                              <Icon icon="solar:wallet-money-bold-duotone" height={18} />
-                              <span>Ver Cartera</span>
-                            </Dropdown.Item>
-                            <Dropdown.Divider />
+                      <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                        <TableActionMenu>
+                          <TableMenuItem className="text-blue-600" onClick={() => abrirCarteraCliente(data)}>
+                            <Icon icon="solar:wallet-money-bold-duotone" height={18} />
+                            <span>Ver Cartera</span>
+                          </TableMenuItem>
+                          {data.clienteId && (
                             <Link to={`/apps/seguros/clientes/editar/${data.clienteId}`}>
-                              <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
+                              <TableMenuItem>
                                 <Icon icon="solar:user-bold-duotone" height={18} />
                                 <span>Ver Cliente</span>
-                              </Dropdown.Item>
+                              </TableMenuItem>
                             </Link>
-                            <Dropdown.Item
-                              className="flex gap-3 w-full justify-start text-left"
-                              onClick={() => navigate(`/apps/seguros/polizas/nueva?cliente_id=${data.clienteId}`)}
-                            >
-                              <Icon icon="solar:document-add-bold-duotone" height={18} />
-                              <span>Nueva Póliza</span>
-                            </Dropdown.Item>
-                          </Dropdown>
-                        </div>
+                          )}
+                        </TableActionMenu>
                       </td>
                     </tr>
                   ))}
@@ -1385,98 +1485,70 @@ const CarteraClientes = () => {
               </table>
             </div>
 
-            {/* Paginación Por Clientes */}
             {totalPaginasClientes > 1 && (
               <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
                   Mostrando {((paginaClientes - 1) * elementosPorPagina) + 1} a {Math.min(paginaClientes * elementosPorPagina, clientesConsolidados.length)} de {clientesConsolidados.length} clientes
                 </div>
                 <div className="flex items-center gap-3">
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={paginaClientes === 1}
-                    onClick={() => setPaginaClientes(p => Math.max(1, p - 1))}
-                    className="rounded-[10px]"
-                  >
+                  <Button size="sm" color="gray" disabled={paginaClientes === 1} onClick={() => setPaginaClientes(p => Math.max(1, p - 1))} className="rounded-[10px]">
                     <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
                   </Button>
-                  <span className="text-sm text-gray-600">
-                    Página {paginaClientes} de {totalPaginasClientes}
-                  </span>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={paginaClientes === totalPaginasClientes}
-                    onClick={() => setPaginaClientes(p => Math.min(totalPaginasClientes, p + 1))}
-                    className="rounded-[10px]"
-                  >
+                  <span className="text-sm text-gray-600">Página {paginaClientes} de {totalPaginasClientes}</span>
+                  <Button size="sm" color="gray" disabled={paginaClientes === totalPaginasClientes} onClick={() => setPaginaClientes(p => Math.min(totalPaginasClientes, p + 1))} className="rounded-[10px]">
                     <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
             )}
-          </Tabs.Item>
+          </Tabs.Item>}
 
+          {/* TAB: Por Cobrar */}
           <Tabs.Item
             active={tabActivo === 'porCobrar'}
             title={`Por Cobrar (${contadoresTabs.porCobrar})`}
             icon={() => <Icon icon="solar:wallet-money-bold-duotone" />}
           >
-            {/* Barra de acciones */}
             <div className="mb-4 flex items-center justify-end gap-2">
-              <Button
-                size="sm"
-                color="gray"
-                onClick={() => { setShowHistorialImportaciones(true); cargarHistorialImportaciones(); }}
-              >
+              <Button size="sm" color="gray" onClick={() => { setShowHistorialImportaciones(true); cargarHistorialImportaciones(); }}>
                 <Icon icon="solar:history-bold-duotone" className="w-4 h-4 mr-2" />
                 Historial Importaciones
               </Button>
-              <Button
-                size="sm"
-                color="purple"
-                onClick={() => setShowRecaudoMasivoModal(true)}
-              >
+              <Button size="sm" color="purple" onClick={() => setShowRecaudoMasivoModal(true)}>
                 <Icon icon="solar:upload-bold-duotone" className="w-4 h-4 mr-2" />
-                Importar Recaudos (CSV/Excel)
+                Importar Recaudos
               </Button>
             </div>
 
-            {/* Estadísticas de Recaudo - Solo lo que los clientes deben pagar */}
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Total Pendiente</p>
-                  <p className="text-2xl font-bold text-orange-600">
-                    {formatCurrency(polizasPorCobrar.reduce((sum, p) => {
-                      const total = p.total || 0;
-                      const recaudadoOficina = p.recaudo_oficina?.recaudado || 0;
-                      const pagadoAseguradora = p.recaudo_aseguradora?.pagado || 0;
-                      return sum + Math.max(0, total - recaudadoOficina - pagadoAseguradora);
-                    }, 0))}
-                  </p>
-                  <p className="text-xs text-gray-500">{polizasPorCobrar.length} pólizas</p>
+            <div className="mb-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3.5 border border-orange-100 dark:border-orange-800/30">
+                <div className="w-9 h-9 rounded-lg bg-orange-100 dark:bg-orange-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:wallet-money-bold-duotone" className="w-4.5 h-4.5 text-orange-600" />
                 </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Ya Recaudado</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(polizasPorCobrar.reduce((sum, p) => sum + (p.recaudo_oficina?.recaudado || 0) + (p.recaudo_aseguradora?.pagado || 0), 0))}
-                  </p>
-                  <p className="text-xs text-gray-500">Oficina + Aseguradora</p>
+                <div>
+                  <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">Saldo Pendiente Oficina</p>
+                  <p className="text-lg font-bold text-orange-700 dark:text-orange-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.saldo_pendiente_oficina || 0), 0))}</p>
+                  <p className="text-[11px] text-orange-500">{carteraItems.length} pagos</p>
                 </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Total Cartera</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {formatCurrency(polizasPorCobrar.reduce((sum, p) => sum + (p.total || 0), 0))}
-                  </p>
-                  <p className="text-xs text-gray-500">Valor total pólizas</p>
+              </div>
+              <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 rounded-xl p-3.5 border border-green-100 dark:border-green-800/30">
+                <div className="w-9 h-9 rounded-lg bg-green-100 dark:bg-green-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:check-circle-bold-duotone" className="w-4.5 h-4.5 text-green-600" />
                 </div>
-              </Card>
+                <div>
+                  <p className="text-xs text-green-700 dark:text-green-300 font-medium">Ya Recaudado en Oficina</p>
+                  <p className="text-lg font-bold text-green-700 dark:text-green-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.valor_recaudado_oficina || 0), 0))}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3.5 border border-blue-100 dark:border-blue-800/30">
+                <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:shield-check-bold-duotone" className="w-4.5 h-4.5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Prima Total</p>
+                  <p className="text-lg font-bold text-blue-700 dark:text-blue-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.prima_total_pago || 0), 0))}</p>
+                </div>
+              </div>
             </div>
 
             <div className="guro-table-wrap">
@@ -1487,96 +1559,100 @@ const CarteraClientes = () => {
                     <th>Cliente</th>
                     <th>Aseguradora</th>
                     <th>Vendedor</th>
-                    <th className="text-right">Total Póliza</th>
-                    <th className="text-center">Estado Recaudo</th>
-                    <th>Vencimiento</th>
+                    <th className="text-right">Saldo Pendiente</th>
+                    <th className="text-right">Recaudado</th>
+                    <th className="text-center">Días Venc.</th>
+                    <th>Forma Pago</th>
                     <th className="sticky-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {polizasPorCobrarPaginadas.map((poliza) => (
-                    <tr key={poliza.id} className="group">
-                      <td className="font-medium">{poliza.numeroPoliza}</td>
+                  {carteraItems.map((item) => (
+                    <tr key={item.id} className="group">
                       <td>
                         <div>
-                          <div className="font-medium">{poliza.cliente}</div>
-                          <div className="text-xs text-gray-500">{poliza.documento}</div>
-                        </div>
-                      </td>
-                      <td>{poliza.aseguradora}</td>
-                      <td>
-                        <span className="text-sm">{poliza.vendedor || 'Sin asignar'}</span>
-                      </td>
-                      <td className="text-right font-semibold">
-                        {formatCurrency(poliza.total)}
-                      </td>
-                      <td className="text-center">
-                        <div className="space-y-1">
-                          <div className="text-sm font-semibold text-orange-600">
-                            Pendiente: {formatCurrency(Math.max(0, (poliza.total || 0) - (poliza.recaudo_oficina?.recaudado || 0) - (poliza.recaudo_aseguradora?.pagado || 0)))}
-                          </div>
-                          {(poliza.recaudo_oficina?.recaudado || 0) > 0 && (
-                            <div className="text-xs text-blue-600">
-                              Recaudado Oficina: {formatCurrency(poliza.recaudo_oficina?.recaudado || 0)}
-                            </div>
-                          )}
-                          {(poliza.recaudo_aseguradora?.pagado || 0) > 0 && (
-                            <div className="text-xs text-green-600">
-                              Pagado Aseguradora: {formatCurrency(poliza.recaudo_aseguradora?.pagado || 0)}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
-                        {poliza.diasMora > 0 && (
-                          <div className="text-xs text-red-600">{poliza.diasMora} días mora</div>
-                        )}
-                      </td>
-                      <td className="sticky-right">
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            style={{ minWidth: '260px' }}
-                            renderTrigger={() => (
-                              <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
-                                <IconDots size={18} />
+                          <div className="font-medium flex items-center gap-1.5">
+                            {item.numero_poliza}
+                            {item.numero_renovacion > 0 && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                R{item.numero_renovacion}
                               </span>
                             )}
-                          >
-                            <Dropdown.Item
-                              className="flex gap-3 w-full justify-start text-left text-blue-600"
-                              onClick={() => abrirModalPagoOficina(poliza)}
-                            >
-                              <Icon icon="solar:dollar-minimalistic-bold-duotone" height={18} />
-                              <span>Recaudo por Oficina</span>
-                            </Dropdown.Item>
-                            <Dropdown.Item
-                              className="flex gap-3 w-full justify-start text-left text-purple-600"
-                              onClick={() => abrirModalRecaudoAseguradoraDirecto(poliza)}
-                            >
-                              <Icon icon="solar:card-transfer-bold-duotone" height={18} />
-                              <span>Recaudo por Aseguradora</span>
-                            </Dropdown.Item>
-                            <Dropdown.Divider />
-                            <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
-                              <Dropdown.Item className="flex gap-3 w-full justify-start text-left">
-                                <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
-                                <span>Ver Póliza</span>
-                              </Dropdown.Item>
-                            </Link>
-                          </Dropdown>
+                          </div>
+                          {item.numero_pago && <div className="text-xs text-gray-500">Pago #{item.numero_pago}</div>}
                         </div>
+                      </td>
+                      <td>
+                        <div>
+                          <div className="font-medium">{item.cliente}</div>
+                          <div className="text-xs text-gray-500">{item.documento}</div>
+                        </div>
+                      </td>
+                      <td className="text-sm">{item.aseguradora}</td>
+                      <td className="text-sm">{item.vendedor || '-'}</td>
+                      <td className="text-right font-semibold text-orange-600">
+                        {formatCurrency(item.saldo_pendiente_oficina)}
+                      </td>
+                      <td className="text-right font-semibold text-green-600">
+                        {formatCurrency(item.valor_recaudado_oficina)}
+                      </td>
+                      <td className="text-center">
+                        {item.dias_vencidos > 0 ? (
+                          <Badge color="failure" size="sm">{item.dias_vencidos}d</Badge>
+                        ) : item.dias_vencidos === 0 ? (
+                          <Badge color="warning" size="sm">Hoy</Badge>
+                        ) : (
+                          <Badge color="success" size="sm">{Math.abs(item.dias_vencidos)}d</Badge>
+                        )}
+                      </td>
+                      <td className="text-sm">{item.forma_pago || '-'}</td>
+                      <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                        <TableActionMenu>
+                          {item.poliza_id && (
+                            <>
+                              <TableMenuItem className="text-green-600" onClick={() => {
+                                const p = polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) abrirModalPagoOficina(p);
+                              }}>
+                                <Icon icon="solar:cash-out-bold-duotone" height={18} />
+                                <span>Registrar Recaudo</span>
+                              </TableMenuItem>
+                              <TableMenuItem className="text-blue-600" onClick={() => {
+                                const p = polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) abrirModalRecaudoAseguradoraDirecto(p);
+                              }}>
+                                <Icon icon="solar:buildings-bold-duotone" height={18} />
+                                <span>Recaudo Directo Aseg.</span>
+                              </TableMenuItem>
+                              <Link to={`/apps/seguros/polizas/editar/${item.poliza_id}`}>
+                                <TableMenuItem>
+                                  <Icon icon="solar:eye-bold-duotone" height={18} />
+                                  <span>Ver Póliza</span>
+                                </TableMenuItem>
+                              </Link>
+                            </>
+                          )}
+                          {item.cliente_id && (
+                            <Link to={`/apps/seguros/clientes/editar/${item.cliente_id}`}>
+                              <TableMenuItem>
+                                <Icon icon="solar:user-bold-duotone" height={18} />
+                                <span>Ver Cliente</span>
+                              </TableMenuItem>
+                            </Link>
+                          )}
+                          {item.recibo && (
+                            <TableMenuItem className="text-amber-600" onClick={() => setPrintFormatRecibo(item.recibo)}>
+                              <Icon icon="solar:printer-bold-duotone" height={18} />
+                              <span>Recibo #{item.recibo.numero_recibo}</span>
+                            </TableMenuItem>
+                          )}
+                        </TableActionMenu>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-
-              {polizasPorCobrar.length === 0 && (
+              {carteraItems.length === 0 && (
                 <div className="text-center py-12">
                   <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
                   <p className="text-gray-500">No hay cuentas por cobrar pendientes</p>
@@ -1584,32 +1660,17 @@ const CarteraClientes = () => {
               )}
             </div>
 
-            {/* Paginación del Servidor */}
             {serverPagination && serverPagination.last_page > 1 && (
               <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
-                  Mostrando página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} pólizas totales)
+                  Página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} items)
                 </div>
                 <div className="flex items-center gap-3">
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={loading || serverPagination.current_page === 1}
-                    onClick={() => cambiarPagina(serverPagination.current_page - 1)}
-                    className="rounded-[10px]"
-                  >
+                  <Button size="sm" color="gray" disabled={loading || serverPagination.current_page === 1} onClick={() => cambiarPagina(serverPagination.current_page - 1)} className="rounded-[10px]">
                     <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
                   </Button>
-                  <span className="text-sm text-gray-600">
-                    Página {serverPagination.current_page} de {serverPagination.last_page}
-                  </span>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={loading || serverPagination.current_page === serverPagination.last_page}
-                    onClick={() => cambiarPagina(serverPagination.current_page + 1)}
-                    className="rounded-[10px]"
-                  >
+                  <span className="text-sm text-gray-600">Página {serverPagination.current_page} de {serverPagination.last_page}</span>
+                  <Button size="sm" color="gray" disabled={loading || serverPagination.current_page === serverPagination.last_page} onClick={() => cambiarPagina(serverPagination.current_page + 1)} className="rounded-[10px]">
                     <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
                   </Button>
                 </div>
@@ -1617,37 +1678,40 @@ const CarteraClientes = () => {
             )}
           </Tabs.Item>
 
+          {/* TAB: Por Pagar */}
           <Tabs.Item
             active={tabActivo === 'porPagar'}
             title={`Por Pagar (${contadoresTabs.porPagar})`}
             icon={() => <Icon icon="solar:card-transfer-bold-duotone" />}
           >
-            {/* Estadísticas de Por Pagar */}
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Total Por Pagar a Aseguradora</p>
-                  <p className="text-2xl font-bold text-purple-600">
-                    {formatCurrency(polizasPorPagar.reduce((sum, p) => sum + (p.recaudo_aseguradora?.pendiente || 0), 0))}
-                  </p>
+            <div className="mb-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="flex items-center gap-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3.5 border border-purple-100 dark:border-purple-800/30">
+                <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:card-transfer-bold-duotone" className="w-4.5 h-4.5 text-purple-600" />
                 </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Pólizas Pendientes</p>
-                  <p className="text-2xl font-bold text-orange-600">
-                    {polizasPorPagar.length}
-                  </p>
+                <div>
+                  <p className="text-xs text-purple-700 dark:text-purple-300 font-medium">Saldo Pendiente Aseguradora</p>
+                  <p className="text-lg font-bold text-purple-700 dark:text-purple-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.saldo_pendiente_aseguradora || 0), 0))}</p>
                 </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Recaudado en Oficina</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {formatCurrency(polizasPorPagar.reduce((sum, p) => sum + (p.recaudo_oficina?.recaudado || 0), 0))}
-                  </p>
+              </div>
+              <div className="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3.5 border border-orange-100 dark:border-orange-800/30">
+                <div className="w-9 h-9 rounded-lg bg-orange-100 dark:bg-orange-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:clock-circle-bold-duotone" className="w-4.5 h-4.5 text-orange-600" />
                 </div>
-              </Card>
+                <div>
+                  <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">Pagos Pendientes</p>
+                  <p className="text-lg font-bold text-orange-700 dark:text-orange-200">{carteraItems.length}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3.5 border border-blue-100 dark:border-blue-800/30">
+                <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:dollar-bold-duotone" className="w-4.5 h-4.5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Valor Neto a Pagar</p>
+                  <p className="text-lg font-bold text-blue-700 dark:text-blue-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.valor_neto_a_pagar || 0), 0))}</p>
+                </div>
+              </div>
             </div>
 
             <div className="guro-table-wrap">
@@ -1657,98 +1721,97 @@ const CarteraClientes = () => {
                     <th>Póliza</th>
                     <th>Cliente</th>
                     <th>Aseguradora</th>
-                    <th className="text-right">Prima Neta</th>
-                    <th className="text-right">Recaudado Oficina</th>
-                    <th className="text-right">Por Pagar</th>
-                    <th>Vencimiento</th>
+                    <th className="text-right">Valor Neto a Pagar</th>
+                    <th className="text-right">Saldo Pendiente</th>
+                    <th className="text-right">Pagado Aseg.</th>
+                    <th>Forma Pago</th>
                     <th className="sticky-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {polizasPorPagarPaginadas.map((poliza) => (
-                    <tr key={poliza.id} className="group">
-                      <td className="font-medium">{poliza.numeroPoliza}</td>
+                  {carteraItems.map((item) => (
+                    <tr key={item.id} className="group">
                       <td>
                         <div>
-                          <div className="font-medium">{poliza.cliente}</div>
-                          <div className="text-xs text-gray-500">{poliza.documento}</div>
+                          <div className="font-medium flex items-center gap-1.5">
+                            {item.numero_poliza}
+                            {item.numero_renovacion > 0 && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                R{item.numero_renovacion}
+                              </span>
+                            )}
+                          </div>
+                          {item.numero_pago && <div className="text-xs text-gray-500">Pago #{item.numero_pago}</div>}
                         </div>
-                      </td>
-                      <td>{poliza.aseguradora}</td>
-                      <td className="text-right font-semibold">
-                        {formatCurrency(poliza.primaNeta)}
-                      </td>
-                      <td className="text-right font-semibold text-blue-600">
-                        {formatCurrency(poliza.recaudo_oficina?.recaudado || 0)}
-                      </td>
-                      <td className="text-right font-semibold text-purple-600">
-                        {formatCurrency(poliza.recaudo_aseguradora?.pendiente || 0)}
                       </td>
                       <td>
-                        <div className="text-sm">{formatDate(poliza.fechaVencimiento)}</div>
-                      </td>
-                      <td className="sticky-right">
-                        <div className="flex gap-2 justify-center">
-                          <Button
-                            size="sm"
-                            color="purple"
-                            onClick={() => abrirModalPagoAseguradora(poliza)}
-                          >
-                            <Icon icon="solar:card-transfer-bold-duotone" className="w-4 h-4 mr-2" />
-                            Pagar
-                          </Button>
-                          {(poliza.recaudo_oficina?.recaudado || 0) > 0 && (
-                            <Button
-                              size="sm"
-                              color="red"
-                              onClick={() => revertirRecaudoOficina(poliza)}
-                              title="Revertir recaudo de oficina"
-                            >
-                              <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4" />
-                            </Button>
-                          )}
+                        <div>
+                          <div className="font-medium">{item.cliente}</div>
+                          <div className="text-xs text-gray-500">{item.documento}</div>
                         </div>
+                      </td>
+                      <td className="text-sm">{item.aseguradora}</td>
+                      <td className="text-right font-semibold">{formatCurrency(item.valor_neto_a_pagar)}</td>
+                      <td className="text-right font-semibold text-purple-600">{formatCurrency(item.saldo_pendiente_aseguradora)}</td>
+                      <td className="text-right font-semibold text-green-600">{formatCurrency(item.valor_pagado_aseguradora)}</td>
+                      <td className="text-sm">{item.forma_pago || '-'}</td>
+                      <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                        <TableActionMenu>
+                          {item.poliza_id && (
+                            <>
+                              <TableMenuItem className="text-purple-600" onClick={() => {
+                                const p = polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) abrirModalPagoAseguradora(p);
+                              }}>
+                                <Icon icon="solar:card-send-bold-duotone" height={18} />
+                                <span>Registrar Pago Aseg.</span>
+                              </TableMenuItem>
+                              <TableMenuItem className="text-red-600" onClick={() => {
+                                const p = polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) revertirRecaudoOficina(p);
+                              }}>
+                                <Icon icon="solar:undo-left-bold-duotone" height={18} />
+                                <span>Revertir Recaudo</span>
+                              </TableMenuItem>
+                              <Link to={`/apps/seguros/polizas/editar/${item.poliza_id}`}>
+                                <TableMenuItem>
+                                  <Icon icon="solar:eye-bold-duotone" height={18} />
+                                  <span>Ver Póliza</span>
+                                </TableMenuItem>
+                              </Link>
+                            </>
+                          )}
+                          {item.recibo && (
+                            <TableMenuItem className="text-amber-600" onClick={() => setPrintFormatRecibo(item.recibo)}>
+                              <Icon icon="solar:printer-bold-duotone" height={18} />
+                              <span>Recibo #{item.recibo.numero_recibo}</span>
+                            </TableMenuItem>
+                          )}
+                        </TableActionMenu>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-
-              {polizasPorPagar.length === 0 && (
+              {carteraItems.length === 0 && (
                 <div className="text-center py-12">
                   <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
                   <p className="text-gray-500">No hay pagos pendientes a compañías</p>
-                  <p className="text-xs text-gray-400 mt-2">Los pagos pendientes aparecen cuando se registra un recaudo por oficina</p>
                 </div>
               )}
             </div>
 
-            {/* Paginación del Servidor */}
             {serverPagination && serverPagination.last_page > 1 && (
               <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
-                  Mostrando página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} pólizas totales)
+                  Página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} items)
                 </div>
                 <div className="flex items-center gap-3">
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={loading || serverPagination.current_page === 1}
-                    onClick={() => cambiarPagina(serverPagination.current_page - 1)}
-                    className="rounded-[10px]"
-                  >
+                  <Button size="sm" color="gray" disabled={loading || serverPagination.current_page === 1} onClick={() => cambiarPagina(serverPagination.current_page - 1)} className="rounded-[10px]">
                     <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
                   </Button>
-                  <span className="text-sm text-gray-600">
-                    Página {serverPagination.current_page} de {serverPagination.last_page}
-                  </span>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={loading || serverPagination.current_page === serverPagination.last_page}
-                    onClick={() => cambiarPagina(serverPagination.current_page + 1)}
-                    className="rounded-[10px]"
-                  >
+                  <span className="text-sm text-gray-600">Página {serverPagination.current_page} de {serverPagination.last_page}</span>
+                  <Button size="sm" color="gray" disabled={loading || serverPagination.current_page === serverPagination.last_page} onClick={() => cambiarPagina(serverPagination.current_page + 1)} className="rounded-[10px]">
                     <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
                   </Button>
                 </div>
@@ -1756,133 +1819,286 @@ const CarteraClientes = () => {
             )}
           </Tabs.Item>
 
+          {/* TAB: Comisiones por Cobrar */}
           <Tabs.Item
-            active={tabActivo === 'recaudosCompletados'}
-            title={`Recaudos Completados (${contadoresTabs.recaudosCompletados})`}
-            icon={() => <Icon icon="solar:check-circle-bold-duotone" />}
+            active={tabActivo === 'comisionPorCobrar'}
+            title={`Comisiones por Cobrar (${contadoresTabs.comisionPorCobrar})`}
+            icon={() => <Icon icon="solar:hand-money-bold-duotone" />}
           >
-            {/* Estadísticas de Recaudos Completados */}
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Total Pagado a Aseguradoras</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(pagosAseguradora.reduce((sum, p) => sum + (p.monto_pagado || 0), 0))}
-                  </p>
+            <div className="mb-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3.5 border border-indigo-100 dark:border-indigo-800/30">
+                <div className="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:hand-money-bold-duotone" className="w-4.5 h-4.5 text-indigo-600" />
                 </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Pagos Registrados</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {pagosAseguradoraPagination?.total || pagosAseguradora.length}
-                  </p>
+                <div>
+                  <p className="text-xs text-indigo-700 dark:text-indigo-300 font-medium">Comisión por Recibir</p>
+                  <p className="text-lg font-bold text-indigo-700 dark:text-indigo-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.comision_a_recibir || 0), 0))}</p>
                 </div>
-              </Card>
-              <Card>
-                <div className="text-center">
-                  <p className="text-sm text-gray-500">Comisiones Generadas</p>
-                  <p className="text-2xl font-bold text-indigo-600">
-                    {formatCurrency(pagosAseguradora.reduce((sum, p) => sum + (p.comision || 0), 0))}
-                  </p>
+              </div>
+              <div className="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3.5 border border-orange-100 dark:border-orange-800/30">
+                <div className="w-9 h-9 rounded-lg bg-orange-100 dark:bg-orange-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:clock-circle-bold-duotone" className="w-4.5 h-4.5 text-orange-600" />
                 </div>
-              </Card>
+                <div>
+                  <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">Items Pendientes</p>
+                  <p className="text-lg font-bold text-orange-700 dark:text-orange-200">{carteraItems.length}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 bg-teal-50 dark:bg-teal-900/20 rounded-xl p-3.5 border border-teal-100 dark:border-teal-800/30">
+                <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:user-check-bold-duotone" className="w-4.5 h-4.5 text-teal-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-teal-700 dark:text-teal-300 font-medium">Comisión Vendedor</p>
+                  <p className="text-lg font-bold text-teal-700 dark:text-teal-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.comision_vendedor || 0), 0))}</p>
+                </div>
+              </div>
             </div>
 
-            <div>
-              {cargandoPagosAseguradora ? (
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Póliza</th>
+                    <th>Cliente</th>
+                    <th>Aseguradora</th>
+                    <th>Vendedor</th>
+                    <th className="text-right">Comisión a Recibir</th>
+                    <th className="text-right">% Comisión</th>
+                    <th className="text-right">Prima Neta</th>
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {carteraItems.map((item) => (
+                    <tr key={item.id} className="group">
+                      <td>
+                        <div>
+                          <div className="font-medium flex items-center gap-1.5">
+                            {item.numero_poliza}
+                            {item.numero_renovacion > 0 && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                R{item.numero_renovacion}
+                              </span>
+                            )}
+                          </div>
+                          {item.numero_pago && <div className="text-xs text-gray-500">Pago #{item.numero_pago}</div>}
+                        </div>
+                      </td>
+                      <td>
+                        <div>
+                          <div className="font-medium">{item.cliente}</div>
+                          <div className="text-xs text-gray-500">{item.documento}</div>
+                        </div>
+                      </td>
+                      <td className="text-sm">{item.aseguradora}</td>
+                      <td className="text-sm">{item.vendedor || '-'}</td>
+                      <td className="text-right font-semibold text-indigo-600">{formatCurrency(item.comision_a_recibir)}</td>
+                      <td className="text-right text-sm">{item.porcentaje_comision ? `${(item.porcentaje_comision * 100).toFixed(1)}%` : '-'}</td>
+                      <td className="text-right font-semibold">{formatCurrency(item.prima_neta)}</td>
+                      <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                        <TableActionMenu>
+                          {item.poliza_id && (
+                            <>
+                              <TableMenuItem className="text-indigo-600" onClick={() => {
+                                const p = polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) abrirModalCobroComision(p);
+                              }}>
+                                <Icon icon="solar:hand-money-bold-duotone" height={18} />
+                                <span>Registrar Cobro Comisión</span>
+                              </TableMenuItem>
+                              <TableMenuItem className="text-red-600" onClick={async () => {
+                                if (!confirm(`¿Revertir el pago de aseguradora de la póliza ${item.numero_poliza}? La póliza regresará a "Por Pagar".`)) return;
+                                try {
+                                  setLoading(true);
+                                  const res = await api.delete(`/saas/polizas/${item.poliza_id}/pagos/revertir-aseguradora`);
+                                  toast({ title: 'Pago revertido', description: res.data?.message || `Póliza ${item.numero_poliza} revertida` });
+                                  await cargarCartera();
+                                } catch (e: any) {
+                                  toast({ title: 'Error', description: e.response?.data?.message || 'No se pudo revertir', variant: 'destructive' });
+                                } finally { setLoading(false); }
+                              }}>
+                                <Icon icon="solar:undo-left-bold-duotone" height={18} />
+                                <span>Revertir Pago Aseguradora</span>
+                              </TableMenuItem>
+                              <Link to={`/apps/seguros/polizas/editar/${item.poliza_id}`}>
+                                <TableMenuItem>
+                                  <Icon icon="solar:eye-bold-duotone" height={18} />
+                                  <span>Ver Póliza</span>
+                                </TableMenuItem>
+                              </Link>
+                            </>
+                          )}
+                          {item.recibo && (
+                            <TableMenuItem className="text-amber-600" onClick={() => setPrintFormatRecibo(item.recibo)}>
+                              <Icon icon="solar:printer-bold-duotone" height={18} />
+                              <span>Recibo #{item.recibo.numero_recibo}</span>
+                            </TableMenuItem>
+                          )}
+                        </TableActionMenu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {carteraItems.length === 0 && (
                 <div className="text-center py-12">
-                  <Spinner size="lg" />
-                  <p className="text-gray-500 mt-2">Cargando pagos...</p>
-                </div>
-              ) : (
-                <div className="guro-table-wrap">
-                  <table className="guro-table">
-                    <thead>
-                      <tr>
-                        <th>Póliza</th>
-                        <th>Cliente</th>
-                        <th>Aseguradora</th>
-                        <th className="text-right">Monto Pagado</th>
-                        <th>Fecha Pago</th>
-                        <th>Método</th>
-                        <th className="sticky-right">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pagosAseguradora.map((pago) => (
-                        <tr key={pago.pago_id} className="group">
-                          <td className="font-medium">{pago.numero_poliza}</td>
-                          <td>
-                            <div>
-                              <div className="font-medium">{pago.cliente}</div>
-                              <div className="text-xs text-gray-500">{pago.documento}</div>
-                            </div>
-                          </td>
-                          <td>{pago.aseguradora}</td>
-                          <td className="text-right font-semibold text-green-600">
-                            {formatCurrency(pago.monto_pagado)}
-                          </td>
-                          <td>
-                            {pago.fecha_pago ? new Date(pago.fecha_pago).toLocaleDateString('es-CO') : '-'}
-                          </td>
-                          <td>
-                            <Badge color="info" size="sm">
-                              {pago.metodo_pago || 'Directo'}
-                            </Badge>
-                          </td>
-                          <td className="sticky-right">
-                            <Button
-                              size="sm"
-                              color="red"
-                              onClick={() => revertirPagoAseguradoraIndividual(pago.pago_id, pago.monto_pagado)}
-                              title="Revertir este pago"
-                            >
-                              <Icon icon="solar:undo-left-bold-duotone" className="w-4 h-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {!cargandoPagosAseguradora && pagosAseguradora.length === 0 && (
-                <div className="text-center py-12">
-                  <Icon icon="solar:inbox-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No hay pagos de aseguradora</p>
-                  <p className="text-xs text-gray-400 mt-2">Aquí aparecen los pagos individuales realizados a las aseguradoras</p>
+                  <Icon icon="solar:check-circle-bold-duotone" className="w-16 h-16 text-green-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No hay comisiones pendientes por cobrar</p>
                 </div>
               )}
             </div>
 
-            {/* Paginación de Pagos Aseguradora */}
-            {pagosAseguradoraPagination && pagosAseguradoraPagination.last_page > 1 && (
+            {serverPagination && serverPagination.last_page > 1 && (
               <div className="flex items-center justify-between p-4">
                 <div className="text-sm text-gray-600">
-                  Mostrando página {pagosAseguradoraPagination.current_page} de {pagosAseguradoraPagination.last_page} ({pagosAseguradoraPagination.total} pagos totales)
+                  Página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} items)
                 </div>
                 <div className="flex items-center gap-3">
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={cargandoPagosAseguradora || pagosAseguradoraPagination.current_page === 1}
-                    onClick={() => cargarPagosAseguradora(pagosAseguradoraPagination.current_page - 1, filtros.busqueda)}
-                    className="rounded-[10px]"
-                  >
+                  <Button size="sm" color="gray" disabled={loading || serverPagination.current_page === 1} onClick={() => cambiarPagina(serverPagination.current_page - 1)} className="rounded-[10px]">
                     <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
                   </Button>
-                  <span className="text-sm text-gray-600">
-                    Página {pagosAseguradoraPagination.current_page} de {pagosAseguradoraPagination.last_page}
-                  </span>
-                  <Button
-                    size="sm"
-                    color="gray"
-                    disabled={cargandoPagosAseguradora || pagosAseguradoraPagination.current_page === pagosAseguradoraPagination.last_page}
-                    onClick={() => cargarPagosAseguradora(pagosAseguradoraPagination.current_page + 1, filtros.busqueda)}
-                    className="rounded-[10px]"
-                  >
+                  <span className="text-sm text-gray-600">Página {serverPagination.current_page} de {serverPagination.last_page}</span>
+                  <Button size="sm" color="gray" disabled={loading || serverPagination.current_page === serverPagination.last_page} onClick={() => cambiarPagina(serverPagination.current_page + 1)} className="rounded-[10px]">
+                    <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Tabs.Item>
+
+          {/* TAB: Comisiones Recibidas */}
+          <Tabs.Item
+            active={tabActivo === 'comisionRecibida'}
+            title={`Comisiones Recibidas (${contadoresTabs.comisionRecibida})`}
+            icon={() => <Icon icon="solar:check-circle-bold-duotone" />}
+          >
+            <div className="mb-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 rounded-xl p-3.5 border border-green-100 dark:border-green-800/30">
+                <div className="w-9 h-9 rounded-lg bg-green-100 dark:bg-green-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:check-circle-bold-duotone" className="w-4.5 h-4.5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-green-700 dark:text-green-300 font-medium">Comisión Recibida Total</p>
+                  <p className="text-lg font-bold text-green-700 dark:text-green-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.comision_recibida || 0), 0))}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3.5 border border-blue-100 dark:border-blue-800/30">
+                <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:bill-check-bold-duotone" className="w-4.5 h-4.5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Pagos Comisionados</p>
+                  <p className="text-lg font-bold text-blue-700 dark:text-blue-200">{carteraItems.length}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 bg-teal-50 dark:bg-teal-900/20 rounded-xl p-3.5 border border-teal-100 dark:border-teal-800/30">
+                <div className="w-9 h-9 rounded-lg bg-teal-100 dark:bg-teal-800/40 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:user-check-bold-duotone" className="w-4.5 h-4.5 text-teal-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-teal-700 dark:text-teal-300 font-medium">Comisión Vendedor Pagada</p>
+                  <p className="text-lg font-bold text-teal-700 dark:text-teal-200">{formatCurrency(carteraItems.reduce((sum, i) => sum + (i.comision_vendedor || 0), 0))}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="guro-table-wrap">
+              <table className="guro-table">
+                <thead>
+                  <tr>
+                    <th>Póliza</th>
+                    <th>Cliente</th>
+                    <th>Aseguradora</th>
+                    <th className="text-right">Comisión Recibida</th>
+                    <th className="text-right">% Comisión</th>
+                    <th>Fecha Comisionada</th>
+                    <th>Vendedor</th>
+                    <th className="sticky-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {carteraItems.map((item) => (
+                    <tr key={item.id} className="group">
+                      <td>
+                        <div>
+                          <div className="font-medium flex items-center gap-1.5">
+                            {item.numero_poliza}
+                            {item.numero_renovacion > 0 && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                R{item.numero_renovacion}
+                              </span>
+                            )}
+                          </div>
+                          {item.numero_pago && <div className="text-xs text-gray-500">Pago #{item.numero_pago}</div>}
+                        </div>
+                      </td>
+                      <td>
+                        <div>
+                          <div className="font-medium">{item.cliente}</div>
+                          <div className="text-xs text-gray-500">{item.documento}</div>
+                        </div>
+                      </td>
+                      <td className="text-sm">{item.aseguradora}</td>
+                      <td className="text-right font-semibold text-green-600">{formatCurrency(item.comision_recibida)}</td>
+                      <td className="text-right text-sm">{item.porcentaje_comision ? `${(item.porcentaje_comision * 100).toFixed(1)}%` : '-'}</td>
+                      <td className="text-sm">{item.fecha_comisionada ? formatDate(item.fecha_comisionada) : '-'}</td>
+                      <td className="text-sm">{item.vendedor || '-'}</td>
+                      <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                        <TableActionMenu>
+                          {item.poliza_id && (
+                            <>
+                              <TableMenuItem className="text-red-600" onClick={() => revertirCobroComision(item)}>
+                                <Icon icon="solar:undo-left-bold-duotone" height={18} />
+                                <span>Revertir Cobro</span>
+                              </TableMenuItem>
+                              <Link to={`/apps/seguros/polizas/editar/${item.poliza_id}`}>
+                                <TableMenuItem>
+                                  <Icon icon="solar:eye-bold-duotone" height={18} />
+                                  <span>Ver Póliza</span>
+                                </TableMenuItem>
+                              </Link>
+                            </>
+                          )}
+                          {item.cliente_id && (
+                            <Link to={`/apps/seguros/clientes/editar/${item.cliente_id}`}>
+                              <TableMenuItem>
+                                <Icon icon="solar:user-bold-duotone" height={18} />
+                                <span>Ver Cliente</span>
+                              </TableMenuItem>
+                            </Link>
+                          )}
+                          {item.recibo && (
+                            <TableMenuItem className="text-amber-600" onClick={() => setPrintFormatRecibo(item.recibo)}>
+                              <Icon icon="solar:printer-bold-duotone" height={18} />
+                              <span>Recibo #{item.recibo.numero_recibo}</span>
+                            </TableMenuItem>
+                          )}
+                        </TableActionMenu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {carteraItems.length === 0 && (
+                <div className="text-center py-12">
+                  <Icon icon="solar:inbox-bold-duotone" className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No hay comisiones recibidas</p>
+                </div>
+              )}
+            </div>
+
+            {serverPagination && serverPagination.last_page > 1 && (
+              <div className="flex items-center justify-between p-4">
+                <div className="text-sm text-gray-600">
+                  Página {serverPagination.current_page} de {serverPagination.last_page} ({serverPagination.total} items)
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button size="sm" color="gray" disabled={loading || serverPagination.current_page === 1} onClick={() => cambiarPagina(serverPagination.current_page - 1)} className="rounded-[10px]">
+                    <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm text-gray-600">Página {serverPagination.current_page} de {serverPagination.last_page}</span>
+                  <Button size="sm" color="gray" disabled={loading || serverPagination.current_page === serverPagination.last_page} onClick={() => cambiarPagina(serverPagination.current_page + 1)} className="rounded-[10px]">
                     <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
                   </Button>
                 </div>
@@ -2039,19 +2255,29 @@ const CarteraClientes = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto a Recaudar
+                Monto a Recaudar *
               </label>
               <Input
                 type="number"
                 value={montoPago}
-                onChange={(e) => setMontoPago(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setMontoPago(val);
+                }}
                 placeholder="Ingrese el monto a recaudar"
-                className="w-full"
+                className={`w-full ${parseFloat(montoPago) > (polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0) ? 'border-red-500 ring-red-500' : ''}`}
+                min={0}
                 max={polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Puede ingresar un monto parcial. El resto quedará pendiente.
-              </p>
+              {parseFloat(montoPago) > (polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0) ? (
+                <p className="text-xs text-red-500 mt-1 font-medium">
+                  El monto supera el saldo pendiente de {formatCurrency(polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0)}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">
+                  Puede ingresar un monto parcial. El resto quedará pendiente.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2116,7 +2342,7 @@ const CarteraClientes = () => {
           <Button
             color="blue"
             onClick={registrarPagoOficina}
-            disabled={procesandoPago || !montoPago}
+            disabled={procesandoPago || !montoPago || parseFloat(montoPago) <= 0 || parseFloat(montoPago) > (polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0) + 0.01}
           >
             {procesandoPago ? <Spinner size="sm" className="mr-2" /> : null}
             Registrar Pago
@@ -2127,21 +2353,44 @@ const CarteraClientes = () => {
       {/* Modal Pago Aseguradora */}
       <Modal show={showPagoAseguradoraModal} onClose={() => setShowPagoAseguradoraModal(false)} size="md">
         <Modal.Header>
-          Registrar Pago por Aseguradora - {polizaSeleccionada?.numeroPoliza}
+          Registrar Pago a Aseguradora - {polizaSeleccionada?.numeroPoliza}
         </Modal.Header>
         <Modal.Body>
           <div className="space-y-4">
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Valor neto a pagar:</span>
+                <span className="font-semibold">{formatCurrency(polizaSeleccionada?.recaudo_aseguradora?.total || polizaSeleccionada?.valorPendienteAseguradora || 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Ya pagado:</span>
+                <span className="font-semibold text-green-600">{formatCurrency(polizaSeleccionada?.recaudo_aseguradora?.pagado || polizaSeleccionada?.valorPagadoAseguradora || 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-purple-200 dark:border-purple-700 pt-2 mt-2">
+                <span className="text-gray-700 dark:text-gray-300 font-medium">Pendiente por pagar:</span>
+                <span className="font-bold text-orange-600">{formatCurrency(polizaSeleccionada?.recaudo_aseguradora?.pendiente || polizaSeleccionada?.valorPendienteAseguradora || 0)}</span>
+              </div>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto Pagado por Aseguradora
+                Monto a Pagar *
               </label>
               <Input
                 type="number"
                 value={montoPago}
                 onChange={(e) => setMontoPago(e.target.value)}
-                placeholder="Monto pagado por la aseguradora"
-                className="w-full"
+                placeholder="Monto a pagar a la aseguradora"
+                className={`w-full ${parseFloat(montoPago) > (polizaSeleccionada?.recaudo_aseguradora?.pendiente || polizaSeleccionada?.valorPendienteAseguradora || 0) ? 'border-red-500 ring-red-500' : ''}`}
+                min={0}
+                max={polizaSeleccionada?.recaudo_aseguradora?.pendiente || polizaSeleccionada?.valorPendienteAseguradora || 0}
               />
+              {parseFloat(montoPago) > (polizaSeleccionada?.recaudo_aseguradora?.pendiente || polizaSeleccionada?.valorPendienteAseguradora || 0) ? (
+                <p className="text-xs text-red-500 mt-1 font-medium">
+                  El monto supera el saldo pendiente de {formatCurrency(polizaSeleccionada?.recaudo_aseguradora?.pendiente || polizaSeleccionada?.valorPendienteAseguradora || 0)}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">Puede ingresar un monto parcial.</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2205,7 +2454,7 @@ const CarteraClientes = () => {
           <Button
             color="purple"
             onClick={registrarPagoAseguradora}
-            disabled={procesandoPago || !montoPago}
+            disabled={procesandoPago || !montoPago || parseFloat(montoPago) <= 0 || parseFloat(montoPago) > (polizaSeleccionada?.recaudo_aseguradora?.pendiente || polizaSeleccionada?.valorPendienteAseguradora || 0) + 0.01}
           >
             {procesandoPago ? <Spinner size="sm" className="mr-2" /> : null}
             Registrar Pago
@@ -2220,31 +2469,46 @@ const CarteraClientes = () => {
         </Modal.Header>
         <Modal.Body>
           <div className="space-y-4">
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <p className="text-sm text-purple-700">
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg">
+              <p className="text-sm text-purple-700 dark:text-purple-300">
                 <strong>Nota:</strong> Este tipo de recaudo se usa cuando la aseguradora cobra directamente al cliente. 
                 La póliza irá directamente a "Recaudos Completados".
               </p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Total de la Póliza
-              </label>
-              <p className="text-lg font-semibold text-gray-900">
-                {formatCurrency(polizaSeleccionada?.total || 0)}
-              </p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Total de la póliza:</span>
+                <span className="font-semibold">{formatCurrency(polizaSeleccionada?.total || 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Ya recaudado:</span>
+                <span className="font-semibold text-green-600">{formatCurrency(polizaSeleccionada?.valorRecaudado || polizaSeleccionada?.recaudo_oficina?.recaudado || 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-blue-200 dark:border-blue-700 pt-2 mt-2">
+                <span className="text-gray-700 dark:text-gray-300 font-medium">Pendiente:</span>
+                <span className="font-bold text-orange-600">{formatCurrency(polizaSeleccionada?.valorPendienteCliente || polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0)}</span>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto Recaudado
+                Monto Recaudado *
               </label>
               <Input
                 type="number"
                 value={montoPago}
                 onChange={(e) => setMontoPago(e.target.value)}
                 placeholder="Monto recaudado por la aseguradora"
-                className="w-full"
+                className={`w-full ${parseFloat(montoPago) > (polizaSeleccionada?.valorPendienteCliente || polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0) ? 'border-red-500 ring-red-500' : ''}`}
+                min={0}
+                max={polizaSeleccionada?.valorPendienteCliente || polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0}
               />
+              {parseFloat(montoPago) > (polizaSeleccionada?.valorPendienteCliente || polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0) ? (
+                <p className="text-xs text-red-500 mt-1 font-medium">
+                  El monto supera el saldo pendiente de {formatCurrency(polizaSeleccionada?.valorPendienteCliente || polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0)}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">Puede ingresar un monto parcial.</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2309,7 +2573,7 @@ const CarteraClientes = () => {
           <Button
             color="purple"
             onClick={registrarRecaudoAseguradoraDirecto}
-            disabled={procesandoPago || !montoPago}
+            disabled={procesandoPago || !montoPago || parseFloat(montoPago) <= 0 || parseFloat(montoPago) > (polizaSeleccionada?.valorPendienteCliente || polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0) + 0.01}
           >
             {procesandoPago ? <Spinner size="sm" className="mr-2" /> : null}
             Registrar Recaudo
@@ -2799,17 +3063,40 @@ const CarteraClientes = () => {
         </Modal.Header>
         <Modal.Body>
           <div className="space-y-4">
+            <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Comisión total:</span>
+                <span className="font-semibold">{formatCurrency(polizaSeleccionada?.cobro_comision?.total || polizaSeleccionada?.comision || 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Ya cobrada:</span>
+                <span className="font-semibold text-green-600">{formatCurrency(polizaSeleccionada?.cobro_comision?.cobrada || polizaSeleccionada?.comisionCobrada || 0)}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-green-200 dark:border-green-700 pt-2 mt-2">
+                <span className="text-gray-700 dark:text-gray-300 font-medium">Pendiente por cobrar:</span>
+                <span className="font-bold text-orange-600">{formatCurrency(polizaSeleccionada?.cobro_comision?.pendiente || polizaSeleccionada?.comisionPendiente || 0)}</span>
+              </div>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto a Cobrar
+                Monto a Cobrar *
               </label>
               <Input
                 type="number"
                 value={montoPago}
                 onChange={(e) => setMontoPago(e.target.value)}
                 placeholder="Monto de la comisión a cobrar"
-                className="w-full"
+                className={`w-full ${parseFloat(montoPago) > (polizaSeleccionada?.cobro_comision?.pendiente || polizaSeleccionada?.comisionPendiente || 0) ? 'border-red-500 ring-red-500' : ''}`}
+                min={0}
+                max={polizaSeleccionada?.cobro_comision?.pendiente || polizaSeleccionada?.comisionPendiente || 0}
               />
+              {parseFloat(montoPago) > (polizaSeleccionada?.cobro_comision?.pendiente || polizaSeleccionada?.comisionPendiente || 0) ? (
+                <p className="text-xs text-red-500 mt-1 font-medium">
+                  El monto supera la comisión pendiente de {formatCurrency(polizaSeleccionada?.cobro_comision?.pendiente || polizaSeleccionada?.comisionPendiente || 0)}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">Puede ingresar un monto parcial.</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2858,7 +3145,7 @@ const CarteraClientes = () => {
           <Button
             color="green"
             onClick={registrarCobroComision}
-            disabled={procesandoPago || !montoPago}
+            disabled={procesandoPago || !montoPago || parseFloat(montoPago) <= 0 || parseFloat(montoPago) > (polizaSeleccionada?.cobro_comision?.pendiente || polizaSeleccionada?.comisionPendiente || 0) + 0.01}
           >
             {procesandoPago ? <Spinner size="sm" className="mr-2" /> : null}
             Registrar Cobro
@@ -2939,28 +3226,9 @@ const CarteraClientes = () => {
                               <div className="text-xs text-green-600">
                                 Rec: {formatCurrency(poliza.recaudo_oficina?.recaudado || 0)}
                               </div>
-                              {(poliza.recaudo_oficina?.historial?.length || 0) > 0 && (
-                                <Badge color="info" size="xs">{poliza.recaudo_oficina?.historial?.length} abono(s)</Badge>
-                              )}
                             </>
                           ) : (
                             <Badge color="success" size="xs">Completo</Badge>
-                          )}
-                          {(poliza.recaudo_oficina?.historial?.length || 0) > 0 && (
-                            <div className="mt-2 text-left border-t pt-2">
-                              <div className="text-xs font-semibold text-gray-600 mb-1">Abonos:</div>
-                              {poliza.recaudo_oficina?.historial?.map((abono, idx) => (
-                                <div key={abono.id || idx} className="text-xs bg-gray-50 dark:bg-gray-700 p-1 rounded mb-1">
-                                  <div className="flex justify-between">
-                                    <span className="text-green-600 font-semibold">{formatCurrency(abono.monto)}</span>
-                                    <span className="text-gray-500">{formatDate(abono.fecha)}</span>
-                                  </div>
-                                  {abono.metodo_pago && (
-                                    <div className="text-gray-500">{abono.metodo_pago}</div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
                           )}
                         </div>
                       </td>
@@ -3074,6 +3342,124 @@ const CarteraClientes = () => {
             Cerrar
           </Button>
         </Modal.Footer>
+      </Modal>
+
+      {/* Modal Imprimir Recibo */}
+      <Modal show={!!reciboParaImprimir} onClose={() => setReciboParaImprimir(null)} size="md">
+        <Modal.Header>
+          Recibo #{reciboParaImprimir?.numero_recibo} generado
+        </Modal.Header>
+        <Modal.Body>
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+              <Icon icon="solar:check-circle-bold-duotone" className="w-10 h-10 text-green-600" />
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">Recibo generado exitosamente</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Recibo #{reciboParaImprimir?.numero_recibo} — {reciboParaImprimir?.cliente_nombre}
+              </p>
+              {reciboParaImprimir?.poliza_numero && (
+                <p className="text-sm text-gray-500">Póliza: {reciboParaImprimir.poliza_numero}</p>
+              )}
+              <p className="text-lg font-bold text-green-600 mt-2">
+                {formatCurrency(reciboParaImprimir?.valor_recaudado_en_oficina || reciboParaImprimir?.valor_a_pagar || 0)}
+              </p>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <div className="flex gap-2 w-full justify-end">
+            <Button color="blue" onClick={() => {
+              if (reciboParaImprimir) {
+                const data: ReciboPrintData = {
+                  numero_recibo: reciboParaImprimir.numero_recibo,
+                  fecha: reciboParaImprimir.fecha,
+                  cliente_nombre: reciboParaImprimir.cliente_nombre,
+                  cliente_documento: reciboParaImprimir.cliente_documento,
+                  poliza_numero: reciboParaImprimir.poliza_numero,
+                  aseguradora_nombre: reciboParaImprimir.aseguradora_nombre,
+                  ramo_nombre: reciboParaImprimir.ramo_nombre,
+                  forma_pago: reciboParaImprimir.forma_pago,
+                  moneda: 'COP',
+                  valor_recaudado_en_oficina: reciboParaImprimir.valor_recaudado_en_oficina || reciboParaImprimir.valor_a_pagar || 0,
+                  es_anticipo: reciboParaImprimir.es_anticipo || false,
+                  observaciones: reciboParaImprimir.observaciones,
+                };
+                const broker: BrokerPrintData = brokerInfo || { nombre: 'Agencia de Seguros', nit: '' };
+                printRecibo(data, broker, 'media_carta');
+              }
+            }}>
+              <Icon icon="solar:printer-bold-duotone" className="w-4 h-4 mr-2" />
+              Imprimir Media Carta
+            </Button>
+            <Button color="purple" onClick={() => {
+              if (reciboParaImprimir) {
+                const data: ReciboPrintData = {
+                  numero_recibo: reciboParaImprimir.numero_recibo,
+                  fecha: reciboParaImprimir.fecha,
+                  cliente_nombre: reciboParaImprimir.cliente_nombre,
+                  cliente_documento: reciboParaImprimir.cliente_documento,
+                  poliza_numero: reciboParaImprimir.poliza_numero,
+                  aseguradora_nombre: reciboParaImprimir.aseguradora_nombre,
+                  ramo_nombre: reciboParaImprimir.ramo_nombre,
+                  forma_pago: reciboParaImprimir.forma_pago,
+                  moneda: 'COP',
+                  valor_recaudado_en_oficina: reciboParaImprimir.valor_recaudado_en_oficina || reciboParaImprimir.valor_a_pagar || 0,
+                  es_anticipo: reciboParaImprimir.es_anticipo || false,
+                  observaciones: reciboParaImprimir.observaciones,
+                };
+                const broker: BrokerPrintData = brokerInfo || { nombre: 'Agencia de Seguros', nit: '' };
+                printRecibo(data, broker, 'carta');
+              }
+            }}>
+              <Icon icon="solar:printer-bold-duotone" className="w-4 h-4 mr-2" />
+              Imprimir Carta
+            </Button>
+            <Button color="gray" onClick={() => setReciboParaImprimir(null)}>
+              Cerrar
+            </Button>
+          </div>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Print Format Selection Modal */}
+      <Modal show={!!printFormatRecibo} onClose={() => setPrintFormatRecibo(null)} size="sm">
+        <Modal.Header>
+          <span className="flex items-center gap-2">
+            <Icon icon="solar:printer-bold-duotone" className="w-5 h-5 text-blue-500" />
+            Imprimir Recibo #{printFormatRecibo?.numero_recibo}
+          </span>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Selecciona el formato de impresión:</p>
+            <button
+              className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition group"
+              onClick={() => { if (printFormatRecibo) { imprimirReciboDeItem(printFormatRecibo, 'media_carta'); setPrintFormatRecibo(null); } }}
+            >
+              <div className="w-12 h-12 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0">
+                <Icon icon="solar:document-bold-duotone" className="text-blue-500 text-2xl" />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-sm text-gray-900 dark:text-white group-hover:text-blue-600">Media Carta</p>
+                <p className="text-xs text-gray-400">Sin copia, tamaño reducido</p>
+              </div>
+            </button>
+            <button
+              className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 transition group"
+              onClick={() => { if (printFormatRecibo) { imprimirReciboDeItem(printFormatRecibo, 'carta'); setPrintFormatRecibo(null); } }}
+            >
+              <div className="w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center shrink-0">
+                <Icon icon="solar:copy-bold-duotone" className="text-indigo-500 text-2xl" />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-sm text-gray-900 dark:text-white group-hover:text-indigo-600">Carta Completa (con copia)</p>
+                <p className="text-xs text-gray-400">Original + copia en hoja completa</p>
+              </div>
+            </button>
+          </div>
+        </Modal.Body>
       </Modal>
     </div>
   );

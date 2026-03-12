@@ -31,6 +31,10 @@ export interface Poliza {
   beneficiario_oneroso_nombre?: string;
   beneficiario_oneroso_documento?: string;
   documents?: any[];
+  // Pólizas colectivas
+  policy_category?: 'individual' | 'colectiva';
+  oficina_radicacion?: string;
+  ciudad_expedicion?: string;
   // Vehículos
   placas?: string[];
   // Lectura partes
@@ -318,26 +322,29 @@ export const polizaService = {
     page: number = 1,
     perPage: number = 25,
     search: string = '',
-    tab?: 'general' | 'porCobrar' | 'porPagar' | 'recaudosCompletados',
+    tab?: 'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida',
   ): Promise<{ 
     success: boolean; 
-    data: Poliza[]; 
+    data: any[]; 
     message?: string; 
     pagination?: { current_page: number; last_page: number; per_page: number; total: number };
     estadisticas?: {
       totalPolizas: number;
-      polizasActivas: number;
+      totalItems: number;
       primaTotal: number;
       comisionesTotal: number;
       recaudadoTotal: number;
       porCobrarTotal: number;
+      porPagarTotal: number;
+      comisionesRecibidasTotal: number;
       tasaRecaudo: number;
     };
     contadoresTabs?: {
       general: number;
       porCobrar: number;
       porPagar: number;
-      recaudosCompletados: number;
+      comisionPorCobrar: number;
+      comisionRecibida: number;
     };
   }> {
     try {
@@ -474,19 +481,21 @@ export const polizaService = {
   /**
    * Registrar recaudo de póliza
    */
-  async registrarPagoPoliza(polizaId: string, tipoRecaudo: 'oficina' | 'aseguradora' | 'aseguradora_directo', monto: number, metodoPago?: string, referenciaPago?: string, observaciones?: string, fechaPago?: string): Promise<ApiResponse<any>> {
+  async registrarPagoPoliza(polizaId: string, tipoRecaudo: 'oficina' | 'aseguradora' | 'aseguradora_directo', monto: number, metodoPago?: string, referenciaPago?: string, observaciones?: string, fechaPago?: string, carteraItemId?: number): Promise<ApiResponse<any>> {
     try {
       const endpoint = `${API_PREFIX}/${polizaId}/pagos`;
+      const body: Record<string, any> = {
+        tipo_recaudo: tipoRecaudo,
+        monto: monto,
+        metodo_pago: metodoPago,
+        referencia_pago: referenciaPago,
+        fecha_pago: fechaPago,
+        observaciones: observaciones,
+      };
+      if (carteraItemId) body.cartera_item_id = carteraItemId;
       const response = await makeRequest<any>(endpoint, {
         method: 'POST',
-        body: JSON.stringify({
-          tipo_recaudo: tipoRecaudo,
-          monto: monto,
-          metodo_pago: metodoPago,
-          referencia_pago: referenciaPago,
-          fecha_pago: fechaPago,
-          observaciones: observaciones,
-        }),
+        body: JSON.stringify(body),
       });
 
       return response;
@@ -1046,20 +1055,30 @@ export const polizaService = {
     const query = new URLSearchParams();
     if (args.path) query.set('path', args.path);
     if (args.name) query.set('name', args.name);
-    const res = await fetch(`${API_BASE_URL}${API_PREFIX}/${id}/documents/signed-url?${query.toString()}`, { headers });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data?.success || !data?.data?.url) {
-      const message = res.status === 401
-        ? 'No autorizado para obtener URL firmada.'
-        : res.status === 403
-          ? 'Permisos insuficientes para ver el archivo.'
-          : res.status === 404
-            ? 'Archivo no encontrado.'
-            : 'No se pudo obtener URL firmada';
-      toast({ variant: 'destructive', title: 'Abrir documento', description: message });
-      throw new Error(message);
-    }
-    return data.data.url as string;
+
+    // Try signed URL first (works for Firebase-hosted files)
+    try {
+      const res = await fetch(`${API_BASE_URL}${API_PREFIX}/${id}/documents/signed-url?${query.toString()}`, { headers });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success && data?.data?.url) {
+        return data.data.url as string;
+      }
+    } catch {}
+
+    // Fallback: stream endpoint (proxies through backend for SS-only files)
+    try {
+      const streamRes = await fetch(`${API_BASE_URL}${API_PREFIX}/${id}/documents/stream?${query.toString()}`, { headers });
+      if (streamRes.ok) {
+        const ct = streamRes.headers.get('Content-Type') || '';
+        if (!ct.includes('application/json')) {
+          const blob = await streamRes.blob();
+          return URL.createObjectURL(blob);
+        }
+      }
+    } catch {}
+
+    toast({ variant: 'destructive', title: 'Abrir documento', description: 'No se pudo obtener el archivo.' });
+    throw new Error('No se pudo obtener el archivo');
   },
 
   async eliminarDocumento(id: string, args: { path?: string; name?: string }): Promise<ApiResponse<any[]>> {
@@ -1587,3 +1606,70 @@ export const polizaUtils = {
     return colores[estado as keyof typeof colores] || 'gray';
   }
 }; 
+
+// ===== Vinculados (Riesgos de pólizas colectivas) =====
+
+export interface PolizaVinculado {
+  id?: number;
+  poliza_id?: number;
+  identificador?: string;
+  documento?: string;
+  nombre_asegurado: string;
+  valor?: number;
+  valor_iva?: number;
+  valor_total?: number;
+  estado?: string;
+  tipo_documento?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  ciudad?: string;
+  observaciones?: string;
+  metadata?: Record<string, any>;
+}
+
+export const vinculadosService = {
+  async list(polizaId: string | number): Promise<{ success: boolean; data: PolizaVinculado[]; totales?: any }> {
+    const response = await makeRequest<any>(`${API_PREFIX}/${polizaId}/vinculados`);
+    return response as any;
+  },
+
+  async create(polizaId: string | number, data: Partial<PolizaVinculado>): Promise<{ success: boolean; data: PolizaVinculado; message?: string }> {
+    const response = await makeRequest<any>(`${API_PREFIX}/${polizaId}/vinculados`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response as any;
+  },
+
+  async bulkCreate(polizaId: string | number, vinculados: Partial<PolizaVinculado>[]): Promise<{ success: boolean; data: PolizaVinculado[]; message?: string }> {
+    const response = await makeRequest<any>(`${API_PREFIX}/${polizaId}/vinculados/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ vinculados }),
+    });
+    return response as any;
+  },
+
+  async update(polizaId: string | number, vinculadoId: number, data: Partial<PolizaVinculado>): Promise<{ success: boolean; data: PolizaVinculado; message?: string }> {
+    const response = await makeRequest<any>(`${API_PREFIX}/${polizaId}/vinculados/${vinculadoId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return response as any;
+  },
+
+  async remove(polizaId: string | number, vinculadoId: number): Promise<{ success: boolean; message?: string }> {
+    const response = await makeRequest<any>(`${API_PREFIX}/${polizaId}/vinculados/${vinculadoId}`, {
+      method: 'DELETE',
+    });
+    return response as any;
+  },
+
+  async bulkDelete(polizaId: string | number, ids: number[]): Promise<{ success: boolean; message?: string; deleted_count?: number }> {
+    const response = await makeRequest<any>(`${API_PREFIX}/${polizaId}/vinculados/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+    return response as any;
+  },
+};

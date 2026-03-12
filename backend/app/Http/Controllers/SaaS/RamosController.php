@@ -220,7 +220,8 @@ class RamosController extends Controller
                         return $query->where('broker_id', $brokerId);
                     }),
                 ],
-                'subramo' => 'nullable|string|max:255',
+                'subramo' => 'nullable',
+                'subramo.*' => 'nullable|string|max:255',
                 'calcular_iva_pri_a_pre' => 'sometimes|boolean',
                 'vista_mapa_oportunidad' => 'sometimes|boolean',
                 'comisiones_aseguradoras' => 'nullable|array',
@@ -237,7 +238,6 @@ class RamosController extends Controller
                 'nombre.string' => 'El nombre debe ser texto',
                 'nombre.max' => 'El nombre no puede exceder 255 caracteres',
                 'nombre.unique' => 'Ya existe un ramo con este nombre',
-                'subramo.max' => 'El subramo no puede exceder 255 caracteres',
                 'comisiones_aseguradoras.array' => 'Las comisiones deben ser un array',
                 'comisiones_aseguradoras.*.aseguradora_id.required_with' => 'La aseguradora es obligatoria',
                 'comisiones_aseguradoras.*.aseguradora_id.integer' => 'La aseguradora debe ser un número entero',
@@ -250,6 +250,12 @@ class RamosController extends Controller
                     'message' => 'Error de validación',
                     'errors' => $validator->errors(),
                 ], 422);
+            }
+
+            // Normalizar subramo: acepta string o array
+            $subramoInput = $request->subramo;
+            if (is_string($subramoInput)) {
+                $subramoInput = array_values(array_filter(array_map('trim', explode(',', $subramoInput)), fn($v) => $v !== ''));
             }
 
             // Validar que no se repitan aseguradoras en las comisiones
@@ -268,7 +274,7 @@ class RamosController extends Controller
             try {
                 $ramo = Ramo::create([
                     'nombre' => $request->nombre,
-                    'subramo' => $request->subramo,
+                    'subramo' => $subramoInput,
                     'calcular_iva_pri_a_pre' => (bool) ($request->calcular_iva_pri_a_pre ?? false),
                     'vista_mapa_oportunidad' => (bool) ($request->vista_mapa_oportunidad ?? false),
                     'broker_id' => $brokerId,
@@ -361,7 +367,8 @@ class RamosController extends Controller
                         return $query->where('broker_id', $brokerId);
                     })->ignore($id),
                 ],
-                'subramo' => 'nullable|string|max:255',
+                'subramo' => 'nullable',
+                'subramo.*' => 'nullable|string|max:255',
                 'calcular_iva_pri_a_pre' => 'sometimes|boolean',
                 'vista_mapa_oportunidad' => 'sometimes|boolean',
                 'comisiones_aseguradoras' => 'nullable|array',
@@ -378,7 +385,6 @@ class RamosController extends Controller
                 'nombre.string' => 'El nombre debe ser texto',
                 'nombre.max' => 'El nombre no puede exceder 255 caracteres',
                 'nombre.unique' => 'Ya existe un ramo con este nombre',
-                'subramo.max' => 'El subramo no puede exceder 255 caracteres',
                 'comisiones_aseguradoras.array' => 'Las comisiones deben ser un array',
                 'comisiones_aseguradoras.*.aseguradora_id.required_with' => 'La aseguradora es obligatoria',
                 'comisiones_aseguradoras.*.aseguradora_id.integer' => 'La aseguradora debe ser un número entero',
@@ -391,6 +397,12 @@ class RamosController extends Controller
                     'message' => 'Error de validación',
                     'errors' => $validator->errors(),
                 ], 422);
+            }
+
+            // Normalizar subramo: acepta string o array
+            $subramoInput = $request->subramo;
+            if (is_string($subramoInput)) {
+                $subramoInput = array_values(array_filter(array_map('trim', explode(',', $subramoInput)), fn($v) => $v !== ''));
             }
 
             // Validar que no se repitan aseguradoras en las comisiones
@@ -409,7 +421,7 @@ class RamosController extends Controller
             try {
                 $ramo->update([
                     'nombre' => $request->nombre,
-                    'subramo' => $request->subramo,
+                    'subramo' => $subramoInput,
                     'calcular_iva_pri_a_pre' => (bool) ($request->calcular_iva_pri_a_pre ?? $ramo->calcular_iva_pri_a_pre),
                     'vista_mapa_oportunidad' => (bool) ($request->vista_mapa_oportunidad ?? $ramo->vista_mapa_oportunidad),
                 ]);

@@ -118,6 +118,12 @@ Route::post('/webhooks/whatsapp-sync-message', [\App\Http\Controllers\Api\WhatsA
 Route::get('/webhooks/meta-whatsapp', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'metaWebhookVerify']);
 Route::post('/webhooks/meta-whatsapp', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'metaWebhookReceive']);
 
+// =============================================================
+// Webhook YCloud (PÚBLICO - llamado por YCloud para coexistencia)
+// Para recibir mensajes de WhatsApp via YCloud API
+// =============================================================
+Route::post('/webhooks/ycloud-whatsapp', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'ycloudWebhookReceive']);
+
 // Rutas públicas de autenticación (sin middleware)
 Route::prefix('auth')->group(function () {
     // Estas rutas no necesitan autenticación
@@ -189,6 +195,13 @@ Route::post('/saas/voice-campaigns/tools/query-clients/{conversationId}', [\App\
 // =============================================================
 Route::post('/saas/elevenlabs/tts/{voiceId}', [\App\Http\Controllers\Api\ElevenLabsProxyController::class, 'tts']);
 
+// =============================================================
+// Proxy seguro para Freepik API (Creador de Contenido)
+// /api/freepik/{path} → https://api.freepik.com/v1/{path}
+// =============================================================
+Route::get('/freepik/{path}', [\App\Http\Controllers\Api\FreepikProxyController::class, 'proxyGet'])->where('path', '.*');
+Route::post('/freepik/{path}', [\App\Http\Controllers\Api\FreepikProxyController::class, 'proxyPost'])->where('path', '.*');
+
 // =============================================================================
 // Rutas SaaS protegidas con autenticación unificada
 // (Anteriormente públicas - ahora requieren Firebase token)
@@ -245,6 +258,19 @@ Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group
         Route::get('/by-insurer', [App\Http\Controllers\SaaS\SaasReportesFinancierosController::class, 'byInsurer']);
     });
 
+    // Recibos y Cuadre de Caja
+    Route::prefix('cartera/recibos-caja')->group(function () {
+        Route::get('/', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'index']);
+        Route::get('/cuadre', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'cuadreCaja']);
+        Route::get('/estadisticas', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'estadisticas']);
+        Route::post('/', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'store']);
+        Route::get('/{id}', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'show'])->whereNumber('id');
+        Route::post('/{id}/anular', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'anular'])->whereNumber('id');
+        Route::post('/{id}/revertir', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'revertir'])->whereNumber('id');
+        Route::post('/{id}/asociar-poliza', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'asociarPoliza'])->whereNumber('id');
+        Route::get('/polizas-cliente/{clienteId}', [App\Http\Controllers\SaaS\RecibosCajaController::class, 'polizasCliente'])->whereNumber('clienteId');
+    });
+
     // Anticipos y Ajustes
     Route::prefix('cartera/anticipos-ajustes')->group(function () {
         Route::get('/', [App\Http\Controllers\SaaS\AnticiposAjustesController::class, 'index']);
@@ -257,7 +283,7 @@ Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group
 });
 
 // Rutas de debug protegidas por bandera de entorno (solo si ENABLE_DEBUG_ROUTES=true)
-if (env('ENABLE_DEBUG_ROUTES', false)) {
+if (config('app.enable_debug_routes', false)) {
 // Ruta temporal de debug: últimas llamadas de voz (id, conversation_id, status)
 Route::get('/test/voice-calls-latest', function() {
     try {
@@ -371,7 +397,7 @@ Route::prefix('empleado-auth')->group(function () {
 });
 
 // Rutas temporales de catálogos solo en modo DEBUG y con autenticación unificada
-if (env('ENABLE_DEBUG_ROUTES', false)) {
+if (config('app.enable_debug_routes', false)) {
     Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('saas/temp-catalogos')->group(function () {
         Route::get('/aseguradoras', function(Request $request) {
             try {
@@ -529,6 +555,8 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/signature/wompi', [WalletController::class, 'wompiSignature']);
         // Fallback manual para confirmar pago si el webhook se demora
         Route::post('/confirm/wompi', [WalletController::class, 'wompiConfirm']);
+        // Guro Studio: cobro por generación de imágenes
+        Route::post('/charge-studio', [WalletController::class, 'chargeStudio']);
     });
     // Dashboard - primas por periodo (compatibilidad en api.php)
     Route::get('dashboard/primas-chart', [DashboardController::class, 'getPrimasChart']);
@@ -566,6 +594,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/{id}/documents', [\App\Http\Controllers\SaaS\PolizaDocumentsController::class, 'upload'])->whereNumber('id');
         Route::delete('/{id}/documents', [\App\Http\Controllers\SaaS\PolizaDocumentsController::class, 'destroy'])->whereNumber('id');
         Route::get('/{id}/documents/signed-url', [\App\Http\Controllers\SaaS\PolizaDocumentsController::class, 'signedUrl'])->whereNumber('id');
+        Route::get('/{id}/documents/stream', [\App\Http\Controllers\SaaS\PolizaDocumentsController::class, 'stream'])->whereNumber('id');
     });
 
     // Equipos comerciales
@@ -752,6 +781,12 @@ Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/whatsapp-inst
     // Cloud API endpoints
     Route::post('{whatsAppInstance}/cloud-api/send', [WhatsAppInstanceController::class, 'sendCloudApiMessage']);
     Route::post('{whatsAppInstance}/cloud-api/test', [WhatsAppInstanceController::class, 'testCloudApiConnection']);
+
+    // YCloud Contacts (proxy to YCloud API)
+    Route::get('{whatsAppInstance}/ycloud-contacts', [WhatsAppInstanceController::class, 'ycloudContacts']);
+    Route::get('{whatsAppInstance}/ycloud-contacts/{contactId}', [WhatsAppInstanceController::class, 'ycloudContactShow']);
+    Route::patch('{whatsAppInstance}/ycloud-contacts/{contactId}', [WhatsAppInstanceController::class, 'ycloudContactUpdate']);
+    Route::delete('{whatsAppInstance}/ycloud-contacts/{contactId}', [WhatsAppInstanceController::class, 'ycloudContactDelete']);
 });
 
 // =============================================================================
@@ -759,6 +794,9 @@ Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/whatsapp-inst
 // =============================================================================
 
 Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/whatsapp-inbox')->group(function () {
+    // Dashboard (aggregated data for WhatsApp dashboard page)
+    Route::get('dashboard', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getDashboard']);
+    
     // Estadísticas
     Route::get('stats', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getStats']);
     
@@ -776,16 +814,40 @@ Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/whatsapp-inbo
     Route::get('conversations/{conversation}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getConversation']);
     Route::put('conversations/{conversation}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'updateConversation']);
     Route::get('conversations/{conversation}/messages', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getConversationMessages']);
+    Route::get('conversations/{conversation}/messages/search', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'searchMessages']);
     Route::post('conversations/{conversation}/messages', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'sendMessage']);
     Route::post('conversations/{conversation}/media', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'sendMediaMessage']);
     Route::post('conversations/{conversation}/assign', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'assignConversation']);
     Route::post('conversations/{conversation}/assign-department', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'assignToDepartment']);
     Route::post('conversations/{conversation}/resolve', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'resolveConversation']);
+    Route::get('conversations/{conversation}/notes', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getNotes']);
     Route::post('conversations/{conversation}/notes', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'addNote']);
+    
+    // Etiquetas
+    Route::get('tags', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getTags']);
+    Route::post('tags', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'createTag']);
+    Route::put('tags/{tag}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'updateTag']);
+    Route::delete('tags/{tag}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'deleteTag']);
+    Route::post('conversations/{conversation}/tags', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'addTagToConversation']);
+    Route::delete('conversations/{conversation}/tags', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'removeTagFromConversation']);
+    
+    // Media proxy (sirve archivos de Firebase Storage)
+    Route::get('media/{encodedPath}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'proxyMedia'])
+        ->where('encodedPath', '[A-Za-z0-9+/=]+');
+    
+    // Cliente + Pólizas por teléfono
+    Route::get('client-by-phone', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getClientByPhone']);
+    Route::get('search-clients', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'searchClients']);
+    Route::post('link-client-phone', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'linkClientPhone']);
+    
+    // Agentes del broker (para transferir conversaciones)
+    Route::get('agents', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getAgents']);
     
     // Respuestas rápidas
     Route::get('quick-replies', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getQuickReplies']);
     Route::post('quick-replies', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'createQuickReply']);
+    Route::put('quick-replies/{quickReply}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'updateQuickReply']);
+    Route::delete('quick-replies/{quickReply}', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'deleteQuickReply']);
     
     // Contactos (Cloud API - Meta registered contacts tracking)
     Route::get('contacts', [\App\Http\Controllers\Api\WhatsAppInboxController::class, 'getContacts']);
@@ -968,6 +1030,7 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::post('/{id}/documents', [PolizaDocumentsController::class, 'upload'])->whereNumber('id');
             Route::delete('/{id}/documents', [PolizaDocumentsController::class, 'destroy'])->whereNumber('id');
             Route::get('/{id}/documents/signed-url', [PolizaDocumentsController::class, 'signedUrl'])->whereNumber('id');
+            Route::get('/{id}/documents/stream', [PolizaDocumentsController::class, 'stream'])->whereNumber('id');
             Route::post('/{id}/cambiar-estado', [SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
 
             // Renovaciones
@@ -1452,6 +1515,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::post('/polizas/{id}/documents', [PolizaDocumentsController::class, 'upload'])->whereNumber('id');
     Route::delete('/polizas/{id}/documents', [PolizaDocumentsController::class, 'destroy'])->whereNumber('id');
     Route::get('/polizas/{id}/documents/signed-url', [PolizaDocumentsController::class, 'signedUrl'])->whereNumber('id');
+    Route::get('/polizas/{id}/documents/stream', [PolizaDocumentsController::class, 'stream'])->whereNumber('id');
 
     // Rutas con {id} (constricción numérica para evitar capturar 'documents')
     Route::get('/polizas/{id}', [SaasPolizasController::class, 'show'])->whereNumber('id');
@@ -1468,6 +1532,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::post('/siniestros/{id}/documents', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'upload']);
     Route::delete('/siniestros/{id}/documents', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'destroy']);
     Route::get('/siniestros/{id}/documents/signed-url', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'signedUrl']);
+    Route::get('/siniestros/{id}/documents/stream', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'stream']);
 
 
     
@@ -1487,7 +1552,39 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::put('/polizas/{id}/anexos/{anexoId}', [\App\Http\Controllers\SaaS\AnexosController::class, 'update']);
     Route::delete('/polizas/{id}/anexos/{anexoId}', [\App\Http\Controllers\SaaS\AnexosController::class, 'destroy']);
     Route::post('/polizas/{id}/anexos/{anexoId}/documents', [\App\Http\Controllers\SaaS\AnexosController::class, 'uploadDocuments']);
+    // Vinculados (riesgos de pólizas colectivas)
+    Route::get('/polizas/{id}/vinculados', [SaasPolizasController::class, 'vinculadosIndex'])->whereNumber('id');
+    Route::post('/polizas/{id}/vinculados', [SaasPolizasController::class, 'vinculadosStore'])->whereNumber('id');
+    Route::post('/polizas/{id}/vinculados/bulk', [SaasPolizasController::class, 'vinculadosBulkStore'])->whereNumber('id');
+    Route::put('/polizas/{id}/vinculados/{vinculadoId}', [SaasPolizasController::class, 'vinculadosUpdate'])->whereNumber('id');
+    Route::delete('/polizas/{id}/vinculados/{vinculadoId}', [SaasPolizasController::class, 'vinculadosDestroy'])->whereNumber('id');
+    Route::post('/polizas/{id}/vinculados/bulk-delete', [SaasPolizasController::class, 'vinculadosBulkDestroy'])->whereNumber('id');
     Route::get('/renovaciones/export', [SaasPolizasController::class, 'exportarRenovaciones']);
+
+    // SURA Scraper (Robots IA - descarga de pólizas)
+    Route::prefix('sura-scraper')->group(function () {
+        Route::get('/status', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'status']);
+        Route::post('/connect', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'connect']);
+        Route::delete('/disconnect', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'disconnect']);
+        Route::get('/polizas', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'fetchPolizas']);
+        Route::get('/polizas/{numeroPoliza}', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'fetchPolizaDetail']);
+        Route::post('/export', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'exportExcel']);
+        Route::post('/import-clients', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'importClients']);
+        Route::get('/existing-documents', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'existingDocuments']);
+    });
+
+    // SoftSeguros Backup/Migración
+    Route::prefix('softseguros')->group(function () {
+        Route::post('/authenticate', [\App\Http\Controllers\Api\SoftSegurosBackupController::class, 'authenticate']);
+        Route::post('/preview', [\App\Http\Controllers\Api\SoftSegurosBackupController::class, 'preview']);
+        Route::post('/download', [\App\Http\Controllers\Api\SoftSegurosBackupController::class, 'download']);
+        Route::post('/download-page', [\App\Http\Controllers\Api\SoftSegurosBackupController::class, 'downloadPage']);
+        Route::post('/import', [\App\Http\Controllers\Api\SoftSegurosImportController::class, 'importEntity']);
+        Route::post('/sync', [\App\Http\Controllers\Api\SoftSegurosImportController::class, 'syncEntity']);
+        Route::post('/sync-page', [\App\Http\Controllers\Api\SoftSegurosImportController::class, 'syncEntityPage']);
+        Route::get('/sync-status', [\App\Http\Controllers\Api\SoftSegurosBackupController::class, 'syncStatus']);
+        Route::post('/sync-to-firebase', [\App\Http\Controllers\Api\SoftSegurosBackupController::class, 'syncToFirebase']);
+    });
     
     // Rutas de Calendario
     Route::get('/calendar/events', [\App\Http\Controllers\SaaS\CalendarEventController::class, 'index']);
@@ -1534,6 +1631,12 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
         
         // Actualizar estados de todas las instancias
         Route::post('/refresh-all-statuses', [WhatsAppInstanceController::class, 'refreshAllStatuses']);
+
+        // YCloud Contacts (proxy to YCloud API)
+        Route::get('/{whatsAppInstance}/ycloud-contacts', [WhatsAppInstanceController::class, 'ycloudContacts']);
+        Route::get('/{whatsAppInstance}/ycloud-contacts/{contactId}', [WhatsAppInstanceController::class, 'ycloudContactShow']);
+        Route::patch('/{whatsAppInstance}/ycloud-contacts/{contactId}', [WhatsAppInstanceController::class, 'ycloudContactUpdate']);
+        Route::delete('/{whatsAppInstance}/ycloud-contacts/{contactId}', [WhatsAppInstanceController::class, 'ycloudContactDelete']);
     });
 
     // Alias estable para lista de instancias disponibles (evita colisión con /campaigns/{id})
@@ -2157,6 +2260,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/{id}/documents', [\App\Http\Controllers\SaaS\ClienteDocumentsController::class, 'upload'])->whereNumber('id');
         Route::delete('/{id}/documents', [\App\Http\Controllers\SaaS\ClienteDocumentsController::class, 'destroy'])->whereNumber('id');
         Route::get('/{id}/documents/signed-url', [\App\Http\Controllers\SaaS\ClienteDocumentsController::class, 'signedUrl'])->whereNumber('id');
+        Route::get('/{id}/documents/stream', [\App\Http\Controllers\SaaS\ClienteDocumentsController::class, 'stream'])->whereNumber('id');
     });
 
     // Pólizas
@@ -2178,6 +2282,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'store'])->whereNumber('id');
         Route::delete('/{id}/pagos/{pagoId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPago'])->whereNumber('id')->whereNumber('pagoId');
         Route::delete('/{id}/pagos/revertir-oficina', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirRecaudosOficina'])->whereNumber('id');
+        Route::delete('/{id}/pagos/revertir-aseguradora', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPagoAseguradoraDePoliza'])->whereNumber('id');
         Route::delete('/{id}/pagos/revertir-completo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirRecaudoCompleto'])->whereNumber('id');
         Route::post('/recaudo-masivo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoMasivo']);
         Route::post('/recaudo-masivo-csv', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoMasivoCsv']);
@@ -2190,6 +2295,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::delete('/importaciones/{importId}/revertir', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirImportacion'])->whereNumber('importId');
         
         Route::post('/{id}/cobrar-comision', [\App\Http\Controllers\Api\PagoPolizaController::class, 'registrarCobroComision'])->whereNumber('id');
+        Route::delete('/{id}/cobrar-comision/ultimo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirUltimoCobroComision'])->whereNumber('id');
         Route::delete('/{id}/cobrar-comision/{cobroId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirCobroComision'])->whereNumber('id')->whereNumber('cobroId');
 
         // Documentos de póliza
@@ -2200,6 +2306,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/{id}/documents', [\App\Http\Controllers\SaaS\PolizaDocumentsController::class, 'upload'])->whereNumber('id');
         Route::delete('/{id}/documents', [\App\Http\Controllers\SaaS\PolizaDocumentsController::class, 'destroy'])->whereNumber('id');
         Route::get('/{id}/documents/signed-url', [\App\Http\Controllers\SaaS\PolizaDocumentsController::class, 'signedUrl'])->whereNumber('id');
+        Route::get('/{id}/documents/stream', [\App\Http\Controllers\SaaS\PolizaDocumentsController::class, 'stream'])->whereNumber('id');
 
         // Anexos
         Route::get('/{id}/anexos', [\App\Http\Controllers\SaaS\AnexosController::class, 'index'])->whereNumber('id');
@@ -2228,6 +2335,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/{id}/documents', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'upload'])->whereNumber('id');
         Route::delete('/{id}/documents', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'destroy'])->whereNumber('id');
         Route::get('/{id}/documents/signed-url', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'signedUrl'])->whereNumber('id');
+        Route::get('/{id}/documents/stream', [\App\Http\Controllers\SaaS\SiniestroDocumentsController::class, 'stream'])->whereNumber('id');
     });
     // Documentos Internos (sin asociación a entidades)
     Route::prefix('internal-documents')->group(function () {
@@ -2235,6 +2343,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/', [\App\Http\Controllers\SaaS\InternalDocumentsController::class, 'upload']);
         Route::delete('/', [\App\Http\Controllers\SaaS\InternalDocumentsController::class, 'destroy']);
         Route::get('/signed-url', [\App\Http\Controllers\SaaS\InternalDocumentsController::class, 'signedUrl']);
+        Route::get('/stream', [\App\Http\Controllers\SaaS\InternalDocumentsController::class, 'stream']);
     });
 
 
@@ -2278,6 +2387,18 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::get('/scheduled', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getScheduledNotifications']);
         Route::post('/skip', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'skipNotification']);
         Route::post('/test', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'testNotification']);
+        Route::get('/whatsapp-templates', [\App\Http\Controllers\Api\PolicyNotificationController::class, 'getWhatsAppTemplates']);
+    });
+
+    // =============================
+    // RUTAS DE NOTIFICACIONES DE CLIENTES
+    // =============================
+    Route::prefix('client-notifications')->group(function () {
+        Route::get('/config', [\App\Http\Controllers\Api\ClientNotificationController::class, 'getConfig']);
+        Route::put('/config', [\App\Http\Controllers\Api\ClientNotificationController::class, 'updateConfig']);
+        Route::get('/logs', [\App\Http\Controllers\Api\ClientNotificationController::class, 'getLogs']);
+        Route::get('/whatsapp-templates', [\App\Http\Controllers\Api\ClientNotificationController::class, 'getWhatsAppTemplates']);
+        Route::get('/scheduled', [\App\Http\Controllers\Api\ClientNotificationController::class, 'getScheduledNotifications']);
     });
 
 });
@@ -2327,6 +2448,19 @@ Route::middleware(['security.auth','global.broker.auth'])->prefix('saas/tenants'
     })->whereNumber('id');
 });
 
+// ===== Servir archivos de storage público (no requiere symlink) =====
+Route::get('/storage/{path}', function (string $path) {
+    $fullPath = storage_path('app/public/' . $path);
+    if (!file_exists($fullPath)) {
+        abort(404);
+    }
+    $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
+    return response()->file($fullPath, [
+        'Content-Type' => $mime,
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+})->where('path', '.*');
+
 // ===== Webhook n8n Email Status (protegido por Bearer) =====
  // ===== Webhook SendGrid events =====
  Route::post('/webhooks/sendgrid/events', [\App\Http\Controllers\Api\SendgridWebhookController::class, 'handle']);
@@ -2341,6 +2475,20 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
     Route::get('/informacion-agencia', [\App\Http\Controllers\SaaS\InformacionAgenciaController::class, 'show']);
     Route::put('/informacion-agencia', [\App\Http\Controllers\SaaS\InformacionAgenciaController::class, 'update']);
     Route::post('/informacion-agencia/branding', [\App\Http\Controllers\SaaS\InformacionAgenciaController::class, 'uploadBranding']);
+
+    // PDF Poliza Extractor (IA)
+    Route::post('/pdf-poliza-extract', [\App\Http\Controllers\SaaS\PdfPolizaExtractorController::class, 'extract']);
+    Route::post('/pdf-poliza-extract-vision', [\App\Http\Controllers\SaaS\PdfPolizaExtractorController::class, 'extractVision']);
+
+    // Broker Website (Mi Página Web)
+    Route::get('/website', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'show']);
+    Route::post('/website/save', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'save']);
+    Route::post('/website/settings', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'saveSettings']);
+    Route::post('/website/page', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'savePage']);
+    Route::delete('/website/page/{pageId}', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'deletePage']);
+    Route::post('/website/publish', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'publish']);
+    Route::post('/website/unpublish', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'unpublish']);
+    Route::post('/website/check-slug', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'checkSlug']);
 
     // Ventas Cruzadas
     Route::prefix('ventas-cruzadas')->group(function () {

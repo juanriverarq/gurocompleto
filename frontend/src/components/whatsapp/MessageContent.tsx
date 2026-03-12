@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 
 interface MessageMedia {
@@ -6,7 +7,9 @@ interface MessageMedia {
   type?: string;
   filename?: string;
   mimetype?: string;
+  mime_type?: string;
   caption?: string;
+  gcs_path?: string;
 }
 
 interface MessageContentProps {
@@ -14,25 +17,49 @@ interface MessageContentProps {
   content: string | null;
   media?: MessageMedia | null;
   isOutgoing: boolean;
+  authToken?: string | null;
 }
 
 /**
  * Componente para renderizar contenido de mensajes según su tipo
  * Soporta: text, image, video, audio, document, location, contact, sticker, interactive
  */
-const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, media, isOutgoing }) => {
+const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, media, isOutgoing, authToken }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
 
-  const textColorClass = isOutgoing ? 'text-white' : 'text-gray-900 dark:text-white';
-  const secondaryTextClass = isOutgoing ? 'text-white/70' : 'text-gray-500';
+  const textColorClass = isOutgoing ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-[#111b21] dark:text-[#e9edef]';
+  const secondaryTextClass = isOutgoing ? 'text-[#667781] dark:text-[rgba(255,255,255,0.55)]' : 'text-[#667781] dark:text-gray-400';
 
   // Helper para construir URL de media del backend
-  const getMediaUrl = (url: string | undefined | null): string | null => {
+  const getMediaUrl = (url: string | undefined | null, mediaObj?: MessageMedia | null): string | null => {
     if (!url) return null;
     const backendUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
     const baseUrl = backendUrl.replace('/api', '');
+
+    // Helper: construir URL del proxy con token
+    const buildProxyUrl = (gcsPath: string) => {
+      const encoded = btoa(gcsPath);
+      const tokenParam = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
+      return `${backendUrl}/saas/whatsapp-inbox/media/${encoded}${tokenParam}`;
+    };
+
+    // Si tiene gcs_path, usar proxy del backend (resuelve 403 de Firebase)
+    const gcsPath = mediaObj?.gcs_path;
+    if (gcsPath) {
+      return buildProxyUrl(gcsPath);
+    }
+
+    // Si es URL de Firebase Storage, extraer el path y usar proxy
+    if (url.includes('firebasestorage.googleapis.com')) {
+      const match = url.match(/\/o\/(.+?)(\?|$)/);
+      if (match) {
+        const decodedPath = decodeURIComponent(match[1]);
+        return buildProxyUrl(decodedPath);
+      }
+    }
+
     // Si es URL relativa, agregar base URL del backend
     if (url.startsWith('/storage/')) {
       return `${baseUrl}${url}`;
@@ -49,7 +76,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, m
   // Renderizar según tipo de mensaje
   switch (messageType) {
     case 'image':
-      const imageUrl = getMediaUrl(media?.url) || content;
+      const imageUrl = getMediaUrl(media?.url, media) || content;
       return (
         <div className="space-y-1">
           {imageUrl && !imageError ? (
@@ -85,30 +112,62 @@ const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, m
             </div>
           )}
           
-          {/* Modal de imagen completa */}
-          {showFullImage && imageUrl && (
+          {/* Lightbox de imagen completa (portal) */}
+          {showFullImage && imageUrl && createPortal(
             <div 
-              className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+              className="fixed inset-0 z-[9999] flex flex-col bg-[#111b21]/95 backdrop-blur-sm"
               onClick={() => setShowFullImage(false)}
             >
-              <button 
-                className="absolute top-4 right-4 text-white hover:text-gray-300"
-                onClick={() => setShowFullImage(false)}
-              >
-                <Icon icon="solar:close-circle-bold" width={32} />
-              </button>
-              <img
-                src={imageUrl}
-                alt="Imagen completa"
-                className="max-w-full max-h-full object-contain rounded-lg"
-              />
-            </div>
+              {/* Top bar */}
+              <div className="flex items-center justify-between px-4 py-3 bg-[#202c33]" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-3 text-[#e9edef] text-sm">
+                  <Icon icon="solar:gallery-bold" width={18} className="text-gray-400" />
+                  <span>{media?.caption || media?.filename || 'Imagen'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={imageUrl}
+                    download={media?.filename || 'imagen'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-full hover:bg-white/10 text-[#aebac1] hover:text-white transition-colors"
+                    title="Descargar"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <Icon icon="solar:download-bold" width={20} />
+                  </a>
+                  <button 
+                    className="p-2 rounded-full hover:bg-white/10 text-[#aebac1] hover:text-white transition-colors"
+                    onClick={() => setShowFullImage(false)}
+                    title="Cerrar"
+                  >
+                    <Icon icon="solar:close-circle-bold" width={22} />
+                  </button>
+                </div>
+              </div>
+              {/* Image area */}
+              <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
+                <img
+                  src={imageUrl}
+                  alt="Imagen completa"
+                  className="max-w-full max-h-full object-contain rounded-md shadow-2xl"
+                  onClick={e => e.stopPropagation()}
+                />
+              </div>
+              {/* Caption bar */}
+              {media?.caption && (
+                <div className="px-6 py-3 bg-[#202c33] text-center" onClick={e => e.stopPropagation()}>
+                  <p className="text-[#e9edef] text-sm">{media.caption}</p>
+                </div>
+              )}
+            </div>,
+            document.body
           )}
         </div>
       );
 
     case 'video':
-      const videoUrl = getMediaUrl(media?.url) || content;
+      const videoUrl = getMediaUrl(media?.url, media) || content;
       return (
         <div className="space-y-1">
           {videoUrl ? (
@@ -133,7 +192,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, m
       );
 
     case 'audio':
-      const audioUrl = getMediaUrl(media?.url) || content;
+      const audioUrl = getMediaUrl(media?.url, media) || content;
       return (
         <div className="flex items-center gap-2">
           {audioUrl ? (
@@ -153,7 +212,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, m
       );
 
     case 'document':
-      const docUrl = getMediaUrl(media?.url) || content;
+      const docUrl = getMediaUrl(media?.url, media) || content;
       const filename = media?.filename || 'Documento';
       return (
         <a
@@ -162,17 +221,17 @@ const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, m
           rel="noopener noreferrer"
           className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
             isOutgoing 
-              ? 'bg-white/10 hover:bg-white/20' 
-              : 'bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500'
+              ? 'bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15' 
+              : 'bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15'
           }`}
         >
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-            isOutgoing ? 'bg-white/20' : 'bg-red-100 dark:bg-red-900/30'
+            isOutgoing ? 'bg-black/10 dark:bg-white/15' : 'bg-red-100 dark:bg-red-900/30'
           }`}>
             <Icon 
               icon="solar:document-bold" 
               width={24} 
-              className={isOutgoing ? 'text-white' : 'text-red-500'} 
+              className={isOutgoing ? 'text-red-600 dark:text-red-400' : 'text-red-500'} 
             />
           </div>
           <div className="flex-1 min-w-0">
@@ -204,8 +263,8 @@ const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, m
           rel="noopener noreferrer"
           className={`block p-2 rounded-lg transition-colors ${
             isOutgoing 
-              ? 'bg-white/10 hover:bg-white/20' 
-              : 'bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500'
+              ? 'bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15' 
+              : 'bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15'
           }`}
         >
           <div className="flex items-center gap-2 mb-2">
@@ -225,12 +284,12 @@ const MessageContent: React.FC<MessageContentProps> = ({ messageType, content, m
       const contactData = typeof content === 'string' ? JSON.parse(content || '{}') : content;
       return (
         <div className={`flex items-center gap-3 p-3 rounded-lg ${
-          isOutgoing ? 'bg-white/10' : 'bg-gray-100 dark:bg-gray-600'
+          isOutgoing ? 'bg-black/5 dark:bg-white/10' : 'bg-gray-100 dark:bg-white/10'
         }`}>
           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-            isOutgoing ? 'bg-white/20' : 'bg-blue-100 dark:bg-blue-900/30'
+            isOutgoing ? 'bg-black/10 dark:bg-white/15' : 'bg-blue-100 dark:bg-blue-900/30'
           }`}>
-            <Icon icon="solar:user-bold" width={24} className={isOutgoing ? 'text-white' : 'text-blue-500'} />
+            <Icon icon="solar:user-bold" width={24} className={isOutgoing ? 'text-blue-600 dark:text-blue-400' : 'text-blue-500'} />
           </div>
           <div>
             <p className={`text-sm font-medium ${textColorClass}`}>

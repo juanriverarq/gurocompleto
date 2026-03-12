@@ -12,9 +12,23 @@ class PagoPoliza extends Model
 
     protected $table = 'pagos_polizas';
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Auto-set numero_renovacion from the poliza if not explicitly provided
+        static::creating(function ($pago) {
+            if (is_null($pago->numero_renovacion) && $pago->poliza_id) {
+                $poliza = Poliza::find($pago->poliza_id);
+                $pago->numero_renovacion = $poliza ? ((int) ($poliza->numero_renovacion ?? 0)) : 0;
+            }
+        });
+    }
+
     protected $fillable = [
         'broker_id',
         'poliza_id',
+        'numero_renovacion',
         'cliente_id',
         'monto_total',
         'monto_pagado',
@@ -27,6 +41,8 @@ class PagoPoliza extends Model
         'estado',
         'observaciones',
         'recaudo_import_id',
+        'recibo_caja_id',
+        'source',
     ];
 
     protected $casts = [
@@ -55,6 +71,11 @@ class PagoPoliza extends Model
     public function recaudoImport(): BelongsTo
     {
         return $this->belongsTo(RecaudoImport::class, 'recaudo_import_id');
+    }
+
+    public function reciboCaja(): BelongsTo
+    {
+        return $this->belongsTo(ReciboCaja::class);
     }
 
     // Scopes

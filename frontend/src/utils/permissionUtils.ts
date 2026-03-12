@@ -54,8 +54,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/marketing/enlaces-cotizacion': 'enlaces_cotizacion',
   '/apps/marketing/plantillas': 'email_marketing',
   '/apps/marketing/mini-web': 'mini_web',
-  '/apps/marketing/mi-web': 'mini_web',
-  '/apps/marketing/comparador-seguros': 'whatsapp_business',
+  '/apps/marketing/mi-web': 'pagina_web',
+  '/apps/marketing/comparador-seguros': 'comparador_autos',
   '/apps/marketing/creador-contenido': 'creador_contenido',
   '/apps/saas/configuracion-masiva': 'whatsapp_business',
 
@@ -65,12 +65,13 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/voice-ai/dashboard': 'voice_ai',
   '/apps/ia/analisis-predictivo/predicciones': 'analytics_predictivo',
   '/apps/ia/ventas-cruzadas': 'analytics_predictivo',
-  '/apps/ia/robots': 'asistentes_ia',
+  '/apps/ia/robots': 'robots_ia',
 
   // Gestión Financiera
   '/apps/comisiones/por-poliza': 'comisiones',
   '/apps/comisiones/anticipos-ajustes': 'comisiones',
   '/apps/cartera/clientes': 'cartera_clientes',
+  '/apps/cartera/recibos-caja': 'recibos_caja',
   '/apps/cartera/estados-cuenta': 'estados_cuenta',
   '/apps/cartera/reportes-financieros': 'reportes_financieros',
   '/apps/cartera/liquidar-vendedores': 'comisiones',
@@ -99,6 +100,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
 
   // Administración
   '/apps/admin/usuarios': 'gestion_usuarios',
+  '/apps/admin/usuarios/reportes': 'reporte_actividades',
   '/apps/admin/roles': 'roles_permisos',
   '/apps/admin/demo-permisos': 'roles_permisos',
   '/apps/admin/auditoria': 'auditoria_accesos',

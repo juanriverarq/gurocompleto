@@ -222,6 +222,15 @@ class WhatsAppChatbotController extends Controller
             'business_hours_enabled' => 'nullable|boolean',
             'business_hours' => 'nullable|array',
             'timezone' => 'nullable|string|max:50',
+            'client_inactivity_enabled' => 'nullable|boolean',
+            'client_inactivity_minutes' => 'nullable|integer|min:1|max:1380',
+            'client_inactivity_message' => 'nullable|string',
+            'agent_inactivity_enabled' => 'nullable|boolean',
+            'agent_inactivity_minutes' => 'nullable|integer|min:1|max:1380',
+            'agent_inactivity_message' => 'nullable|string',
+            'escape_enabled' => 'nullable|boolean',
+            'escape_keywords' => 'nullable|string|max:500',
+            'escape_message' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -243,13 +252,20 @@ class WhatsAppChatbotController extends Controller
                     ->where('id', '!=', $chatbot->id)
                     ->first();
 
+                $deactivatedName = null;
                 if ($existingActive) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Ya existe un chatbot activo en esta línea: \"{$existingActive->name}\". Solo puede haber un chatbot activo por línea. Desactívalo primero.",
-                        'active_chatbot_id' => $existingActive->id,
-                        'active_chatbot_name' => $existingActive->name,
-                    ], 409);
+                    if ($request->boolean('force_deactivate_other')) {
+                        $deactivatedName = $existingActive->name;
+                        $existingActive->update(['is_active' => false]);
+                        Log::info("🔄 [CHATBOT] Desactivado chatbot #{$existingActive->id} ({$existingActive->name}) para activar #{$chatbot->id} ({$chatbot->name})");
+                    } else {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Ya existe un chatbot activo en esta línea: \"{$existingActive->name}\". Solo puede haber un chatbot activo por línea.",
+                            'active_chatbot_id' => $existingActive->id,
+                            'active_chatbot_name' => $existingActive->name,
+                        ], 409);
+                    }
                 }
             }
             
@@ -259,14 +275,23 @@ class WhatsAppChatbotController extends Controller
                 'ai_enabled', 'ai_provider', 'ai_model', 'ai_system_prompt',
                 'ai_temperature', 'ai_max_tokens',
                 'typing_delay_ms', 'response_delay_ms', 'session_timeout_minutes', 'max_fallback_count',
-                'business_hours_enabled', 'business_hours', 'timezone'
+                'business_hours_enabled', 'business_hours', 'timezone',
+                'client_inactivity_enabled', 'client_inactivity_minutes', 'client_inactivity_message',
+                'agent_inactivity_enabled', 'agent_inactivity_minutes', 'agent_inactivity_message',
+                'escape_enabled', 'escape_keywords', 'escape_message'
             ]));
 
-            return response()->json([
+            $response = [
                 'success' => true,
                 'message' => 'Chatbot actualizado exitosamente',
-                'data' => $chatbot
-            ]);
+                'data' => $chatbot,
+            ];
+
+            if (!empty($deactivatedName)) {
+                $response['deactivated_chatbot_name'] = $deactivatedName;
+            }
+
+            return response()->json($response);
         } catch (\Exception $e) {
             Log::error('Error actualizando chatbot: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Error al actualizar chatbot'], 500);
@@ -996,12 +1021,49 @@ class WhatsAppChatbotController extends Controller
                 // Ignorar error de duración
             }
 
-            // Sesiones recientes con detalles
+            // Precargar nodos y flujos del chatbot para resolver nombres
+            $flowIds = ChatbotFlow::where('chatbot_id', $chatbotId)->pluck('id', 'id');
+            $flowNames = ChatbotFlow::where('chatbot_id', $chatbotId)->pluck('name', 'id');
+            $allNodes = ChatbotNode::whereIn('flow_id', $flowIds->keys())->get()->keyBy('id');
+
+            // Node stats: contar sesiones activas/waiting por nodo actual
+            $activeByNode = ChatbotSession::where('chatbot_id', $chatbotId)
+                ->whereIn('status', ['active', 'waiting_input'])
+                ->whereNotNull('current_node_id')
+                ->selectRaw('current_node_id, COUNT(*) as active_count')
+                ->groupBy('current_node_id')
+                ->pluck('active_count', 'current_node_id');
+
+            // Contar sesiones completadas/expiradas/transferidas por último nodo conocido
+            $droppedByNode = ChatbotSession::where('chatbot_id', $chatbotId)
+                ->whereIn('status', ['expired', 'completed', 'transferred'])
+                ->whereNotNull('current_node_id')
+                ->when($startDate, fn($q) => $q->where('started_at', '>=', $startDate))
+                ->selectRaw('current_node_id, COUNT(*) as drop_count')
+                ->groupBy('current_node_id')
+                ->pluck('drop_count', 'current_node_id');
+
+            // Construir node_stats con todos los nodos del chatbot
+            $nodeStats = $allNodes->map(function ($node) use ($activeByNode, $droppedByNode) {
+                $active = $activeByNode->get($node->id, 0);
+                $dropped = $droppedByNode->get($node->id, 0);
+                return [
+                    'node_id' => $node->id,
+                    'node_name' => $node->name ?: 'Nodo ' . $node->id,
+                    'node_type' => $node->node_type,
+                    'visits' => $active + $dropped,
+                    'drop_offs' => $dropped,
+                    'active_users' => $active,
+                ];
+            })->filter(fn($s) => $s['visits'] > 0)->values()->toArray();
+
+            // Sesiones recientes con detalles resueltos
             $recentSessions = ChatbotSession::where('chatbot_id', $chatbotId)
                 ->orderByDesc('id')
                 ->limit(20)
                 ->get()
-                ->map(function ($session) {
+                ->map(function ($session) use ($flowNames, $allNodes) {
+                    $node = $session->current_node_id ? $allNodes->get($session->current_node_id) : null;
                     return [
                         'id' => $session->id,
                         'contact_phone' => $session->contact_phone ?? 'N/A',
@@ -1011,8 +1073,12 @@ class WhatsAppChatbotController extends Controller
                         'variables' => $session->variables ?? [],
                         'started_at' => $session->started_at ? $session->started_at->toISOString() : null,
                         'last_activity_at' => $session->last_activity_at ? $session->last_activity_at->toISOString() : null,
-                        'flow' => null,
-                        'node' => null,
+                        'flow' => $session->current_flow_id && $flowNames->has($session->current_flow_id)
+                            ? ['name' => $flowNames->get($session->current_flow_id)]
+                            : null,
+                        'node' => $node
+                            ? ['name' => $node->name, 'node_type' => $node->node_type]
+                            : null,
                     ];
                 });
 
@@ -1027,7 +1093,7 @@ class WhatsAppChatbotController extends Controller
                     'avg_session_duration_minutes' => round((float)$avgDuration, 1),
                     'sessions_today' => $sessionsToday,
                     'sessions_this_week' => $sessionsThisWeek,
-                    'node_stats' => [],
+                    'node_stats' => $nodeStats,
                     'recent_sessions' => $recentSessions,
                 ]
             ]);

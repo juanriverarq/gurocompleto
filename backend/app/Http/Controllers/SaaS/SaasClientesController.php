@@ -59,6 +59,11 @@ class SaasClientesController extends Controller
             // Optimized query: select only essential fields for campaigns/selectors
             // This prevents memory exhaustion with large client bases
             $clientes = Cliente::where('broker_id', $brokerId)
+                ->withCount([
+                    'policies as active_policies_count' => function ($q) {
+                        $q->where('status', 'active')->whereNull('deleted_at');
+                    },
+                ])
                 ->select([
                     'id',
                     'first_name',
@@ -80,6 +85,12 @@ class SaasClientesController extends Controller
             
             // Transform data with minimal fields (no heavy processing)
             $transformedClientes = $clientes->map(function ($cliente) {
+                $estado = $cliente->status;
+                $activePolicies = $cliente->active_policies_count ?? null;
+                if ($estado !== 'blocked' && $activePolicies !== null) {
+                    $estado = $activePolicies > 0 ? 'active' : 'inactive';
+                }
+
                 return [
                     'id' => $cliente->id,
                     'nombre' => $cliente->first_name,
@@ -90,7 +101,7 @@ class SaasClientesController extends Controller
                     'celular_principal' => $cliente->mobile_phone,
                     'telefono' => $cliente->phone,
                     'ciudad' => $cliente->city,
-                    'estado' => $cliente->status,
+                    'estado' => $estado,
                     'client_type' => $cliente->client_type ?? (($cliente->document_type === 'NIT' || !empty($cliente->company)) ? 'empresa' : 'persona'),
                     'empresa' => $cliente->company,
                 ];
@@ -144,7 +155,12 @@ class SaasClientesController extends Controller
             ]);
             
             // Construir la query base con aislamiento multi-tenant
-            $query = Cliente::where('broker_id', $brokerId);
+            $query = Cliente::where('broker_id', $brokerId)
+                ->withCount([
+                    'policies as active_policies_count' => function ($q) {
+                        $q->where('status', 'active')->whereNull('deleted_at');
+                    },
+                ]);
             
             // Log para verificar cuántos clientes hay en total para este broker
             $totalClientesParaBroker = Cliente::where('broker_id', $brokerId)->count();
@@ -213,8 +229,24 @@ class SaasClientesController extends Controller
             }
 
             if ($request->has('estado') && !empty($request->estado)) {
-                $query->where('status', $request->estado);
-                \Log::info('🔍 [DEBUG] Filtro de estado aplicado', ['estado' => $request->estado]);
+                $estadoFilter = $request->estado;
+                if ($estadoFilter === 'active') {
+                    // Activo = tiene al menos 1 póliza activa y no está bloqueado
+                    $query->where('status', '!=', 'blocked')
+                          ->whereHas('policies', function ($q) {
+                              $q->where('status', 'active')->whereNull('deleted_at');
+                          });
+                } elseif ($estadoFilter === 'inactive') {
+                    // Inactivo = no tiene pólizas activas y no está bloqueado
+                    $query->where('status', '!=', 'blocked')
+                          ->whereDoesntHave('policies', function ($q) {
+                              $q->where('status', 'active')->whereNull('deleted_at');
+                          });
+                } else {
+                    // prospect, blocked, etc. → filtrar directo por status
+                    $query->where('status', $estadoFilter);
+                }
+                \Log::info('🔍 [DEBUG] Filtro de estado aplicado', ['estado' => $estadoFilter]);
             }
 
             if ($request->has('ciudad') && !empty($request->ciudad)) {
@@ -481,7 +513,14 @@ class SaasClientesController extends Controller
             
             // Etiquetas/Tags
             if ($request->has('etiquetas') || $request->has('tags')) {
-                $mappedData['tags'] = $request->input('etiquetas', $request->input('tags'));
+                $rawTags = $request->input('etiquetas', $request->input('tags'));
+                if (is_string($rawTags) && !empty($rawTags)) {
+                    $mappedData['tags'] = array_values(array_filter(array_map('trim', explode(',', $rawTags))));
+                } elseif (is_array($rawTags)) {
+                    $mappedData['tags'] = $rawTags;
+                } else {
+                    $mappedData['tags'] = [];
+                }
             }
             
             // Log para debug - ver datos después del mapeo
@@ -521,7 +560,8 @@ class SaasClientesController extends Controller
                 'legal_representative_document_number' => 'nullable|string|max:100',
                 'monthly_income' => 'nullable|numeric',
                 'priority' => 'nullable|in:low,medium,high',
-                'tags' => 'nullable|string|max:1000',
+                'tags' => 'nullable|array',
+                'tags.*' => 'string|max:255',
             ]);
 
             // Reglas condicionales
@@ -585,7 +625,13 @@ class SaasClientesController extends Controller
         try {
             $brokerId = $this->getBrokerId(request());
             
-            $cliente = Cliente::where('broker_id', $brokerId)->findOrFail($id);
+            $cliente = Cliente::where('broker_id', $brokerId)
+                ->withCount([
+                    'policies as active_policies_count' => function ($q) {
+                        $q->where('status', 'active')->whereNull('deleted_at');
+                    },
+                ])
+                ->findOrFail($id);
 
             return response()->json([
                 'success' => true,
@@ -707,7 +753,14 @@ class SaasClientesController extends Controller
             
             // Etiquetas/Tags
             if ($request->has('etiquetas') || $request->has('tags')) {
-                $mappedData['tags'] = $request->input('etiquetas', $request->input('tags'));
+                $rawTags = $request->input('etiquetas', $request->input('tags'));
+                if (is_string($rawTags) && !empty($rawTags)) {
+                    $mappedData['tags'] = array_values(array_filter(array_map('trim', explode(',', $rawTags))));
+                } elseif (is_array($rawTags)) {
+                    $mappedData['tags'] = $rawTags;
+                } else {
+                    $mappedData['tags'] = [];
+                }
             }
 
             // Normalizar estado (aceptar 'status' o 'estado')
@@ -765,7 +818,8 @@ class SaasClientesController extends Controller
                 'legal_representative_document_number' => 'nullable|string|max:100',
                 'monthly_income' => 'nullable|numeric',
                 'priority' => 'nullable|in:low,medium,high',
-                'tags' => 'nullable|string|max:1000',
+                'tags' => 'nullable|array',
+                'tags.*' => 'string|max:255',
             ];
 
             if ($clientTypeForValidation === 'persona') {
@@ -991,12 +1045,20 @@ class SaasClientesController extends Controller
             // Obtener broker_id dinámicamente
             $brokerId = $this->getBrokerId($request);
             
-            // Estadísticas básicas de clientes
+            // Estadísticas básicas de clientes (activo/inactivo basado en pólizas activas)
             $totalClientes = Cliente::where('broker_id', $brokerId)->count();
-            $clientesActivos = Cliente::where('broker_id', $brokerId)->where('status', 'active')->count();
-            $clientesInactivos = Cliente::where('broker_id', $brokerId)->where('status', 'inactive')->count();
-            $clientesProspectos = Cliente::where('broker_id', $brokerId)->where('status', 'prospect')->count();
             $clientesBloqueados = Cliente::where('broker_id', $brokerId)->where('status', 'blocked')->count();
+            $clientesProspectos = Cliente::where('broker_id', $brokerId)->where('status', 'prospect')->count();
+            $clientesActivos = Cliente::where('broker_id', $brokerId)
+                ->where('status', '!=', 'blocked')
+                ->whereHas('policies', function ($q) {
+                    $q->where('status', 'active')->whereNull('deleted_at');
+                })->count();
+            $clientesInactivos = Cliente::where('broker_id', $brokerId)
+                ->where('status', '!=', 'blocked')
+                ->whereDoesntHave('policies', function ($q) {
+                    $q->where('status', 'active')->whereNull('deleted_at');
+                })->count();
 
             // Si no hay clientes, devolver ceros reales
             if ($totalClientes === 0) {
@@ -1056,17 +1118,23 @@ class SaasClientesController extends Controller
             // Usar el método getBrokerId que maneja correctamente empleados y Firebase
             $brokerId = $this->getBrokerId($request);
 
-            // OPTIMIZACIÓN: Estadísticas básicas de clientes en una sola consulta
-            $basicStats = Cliente::where('broker_id', $brokerId)
+            // Estadísticas básicas: activo/inactivo basado en pólizas activas (no en campo status)
+            $basicStats = DB::table('clientes')
+                ->where('clientes.broker_id', $brokerId)
+                ->whereNull('clientes.deleted_at')
                 ->selectRaw('
                     COUNT(*) as total_clientes,
-                    COUNT(CASE WHEN status = "active" THEN 1 END) as clientes_activos,
-                    COUNT(CASE WHEN status = "inactive" THEN 1 END) as clientes_inactivos,
-                    COUNT(CASE WHEN status = "prospect" THEN 1 END) as clientes_prospectos,
-                    COUNT(CASE WHEN status = "blocked" THEN 1 END) as clientes_bloqueados,
+                    COUNT(CASE WHEN clientes.status = "blocked" THEN 1 END) as clientes_bloqueados,
+                    COUNT(CASE WHEN clientes.status = "prospect" THEN 1 END) as clientes_prospectos,
+                    COUNT(CASE WHEN clientes.status != "blocked" AND EXISTS (
+                        SELECT 1 FROM polizas WHERE polizas.client_id = clientes.id AND polizas.status = "active" AND polizas.deleted_at IS NULL
+                    ) THEN 1 END) as clientes_activos,
+                    COUNT(CASE WHEN clientes.status != "blocked" AND NOT EXISTS (
+                        SELECT 1 FROM polizas WHERE polizas.client_id = clientes.id AND polizas.status = "active" AND polizas.deleted_at IS NULL
+                    ) THEN 1 END) as clientes_inactivos,
                     COUNT(CASE WHEN client_type = "persona" THEN 1 END) as clientes_personas,
                     COUNT(CASE WHEN client_type = "empresa" THEN 1 END) as clientes_empresas,
-                    COUNT(CASE WHEN MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE()) THEN 1 END) as nuevos_este_mes
+                    COUNT(CASE WHEN MONTH(clientes.created_at) = MONTH(CURDATE()) AND YEAR(clientes.created_at) = YEAR(CURDATE()) THEN 1 END) as nuevos_este_mes
                 ')
                 ->first();
 
@@ -1160,6 +1228,12 @@ class SaasClientesController extends Controller
      */
     private function transformClienteToFrontend($cliente)
     {
+        $estado = $cliente->status;
+        $activePolicies = $cliente->active_policies_count ?? null;
+        if ($estado !== 'blocked' && $activePolicies !== null) {
+            $estado = $activePolicies > 0 ? 'active' : 'inactive';
+        }
+
         return [
             'id' => $cliente->id,
             'client_type' => $cliente->client_type ?? (($cliente->document_type === 'NIT' || !empty($cliente->company)) ? 'empresa' : 'persona'),
@@ -1179,7 +1253,7 @@ class SaasClientesController extends Controller
             'department' => $cliente->department, // alias para clientes modernos
             'branch_name' => $cliente->branch_name,
             'sede' => $cliente->branch_name, // alias por compatibilidad
-            'estado' => $cliente->status,
+            'estado' => $estado,
             'observaciones' => $cliente->notes,
             'telefono' => $cliente->phone,
             'empresa' => $cliente->company,
@@ -1190,6 +1264,7 @@ class SaasClientesController extends Controller
             'ingresos_mensuales' => $cliente->monthly_income,
             'prioridad' => $cliente->priority,
             'estado_civil' => $cliente->marital_status,
+            'etiquetas' => is_array($cliente->tags) ? implode(',', $cliente->tags) : ($cliente->tags ?? ''),
             'created_at' => $cliente->created_at,
             'updated_at' => $cliente->updated_at,
         ];

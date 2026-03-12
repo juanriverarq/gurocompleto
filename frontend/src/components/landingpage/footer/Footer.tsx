@@ -25,6 +25,13 @@ const Footer = () => {
                 >
                   Política de Privacidad
                 </Link>
+                <span className="text-gray-400">|</span>
+                <Link
+                  to="/trabaja-con-nosotros"
+                  className="text-gray-600 hover:text-primary-ld transition-colors"
+                >
+                  Trabaja con Nosotros
+                </Link>
               </nav>
             </div>
             <div>

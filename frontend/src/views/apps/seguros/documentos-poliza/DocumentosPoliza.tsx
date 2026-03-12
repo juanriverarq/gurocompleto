@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   Card,
   Select,
@@ -13,7 +13,6 @@ import {
 import HeroButton from 'src/components/HeroButton';
 import { polizaService, type Poliza } from 'src/services/polizaService';
 import {
-  IconDotsVertical,
   IconEye,
   IconTrash,
   IconCloudUpload,
@@ -24,6 +23,7 @@ import {
 import { useDropzone } from 'react-dropzone';
 import PermissionGate from 'src/components/PermissionGate';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import SearchableSelect from 'src/components/shared/SearchableSelect';
 
 const DocumentosPoliza: React.FC = () => {
   const { hasPermission } = useUnifiedAuth();
@@ -37,8 +37,10 @@ const DocumentosPoliza: React.FC = () => {
   const [errorDocs, setErrorDocs] = useState<string | null>(null);
 
   const [search, setSearch] = useState<string>('');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [selectedPolizaId, setSelectedPolizaId] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [openingKey, setOpeningKey] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -90,6 +92,27 @@ const DocumentosPoliza: React.FC = () => {
   const buildPolizaLabel = useCallback((p: Poliza): string => {
     const clienteLabel = `${p.nombres_cliente || ''} ${p.apellidos_cliente || ''}`.trim();
     return `${p.numero_poliza} · ${p.aseguradora}${clienteLabel ? ` · ${clienteLabel}` : ''}`;
+  }, []);
+
+  // Memoize poliza options for SearchableSelect
+  const polizaOptions = useMemo(() => {
+    return polizas.map((p) => ({ value: String(p.id), label: buildPolizaLabel(p) }));
+  }, [polizas, buildPolizaLabel]);
+
+  // Memoize type options for SearchableSelect
+  const typeSelectOptions = useMemo(() => {
+    const present = new Set<string>(docs.map((d) => d.type || 'otro'));
+    const base = ['caratula','condiciones','recibo','soporte_pago','endoso','anexo','cotizacion','otro'];
+    const all = Array.from(new Set([...base, ...Array.from(present)]));
+    return all.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }));
+  }, [docs]);
+
+  // Debounce search
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearch(val);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(val), 250);
   }, []);
 
   const loadAllDocs = useCallback(async () => {
@@ -147,23 +170,8 @@ const DocumentosPoliza: React.FC = () => {
     }
   }, [loadingPolizas, polizas, loadAllDocs]);
 
-  const typesOptions = useMemo(() => {
-    const present = new Set<string>(docs.map((d) => d.type || 'otro'));
-    const base = [
-      'caratula',
-      'condiciones',
-      'recibo',
-      'soporte_pago',
-      'endoso',
-      'anexo',
-      'cotizacion',
-      'otro',
-    ];
-    return [''].concat(Array.from(new Set([...base, ...Array.from(present)])));
-  }, [docs]);
-
   const visibleDocs = useMemo(() => {
-    const s = search.trim().toLowerCase();
+    const s = debouncedSearch.trim().toLowerCase();
     let list = docs.filter((d) => {
       const okPoliza = !selectedPolizaId || String(d.__polizaId) === String(selectedPolizaId);
       const okType = !typeFilter || (d.type || 'otro') === typeFilter;
@@ -178,12 +186,12 @@ const DocumentosPoliza: React.FC = () => {
       return okPoliza && okType && okSearch;
     });
     return list;
-  }, [docs, search, selectedPolizaId, typeFilter]);
+  }, [docs, debouncedSearch, selectedPolizaId, typeFilter]);
 
   // Resetear a la primera página cuando cambian filtros o el tamaño de página
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, selectedPolizaId, typeFilter, pageSize]);
+  }, [debouncedSearch, selectedPolizaId, typeFilter, pageSize]);
 
   // Cálculo de páginas y rebanado de elementos visibles
   const totalPages = useMemo(() => {
@@ -291,7 +299,7 @@ const DocumentosPoliza: React.FC = () => {
             <TextInput
               placeholder="Buscar documentos..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={handleSearchChange}
               icon={IconSearch}
             />
           </div>
@@ -299,36 +307,25 @@ const DocumentosPoliza: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Póliza
             </label>
-            {loadingPolizas ? (
-              <div className="flex items-center justify-center h-10 text-gray-500">
-                <Spinner size="sm" />
-                <span className="ml-2 text-sm">Cargando...</span>
-              </div>
-            ) : (
-              <Select
-                value={selectedPolizaId}
-                onChange={(e) => setSelectedPolizaId(e.target.value)}
-              >
-                <option value="">Todas las pólizas</option>
-                {polizas.map((p) => (
-                  <option key={p.id} value={String(p.id)}>
-                    {buildPolizaLabel(p)}
-                  </option>
-                ))}
-              </Select>
-            )}
+            <SearchableSelect
+              options={polizaOptions}
+              value={selectedPolizaId}
+              onChange={setSelectedPolizaId}
+              placeholder="Todas las pólizas"
+              loading={loadingPolizas}
+              maxDisplayed={80}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Tipo
             </label>
-            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-              {typesOptions.map((t, i) => (
-                <option key={i} value={t}>
-                  {t ? t.replace('_', ' ') : 'Todos los tipos'}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={typeSelectOptions}
+              value={typeFilter}
+              onChange={setTypeFilter}
+              placeholder="Todos los tipos"
+            />
           </div>
           <div className="flex items-end">
             <Button
@@ -336,6 +333,7 @@ const DocumentosPoliza: React.FC = () => {
               size="sm"
               onClick={() => {
                 setSearch('');
+                setDebouncedSearch('');
                 setSelectedPolizaId('');
                 setTypeFilter('');
               }}
@@ -519,14 +517,14 @@ const DocumentosPoliza: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Póliza destino
                 </label>
-                <Select value={uploadPolizaId} onChange={(e) => setUploadPolizaId(e.target.value)}>
-                  <option value="">Seleccione una póliza...</option>
-                  {polizas.map((p) => (
-                    <option key={p.id} value={String(p.id)}>
-                      {buildPolizaLabel(p)}
-                    </option>
-                  ))}
-                </Select>
+                <SearchableSelect
+                  options={polizaOptions}
+                  value={uploadPolizaId}
+                  onChange={setUploadPolizaId}
+                  placeholder="Seleccione una póliza..."
+                  loading={loadingPolizas}
+                  maxDisplayed={80}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

@@ -98,6 +98,7 @@ const WhatsAppInbox: React.FC = () => {
       let data;
       if (filter === 'mine') {
         data = await whatsappInboxService.getMyConversations();
+        console.log('[INBOX DEBUG] getMyConversations:', data);
         setConversations(data);
       } else {
         const filters: any = {};
@@ -105,10 +106,12 @@ const WhatsAppInbox: React.FC = () => {
         if (filter === 'pending') filters.status = 'pending';
         if (searchTerm) filters.search = searchTerm;
         const response = await whatsappInboxService.getConversations(filters);
+        console.log('[INBOX DEBUG] getConversations raw response:', response);
+        console.log('[INBOX DEBUG] response.data:', response.data, 'length:', response.data?.length);
         setConversations(response.data);
       }
     } catch (err: any) {
-      console.error('Error loading conversations:', err);
+      console.error('[INBOX DEBUG] Error loading conversations:', err);
     }
   };
 

@@ -15,6 +15,7 @@ use App\Models\Vendedor;
 // Modelos opcionales (la tabla puede no existir en algunas instalaciones)
 use App\Models\VoiceCampaign;
 use App\Models\EmailCampaign;
+use App\Models\PolizaVinculado;
 
 class GlobalSearchController extends Controller
 {
@@ -378,16 +379,56 @@ class GlobalSearchController extends Controller
             $counts['vendedor'] = 0;
         }
 
+        // Vinculados (asegurados de pólizas colectivas)
+        try {
+            $vinculados = PolizaVinculado::query()
+                ->when($brokerId, fn($qb) => $qb->where('broker_id', $brokerId))
+                ->where(function ($qb) use ($q) {
+                    $qb->where('nombre_asegurado', 'like', '%' . $q . '%')
+                       ->orWhere('documento', 'like', '%' . $q . '%')
+                       ->orWhere('identificador', 'like', '%' . $q . '%')
+                       ->orWhere('email', 'like', '%' . $q . '%')
+                       ->orWhere('telefono', 'like', '%' . $q . '%');
+                })
+                ->with('poliza:id,policy_number,insurance_company')
+                ->limit($perType)
+                ->get();
+
+            foreach ($vinculados as $vin) {
+                $title = $vin->nombre_asegurado ?: ('Vinculado #' . $vin->id);
+                $polizaNum = $vin->poliza?->policy_number ?? '';
+                $subtitleParts = array_filter([
+                    $vin->documento ? ('Doc: ' . $vin->documento) : null,
+                    $vin->identificador ? ('ID: ' . $vin->identificador) : null,
+                    $polizaNum ? ('Póliza: ' . $polizaNum) : null,
+                    $vin->poliza?->insurance_company ?: null,
+                ]);
+                $results[] = [
+                    'type' => 'vinculado',
+                    'id' => $vin->poliza_id,
+                    'title' => $title,
+                    'subtitle' => implode(' • ', $subtitleParts),
+                    'url' => '/apps/seguros/polizas/editar/' . $vin->poliza_id . '?tab=vinculados',
+                    'icon' => 'solar:users-group-two-rounded-bold-duotone',
+                ];
+            }
+            $counts['vinculado'] = isset($vinculados) ? $vinculados->count() : 0;
+        } catch (\Throwable $e) {
+            Log::warning('GlobalSearch vinculados error', ['q' => $q, 'error' => $e->getMessage()]);
+            $counts['vinculado'] = 0;
+        }
+
         // Ordenar por tipo y por título
         $typeOrder = [
             'vendedor' => 1,
             'cliente' => 2,
             'poliza' => 3,
-            'automovil' => 4,
-            'siniestro' => 5,
-            'campaign_whatsapp' => 6,
-            'campaign_voice' => 7,
-            'campaign_email' => 8,
+            'vinculado' => 4,
+            'automovil' => 5,
+            'siniestro' => 6,
+            'campaign_whatsapp' => 7,
+            'campaign_voice' => 8,
+            'campaign_email' => 9,
         ];
         try {
             usort($results, function ($a, $b) use ($typeOrder) {

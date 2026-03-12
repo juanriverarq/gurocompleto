@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use App\Services\WhatsAppCloudApiService;
 use App\Traits\RequiresAuth;
 
 class PolicyNotificationController extends Controller
@@ -474,15 +475,17 @@ class PolicyNotificationController extends Controller
                 ], 403);
             }
 
-            // Generar mensaje
+            // Generar mensaje (para log y fallback)
             $template = $config->getTemplate($request->notification_type);
             $message = $config->processTemplate($template, $poliza);
 
-            // Enviar por WhatsApp
-            $result = $this->sendWhatsAppMessage(
+            // Enviar por WhatsApp usando plantilla de Meta
+            $result = $this->sendWhatsAppNotification(
                 $config->whatsappInstance,
                 $request->phone,
-                $message
+                $message,
+                $request->notification_type,
+                $poliza
             );
 
             if ($result['success']) {
@@ -887,6 +890,72 @@ class PolicyNotificationController extends Controller
     }
 
     /**
+     * Obtener plantillas de WhatsApp aprobadas
+     */
+    public function getWhatsAppTemplates(Request $request): JsonResponse
+    {
+        try {
+            $brokerId = $request->get('authenticated_broker_id')
+                ?? $request->get('broker_id')
+                ?? $this->getBrokerId($request);
+
+            if (!$brokerId) {
+                return response()->json(['success' => true, 'data' => []]);
+            }
+            $brokerId = (int)$brokerId;
+
+            $config = PolicyNotificationConfig::forBroker($brokerId)->first();
+
+            if (!$config || !$config->whatsappInstance) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'message' => 'No hay instancia de WhatsApp configurada'
+                ]);
+            }
+
+            $cloudApi = app(WhatsAppCloudApiService::class);
+            $result = $cloudApi->getMessageTemplates($config->whatsappInstance, 'APPROVED', 100);
+
+            if (!($result['success'] ?? false)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['error'] ?? 'Error al obtener plantillas',
+                    'data' => []
+                ]);
+            }
+
+            $templates = collect($result['data'] ?? [])->map(function ($t) {
+                $bodyComponent = collect($t['components'] ?? [])->firstWhere('type', 'BODY');
+                $bodyText = $bodyComponent['text'] ?? '';
+                $paramCount = preg_match_all('/\{\{\d+\}\}/', $bodyText);
+
+                return [
+                    'name' => $t['name'],
+                    'status' => $t['status'],
+                    'category' => $t['category'],
+                    'language' => $t['language'],
+                    'body_text' => $bodyText,
+                    'param_count' => $paramCount,
+                ];
+            })->values();
+
+            return response()->json([
+                'success' => true,
+                'data' => $templates,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo plantillas de WhatsApp', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener plantillas',
+                'data' => []
+            ], 500);
+        }
+    }
+
+    /**
      * Obtener etiquetas de días de la semana
      */
     private function getDaysLabels(array $days): array
@@ -939,20 +1008,74 @@ class PolicyNotificationController extends Controller
     /**
      * Enviar mensaje por WhatsApp
      */
-    private function sendWhatsAppMessage(WhatsAppInstance $instance, string $phone, string $message): array
+    private function sendWhatsAppNotification(WhatsAppInstance $instance, string $phone, string $message, string $type, Poliza $poliza): array
     {
         try {
-            $waBase = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3000/api/v1'), '/');
-            $url = $waBase . '/instances/' . $instance->instance_id . '/send-message';
+            $cloudApi = app(WhatsAppCloudApiService::class);
 
-            $response = Http::timeout(10)->post($url, [
-                'phone' => $phone,
-                'message' => $message,
-            ]);
+            // Leer plantilla desde config del broker (seleccionada por el usuario)
+            $brokerId = $instance->broker_id;
+            $notifConfig = PolicyNotificationConfig::forBroker($brokerId)->first();
+            $configTemplateMap = [
+                'expiration' => $notifConfig->expiration_template ?? null,
+                'renewal' => $notifConfig->renewal_template ?? null,
+                'payment_due' => $notifConfig->payment_template ?? null,
+            ];
+            $defaultTemplateMap = [
+                'expiration' => 'poliza_vencimiento',
+                'renewal' => 'poliza_renovacion',
+                'payment_due' => 'poliza_pago_pendiente',
+            ];
 
-            if ($response->successful() && $response->json('success')) {
-                $messageId = $response->json('messageId');
-                
+            $templateName = !empty($configTemplateMap[$type]) ? $configTemplateMap[$type] : ($defaultTemplateMap[$type] ?? null);
+
+            if ($templateName) {
+                $client = $poliza->client;
+                $clientName = $client ? ($client->full_name ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: 'Cliente') : 'Cliente';
+                $ramoName = $poliza->ramo ? ($poliza->ramo->nombre ?? '-') : ($poliza->product_name ?? '-');
+
+                $templateParams = match($type) {
+                    'expiration' => [
+                        $clientName,
+                        $poliza->policy_number ?? '-',
+                        $poliza->insurance_company ?? '-',
+                        $poliza->end_date ? $poliza->end_date->format('d/m/Y') : 'N/A',
+                        $ramoName,
+                    ],
+                    'renewal' => [
+                        $clientName,
+                        $poliza->policy_number ?? '-',
+                        $poliza->insurance_company ?? '-',
+                        ($poliza->renewal_date ?? $poliza->end_date)?->format('d/m/Y') ?? 'N/A',
+                        $ramoName,
+                    ],
+                    'payment_due' => [
+                        $clientName,
+                        $poliza->policy_number ?? '-',
+                        $poliza->payment_due_date ? $poliza->payment_due_date->format('d/m/Y') : 'N/A',
+                        '$' . number_format($poliza->premium_amount ?? 0, 0, ',', '.'),
+                        $ramoName,
+                    ],
+                    default => [],
+                };
+
+                $components = [];
+                if (!empty($templateParams)) {
+                    $parameters = array_map(fn($val) => ['type' => 'text', 'text' => (string) $val], $templateParams);
+                    $components[] = [
+                        'type' => 'body',
+                        'parameters' => $parameters,
+                    ];
+                }
+
+                $result = $cloudApi->sendTemplateMessage($instance, $phone, $templateName, 'es', $components);
+            } else {
+                $result = $cloudApi->sendTextMessage($instance, $phone, $message);
+            }
+
+            if ($result['success'] ?? false) {
+                $messageId = $result['message_id'] ?? null;
+
                 // Cobrar 50 pesos por WhatsApp enviado
                 $costPerWhatsApp = 50;
                 $wallet = Wallet::firstOrCreate(
@@ -966,29 +1089,28 @@ class PolicyNotificationController extends Controller
                     ]
                 );
 
-                if ($wallet->balance_cop >= $costPerWhatsApp) {
-                    $wallet->balance_cop -= $costPerWhatsApp;
-                    $wallet->save();
+                $balanceBefore = (float) $wallet->balance_cop;
+                $wallet->balance_cop = $balanceBefore - $costPerWhatsApp;
+                $wallet->save();
 
-                    WalletTransaction::create([
-                        'wallet_id' => $wallet->id,
-                        'broker_id' => $instance->broker_id,
-                        'user_id' => null,
-                        'type' => 'debit',
-                        'amount_cop' => $costPerWhatsApp,
-                        'amount_usd' => 0,
-                        'currency' => 'COP',
-                        'description' => "WhatsApp enviado - Mensaje manual",
-                        'reference_type' => 'whatsapp_message',
-                        'reference_id' => null,
-                        'balance_cop_after' => $wallet->balance_cop,
-                        'metadata' => [
-                            'phone' => $phone,
-                            'message_preview' => substr($message, 0, 100),
-                            'cost_per_whatsapp' => $costPerWhatsApp
-                        ]
-                    ]);
-                }
+                WalletTransaction::create([
+                    'wallet_id' => $wallet->id,
+                    'broker_id' => $instance->broker_id,
+                    'user_id' => null,
+                    'type' => 'debit',
+                    'amount_cop' => $costPerWhatsApp,
+                    'amount_usd' => 0,
+                    'currency' => 'COP',
+                    'description' => "WhatsApp enviado - Notificación de póliza",
+                    'reference_type' => 'whatsapp_message',
+                    'reference_id' => null,
+                    'balance_cop_after' => $wallet->balance_cop,
+                    'metadata' => [
+                        'phone' => $phone,
+                        'message_preview' => substr($message, 0, 100),
+                        'cost_per_whatsapp' => $costPerWhatsApp
+                    ]
+                ]);
 
                 return [
                     'success' => true,
@@ -998,7 +1120,7 @@ class PolicyNotificationController extends Controller
 
             return [
                 'success' => false,
-                'error' => $response->json('error') ?? 'Error desconocido'
+                'error' => $result['error'] ?? 'Error desconocido'
             ];
 
         } catch (\Exception $e) {

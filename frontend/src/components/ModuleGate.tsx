@@ -23,13 +23,18 @@ const FEATURE_MAP: Record<string, string> = {
   email_marketing: 'email',
   enlaces_cotizacion: 'miniweb',
   mini_web: 'miniweb',
+  pagina_web: 'miniweb',
   asistentes_ia: 'ia_chatbot',
+  robots_ia: 'ia_chatbot',
   voice_ai: 'ia_callcenter',
   analytics_predictivo: 'ia_predicciones',
+  comparador_autos: 'automoviles',
   comisiones: 'cartera',
   cartera_clientes: 'cartera',
+  recibos_caja: 'cartera',
   estados_cuenta: 'cartera',
   reportes_financieros: 'cartera',
+  creador_contenido: 'creador_contenido',
 };
 
 interface ModuleGateProps {

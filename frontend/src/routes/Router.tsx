@@ -19,6 +19,7 @@ const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')))
 const TerminosCondiciones = Loadable(lazy(() => import('../views/pages/TerminosCondiciones')));
 const PoliticaPrivacidad = Loadable(lazy(() => import('../views/pages/PoliticaPrivacidad')));
 const Regalo = Loadable(lazy(() => import('../views/pages/Regalo')));
+const TrabajaConNosotros = Loadable(lazy(() => import('../views/pages/TrabajaConNosotros')));
 
 /* ****Apps***** */
 const CombinedDashboard = Loadable(lazy(() => import('../views/combined/CombinedDashboard')));
@@ -119,6 +120,7 @@ const Renovaciones = Loadable(
   lazy(() => import('../views/apps/seguros/renovaciones/Renovaciones')),
 );
 const Seguimiento = Loadable(lazy(() => import('../views/apps/seguros/seguimiento/Seguimiento')));
+const Cumplimiento = Loadable(lazy(() => import('../views/apps/seguros/polizas/Cumplimiento')));
 
 // IA Apps
 const AsistenteIA = Loadable(lazy(() => import('../views/apps/ia/asistente/AsistenteIA')));
@@ -207,6 +209,7 @@ const ComisionesPorPoliza = Loadable(
 const AnticiposAjustes = Loadable(lazy(() => import('../views/apps/comisiones/AnticiposAjustes')));
 const CarteraClientes = Loadable(lazy(() => import('../views/apps/cartera/CarteraClientes')));
 const ReciboCaja = Loadable(lazy(() => import('../views/apps/cartera/ReciboCaja')));
+const RecibosCuadreCaja = Loadable(lazy(() => import('../views/apps/cartera/RecibosCuadreCaja')));
 const ReportesFinancieros = Loadable(
   lazy(() => import('../views/apps/cartera/ReportesFinancieros')),
 );
@@ -293,6 +296,7 @@ const Router = [
       { path: '/blog/software-seguros-colombia', element: <BlogSegurosSEO /> },
       { path: '/blog/:slug', element: <BlogArticle /> },
       { path: '/regalo', element: <Regalo /> },
+      { path: '/trabaja-con-nosotros', element: <ForceLightMode><TrabajaConNosotros /></ForceLightMode> },
       { path: '/terminos-condiciones', element: <TerminosCondiciones /> },
       { path: '/politica-privacidad', element: <PoliticaPrivacidad /> },
       // Transitional route while SaaS contexto/tenant se termina de resolver
@@ -325,6 +329,7 @@ const Router = [
       { path: '/apps/seguros/siniestros/editar/:id', element: <EditarSiniestro /> },
       { path: '/apps/seguros/renovaciones', element: <Renovaciones /> },
       { path: '/apps/seguros/seguimiento', element: <Seguimiento /> },
+      { path: '/apps/seguros/cumplimiento', element: <Cumplimiento /> },
       // Ruta removida: /apps/seguros/adjuntos-condiciones
       // Rutas de embudo de ventas eliminadas
 
@@ -387,6 +392,7 @@ const Router = [
       { path: '/apps/comisiones/por-poliza', element: <ComisionesPorPoliza /> },
       { path: '/apps/comisiones/anticipos-ajustes', element: <AnticiposAjustes /> },
       { path: '/apps/cartera/clientes', element: <CarteraClientes /> },
+      { path: '/apps/cartera/recibos-caja', element: <RecibosCuadreCaja /> },
       { path: '/apps/cartera/liquidar-vendedores', element: <LiquidarVendedores /> },
       { path: '/apps/cartera/reportes-financieros', element: <ReportesFinancieros /> },
 

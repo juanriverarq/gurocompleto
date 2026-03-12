@@ -34,13 +34,13 @@ class WhatsAppTemplateController extends Controller
         if ($instanceId) {
             return WhatsAppInstance::where('broker_id', $broker->id)
                 ->where('id', $instanceId)
-                ->where('connection_type', 'cloud_api')
+                ->whereIn('connection_type', ['cloud_api', 'ycloud'])
                 ->first();
         }
 
-        // Si no, usar la primera instancia cloud_api activa
+        // Buscar la primera instancia cloud_api o ycloud activa
         return WhatsAppInstance::where('broker_id', $broker->id)
-            ->where('connection_type', 'cloud_api')
+            ->whereIn('connection_type', ['cloud_api', 'ycloud'])
             ->where('is_active', true)
             ->first();
     }

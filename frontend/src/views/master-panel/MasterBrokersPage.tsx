@@ -49,8 +49,8 @@ interface Broker {
 // Presets de plan → módulos (mismos que en Pricing.tsx)
 const PLAN_PRESETS: Record<string, string[]> = {
   starter: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm'],
-  professional: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm','comisiones','reportes','miniweb','ia_chatbot','lector_pdf_ia'],
-  business: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm','comisiones','reportes','miniweb','ia_chatbot','lector_pdf_ia','ia_chatbot_sura','marca_blanca','sitio_web','ia_predicciones','ia_ventas_cruzadas'],
+  professional: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm','comisiones','reportes','miniweb','ia_chatbot','lector_pdf_ia','creador_contenido'],
+  business: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','whatsapp','email','ia_callcenter','cartera','crm','comisiones','reportes','miniweb','ia_chatbot','lector_pdf_ia','creador_contenido','ia_chatbot_sura','marca_blanca','sitio_web','ia_predicciones','ia_ventas_cruzadas'],
   custom: MODULES.map(m => m.key),
 };
 

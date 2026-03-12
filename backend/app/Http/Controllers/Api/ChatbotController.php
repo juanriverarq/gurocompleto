@@ -428,7 +428,7 @@ class ChatbotController extends Controller
                 </div>
             </div>
             <div style='background: #1f2937; padding: 15px; border-radius: 0 0 10px 10px; text-align: center;'>
-                <p style='color: #9ca3af; margin: 0; font-size: 12px;'>Este ticket fue enviado desde el asistente Sara de Guro</p>
+                <p style='color: #9ca3af; margin: 0; font-size: 12px;'>Este ticket fue enviado desde el asistente de Guro</p>
             </div>
         </div>
         ";

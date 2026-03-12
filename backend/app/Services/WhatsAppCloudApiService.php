@@ -12,10 +12,22 @@ class WhatsAppCloudApiService
     private string $baseUrl = 'https://graph.facebook.com';
 
     /**
+     * Check if instance uses YCloud and return the YCloud service, or null for direct Meta.
+     */
+    private function ycloud(WhatsAppInstance $instance): ?YCloudWhatsAppService
+    {
+        if ($instance->connection_type === 'ycloud') {
+            return app(YCloudWhatsAppService::class);
+        }
+        return null;
+    }
+
+    /**
      * Enviar mensaje de texto
      */
     public function sendTextMessage(WhatsAppInstance $instance, string $to, string $message): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->sendTextMessage($instance, $to, $message);
         return $this->sendMessage($instance, [
             'messaging_product' => 'whatsapp',
             'recipient_type' => 'individual',
@@ -33,6 +45,7 @@ class WhatsAppCloudApiService
      */
     public function sendTemplateMessage(WhatsAppInstance $instance, string $to, string $templateName, string $languageCode = 'es', array $components = []): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->sendTemplateMessage($instance, $to, $templateName, $languageCode, $components);
         $payload = [
             'messaging_product' => 'whatsapp',
             'to' => $this->formatPhoneNumber($to),
@@ -57,6 +70,7 @@ class WhatsAppCloudApiService
      */
     public function sendImageMessage(WhatsAppInstance $instance, string $to, string $imageUrl, ?string $caption = null): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->sendImageMessage($instance, $to, $imageUrl, $caption);
         $imageData = ['link' => $imageUrl];
         if ($caption) {
             $imageData['caption'] = $caption;
@@ -76,6 +90,7 @@ class WhatsAppCloudApiService
      */
     public function sendDocumentMessage(WhatsAppInstance $instance, string $to, string $documentUrl, ?string $filename = null, ?string $caption = null): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->sendDocumentMessage($instance, $to, $documentUrl, $filename, $caption);
         $docData = ['link' => $documentUrl];
         if ($filename) {
             $docData['filename'] = $filename;
@@ -98,6 +113,7 @@ class WhatsAppCloudApiService
      */
     public function sendAudio(WhatsAppInstance $instance, string $to, string $audioUrl): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->sendAudio($instance, $to, $audioUrl);
         return $this->sendMessage($instance, [
             'messaging_product' => 'whatsapp',
             'recipient_type' => 'individual',
@@ -112,6 +128,7 @@ class WhatsAppCloudApiService
      */
     public function sendVideo(WhatsAppInstance $instance, string $to, string $videoUrl, ?string $caption = null): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->sendVideo($instance, $to, $videoUrl, $caption);
         $videoData = ['link' => $videoUrl];
         if ($caption) {
             $videoData['caption'] = $caption;
@@ -129,8 +146,9 @@ class WhatsAppCloudApiService
     /**
      * Enviar mensaje con botones interactivos
      */
-    public function sendButtonMessage(WhatsAppInstance $instance, string $to, string $bodyText, array $buttons): array
+    public function sendButtonMessage(WhatsAppInstance $instance, string $to, string $bodyText, array $buttons, ?string $header = null, ?string $footer = null): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->sendButtonMessage($instance, $to, $bodyText, $buttons, $header, $footer);
         $buttonData = array_map(function ($button, $index) {
             return [
                 'type' => 'reply',
@@ -159,6 +177,7 @@ class WhatsAppCloudApiService
      */
     public function sendListMessage(WhatsAppInstance $instance, string $to, string $bodyText, string $buttonText, array $sections): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->sendListMessage($instance, $to, $bodyText, $buttonText, $sections);
         return $this->sendMessage($instance, [
             'messaging_product' => 'whatsapp',
             'recipient_type' => 'individual',
@@ -180,6 +199,7 @@ class WhatsAppCloudApiService
      */
     public function markAsRead(WhatsAppInstance $instance, string $messageId): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->markAsRead($instance, $messageId);
         return $this->sendMessage($instance, [
             'messaging_product' => 'whatsapp',
             'status' => 'read',
@@ -192,6 +212,7 @@ class WhatsAppCloudApiService
      */
     public function getBusinessProfile(WhatsAppInstance $instance): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->getBusinessProfile($instance);
         try {
             $response = Http::withToken($instance->cloud_api_token)
                 ->get("{$this->baseUrl}/{$this->apiVersion}/{$instance->cloud_api_phone_id}/whatsapp_business_profile", [
@@ -227,6 +248,7 @@ class WhatsAppCloudApiService
      */
     public function getMediaUrl(WhatsAppInstance $instance, string $mediaId): ?string
     {
+        if ($yc = $this->ycloud($instance)) return $yc->getMediaUrl($instance, $mediaId);
         try {
             $url = "{$this->baseUrl}/{$this->apiVersion}/{$mediaId}";
             
@@ -263,10 +285,11 @@ class WhatsAppCloudApiService
     }
 
     /**
-     * Descargar media y guardar localmente
+     * Descargar media y guardar en Google Cloud Storage (Firebase Storage)
      */
     public function downloadMedia(WhatsAppInstance $instance, string $mediaId, string $mimeType = null): ?string
     {
+        if ($yc = $this->ycloud($instance)) return $yc->downloadMedia($instance, $mediaId, $mimeType);
         try {
             // Primero obtener la URL del media
             $mediaUrl = $this->getMediaUrl($instance, $mediaId);
@@ -309,12 +332,45 @@ class WhatsAppCloudApiService
                 $extension = $extensions[$mimeType] ?? 'bin';
             }
 
-            // Guardar archivo
-            $filename = 'whatsapp-media/' . $mediaId . '.' . $extension;
-            \Storage::disk('public')->put($filename, $response->body());
+            // Upload to Firebase Storage (Google Cloud Storage) instead of local
+            $brokerId = $instance->broker_id ?? 0;
+            $gcsPath = "brokers/{$brokerId}/whatsapp-media/{$mediaId}.{$extension}";
 
-            // Usar URL relativa para que funcione tanto en local como en producción
-            return '/storage/' . $filename;
+            try {
+                $firebaseStorage = app(\Kreait\Firebase\Contract\Storage::class);
+                $bucket = $this->getFirebaseBucket($firebaseStorage);
+
+                $bucket->upload($response->body(), [
+                    'name' => $gcsPath,
+                    'metadata' => ['contentType' => $mimeType ?: 'application/octet-stream'],
+                ]);
+
+                // Generate public URL
+                try {
+                    $object = $bucket->object($gcsPath);
+                    $publicUrl = $object->signedUrl(new \DateTimeImmutable('+1 year'), ['version' => 'v4']);
+                } catch (\Throwable $e) {
+                    $enc = rawurlencode($gcsPath);
+                    $bn = $bucket->name();
+                    $publicUrl = "https://firebasestorage.googleapis.com/v0/b/{$bn}/o/{$enc}?alt=media";
+                }
+
+                Log::info('📥 [MEDIA DOWNLOAD] Guardado en GCS', [
+                    'media_id' => substr($mediaId, 0, 40),
+                    'gcsPath' => $gcsPath,
+                    'url_preview' => substr($publicUrl, 0, 120),
+                ]);
+
+                return $publicUrl;
+            } catch (\Throwable $gcsError) {
+                // Fallback: save to local storage if GCS fails
+                Log::warning('⚠️ [MEDIA DOWNLOAD] GCS falló, guardando local', [
+                    'error' => $gcsError->getMessage(),
+                ]);
+                $filename = 'whatsapp-media/' . $mediaId . '.' . $extension;
+                \Storage::disk('public')->put($filename, $response->body());
+                return '/storage/' . $filename;
+            }
         } catch (\Exception $e) {
             Log::error('WhatsApp Cloud API - Exception downloading media', [
                 'media_id' => $mediaId,
@@ -322,6 +378,27 @@ class WhatsAppCloudApiService
             ]);
             return null;
         }
+    }
+
+    /**
+     * Get Firebase Storage bucket
+     */
+    private function getFirebaseBucket($firebaseStorage)
+    {
+        $bucketName = env('FIREBASE_STORAGE_BUCKET') ?: config('firebase.storage_bucket');
+        $projectId = config('firebase.project_id') ?: env('FIREBASE_PROJECT_ID');
+        $candidates = array_filter([
+            $bucketName,
+            $projectId ? ($projectId . '.appspot.com') : null,
+            $projectId ? ($projectId . '.firebasestorage.app') : null,
+        ]);
+        foreach ($candidates as $name) {
+            try {
+                $b = $firebaseStorage->getBucket($name);
+                if (method_exists($b, 'exists') && $b->exists()) return $b;
+            } catch (\Throwable $e) {}
+        }
+        return $firebaseStorage->getBucket();
     }
 
     /**
@@ -402,7 +479,7 @@ class WhatsAppCloudApiService
     private function sendMessage(WhatsAppInstance $instance, array $payload): array
     {
         try {
-            if (!$instance->isCloudApi()) {
+            if (!$instance->isCloudApi() && $instance->connection_type !== 'ycloud') {
                 return [
                     'success' => false,
                     'error' => 'Instance is not configured for Cloud API'
@@ -478,6 +555,7 @@ class WhatsAppCloudApiService
      */
     public function getMessageTemplates(WhatsAppInstance $instance, ?string $status = null, ?int $limit = 50): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->getMessageTemplates($instance, $status, $limit);
         try {
             $wabaId = $instance->cloud_api_business_id;
             if (!$wabaId) {
@@ -518,6 +596,7 @@ class WhatsAppCloudApiService
      */
     public function createMessageTemplate(WhatsAppInstance $instance, array $templateData): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->createMessageTemplate($instance, $templateData);
         try {
             $wabaId = $instance->cloud_api_business_id;
             if (!$wabaId) {
@@ -569,6 +648,7 @@ class WhatsAppCloudApiService
      */
     public function deleteMessageTemplate(WhatsAppInstance $instance, string $templateName): array
     {
+        if ($yc = $this->ycloud($instance)) return $yc->deleteMessageTemplate($instance, $templateName);
         try {
             $wabaId = $instance->cloud_api_business_id;
             if (!$wabaId) {

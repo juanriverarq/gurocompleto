@@ -16,7 +16,7 @@ import { GuroToastContainer } from 'src/components/GuroToast/GuroToast';
 import ModuleGate from 'src/components/ModuleGate';
 
 const UnifiedProtectedFullLayout: React.FC = () => {
-  const { activeLayout, isLayout } = useContext(CustomizerContext);
+  const { activeLayout } = useContext(CustomizerContext);
   const {
     isAuthenticated,
     loading,
@@ -86,6 +86,24 @@ const UnifiedProtectedFullLayout: React.FC = () => {
       navigate(`${target}?redirect=${encodeURIComponent(currentPath)}`);
     }
   }, [isAuthenticated, loading, location, navigate]);
+
+  // Timeout para limpiar datos stale de empleado si el contexto nunca se restaura
+  const [empleadoTimeout, setEmpleadoTimeout] = useState(false);
+  useEffect(() => {
+    if (!loading && isAuthenticated && !isEmpleado && !hasCompleteSaasAccess) {
+      const hasData = !!localStorage.getItem('empleado_data');
+      const hasToken = !!localStorage.getItem('empleado_token');
+      if (hasData && hasToken) {
+        const timer = setTimeout(() => {
+          console.warn('[Layout] Timeout: limpiando datos stale de empleado');
+          localStorage.removeItem('empleado_data');
+          localStorage.removeItem('empleado_token');
+          setEmpleadoTimeout(true);
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loading, isAuthenticated, isEmpleado, hasCompleteSaasAccess]);
 
   // Estado para mostrar error de conexión
   const [connectionError, setConnectionError] = React.useState(false);
@@ -278,7 +296,9 @@ const UnifiedProtectedFullLayout: React.FC = () => {
   if (!hasCompleteSaasAccess && !isEmpleado) {
     const hasSavedEmpleado =
       typeof window !== 'undefined' && !!localStorage.getItem('empleado_data');
-    if (hasSavedEmpleado) {
+    const hasSavedToken =
+      typeof window !== 'undefined' && !!localStorage.getItem('empleado_token');
+    if (hasSavedEmpleado && hasSavedToken && !empleadoTimeout) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-[#fafafa]" style={{ fontFamily: "'General Sans', sans-serif" }}>
           <div className="flex flex-col items-center gap-4">
@@ -289,6 +309,10 @@ const UnifiedProtectedFullLayout: React.FC = () => {
           </div>
         </div>
       );
+    }
+    // Datos stale sin token: limpiar localStorage para evitar spinner infinito
+    if (hasSavedEmpleado && !hasSavedToken) {
+      localStorage.removeItem('empleado_data');
     }
     return null;
   }
@@ -339,11 +363,7 @@ const UnifiedProtectedFullLayout: React.FC = () => {
             >
               {/* Body Content  */}
               <div
-                className={`${
-                  isLayout == 'full' || location.pathname.includes('/marketing/creador-contenido') || location.pathname.includes('/whatsapp/inbox') || location.pathname.includes('/whatsapp/chatbots/flujos') || location.pathname.includes('/ia/asistente')
-                    ? 'w-full py-8 md:py-10 px-4 md:px-6 xl:px-8 2xl:px-10'
-                    : 'container mx-auto py-8 md:py-10'
-                } ${activeLayout == 'horizontal' ? 'xl:mt-3' : ''} min-w-0 overflow-x-auto`}
+                className={`w-full py-8 md:py-10 px-4 md:px-6 xl:px-8 2xl:px-10 ${activeLayout == 'horizontal' ? 'xl:mt-3' : ''} min-w-0 overflow-x-auto`}
               >
                 <ScrollToTop>
                   <ModuleGate>

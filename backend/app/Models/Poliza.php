@@ -78,6 +78,11 @@ class Poliza extends Model
         'beneficiaries',
         'policy_holder_name',
         'policy_holder_document',
+        'policy_holder_doc_type',
+        'policy_holder_phone',
+        'policy_holder_email',
+        'policy_holder_address',
+        'policy_holder_city',
         'insured_name',
         'insured_document',
         'assigned_user_id',
@@ -110,7 +115,70 @@ class Poliza extends Model
         'reteiva_percentage',
         
         'beneficiary_in_remittance',
-        
+
+        // Campos SoftSeguros migración 2026_02_28
+        // Comisiones detalladas
+        'iva_comision',
+        'porcentaje_sobrecomision',
+        'sobrecomision',
+        'porcentaje_comision_vendedor',
+        'comision_vendedor',
+        'porcentaje_comision_tecnico',
+        'comision_tecnico',
+        'porcentaje_comision_sede',
+        'comision_sede',
+        'comision_recibida',
+        'total_pagado',
+        // Financiación
+        'porcentaje_financiacion',
+        'valor_financiacion',
+        'total_poliza_financiada',
+        'financiacion_incluye_comision',
+        'financiacion_calcular_iva',
+        // Cartera / Recaudo
+        'estado_cartera',
+        'comisionada',
+        'recaudado',
+        'recaudado_en_oficina',
+        'fecha_recaudo',
+        // Tipo de póliza
+        'tipo_poliza',
+        'colectiva',
+        'masiva',
+        // SOAT / ARL
+        'soat',
+        'arl',
+        // Moneda
+        'tipo_moneda',
+        'tasa_cambio',
+        // Impuestos adicionales
+        'porcentaje_impuesto_bomberos',
+        'impuesto_bomberos',
+        'aporte_sbs',
+        'aporte_seguro_campesino',
+        'prima_asistencia',
+        'otros_cargos',
+        // Periodicidad / Clasificación
+        'periodicidad',
+        'clasificacion_poliza',
+        'numero_renovacion',
+        'is_renewal',
+        // Coaseguro
+        'coinsurance_participation',
+        // Notificaciones
+        'notification_preferences',
+        // Objeto asegurado
+        'datos_objeto_asegurado',
+        'accesorios',
+        'lugar_expedicion',
+        // Forma pago detallada
+        'forma_pago_detalle',
+        // Relaciones extra
+        'sede_nombre',
+        'softseguros_id',
+        // Eliminación SoftSeguros
+        'motivo_eliminacion',
+        'fecha_eliminacion',
     ];
 
     /**
@@ -145,6 +213,44 @@ class Poliza extends Model
         'reception_date' => 'date',
         
         'beneficiary_in_remittance' => 'boolean',
+
+        // Casts SoftSeguros migración 2026_02_28
+        'iva_comision' => 'decimal:2',
+        'porcentaje_sobrecomision' => 'decimal:2',
+        'sobrecomision' => 'decimal:2',
+        'porcentaje_comision_vendedor' => 'decimal:2',
+        'comision_vendedor' => 'decimal:2',
+        'porcentaje_comision_tecnico' => 'decimal:2',
+        'comision_tecnico' => 'decimal:2',
+        'porcentaje_comision_sede' => 'decimal:2',
+        'comision_sede' => 'decimal:2',
+        'comision_recibida' => 'decimal:2',
+        'total_pagado' => 'decimal:2',
+        'porcentaje_financiacion' => 'decimal:2',
+        'valor_financiacion' => 'decimal:2',
+        'total_poliza_financiada' => 'decimal:2',
+        'financiacion_incluye_comision' => 'boolean',
+        'financiacion_calcular_iva' => 'boolean',
+        'comisionada' => 'boolean',
+        'recaudado' => 'boolean',
+        'recaudado_en_oficina' => 'boolean',
+        'fecha_recaudo' => 'date',
+        'colectiva' => 'boolean',
+        'masiva' => 'boolean',
+        'soat' => 'boolean',
+        'arl' => 'boolean',
+        'tasa_cambio' => 'decimal:4',
+        'porcentaje_impuesto_bomberos' => 'decimal:2',
+        'impuesto_bomberos' => 'decimal:2',
+        'aporte_sbs' => 'decimal:2',
+        'aporte_seguro_campesino' => 'decimal:2',
+        'prima_asistencia' => 'decimal:2',
+        'otros_cargos' => 'decimal:2',
+        'is_renewal' => 'boolean',
+        'coinsurance_participation' => 'decimal:2',
+        'notification_preferences' => 'array',
+        'forma_pago_detalle' => 'array',
+        'fecha_eliminacion' => 'datetime',
     ];
 
     // ===== RELACIONES =====
@@ -203,6 +309,25 @@ class Poliza extends Model
     public function automoviles(): HasMany
     {
         return $this->hasMany(Automovil::class, 'poliza_id');
+    }
+
+    /**
+     * Relación con vinculados (riesgos de pólizas colectivas)
+     */
+    public function vinculados(): HasMany
+    {
+        return $this->hasMany(PolizaVinculado::class, 'poliza_id');
+    }
+
+    /**
+     * Verificar si es póliza colectiva
+     */
+    public function isColectiva(): bool
+    {
+        $cf = is_array($this->custom_fields) ? $this->custom_fields : [];
+        return ($cf['policy_category'] ?? null) === 'colectiva'
+            || (bool) $this->colectiva
+            || $this->tipo_poliza === 'colectiva';
     }
 
     /**

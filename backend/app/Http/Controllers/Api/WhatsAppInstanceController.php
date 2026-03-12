@@ -62,7 +62,7 @@ class WhatsAppInstanceController extends Controller
         }
 
         $validated = $request->validate([
-            'connection_type' => 'nullable|in:baileys,cloud_api',
+            'connection_type' => 'nullable|in:baileys,cloud_api,ycloud',
             'phone_number' => 'nullable|string',
             'webhook_url' => 'nullable|url',
             'settings' => 'nullable|array',
@@ -73,6 +73,163 @@ class WhatsAppInstanceController extends Controller
         ]);
 
         $connectionType = $validated['connection_type'] ?? 'baileys';
+
+        // Validar credenciales de YCloud (coexistencia) antes de crear la instancia
+        if ($connectionType === 'ycloud') {
+            $ycloudApiKey = $validated['settings']['ycloud_api_key'] ?? env('YCLOUD_API_KEY');
+            $phoneNumber = $validated['phone_number'] ?? null;
+
+            if (empty($ycloudApiKey)) {
+                return response([
+                    'error' => 'Se requiere una API Key de YCloud. Configúrala en la instancia o en el .env del servidor.'
+                ], 422);
+            }
+
+            if (empty($phoneNumber)) {
+                return response([
+                    'error' => 'Se requiere el número de teléfono de WhatsApp Business.'
+                ], 422);
+            }
+
+            // Verificar credenciales con YCloud API
+            try {
+                $verifyResponse = Http::withHeaders([
+                    'X-API-Key' => $ycloudApiKey,
+                ])->timeout(10)->get('https://api.ycloud.com/v2/whatsapp/phoneNumbers');
+
+                if (!$verifyResponse->successful()) {
+                    Log::warning('❌ [YCLOUD] API Key inválida o error de conexión', [
+                        'status' => $verifyResponse->status(),
+                        'error' => $verifyResponse->body(),
+                    ]);
+                    return response([
+                        'error' => 'Error al verificar credenciales de YCloud: ' . ($verifyResponse->json('message') ?? 'API Key inválida')
+                    ], 422);
+                }
+
+                $phoneNumbers = $verifyResponse->json('items', []);
+                Log::info('✅ [YCLOUD] Credenciales verificadas', [
+                    'phone_numbers_count' => count($phoneNumbers),
+                ]);
+
+                // Try to find the matching phone number to get its ID and WABA ID
+                $matchedPhone = null;
+                $normalizedInput = preg_replace('/[^0-9]/', '', $phoneNumber);
+                foreach ($phoneNumbers as $pn) {
+                    $normalizedPn = preg_replace('/[^0-9]/', '', $pn['phoneNumber'] ?? '');
+                    if ($normalizedPn === $normalizedInput || str_ends_with($normalizedPn, $normalizedInput) || str_ends_with($normalizedInput, $normalizedPn)) {
+                        $matchedPhone = $pn;
+                        break;
+                    }
+                }
+
+                // Store phone number ID and WABA ID if found
+                if ($matchedPhone) {
+                    $validated['cloud_api_phone_id'] = $matchedPhone['id'] ?? null;
+                    $validated['cloud_api_business_id'] = $matchedPhone['wabaId'] ?? null;
+                    $validated['phone_number'] = $matchedPhone['phoneNumber'] ?? $phoneNumber;
+                    Log::info('✅ [YCLOUD] Número encontrado en YCloud', [
+                        'phone_id' => $matchedPhone['id'] ?? 'N/A',
+                        'waba_id' => $matchedPhone['wabaId'] ?? 'N/A',
+                        'phone' => $matchedPhone['phoneNumber'] ?? 'N/A',
+                    ]);
+                } else {
+                    Log::warning('⚠️ [YCLOUD] Número no encontrado exacto en YCloud, usando primer número disponible', [
+                        'input' => $phoneNumber,
+                        'available' => array_column($phoneNumbers, 'phoneNumber'),
+                    ]);
+                    // Use the first available phone number if no exact match
+                    if (!empty($phoneNumbers)) {
+                        $validated['cloud_api_phone_id'] = $phoneNumbers[0]['id'] ?? null;
+                        $validated['cloud_api_business_id'] = $phoneNumbers[0]['wabaId'] ?? null;
+                        $validated['phone_number'] = $phoneNumbers[0]['phoneNumber'] ?? $phoneNumber;
+                    }
+                }
+
+            } catch (\Exception $e) {
+                Log::error('❌ [YCLOUD] Error al verificar credenciales', [
+                    'error' => $e->getMessage(),
+                ]);
+                return response([
+                    'error' => 'No se pudo conectar con YCloud: ' . $e->getMessage()
+                ], 422);
+            }
+
+            // Auto-registrar webhook en YCloud
+            try {
+                $webhookUrl = rtrim(config('app.url', 'https://guro.co'), '/') . '/api/webhooks/ycloud-whatsapp';
+                $ycloudEvents = [
+                    'whatsapp.inbound_message.received',
+                    'whatsapp.message.updated',
+                    'whatsapp.smb.history',
+                    'whatsapp.smb.message.echoes',
+                    'whatsapp.smb.app.state.sync',
+                    'whatsapp.template.reviewed',
+                    'whatsapp.phone_number.quality_updated',
+                ];
+
+                // Check existing webhooks
+                $existingResponse = Http::withHeaders([
+                    'X-API-Key' => $ycloudApiKey,
+                ])->timeout(10)->get('https://api.ycloud.com/v2/webhookEndpoints');
+
+                $existingWebhooks = $existingResponse->json('items', []);
+                $webhookFound = false;
+
+                foreach ($existingWebhooks as $wh) {
+                    // If there's already a webhook, update its URL and ensure it's active
+                    if ($wh['url'] === $webhookUrl && $wh['status'] === 'active') {
+                        $webhookFound = true;
+                        Log::info('✅ [YCLOUD] Webhook ya configurado y activo', ['id' => $wh['id']]);
+                        break;
+                    }
+
+                    // Update existing webhook with correct URL and activate it
+                    $updateData = [];
+                    if ($wh['url'] !== $webhookUrl) {
+                        $updateData['url'] = $webhookUrl;
+                    }
+                    if ($wh['status'] !== 'active') {
+                        $updateData['status'] = 'active';
+                    }
+                    if (!empty($updateData)) {
+                        Http::withHeaders(['X-API-Key' => $ycloudApiKey])
+                            ->timeout(10)
+                            ->patch("https://api.ycloud.com/v2/webhookEndpoints/{$wh['id']}", $updateData);
+                        Log::info('✅ [YCLOUD] Webhook actualizado', ['id' => $wh['id'], 'updates' => $updateData]);
+                    }
+                    $webhookFound = true;
+                    break;
+                }
+
+                // Create new webhook if none exists
+                if (!$webhookFound) {
+                    $createResponse = Http::withHeaders([
+                        'X-API-Key' => $ycloudApiKey,
+                    ])->timeout(10)->post('https://api.ycloud.com/v2/webhookEndpoints', [
+                        'url' => $webhookUrl,
+                        'enabledEvents' => $ycloudEvents,
+                        'status' => 'active',
+                    ]);
+
+                    if ($createResponse->successful()) {
+                        Log::info('✅ [YCLOUD] Webhook creado automáticamente', [
+                            'url' => $webhookUrl,
+                            'webhook_id' => $createResponse->json('id'),
+                        ]);
+                    } else {
+                        Log::warning('⚠️ [YCLOUD] No se pudo crear webhook automáticamente', [
+                            'error' => $createResponse->body(),
+                        ]);
+                    }
+                }
+            } catch (\Exception $webhookError) {
+                // Non-fatal: instance still created, webhook can be configured manually
+                Log::warning('⚠️ [YCLOUD] Error configurando webhook automáticamente (no fatal)', [
+                    'error' => $webhookError->getMessage(),
+                ]);
+            }
+        }
 
         // Validar credenciales de Cloud API antes de crear la instancia
         if ($connectionType === 'cloud_api') {
@@ -139,7 +296,7 @@ class WhatsAppInstanceController extends Controller
             'phone_number' => $validated['phone_number'] ?? null,
             'webhook_url' => $validated['webhook_url'] ?? null,
             'settings' => $validated['settings'] ?? [],
-            'status' => $connectionType === 'cloud_api' ? 'connected' : 'disconnected',
+            'status' => in_array($connectionType, ['cloud_api', 'ycloud']) ? 'connected' : 'disconnected',
         ]);
 
         // Solo sincronizar con microservicio si es tipo Baileys (QR)
@@ -244,6 +401,8 @@ class WhatsAppInstanceController extends Controller
 
         $validated = $request->validate([
             'code' => 'required|string',
+            'waba_id' => 'nullable|string',
+            'phone_number_id' => 'nullable|string',
         ]);
 
         $appId = env('META_APP_ID');
@@ -252,6 +411,17 @@ class WhatsAppInstanceController extends Controller
         if (!$appId || !$appSecret) {
             return response(['error' => 'META_APP_ID y META_APP_SECRET no configurados en el servidor'], 500);
         }
+
+        // Check if sessionInfo was provided from frontend (sessionInfoVersion: 3)
+        $sessionWabaId = $validated['waba_id'] ?? null;
+        $sessionPhoneNumberId = $validated['phone_number_id'] ?? null;
+
+        Log::info('📋 [EMBEDDED SIGNUP] Request received', [
+            'has_session_waba_id' => !empty($sessionWabaId),
+            'has_session_phone_number_id' => !empty($sessionPhoneNumberId),
+            'session_waba_id' => $sessionWabaId,
+            'session_phone_number_id' => $sessionPhoneNumberId,
+        ]);
 
         try {
             // Step 1: Exchange code for user access token
@@ -277,72 +447,116 @@ class WhatsAppInstanceController extends Controller
 
             Log::info('✅ [EMBEDDED SIGNUP] Token obtained');
 
-            // Step 2: Get shared WABA info using the debug_token or business integration API
-            $sharedWabasResponse = Http::withToken($accessToken)
-                ->get('https://graph.facebook.com/v22.0/debug_token', [
-                    'input_token' => $accessToken,
-                ]);
+            // Step 2: Get WABA ID - use sessionInfo if available, otherwise discover via debug_token
+            $wabaId = $sessionWabaId;
 
-            $debugData = $sharedWabasResponse->json('data', []);
-            $granularScopes = $debugData['granular_scopes'] ?? [];
-
-            // Extract WABA ID from granular scopes
-            $wabaId = null;
-            foreach ($granularScopes as $scope) {
-                if ($scope['permission'] === 'whatsapp_business_management') {
-                    $wabaId = $scope['target_ids'][0] ?? null;
-                    break;
-                }
-            }
-
-            // Alternative: try to get WABAs directly
             if (!$wabaId) {
-                $wabasResponse = Http::withToken($accessToken)
-                    ->get('https://graph.facebook.com/v22.0/me/businesses');
+                // Use app access token to inspect the user token
+                $appAccessToken = $appId . '|' . $appSecret;
+                $sharedWabasResponse = Http::withToken($appAccessToken)
+                    ->get('https://graph.facebook.com/v22.0/debug_token', [
+                        'input_token' => $accessToken,
+                    ]);
 
-                $businesses = $wabasResponse->json('data', []);
-                if (!empty($businesses)) {
-                    $businessId = $businesses[0]['id'];
-                    $wabaListResponse = Http::withToken($accessToken)
-                        ->get("https://graph.facebook.com/v22.0/{$businessId}/owned_whatsapp_business_accounts");
-                    $wabas = $wabaListResponse->json('data', []);
-                    if (!empty($wabas)) {
-                        $wabaId = $wabas[0]['id'];
+                $debugData = $sharedWabasResponse->json('data', []);
+                Log::info('🔍 [EMBEDDED SIGNUP] debug_token response', [
+                    'scopes' => $debugData['scopes'] ?? [],
+                    'granular_scopes' => $debugData['granular_scopes'] ?? [],
+                    'app_id' => $debugData['app_id'] ?? null,
+                    'type' => $debugData['type'] ?? null,
+                ]);
+                $granularScopes = $debugData['granular_scopes'] ?? [];
+
+                // Extract WABA ID from granular scopes
+                foreach ($granularScopes as $gs) {
+                    $scopeName = $gs['scope'] ?? $gs['permission'] ?? '';
+                    if ($scopeName === 'whatsapp_business_management' && !empty($gs['target_ids'])) {
+                        $wabaId = $gs['target_ids'][0];
+                        break;
+                    }
+                }
+
+                // Alternative: try to get WABAs directly
+                if (!$wabaId) {
+                    $wabasResponse = Http::withToken($accessToken)
+                        ->get('https://graph.facebook.com/v22.0/me/businesses');
+
+                    $businesses = $wabasResponse->json('data', []);
+                    if (!empty($businesses)) {
+                        $businessId = $businesses[0]['id'];
+                        $wabaListResponse = Http::withToken($accessToken)
+                            ->get("https://graph.facebook.com/v22.0/{$businessId}/owned_whatsapp_business_accounts");
+                        $wabas = $wabaListResponse->json('data', []);
+                        if (!empty($wabas)) {
+                            $wabaId = $wabas[0]['id'];
+                        }
                     }
                 }
             }
 
             if (!$wabaId) {
-                Log::warning('⚠️ [EMBEDDED SIGNUP] No WABA ID found', ['debug_data' => $debugData]);
+                Log::warning('⚠️ [EMBEDDED SIGNUP] No WABA ID found');
                 return response(['error' => 'No se encontró una cuenta de WhatsApp Business. Asegúrate de completar el proceso de registro.'], 400);
             }
 
-            Log::info('✅ [EMBEDDED SIGNUP] WABA found', ['waba_id' => $wabaId]);
+            Log::info('✅ [EMBEDDED SIGNUP] WABA found', ['waba_id' => $wabaId, 'from_session' => !empty($sessionWabaId)]);
 
-            // Step 3: Get phone numbers from the WABA
-            $phonesResponse = Http::withToken($accessToken)
-                ->get("https://graph.facebook.com/v22.0/{$wabaId}/phone_numbers");
+            // Step 3: Get phone number info
+            $phoneNumberId = $sessionPhoneNumberId;
+            $displayPhone = '';
+            $verifiedName = '';
 
-            $phones = $phonesResponse->json('data', []);
+            if ($phoneNumberId) {
+                // Use the phone_number_id from sessionInfo directly
+                $phoneResponse = Http::withToken($accessToken)
+                    ->get("https://graph.facebook.com/v22.0/{$phoneNumberId}");
 
-            if (empty($phones)) {
-                return response(['error' => 'No se encontraron números de teléfono en la cuenta WABA. Completa la verificación del número.'], 400);
+                if ($phoneResponse->successful()) {
+                    $phoneData = $phoneResponse->json();
+                    $displayPhone = $phoneData['display_phone_number'] ?? '';
+                    $verifiedName = $phoneData['verified_name'] ?? '';
+                }
+
+                Log::info('✅ [EMBEDDED SIGNUP] Phone from sessionInfo', [
+                    'phone_number_id' => $phoneNumberId,
+                    'display_phone' => $displayPhone,
+                    'verified_name' => $verifiedName,
+                ]);
+            } else {
+                // Fallback: list phone numbers from the WABA
+                $phonesResponse = Http::withToken($accessToken)
+                    ->get("https://graph.facebook.com/v22.0/{$wabaId}/phone_numbers");
+
+                $phones = $phonesResponse->json('data', []);
+
+                if (empty($phones)) {
+                    return response(['error' => 'No se encontraron números de teléfono en la cuenta WABA. Completa la verificación del número.'], 400);
+                }
+
+                $phoneData = $phones[0];
+                $phoneNumberId = $phoneData['id'];
+                $displayPhone = $phoneData['display_phone_number'] ?? '';
+                $verifiedName = $phoneData['verified_name'] ?? '';
+
+                Log::info('✅ [EMBEDDED SIGNUP] Phone from WABA listing', [
+                    'phone_number_id' => $phoneNumberId,
+                    'display_phone' => $displayPhone,
+                    'verified_name' => $verifiedName,
+                ]);
             }
 
-            $phoneData = $phones[0];
-            $phoneNumberId = $phoneData['id'];
-            $displayPhone = $phoneData['display_phone_number'] ?? '';
-            $verifiedName = $phoneData['verified_name'] ?? '';
+            // Step 4: Subscribe the app to the WABA for webhooks (including coexistence fields)
+            $subscribeResponse = Http::withToken($accessToken)
+                ->post("https://graph.facebook.com/v22.0/{$wabaId}/subscribed_apps", [
+                    'subscribed_fields' => ['messages', 'message_echoes', 'smb_message_echoes', 'smb_app_state_sync', 'history'],
+                ]);
 
-            Log::info('✅ [EMBEDDED SIGNUP] Phone number found', [
-                'phone_number_id' => $phoneNumberId,
-                'display_phone' => $displayPhone,
-                'verified_name' => $verifiedName,
+            Log::info('📡 [EMBEDDED SIGNUP] Webhook subscription', [
+                'waba_id' => $wabaId,
+                'success' => $subscribeResponse->successful(),
+                'response' => $subscribeResponse->json(),
+                'fields' => ['messages', 'message_echoes', 'smb_message_echoes', 'smb_app_state_sync', 'history'],
             ]);
-
-            // Step 4: Subscribe the app to the WABA for webhooks
-            Http::withToken($accessToken)
-                ->post("https://graph.facebook.com/v22.0/{$wabaId}/subscribed_apps");
 
             // Step 5: Check if instance already exists for this phone
             $existing = WhatsAppInstance::where('broker_id', $broker->id)
@@ -557,6 +771,11 @@ class WhatsAppInstanceController extends Controller
         
         if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
             return response(['error' => 'Unauthorized'], 403);
+        }
+
+        // Para instancias YCloud, verificar con YCloud API
+        if ($whatsAppInstance->isYCloud()) {
+            return $this->getYCloudStatus($whatsAppInstance);
         }
 
         // Para instancias Cloud API, verificar directamente con Meta (no usar microservicio Baileys)
@@ -1013,6 +1232,117 @@ class WhatsAppInstanceController extends Controller
     }
 
     /**
+     * Obtener estado de instancia YCloud verificando con YCloud API
+     */
+    protected function getYCloudStatus(WhatsAppInstance $whatsAppInstance): Response
+    {
+        try {
+            $apiKey = $whatsAppInstance->settings['ycloud_api_key'] ?? env('YCLOUD_API_KEY');
+            if (!$apiKey) {
+                return response([
+                    'success' => false,
+                    'instanceId' => $whatsAppInstance->instance_id,
+                    'status' => 'error',
+                    'connected' => false,
+                    'connecting' => false,
+                    'connection_type' => 'ycloud',
+                    'error' => 'YCLOUD_API_KEY no configurada'
+                ], 200);
+            }
+
+            $response = Http::withHeaders([
+                'X-API-Key' => $apiKey,
+            ])->timeout(10)->get('https://api.ycloud.com/v2/whatsapp/phoneNumbers');
+
+            if ($response->successful()) {
+                $phoneNumbers = $response->json('items', []);
+
+                // Find our phone number
+                $matchedPhone = null;
+                $normalizedInstance = preg_replace('/[^0-9]/', '', $whatsAppInstance->phone_number ?? '');
+                foreach ($phoneNumbers as $pn) {
+                    $normalizedPn = preg_replace('/[^0-9]/', '', $pn['phoneNumber'] ?? '');
+                    if ($normalizedPn === $normalizedInstance || str_ends_with($normalizedPn, $normalizedInstance) || str_ends_with($normalizedInstance, $normalizedPn)) {
+                        $matchedPhone = $pn;
+                        break;
+                    }
+                }
+
+                if (!$matchedPhone && !empty($phoneNumbers)) {
+                    $matchedPhone = $phoneNumbers[0];
+                }
+
+                $isConnected = !empty($matchedPhone);
+                $newStatus = $isConnected ? 'connected' : 'disconnected';
+
+                $whatsAppInstance->update([
+                    'status' => $newStatus,
+                    'last_activity_at' => now(),
+                    'error_message' => null,
+                ]);
+
+                Log::info('✅ [YCLOUD STATUS] Estado verificado', [
+                    'instance_id' => $whatsAppInstance->instance_id,
+                    'status' => $newStatus,
+                    'phone' => $matchedPhone['phoneNumber'] ?? 'N/A',
+                    'phone_count' => count($phoneNumbers),
+                ]);
+
+                return response([
+                    'success' => true,
+                    'instanceId' => $whatsAppInstance->instance_id,
+                    'status' => $newStatus,
+                    'connected' => $isConnected,
+                    'connecting' => false,
+                    'connection_type' => 'ycloud',
+                    'phoneNumber' => $matchedPhone['phoneNumber'] ?? $whatsAppInstance->phone_number,
+                    'verifiedName' => $matchedPhone['displayName'] ?? null,
+                    'qualityRating' => $matchedPhone['qualityRating'] ?? null,
+                ], 200);
+            }
+
+            $error = $response->json('message', 'Error conectando con YCloud');
+            Log::warning('⚠️ [YCLOUD STATUS] Error verificando', [
+                'instance_id' => $whatsAppInstance->instance_id,
+                'status' => $response->status(),
+                'error' => $error,
+            ]);
+
+            $whatsAppInstance->update([
+                'status' => 'error',
+                'error_message' => $error,
+                'last_activity_at' => now(),
+            ]);
+
+            return response([
+                'success' => false,
+                'instanceId' => $whatsAppInstance->instance_id,
+                'status' => 'error',
+                'connected' => false,
+                'connecting' => false,
+                'connection_type' => 'ycloud',
+                'error' => $error,
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('❌ [YCLOUD STATUS] Exception', [
+                'instance_id' => $whatsAppInstance->instance_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response([
+                'success' => false,
+                'instanceId' => $whatsAppInstance->instance_id,
+                'status' => 'error',
+                'connected' => false,
+                'connecting' => false,
+                'connection_type' => 'ycloud',
+                'error' => $e->getMessage(),
+            ], 200);
+        }
+    }
+
+    /**
      * Obtener estado de instancia Cloud API verificando con Meta
      */
     protected function getCloudApiStatus(WhatsAppInstance $whatsAppInstance): Response
@@ -1103,5 +1433,94 @@ class WhatsAppInstanceController extends Controller
                 'error' => $e->getMessage()
             ], 200);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  YCLOUD CONTACTS
+    // ─────────────────────────────────────────────────────────
+
+    /**
+     * List YCloud contacts (paginated).
+     * GET /whatsapp-instances/{id}/ycloud-contacts
+     */
+    public function ycloudContacts(Request $request, WhatsAppInstance $whatsAppInstance): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
+            return response(['error' => 'Unauthorized'], 403);
+        }
+        if (!$whatsAppInstance->isYCloud()) {
+            return response(['error' => 'Esta instancia no es de tipo YCloud'], 400);
+        }
+
+        $service = app(\App\Services\YCloudWhatsAppService::class);
+        $result = $service->getContacts(
+            $whatsAppInstance,
+            (int) $request->input('limit', 100),
+            (int) $request->input('offset', 0),
+            $request->input('filter')
+        );
+
+        return response($result, $result['success'] ? 200 : 400);
+    }
+
+    /**
+     * Get a single YCloud contact.
+     * GET /whatsapp-instances/{id}/ycloud-contacts/{contactId}
+     */
+    public function ycloudContactShow(Request $request, WhatsAppInstance $whatsAppInstance, string $contactId): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
+            return response(['error' => 'Unauthorized'], 403);
+        }
+        if (!$whatsAppInstance->isYCloud()) {
+            return response(['error' => 'Esta instancia no es de tipo YCloud'], 400);
+        }
+
+        $service = app(\App\Services\YCloudWhatsAppService::class);
+        $result = $service->getContact($whatsAppInstance, $contactId);
+
+        return response($result, $result['success'] ? 200 : 404);
+    }
+
+    /**
+     * Update a YCloud contact.
+     * PATCH /whatsapp-instances/{id}/ycloud-contacts/{contactId}
+     */
+    public function ycloudContactUpdate(Request $request, WhatsAppInstance $whatsAppInstance, string $contactId): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
+            return response(['error' => 'Unauthorized'], 403);
+        }
+        if (!$whatsAppInstance->isYCloud()) {
+            return response(['error' => 'Esta instancia no es de tipo YCloud'], 400);
+        }
+
+        $service = app(\App\Services\YCloudWhatsAppService::class);
+        $result = $service->updateContact($whatsAppInstance, $contactId, $request->all());
+
+        return response($result, $result['success'] ? 200 : 400);
+    }
+
+    /**
+     * Delete a YCloud contact.
+     * DELETE /whatsapp-instances/{id}/ycloud-contacts/{contactId}
+     */
+    public function ycloudContactDelete(Request $request, WhatsAppInstance $whatsAppInstance, string $contactId): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker || $whatsAppInstance->broker_id !== $broker->id) {
+            return response(['error' => 'Unauthorized'], 403);
+        }
+        if (!$whatsAppInstance->isYCloud()) {
+            return response(['error' => 'Esta instancia no es de tipo YCloud'], 400);
+        }
+
+        $service = app(\App\Services\YCloudWhatsAppService::class);
+        $result = $service->deleteContact($whatsAppInstance, $contactId);
+
+        return response($result, $result['success'] ? 200 : 400);
     }
 }

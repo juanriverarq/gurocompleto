@@ -687,4 +687,111 @@ class WalletController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Cobrar por generación de imagen en Guro Studio
+     * Costo fijo por imagen en COP (TRM 5000, +50% markup)
+     */
+    public function chargeStudio(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'images' => 'required|integer|min:1|max:20',
+                'description' => 'nullable|string|max:255',
+            ]);
+
+            $user = $this->getAuthenticatedUser($request);
+            $brokerId = $this->getBrokerId($request);
+
+            if (!$brokerId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Broker no autenticado'
+                ], 401);
+            }
+
+            $wallet = Wallet::where('broker_id', $brokerId)->first();
+            if (!$wallet) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes un wallet activo. Recarga saldo para usar Guro Studio.',
+                    'code' => 'NO_WALLET',
+                ], 404);
+            }
+
+            // Pricing: ~$0.04 USD per image actual cost, +50% markup = $0.06 USD
+            // TRM 5000 → $0.06 * 5000 = $300 COP per image, rounded up to $500 COP
+            $costPerImage = 500; // COP
+            $images = (int) $request->input('images', 1);
+            $totalCost = $costPerImage * $images;
+
+            if ((float) $wallet->balance_cop < $totalCost) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Saldo insuficiente',
+                    'code' => 'INSUFFICIENT_FUNDS',
+                    'data' => [
+                        'balance_cop' => (float) $wallet->balance_cop,
+                        'cost_cop' => $totalCost,
+                        'cost_per_image' => $costPerImage,
+                        'images' => $images,
+                        'deficit' => $totalCost - (float) $wallet->balance_cop,
+                    ],
+                ], 402);
+            }
+
+            // Debit
+            $wallet->balance_cop -= $totalCost;
+            $wallet->save();
+
+            $description = $request->input('description', "Guro Studio: {$images} imagen(es)");
+
+            WalletTransaction::create([
+                'wallet_id' => $wallet->id,
+                'broker_id' => $brokerId,
+                'user_id' => $user ? $user->id : $wallet->user_id,
+                'type' => 'debit',
+                'amount_cop' => $totalCost,
+                'amount_usd' => 0,
+                'currency' => 'COP',
+                'description' => $description,
+                'reference_type' => 'guro_studio',
+                'balance_cop_after' => (float) $wallet->balance_cop,
+                'metadata' => [
+                    'images' => $images,
+                    'cost_per_image' => $costPerImage,
+                    'service' => 'guro_studio',
+                ],
+            ]);
+
+            Log::info('🎨 [STUDIO] Cobro por generación de imagen', [
+                'broker_id' => $brokerId,
+                'images' => $images,
+                'total_cop' => $totalCost,
+                'balance_after' => $wallet->balance_cop,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Cobro exitoso: $" . number_format($totalCost, 0, ',', '.') . " COP",
+                'data' => [
+                    'charged_cop' => $totalCost,
+                    'cost_per_image' => $costPerImage,
+                    'images' => $images,
+                    'balance_cop' => (float) $wallet->balance_cop,
+                    'formatted_balance' => '$' . number_format((float) $wallet->balance_cop, 0, ',', '.') . ' COP',
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('🎨 [STUDIO] Error cobrando por imagen', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar el cobro: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

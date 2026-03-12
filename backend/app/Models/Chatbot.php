@@ -34,6 +34,15 @@ class Chatbot extends Model
         'business_hours_enabled',
         'business_hours',
         'timezone',
+        'client_inactivity_enabled',
+        'client_inactivity_minutes',
+        'client_inactivity_message',
+        'agent_inactivity_enabled',
+        'agent_inactivity_minutes',
+        'agent_inactivity_message',
+        'escape_enabled',
+        'escape_keywords',
+        'escape_message',
     ];
 
     protected $casts = [
@@ -42,6 +51,7 @@ class Chatbot extends Model
         'ai_temperature' => 'decimal:1',
         'business_hours_enabled' => 'boolean',
         'business_hours' => 'array',
+        'escape_enabled' => 'boolean',
     ];
 
     public function broker(): BelongsTo
@@ -102,5 +112,31 @@ class Chatbot extends Model
     public function scopeForInstance($query, $instanceId)
     {
         return $query->where('instance_id', $instanceId);
+    }
+
+    /**
+     * Verificar si estamos dentro del horario de atención
+     */
+    public function isWithinBusinessHours(): bool
+    {
+        if (!$this->business_hours_enabled) {
+            return true;
+        }
+
+        $tz = $this->timezone ?: 'America/Bogota';
+        $now = now()->timezone($tz);
+        $dayName = strtolower($now->englishDayOfWeek); // monday, tuesday, etc.
+
+        $hours = $this->business_hours ?? [];
+        $todayHours = $hours[$dayName] ?? null;
+
+        if (!$todayHours || empty($todayHours['start']) || empty($todayHours['end'])) {
+            return false; // No hay horario configurado para hoy = fuera de horario
+        }
+
+        $start = \Carbon\Carbon::parse($todayHours['start'], $tz);
+        $end = \Carbon\Carbon::parse($todayHours['end'], $tz);
+
+        return $now->between($start, $end);
     }
 }

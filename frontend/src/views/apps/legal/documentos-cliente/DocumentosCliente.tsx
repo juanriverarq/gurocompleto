@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   Card,
   Select,
@@ -14,7 +14,6 @@ import HeroButton from 'src/components/HeroButton';
 import { clienteService, type Cliente } from 'src/services/clienteService';
 import { clienteDocumentsService } from 'src/services/clienteDocumentsService';
 import {
-  IconDotsVertical,
   IconEye,
   IconTrash,
   IconCloudUpload,
@@ -25,6 +24,7 @@ import {
 import { useDropzone } from 'react-dropzone';
 import PermissionGate from 'src/components/PermissionGate';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import SearchableSelect from 'src/components/shared/SearchableSelect';
 
 const DocumentosCliente: React.FC = () => {
   const { hasPermission } = useUnifiedAuth();
@@ -38,8 +38,10 @@ const DocumentosCliente: React.FC = () => {
   const [errorDocs, setErrorDocs] = useState<string | null>(null);
 
   const [search, setSearch] = useState<string>('');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [selectedClienteId, setSelectedClienteId] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [openingKey, setOpeningKey] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -90,6 +92,27 @@ const DocumentosCliente: React.FC = () => {
     return `${fullName}${c.cuit ? ` · ${c.cuit}` : ''}`;
   }, []);
 
+  // Memoize cliente options for SearchableSelect
+  const clienteOptions = useMemo(() => {
+    return clientes.map((c) => ({ value: String(c.id), label: buildClienteLabel(c) }));
+  }, [clientes, buildClienteLabel]);
+
+  // Memoize type options for SearchableSelect
+  const typeSelectOptions = useMemo(() => {
+    const present = new Set<string>(docs.map((d) => d.type || 'otros'));
+    const base = ['otros', 'documento_identidad', 'soporte_ingresos', 'contrato', 'consentimiento'];
+    const all = Array.from(new Set([...base, ...Array.from(present)]));
+    return all.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }));
+  }, [docs]);
+
+  // Debounce search
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearch(val);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(val), 250);
+  }, []);
+
   const loadAllDocs = useCallback(async () => {
     setLoadingDocs(true);
     setErrorDocs(null);
@@ -121,14 +144,8 @@ const DocumentosCliente: React.FC = () => {
     loadAllDocs();
   }, [loadAllDocs]);
 
-  const typesOptions = useMemo(() => {
-    const present = new Set<string>(docs.map((d) => d.type || 'otros'));
-    const base = ['otros', 'documento_identidad', 'soporte_ingresos', 'contrato', 'consentimiento'];
-    return [''].concat(Array.from(new Set([...base, ...Array.from(present)])));
-  }, [docs]);
-
   const visibleDocs = useMemo(() => {
-    const s = search.trim().toLowerCase();
+    const s = debouncedSearch.trim().toLowerCase();
     let list = docs.filter((d) => {
       const okCliente = !selectedClienteId || String(d.__clienteId) === String(selectedClienteId);
       const okType = !typeFilter || (d.type || 'otros') === typeFilter;
@@ -143,12 +160,12 @@ const DocumentosCliente: React.FC = () => {
       return okCliente && okType && okSearch;
     });
     return list;
-  }, [docs, search, selectedClienteId, typeFilter]);
+  }, [docs, debouncedSearch, selectedClienteId, typeFilter]);
 
   // Reiniciar a la primera página cuando cambien filtros o tamaño de página
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, selectedClienteId, typeFilter, pageSize]);
+  }, [debouncedSearch, selectedClienteId, typeFilter, pageSize]);
 
   // Total de páginas y documentos paginados
   const totalPages = useMemo(() => {
@@ -256,7 +273,7 @@ const DocumentosCliente: React.FC = () => {
             <TextInput
               placeholder="Buscar documentos..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={handleSearchChange}
               icon={IconSearch}
             />
           </div>
@@ -264,36 +281,25 @@ const DocumentosCliente: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Cliente
             </label>
-            {loadingClientes ? (
-              <div className="flex items-center justify-center h-10 text-gray-500">
-                <Spinner size="sm" />
-                <span className="ml-2 text-sm">Cargando...</span>
-              </div>
-            ) : (
-              <Select
-                value={selectedClienteId}
-                onChange={(e) => setSelectedClienteId(e.target.value)}
-              >
-                <option value="">Todos los clientes</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {buildClienteLabel(c)}
-                  </option>
-                ))}
-              </Select>
-            )}
+            <SearchableSelect
+              options={clienteOptions}
+              value={selectedClienteId}
+              onChange={setSelectedClienteId}
+              placeholder="Todos los clientes"
+              loading={loadingClientes}
+              maxDisplayed={80}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Tipo
             </label>
-            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-              {typesOptions.map((t, i) => (
-                <option key={i} value={t}>
-                  {t ? t.replace('_', ' ') : 'Todos los tipos'}
-                </option>
-              ))}
-            </Select>
+            <SearchableSelect
+              options={typeSelectOptions}
+              value={typeFilter}
+              onChange={setTypeFilter}
+              placeholder="Todos los tipos"
+            />
           </div>
           <div className="flex items-end">
             <Button
@@ -301,6 +307,7 @@ const DocumentosCliente: React.FC = () => {
               size="sm"
               onClick={() => {
                 setSearch('');
+                setDebouncedSearch('');
                 setSelectedClienteId('');
                 setTypeFilter('');
               }}
@@ -484,17 +491,14 @@ const DocumentosCliente: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Cliente destino
                 </label>
-                <Select
+                <SearchableSelect
+                  options={clienteOptions}
                   value={uploadClienteId}
-                  onChange={(e) => setUploadClienteId(e.target.value)}
-                >
-                  <option value="">Seleccione un cliente...</option>
-                  {clientes.map((c) => (
-                    <option key={c.id} value={String(c.id)}>
-                      {buildClienteLabel(c)}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={setUploadClienteId}
+                  placeholder="Seleccione un cliente..."
+                  loading={loadingClientes}
+                  maxDisplayed={80}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

@@ -262,10 +262,10 @@ class Broker extends Model
             return $this->logo;
         }
         
-        // Construir URL absoluta con APP_URL
+        // Usar ruta /api/storage/ que sirve archivos sin symlink
         $appUrl = rtrim(config('app.url', 'http://localhost'), '/');
         $path = ltrim($this->logo, '/');
-        return "{$appUrl}/storage/{$path}";
+        return "{$appUrl}/api/storage/{$path}";
     }
 
     /**
@@ -282,10 +282,10 @@ class Broker extends Model
             return $this->favicon;
         }
         
-        // Construir URL absoluta con APP_URL
+        // Usar ruta /api/storage/ que sirve archivos sin symlink
         $appUrl = rtrim(config('app.url', 'http://localhost'), '/');
         $path = ltrim($this->favicon, '/');
-        return "{$appUrl}/storage/{$path}";
+        return "{$appUrl}/api/storage/{$path}";
     }
 
     /**

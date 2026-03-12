@@ -263,6 +263,7 @@ class PolicyNotificationService {
       { name: '{{policy_number}}', description: 'Número de póliza' },
       { name: '{{insurance_company}}', description: 'Compañía aseguradora' },
       { name: '{{product_name}}', description: 'Nombre del producto' },
+      { name: '{{ramo_name}}', description: 'Ramo de la póliza' },
       { name: '{{end_date}}', description: 'Fecha de vencimiento (formato dd/mm/yyyy)' },
       { name: '{{renewal_date}}', description: 'Fecha de renovación (formato dd/mm/yyyy)' },
       { name: '{{payment_due_date}}', description: 'Fecha de vencimiento de pago (formato dd/mm/yyyy)' },

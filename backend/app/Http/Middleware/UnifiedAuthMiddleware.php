@@ -27,6 +27,11 @@ class UnifiedAuthMiddleware
         
         $authHeader = $request->header('Authorization');
         
+        // Soportar token via query param (para <img>, <audio>, <video> que no pueden enviar headers)
+        if ((!$authHeader || !str_starts_with($authHeader, 'Bearer ')) && $request->has('token')) {
+            $authHeader = 'Bearer ' . $request->input('token');
+        }
+
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
             Log::error('🔥 UnifiedAuthMiddleware - NO HAY TOKEN');
             return response()->json([

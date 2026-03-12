@@ -74,6 +74,11 @@ export interface PolizaFormData {
   // Partes
   policy_holder_name?: string;
   policy_holder_document?: string;
+  policy_holder_doc_type?: string;
+  policy_holder_phone?: string;
+  policy_holder_email?: string;
+  policy_holder_address?: string;
+  policy_holder_city?: string;
   insured_name?: string;
   insured_document?: string;
   // Vehículos

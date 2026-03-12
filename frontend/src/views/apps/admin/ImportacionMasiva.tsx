@@ -705,6 +705,29 @@ const ImportacionMasiva: React.FC = () => {
         </div>
       </div>
 
+      {/* Banner SoftSeguros */}
+      <a href="/apps/softseguros" className="block mb-6 group">
+        <div className="bg-gradient-to-r from-[#573CFF]/10 to-[#7c3aed]/10 dark:from-[#573CFF]/20 dark:to-[#7c3aed]/20 border border-[#573CFF]/20 dark:border-[#573CFF]/30 rounded-2xl p-4 flex items-center gap-4 hover:shadow-md hover:border-[#573CFF]/40 transition-all">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#573CFF] to-[#7c3aed] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[#573CFF]/20">
+            <Icon icon="solar:refresh-circle-bold-duotone" className="text-white text-2xl" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+              ¿Vienes de SoftSeguros?
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Sincroniza automáticamente todos tus datos (clientes, pólizas, siniestros, etc.) sin necesidad de archivos Excel
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-sm font-semibold text-[#573CFF] group-hover:text-[#4930d9] transition hidden sm:inline">
+              Sincronizar ahora
+            </span>
+            <Icon icon="solar:arrow-right-bold" className="text-[#573CFF] text-lg group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+      </a>
+
       {/* Guía de orden de importación */}
       <Card className="mb-6 overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-800 border-b">

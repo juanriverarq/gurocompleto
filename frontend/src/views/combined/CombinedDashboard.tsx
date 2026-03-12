@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs } from "flowbite-react";
 import { Icon } from "@iconify/react";
-import { useUnifiedAuth } from '../../context/UnifiedAuthContext';
 import Dashboard3 from '../dashboard/Dashboard3';
 import VoiceAIDashboard from '../voice-ai/VoiceAIDashboard';
 import ConfiguracionMasiva from '../saas/configuracion-masiva/ConfiguracionMasiva';
@@ -21,7 +20,6 @@ interface DashboardConfig {
 }
 
 const CombinedDashboard = () => {
-  const { usuarioSaas, tenant } = useUnifiedAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -187,25 +185,11 @@ const CombinedDashboard = () => {
     );
   }
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Buenos días';
-    if (hour < 18) return 'Buenas tardes';
-    return 'Buenas noches';
-  };
-
   return (
     <div>
-      {/* Header con saludo + acciones */}
+      {/* Header con acciones */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-[-0.02em]">
-            {getGreeting()}, {usuarioSaas?.nombre || 'Usuario'}
-          </h1>
-          <p className="text-gray-500 text-sm">
-            {tenant?.branding?.nombre_comercial || tenant?.nombre || 'Tu agencia'}
-          </p>
-        </div>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setTutorialOpen(true)}

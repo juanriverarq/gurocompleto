@@ -12,6 +12,7 @@ interface WhatsAppInstance {
   instance_id: string;
   phone_number?: string;
   status: string;
+  connection_type?: string;
 }
 
 const ChatbotsList: React.FC = () => {
@@ -23,6 +24,13 @@ const ChatbotsList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictInfo, setConflictInfo] = useState<{
+    chatbotToActivate: Chatbot;
+    activeChatbotName: string;
+    activeChatbotId: number;
+  } | null>(null);
+
   const [newChatbot, setNewChatbot] = useState<CreateChatbotRequest>({
     name: '',
     description: '',
@@ -99,18 +107,29 @@ const ChatbotsList: React.FC = () => {
     }
   };
 
-  const handleToggleActive = async (chatbot: Chatbot) => {
+  const handleToggleActive = async (chatbot: Chatbot, forceDeactivateOther = false) => {
     try {
       const result = await chatbotService.updateChatbot(chatbot.id, { 
-        is_active: !chatbot.is_active 
+        is_active: !chatbot.is_active,
+        ...(forceDeactivateOther ? { force_deactivate_other: true } : {}),
       });
       
       if (result.success) {
+        const deactivatedName = result.deactivated_chatbot_name;
         toast({
           title: chatbot.is_active ? 'Chatbot pausado' : 'Chatbot activado',
-          description: `El chatbot "${chatbot.name}" ha sido ${chatbot.is_active ? 'pausado' : 'activado'}.`,
+          description: deactivatedName
+            ? `"${chatbot.name}" activado. Se desactivó "${deactivatedName}" automáticamente.`
+            : `El chatbot "${chatbot.name}" ha sido ${chatbot.is_active ? 'pausado' : 'activado'}.`,
         });
         await loadData();
+      } else if (result.active_chatbot_id && result.active_chatbot_name) {
+        setConflictInfo({
+          chatbotToActivate: chatbot,
+          activeChatbotName: result.active_chatbot_name,
+          activeChatbotId: result.active_chatbot_id,
+        });
+        setShowConflictModal(true);
       } else {
         toast({
           title: 'No se pudo activar el chatbot',
@@ -143,6 +162,30 @@ const ChatbotsList: React.FC = () => {
       }
     } catch (error) {
       console.error('Error eliminando chatbot:', error);
+    }
+  };
+
+  const handleChangeInstance = async (chatbot: Chatbot, newInstanceId: string) => {
+    try {
+      const result = await chatbotService.updateChatbot(chatbot.id, { 
+        instance_id: newInstanceId || null 
+      });
+      if (result.success) {
+        const inst = instances.find(i => i.instance_id === newInstanceId);
+        toast({
+          title: 'Conexión actualizada',
+          description: `"${chatbot.name}" ahora usa ${inst ? (inst.phone_number || inst.instance_id) : 'todas las conexiones'}.`,
+        });
+        await loadData();
+      } else {
+        toast({
+          title: 'Error',
+          description: result.message || 'No se pudo cambiar la conexión.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error cambiando instancia:', error);
     }
   };
 
@@ -261,7 +304,25 @@ const ChatbotsList: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              {/* Instance selector */}
+              <div className="mt-3">
+                <Select
+                  sizing="sm"
+                  value={chatbot.instance_id || ''}
+                  onChange={(e) => handleChangeInstance(chatbot, e.target.value)}
+                >
+                  <option value="">Todas las conexiones</option>
+                  {instances.map((inst) => (
+                    <option key={inst.id} value={inst.instance_id}>
+                      {inst.phone_number || inst.instance_id}
+                      {inst.connection_type === 'cloud_api' ? ' (Cloud API)' : ''}
+                      {inst.status === 'connected' ? ' ✓' : ''}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex gap-2">
                   <Button 
                     size="sm" 
@@ -340,7 +401,9 @@ const ChatbotsList: React.FC = () => {
                 <option value="">Sin asignar (todas las conexiones)</option>
                 {instances.map((instance) => (
                   <option key={instance.id} value={instance.instance_id}>
-                    {instance.phone_number || instance.instance_id} {instance.status === 'connected' ? '✓' : ''}
+                    {instance.phone_number || instance.instance_id}
+                    {instance.connection_type === 'cloud_api' ? ' (Cloud API)' : ''}
+                    {instance.status === 'connected' ? ' ✓' : ''}
                   </option>
                 ))}
               </Select>
@@ -387,6 +450,52 @@ const ChatbotsList: React.FC = () => {
           <Button color="blue" onClick={handleCreateChatbot} disabled={creating}>
             {creating ? <Spinner size="sm" className="mr-2" /> : null}
             Crear Chatbot
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Conflict Modal - Another chatbot active on same line */}
+      <Modal show={showConflictModal} onClose={() => setShowConflictModal(false)} size="md">
+        <Modal.Header>
+          <span className="flex items-center gap-2 text-yellow-600">
+            <Icon icon="solar:danger-triangle-bold" width={22} />
+            Conflicto de línea
+          </span>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-3">
+            <p className="text-gray-700 dark:text-gray-300">
+              Ya existe un chatbot activo en esta línea:
+            </p>
+            <div className="flex items-center gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <Icon icon="solar:bot-bold-duotone" className="text-yellow-500" width={24} />
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {conflictInfo?.activeChatbotName}
+              </span>
+              <Badge color="success" className="ml-auto">Activo</Badge>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Solo puede haber <strong>un chatbot activo por línea</strong>. Si continúas, el chatbot 
+              <strong> "{conflictInfo?.activeChatbotName}"</strong> será desactivado automáticamente y se activará 
+              <strong> "{conflictInfo?.chatbotToActivate?.name}"</strong>.
+            </p>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setShowConflictModal(false)}>
+            Cancelar
+          </Button>
+          <Button 
+            color="warning" 
+            onClick={async () => {
+              if (conflictInfo) {
+                setShowConflictModal(false);
+                await handleToggleActive(conflictInfo.chatbotToActivate, true);
+              }
+            }}
+          >
+            <Icon icon="solar:restart-bold" className="mr-2" width={18} />
+            Desactivar "{conflictInfo?.activeChatbotName}" y activar
           </Button>
         </Modal.Footer>
       </Modal>

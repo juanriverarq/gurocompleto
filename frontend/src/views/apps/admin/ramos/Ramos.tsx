@@ -40,11 +40,12 @@ const Ramos = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<RamoCreate>({
     nombre: '',
-    subramo: '',
+    subramo: [],
     calcular_iva_pri_a_pre: false,
     vista_mapa_oportunidad: false,
     comisiones_aseguradoras: [],
   });
+  const [subramoInput, setSubramoInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Nuevo flujo: creación en blanco o por plantilla
@@ -70,7 +71,10 @@ const Ramos = () => {
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .trim();
-  const makeKey = (nombre: string, subramo: string) => `${normalize(nombre)}|${normalize(subramo)}`;
+  const makeKey = (nombre: string, subramo: string | string[]) => {
+    const sub = Array.isArray(subramo) ? subramo.join(',') : (subramo || '');
+    return `${normalize(nombre)}|${normalize(sub)}`;
+  };
 
   const existingKeys = new Set(ramos.map((r) => makeKey(r.nombre, r.subramo)));
 
@@ -131,7 +135,7 @@ const Ramos = () => {
 
     const payloads: RamoCreate[] = items.map((t) => ({
       nombre: t.nombre,
-      subramo: t.subramo,
+      subramo: t.subramo ? [t.subramo] : [],
       calcular_iva_pri_a_pre: false,
       vista_mapa_oportunidad: false,
       comisiones_aseguradoras: baseComisiones,
@@ -170,9 +174,10 @@ const Ramos = () => {
     setSelectedTemplates({});
     setBulkResult(null);
     setIsBulkCreating(false);
+    setSubramoInput('');
     setFormData({
       nombre: '',
-      subramo: '',
+      subramo: [],
       calcular_iva_pri_a_pre: false,
       vista_mapa_oportunidad: false,
       comisiones_aseguradoras: (aseguradoras || []).map((aseg) => ({
@@ -189,9 +194,11 @@ const Ramos = () => {
     setSelectedItem(item);
     setIsEditing(true);
     setCreationMode('blank');
+    setSubramoInput('');
+    const sub = Array.isArray(item.subramo) ? item.subramo : (item.subramo ? [item.subramo as any] : []);
     setFormData({
       nombre: item.nombre || '',
-      subramo: item.subramo || '',
+      subramo: sub,
       calcular_iva_pri_a_pre: item.calcular_iva_pri_a_pre ?? false,
       vista_mapa_oportunidad: item.vista_mapa_oportunidad ?? false,
       comisiones_aseguradoras: (item.comisiones_aseguradoras || []).map((comision) => ({
@@ -422,6 +429,7 @@ const Ramos = () => {
                     />
                   </th>
                   <th>Ramo</th>
+                  <th>Subramos</th>
                   <th>Características</th>
                   <th>Aseguradoras</th>
                   <th>Fecha de Creación</th>
@@ -443,10 +451,17 @@ const Ramos = () => {
                     <td className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       <div className="flex items-center gap-2">
                         <Icon icon="solar:document-bold" className="w-5 h-5 text-blue-600" />
-                        <div>
-                          <div className="font-medium">{item.nombre}</div>
-                          <div className="text-xs text-gray-500">{item.subramo}</div>
-                        </div>
+                        <span className="font-medium">{item.nombre}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap gap-1">
+                        {(Array.isArray(item.subramo) ? item.subramo : (item.subramo ? [item.subramo] : [])).length > 0
+                          ? (Array.isArray(item.subramo) ? item.subramo : [item.subramo]).map((s: string, i: number) => (
+                              <Badge key={i} color="indigo" size="xs">{s}</Badge>
+                            ))
+                          : <span className="text-xs text-gray-400">—</span>
+                        }
                       </div>
                     </td>
                     <td>
@@ -632,28 +647,60 @@ const Ramos = () => {
               <Tabs>
                 <Tabs.Item active title="Datos principales">
                   <div className="space-y-6 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="nombre" value="Ramo *" />
-                        <TextInput
-                          id="nombre"
-                          type="text"
-                          placeholder="Ramo principal"
-                          value={formData.nombre}
-                          onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="subramo" value="Subramo (opcional)" />
+                    <div>
+                      <Label htmlFor="nombre" value="Ramo *" />
+                      <TextInput
+                        id="nombre"
+                        type="text"
+                        placeholder="Ej: Autos, Hogar, Salud..."
+                        value={formData.nombre}
+                        onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="subramo" value="Subramos (opcional)" />
+                      <div className="flex gap-2 mt-1">
                         <TextInput
                           id="subramo"
                           type="text"
-                          placeholder="Subramo"
-                          value={formData.subramo}
-                          onChange={(e) => setFormData({ ...formData, subramo: e.target.value })}
+                          placeholder="Escribir subramo y presionar Enter"
+                          value={subramoInput}
+                          onChange={(e) => setSubramoInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if ((e.key === 'Enter' || e.key === ',') && subramoInput.trim()) {
+                              e.preventDefault();
+                              if (!formData.subramo.includes(subramoInput.trim())) {
+                                setFormData({ ...formData, subramo: [...formData.subramo, subramoInput.trim()] });
+                              }
+                              setSubramoInput('');
+                            }
+                          }}
+                          className="flex-1"
                         />
+                        <Button type="button" size="sm" color="light" onClick={() => {
+                          if (subramoInput.trim() && !formData.subramo.includes(subramoInput.trim())) {
+                            setFormData({ ...formData, subramo: [...formData.subramo, subramoInput.trim()] });
+                          }
+                          setSubramoInput('');
+                        }}>
+                          <Icon icon="solar:add-circle-bold" width={18} />
+                        </Button>
                       </div>
+                      {formData.subramo.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {formData.subramo.map((s, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-lg border border-blue-200 dark:border-blue-800">
+                              {s}
+                              <button type="button" onClick={() => setFormData({ ...formData, subramo: formData.subramo.filter((_, idx) => idx !== i) })} className="ml-0.5 hover:text-red-500 transition-colors">
+                                <Icon icon="solar:close-circle-bold" width={16} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-400 mt-1.5">Presiona Enter o coma para agregar. Puedes agregar varios subramos.</p>
                     </div>
 
                     <div className="space-y-4">
@@ -854,7 +901,7 @@ const Ramos = () => {
                   <PermissionGate route="/apps/admin/ramos" action="editar">
                     <Button
                       type="submit"
-                      disabled={isSubmitting || !(formData.nombre || '').trim() || !(formData.subramo || '').trim()}
+                      disabled={isSubmitting || !(formData.nombre || '').trim()}
                     >
                       {isSubmitting ? (
                         <>
@@ -870,7 +917,7 @@ const Ramos = () => {
                   <PermissionGate route="/apps/admin/ramos" action="crear">
                     <Button
                       type="submit"
-                      disabled={isSubmitting || !(formData.nombre || '').trim() || !(formData.subramo || '').trim()}
+                      disabled={isSubmitting || !(formData.nombre || '').trim()}
                     >
                       {isSubmitting ? (
                         <>

@@ -83,22 +83,30 @@ export const internalDocumentsService = {
     const headers = await getAuthHeaders();
     const query = new URLSearchParams();
     query.set('path', params.path);
-    const url = `${API_BASE_URL}/saas/internal-documents/signed-url?${query}`;
-    const res = await fetch(url, { headers });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data?.success || !data?.data?.url) {
-      const message =
-        res.status === 401
-          ? 'No autorizado para obtener URL firmada.'
-          : res.status === 403
-          ? 'Permisos insuficientes para ver el archivo.'
-          : res.status === 404
-          ? 'Archivo no encontrado.'
-          : data?.message || data?.error || 'No se pudo obtener URL firmada';
-      toast({ variant: 'destructive', title: 'Abrir documento', description: message });
-      throw new Error(message);
-    }
-    return data.data.url as string;
+
+    // Try signed URL first (works for Firebase-hosted files)
+    try {
+      const res = await fetch(`${API_BASE_URL}/saas/internal-documents/signed-url?${query}`, { headers });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success && data?.data?.url) {
+        return data.data.url as string;
+      }
+    } catch {}
+
+    // Fallback: stream endpoint (proxies through backend for SS-only files)
+    try {
+      const streamRes = await fetch(`${API_BASE_URL}/saas/internal-documents/stream?${query}`, { headers });
+      if (streamRes.ok) {
+        const ct = streamRes.headers.get('Content-Type') || '';
+        if (!ct.includes('application/json')) {
+          const blob = await streamRes.blob();
+          return URL.createObjectURL(blob);
+        }
+      }
+    } catch {}
+
+    toast({ variant: 'destructive', title: 'Abrir documento', description: 'No se pudo obtener el archivo.' });
+    throw new Error('No se pudo obtener el archivo');
   },
 
   /**

@@ -17,6 +17,10 @@
         php_value memory_limit 256M
     </IfModule>
 
+    # CORS - Pass preflight OPTIONS requests to Laravel (not Apache)
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ index.php [QSA,L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

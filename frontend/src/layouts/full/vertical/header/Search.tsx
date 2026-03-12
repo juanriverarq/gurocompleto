@@ -118,6 +118,9 @@ const Search = () => {
       ensureParam("open_siniestro_id", "/apps/seguros/siniestros");
     } else if (t.includes("auto") || t.includes("automovil") || t.includes("vehicul") || t.includes("vehicle")) {
       ensureParam("open_auto_id", "/apps/seguros/automoviles");
+    } else if (t.includes("vinculado")) {
+      // Vinculados link directly to the poliza edit page with vinculados tab
+      // item.url already contains the full path from backend
     } else if ((t.includes("whatsapp") || t.includes("wpp")) && (t.includes("camp") || t.includes("campaign"))) {
       // Campañas de WhatsApp
       ensureParam("open_whatsapp_campaign_id", "/apps/saas/configuracion-masiva");

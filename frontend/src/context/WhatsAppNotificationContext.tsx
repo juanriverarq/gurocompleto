@@ -61,7 +61,7 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
   const [notifications, setNotifications] = useState<WhatsAppNotification[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(() => {
     const saved = localStorage.getItem('whatsapp_sound_enabled');
-    return saved !== null ? saved === 'true' : false; // Desactivado por defecto
+    return saved !== null ? saved === 'true' : true; // Activado por defecto
   });
   const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useState(() => {
     const saved = localStorage.getItem('whatsapp_desktop_notifications');
@@ -69,25 +69,60 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
   });
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUnlockedRef = useRef(false);
 
-  // Inicializar audio - usar Web Audio API como fallback si no hay archivo
+  // Inicializar audio con archivo real .mp3
   useEffect(() => {
-    // Intentar cargar archivo de sonido, si no existe usar Web Audio API
     const audio = new Audio('/sounds/notification.mp3');
-    audio.volume = 0.5;
-    
-    // Verificar si el archivo existe
-    audio.addEventListener('error', () => {
-      // Si no existe el archivo, usar Web Audio API para generar sonido
-      audioRef.current = null;
-    });
+    audio.volume = 0.7;
+    audio.preload = 'auto';
     
     audio.addEventListener('canplaythrough', () => {
+      console.log('🔊 [Audio] notification.mp3 cargado correctamente');
       audioRef.current = audio;
     });
     
-    // Intentar precargar
+    audio.addEventListener('error', () => {
+      console.warn('🔊 [Audio] notification.mp3 no encontrado, usando Web Audio API');
+      audioRef.current = null;
+    });
+    
     audio.load();
+
+    // Desbloquear audio al primer clic/teclado del usuario (política autoplay del browser)
+    const unlockAudio = () => {
+      if (audioUnlockedRef.current) return;
+      audioUnlockedRef.current = true;
+      
+      // Reproducir y pausar inmediatamente para desbloquear
+      if (audioRef.current) {
+        audioRef.current.play().then(() => {
+          audioRef.current!.pause();
+          audioRef.current!.currentTime = 0;
+        }).catch(() => {});
+      }
+      
+      // También crear y cerrar un AudioContext para desbloquearlo
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+        console.log('🔊 [Audio] AudioContext desbloqueado por interacción del usuario');
+      } catch { /* ignore */ }
+    };
+
+    document.addEventListener('click', unlockAudio, { once: false });
+    document.addEventListener('keydown', unlockAudio, { once: false });
+    document.addEventListener('touchstart', unlockAudio, { once: false });
+
+    return () => {
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('keydown', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+    };
   }, []);
 
   // Guardar preferencias
@@ -102,34 +137,59 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
   const playNotificationSound = useCallback(() => {
     if (!soundEnabled) return;
     
-    // Si hay archivo de audio cargado, usarlo
+    console.log('🔊 [Audio] Intentando reproducir sonido...', { hasFile: !!audioRef.current });
+    
+    // Si hay archivo de audio cargado, usarlo (más confiable)
     if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
+      const audio = audioRef.current;
+      audio.currentTime = 0;
+      audio.volume = 0.7;
+      audio.play().then(() => {
+        console.log('🔊 [Audio] Sonido reproducido (mp3)');
+      }).catch((err) => {
+        console.warn('🔊 [Audio] Error reproduciendo mp3:', err.message);
+        // Fallback a Web Audio API
+        playWebAudioFallback();
+      });
       return;
     }
     
-    // Fallback: usar Web Audio API para generar un sonido de notificación
+    playWebAudioFallback();
+  }, [soundEnabled]);
+
+  const playWebAudioFallback = useCallback(() => {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
       
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      // Primer tono
+      const osc1 = audioContext.createOscillator();
+      const gain1 = audioContext.createGain();
+      osc1.connect(gain1);
+      gain1.connect(audioContext.destination);
+      osc1.frequency.value = 960;
+      osc1.type = 'sine';
+      gain1.gain.setValueAtTime(0.6, audioContext.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+      osc1.start(audioContext.currentTime);
+      osc1.stop(audioContext.currentTime + 0.15);
       
-      oscillator.frequency.value = 800; // Frecuencia en Hz
-      oscillator.type = 'sine';
+      // Segundo tono (más alto, después del primero)
+      const osc2 = audioContext.createOscillator();
+      const gain2 = audioContext.createGain();
+      osc2.connect(gain2);
+      gain2.connect(audioContext.destination);
+      osc2.frequency.value = 1200;
+      osc2.type = 'sine';
+      gain2.gain.setValueAtTime(0.6, audioContext.currentTime + 0.18);
+      gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+      osc2.start(audioContext.currentTime + 0.18);
+      osc2.stop(audioContext.currentTime + 0.4);
       
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.3);
-    } catch {
-      // Ignorar errores de audio
+      console.log('🔊 [Audio] Sonido reproducido (Web Audio API)');
+    } catch (err) {
+      console.warn('🔊 [Audio] Error Web Audio API:', err);
     }
-  }, [soundEnabled]);
+  }, []);
 
   const showDesktopNotification = useCallback((title: string, body: string) => {
     if (desktopNotificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
@@ -179,9 +239,11 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
 
     console.log('🔔 [NotificationContext] Agregando notificación:', newNotification);
     setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Máximo 50 notificaciones
-    // Sonido desactivado para evitar duplicados
-    // playNotificationSound();
+    playNotificationSound();
     showDesktopNotification(notification.title, notification.message);
+    
+    // Disparar evento custom para que WhatsAppToast lo reciba inmediatamente
+    window.dispatchEvent(new CustomEvent('whatsapp-new-notification', { detail: newNotification }));
   }, [playNotificationSound, showDesktopNotification]);
 
   const markAsRead = useCallback((id: string) => {
@@ -231,9 +293,28 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
     }
   });
 
-  // Polling para notificaciones (funciona con Cloud API y como fallback)
-  const lastCheckedRef = useRef<string | null>(null);
-  const processedMessageIdsRef = useRef<Set<string>>(new Set());
+  // Polling para notificaciones (funciona con Cloud API/YCloud y como fallback)
+  // Usa ref para addNotification para evitar que el useEffect se re-ejecute y cause fantasmas
+  const addNotificationRef = useRef(addNotification);
+  addNotificationRef.current = addNotification;
+
+  const snapshotRef = useRef<Map<number, string>>(new Map());
+  const isFirstPollRef = useRef(true);
+  const recentWebSocketIdsRef = useRef<Set<number>>(new Set());
+
+  // Registrar conversationIds que llegan por WebSocket para no duplicar con polling
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.conversationId) {
+        recentWebSocketIdsRef.current.add(detail.conversationId);
+        // Limpiar después de 15 segundos
+        setTimeout(() => recentWebSocketIdsRef.current.delete(detail.conversationId), 15000);
+      }
+    };
+    window.addEventListener('whatsapp-new-notification', handler);
+    return () => window.removeEventListener('whatsapp-new-notification', handler);
+  }, []);
 
   useEffect(() => {
     const checkForNewMessages = async () => {
@@ -241,49 +322,65 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
         const response = await whatsappInboxService.getConversations({});
         const conversations = response.data || [];
         
-        const unreadConvs = conversations.filter(c => c.unread_count > 0);
-        console.log('🔔 [Polling] Conversaciones con mensajes no leídos:', unreadConvs.length);
-        
-        for (const conv of conversations) {
-          // Si hay mensajes sin leer y es una conversación reciente
-          if (conv.unread_count > 0 && conv.last_message_at) {
-            const messageKey = `${conv.id}_${conv.last_message_at}`;
-            
-            // Evitar notificaciones duplicadas
-            if (!processedMessageIdsRef.current.has(messageKey)) {
-              processedMessageIdsRef.current.add(messageKey);
-              
-              // Solo notificar si es más reciente que la última verificación
-              const isRecent = !lastCheckedRef.current || new Date(conv.last_message_at) > new Date(lastCheckedRef.current);
-              console.log('🔔 [Polling] Nuevo mensaje detectado:', conv.phone, 'Es reciente:', isRecent);
-              
-              if (isRecent) {
-                addNotification({
-                  type: 'new_message',
-                  title: '📱 Nuevo mensaje de WhatsApp',
-                  message: (conv as any).last_message_preview || 'Nuevo mensaje recibido',
-                  phone: conv.contact_push_name || conv.contact_name || conv.phone,
-                  conversationId: conv.id,
-                });
-              }
+        if (isFirstPollRef.current) {
+          // Primera ejecución: solo guardar snapshot, no notificar
+          for (const conv of conversations) {
+            if (conv.last_message_at) {
+              snapshotRef.current.set(conv.id, conv.last_message_at);
             }
           }
+          isFirstPollRef.current = false;
+          return;
+        }
+
+        // Comparar con snapshot anterior para detectar mensajes NUEVOS
+        for (const conv of conversations) {
+          if (!conv.last_message_at || conv.unread_count === 0) continue;
+          
+          const prevTimestamp = snapshotRef.current.get(conv.id);
+          const currentTimestamp = conv.last_message_at;
+          
+          // Solo notificar si last_message_at realmente cambió
+          if (prevTimestamp && prevTimestamp === currentTimestamp) continue;
+          
+          // Si no existía en snapshot previo, puede ser una nueva conversación o el primer poll
+          // Solo notificar si cambió (prevTimestamp existe pero difiere)
+          if (!prevTimestamp) {
+            // Conversación nueva — registrar pero no notificar si snapshot ya tenía datos
+            if (snapshotRef.current.size > 0) {
+              snapshotRef.current.set(conv.id, currentTimestamp);
+              continue;
+            }
+          }
+          
+          // Evitar duplicados con WebSocket
+          if (recentWebSocketIdsRef.current.has(conv.id)) continue;
+          
+          const contactName = (conv as any).contact_push_name || (conv as any).contact_name || conv.phone;
+          console.log('🔔 [Polling] Mensaje nuevo:', contactName);
+          
+          addNotificationRef.current({
+            type: 'new_message',
+            title: '📱 Nuevo mensaje de WhatsApp',
+            message: (conv as any).last_message_preview || 'Nuevo mensaje recibido',
+            phone: contactName,
+            conversationId: conv.id,
+          });
         }
         
-        lastCheckedRef.current = new Date().toISOString();
-        
-        // Limpiar IDs antiguos (mantener solo los últimos 100)
-        if (processedMessageIdsRef.current.size > 100) {
-          const idsArray = Array.from(processedMessageIdsRef.current);
-          processedMessageIdsRef.current = new Set(idsArray.slice(-50));
+        // Actualizar snapshot (NO clear — actualizar in-place para no perder datos)
+        for (const conv of conversations) {
+          if (conv.last_message_at) {
+            snapshotRef.current.set(conv.id, conv.last_message_at);
+          }
         }
       } catch (err) {
-        console.log('🔔 [Polling] Error:', err);
+        // Silencioso
       }
     };
 
-    // Verificar cada 10 segundos
-    const interval = setInterval(checkForNewMessages, 10000);
+    // Verificar cada 8 segundos (más conservador)
+    const interval = setInterval(checkForNewMessages, 8000);
     
     // Primera verificación después de 3 segundos
     const initialTimeout = setTimeout(checkForNewMessages, 3000);
@@ -292,7 +389,7 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
       clearInterval(interval);
       clearTimeout(initialTimeout);
     };
-  }, [addNotification]);
+  }, []); // Sin dependencias — usa refs para todo
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

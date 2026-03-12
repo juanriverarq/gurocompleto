@@ -58,6 +58,21 @@ class FirebaseAuthMiddleware
             // Buscar o crear el usuario en la base de datos local
             $user = User::where('firebase_uid', $uid)->first();
 
+            if (!$user && $email) {
+                // Fallback: buscar por email (el usuario puede existir con un firebase_uid diferente o nulo)
+                $user = User::where('email', $email)->first();
+                if ($user) {
+                    // Vincular el firebase_uid al usuario existente
+                    $user->firebase_uid = $uid;
+                    $user->save();
+                    Log::info('Firebase UID vinculado a usuario existente por email', [
+                        'user_id' => $user->id,
+                        'firebase_uid' => $uid,
+                        'email' => $email,
+                    ]);
+                }
+            }
+
             if (!$user) {
                 // Si viene de Custom Token de empleado, puede no traer email
                 $claimsArray = isset($claimsArray) ? $claimsArray : json_decode(json_encode($decodedToken), true);

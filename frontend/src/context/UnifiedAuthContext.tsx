@@ -265,8 +265,14 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
   // Check SaaS status when user authenticates
   useEffect(() => {
     if (user && !firebaseLoading) {
-      // Empleados no requieren verificación de email; no limpiar su estado SaaS
-      if (isEmpleado) {
+      // Empleados no requieren verificación de email; no limpiar su estado SaaS.
+      // Verificar TANTO el state como localStorage para evitar race condition:
+      // cuando Firebase onAuthStateChanged se dispara durante el primer login de empleado,
+      // isEmpleado puede ser false porque setEmpleadoSession aún no se ha llamado.
+      const hasEmpleadoInStorage = typeof window !== 'undefined' && (
+        !!localStorage.getItem('empleado_token') || !!localStorage.getItem('empleado_data')
+      );
+      if (isEmpleado || hasEmpleadoInStorage) {
         // No hacemos checkSaasStatus para empleados; usan broker/permisos del login
         return;
       }
@@ -688,6 +694,14 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
+          // Si el backend detectó que es un empleado (Firebase Custom Token con claims),
+          // NO procesar como usuario SaaS — los permisos del empleado se manejan aparte.
+          if (data.auth_type === 'empleado') {
+            console.debug('[UnifiedAuthContext] checkSaasStatus() skipped: response is for empleado');
+            setSaasChecked(true);
+            return;
+          }
+
           // Si no hay broker, NO activar onboarding - dejar que el layout muestre error de conexión
           if (!data?.data?.broker) {
             setUsuarioSaas(data.data.user || null);
@@ -925,6 +939,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         'mensajeros', 'configuracion_sistema', 'monitoreo_logs',
         'integraciones_externas', 'sincronizacion', 'rrhh',
         'contratos', 'documentos_clientes', 'cumplimiento_legal',
+        'reporte_actividades',
       ]);
       const featureMap: Record<string, string> = {
         clientes: 'clientes',
@@ -944,17 +959,33 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         email_marketing: 'email',
         enlaces_cotizacion: 'miniweb',
         mini_web: 'miniweb',
+        pagina_web: 'miniweb',
         asistentes_ia: 'ia_chatbot',
+        robots_ia: 'ia_chatbot',
         voice_ai: 'ia_callcenter',
         analytics_predictivo: 'ia_predicciones',
+        comparador_autos: 'automoviles',
         comisiones: 'cartera',
         cartera_clientes: 'cartera',
+        recibos_caja: 'cartera',
         estados_cuenta: 'cartera',
         reportes_financieros: 'cartera',
+        creador_contenido: 'creador_contenido',
       };
 
-      // Usuario SaaS MASTER/ADMIN: acceso total (evaluar ANTES de empleado para evitar
-      // bloqueo cuando hay sesión de empleado mezclada con sesión Firebase)
+      // Feature gate del plan: aplica a TODOS los usuarios (MASTER, empleados, etc.)
+      // MASTER solo bypasea permisos de rol, NO el plan de features contratadas.
+      if (tenant?.features && Array.isArray(tenant.features) && tenant.features.length > 0) {
+        if (!alwaysAllowed.has(module)) {
+          const featureKey = featureMap[module] || module;
+          if (!tenant.features.includes(featureKey)) {
+            return false;
+          }
+        }
+      }
+
+      // Usuario SaaS MASTER/ADMIN: acceso total a módulos del plan (evaluar ANTES de empleado
+      // para evitar bloqueo cuando hay sesión de empleado mezclada con sesión Firebase)
       if (usuarioSaas) {
         const isMasterOrAdmin =
           usuarioSaas.rol === 'admin' ||
@@ -962,7 +993,9 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
           usuarioSaas.rol === 'MASTER' ||
           usuarioSaas.rol === 'super_admin' ||
           (usuarioSaas as any).user_type === 'MASTER' ||
-          (usuarioSaas as any).user_type === 'ADMIN';
+          (usuarioSaas as any).user_type === 'ADMIN' ||
+          (usuarioSaas as any).user_type === 'admin' ||
+          (usuarioSaas as any).user_type === 'super_admin';
         if (isMasterOrAdmin) return true;
       }
 
@@ -980,29 +1013,8 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         return list.some((p: string) => p.startsWith(`${module}.`));
       }
 
-      // Feature gate del plan: solo para usuarios SaaS (Firebase), no empleados
-      if (tenant?.features && Array.isArray(tenant.features) && tenant.features.length > 0) {
-        if (!alwaysAllowed.has(module)) {
-          const featureKey = featureMap[module] || module;
-          if (!tenant.features.includes(featureKey)) {
-            return false;
-          }
-        }
-      }
-
-      // Usuario SaaS (Firebase)
+      // Usuario SaaS (Firebase) no-MASTER: verificar permisos específicos
       if (usuarioSaas) {
-        const isMasterOrAdmin =
-          usuarioSaas.rol === 'admin' ||
-          usuarioSaas.rol === 'ADMIN' ||
-          usuarioSaas.rol === 'MASTER' ||
-          usuarioSaas.rol === 'super_admin' ||
-          (usuarioSaas as any).user_type === 'MASTER' ||
-          (usuarioSaas as any).user_type === 'ADMIN' ||
-          (usuarioSaas as any).user_type === 'admin' ||
-          (usuarioSaas as any).user_type === 'super_admin';
-        if (isMasterOrAdmin) return true;
-
         if (Array.isArray(permisos)) {
           const list = permisos as string[];
           return (
@@ -1035,6 +1047,7 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         'mensajeros', 'configuracion_sistema', 'monitoreo_logs',
         'integraciones_externas', 'sincronizacion', 'rrhh',
         'contratos', 'documentos_clientes', 'cumplimiento_legal',
+        'reporte_actividades',
       ]);
       if (alwaysAllowed.has(module)) return true;
       const featureMap: Record<string, string> = {
@@ -1044,9 +1057,11 @@ export const UnifiedAuthProvider: React.FC<AuthProviderProps> = ({ children }) =
         documentos_poliza: 'documentos', embudo_ventas: 'crm', metas_objetivos: 'crm',
         equipos_ventas: 'crm', analisis_rendimiento: 'crm', whatsapp_business: 'whatsapp',
         sms_marketing: 'whatsapp', email_marketing: 'email', enlaces_cotizacion: 'miniweb',
-        mini_web: 'miniweb', asistentes_ia: 'ia_chatbot', voice_ai: 'ia_callcenter',
-        analytics_predictivo: 'ia_predicciones', comisiones: 'cartera',
-        cartera_clientes: 'cartera', estados_cuenta: 'cartera', reportes_financieros: 'cartera',
+        mini_web: 'miniweb', pagina_web: 'miniweb', asistentes_ia: 'ia_chatbot', robots_ia: 'ia_chatbot',
+        voice_ai: 'ia_callcenter', analytics_predictivo: 'ia_predicciones',
+        comparador_autos: 'automoviles', comisiones: 'cartera',
+        cartera_clientes: 'cartera', recibos_caja: 'cartera', estados_cuenta: 'cartera', reportes_financieros: 'cartera',
+        creador_contenido: 'creador_contenido',
       };
       if (tenant?.features && Array.isArray(tenant.features) && tenant.features.length > 0) {
         const featureKey = featureMap[module] || module;

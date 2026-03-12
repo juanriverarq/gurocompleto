@@ -9,6 +9,7 @@ use App\Models\Poliza;
 use App\Models\Cliente;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
+use App\Services\WhatsAppCloudApiService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
@@ -481,21 +482,75 @@ class SendPolicyNotifications extends Command
                 ],
             ]);
 
-            // Enviar por WhatsApp
-            $waBase = rtrim(env('WHATSAPP_SERVICE_URL', 'http://localhost:3000/api/v1'), '/');
-            $url = $waBase . '/instances/' . $config->whatsappInstance->instance_id . '/send-message';
+            // Enviar por WhatsApp usando Cloud API Service con plantillas de Meta
+            $cloudApi = app(WhatsAppCloudApiService::class);
+            
+            // Leer nombre de plantilla desde la config (seleccionada por el usuario en la modal)
+            $configTemplateMap = [
+                'expiration' => $config->expiration_template,
+                'renewal' => $config->renewal_template,
+                'payment_due' => $config->payment_template,
+            ];
+            
+            // Fallback a nombres por defecto si no se configuró
+            $defaultTemplateMap = [
+                'expiration' => 'poliza_vencimiento',
+                'renewal' => 'poliza_renovacion',
+                'payment_due' => 'poliza_pago_pendiente',
+            ];
+            
+            $templateName = !empty($configTemplateMap[$type]) ? $configTemplateMap[$type] : ($defaultTemplateMap[$type] ?? null);
+            
+            if ($templateName) {
+                // Preparar variables para la plantilla
+                $client = $policy->client;
+                $clientName = $client ? ($client->full_name ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: 'Cliente') : 'Cliente';
+                
+                $ramoName = $policy->ramo ? ($policy->ramo->nombre ?? '-') : ($policy->product_name ?? '-');
+                
+                $templateParams = match($type) {
+                    'expiration' => [
+                        $clientName,
+                        $policy->policy_number ?? '-',
+                        $policy->insurance_company ?? '-',
+                        $policy->end_date ? $policy->end_date->format('d/m/Y') : 'N/A',
+                        $ramoName,
+                    ],
+                    'renewal' => [
+                        $clientName,
+                        $policy->policy_number ?? '-',
+                        $policy->insurance_company ?? '-',
+                        ($policy->renewal_date ?? $policy->end_date)?->format('d/m/Y') ?? 'N/A',
+                        $ramoName,
+                    ],
+                    'payment_due' => [
+                        $clientName,
+                        $policy->policy_number ?? '-',
+                        $policy->payment_due_date ? $policy->payment_due_date->format('d/m/Y') : 'N/A',
+                        '$' . number_format($policy->premium_amount ?? 0, 0, ',', '.'),
+                        $ramoName,
+                    ],
+                    default => [],
+                };
+                
+                // Construir components para la plantilla
+                $components = [];
+                if (!empty($templateParams)) {
+                    $parameters = array_map(fn($val) => ['type' => 'text', 'text' => (string) $val], $templateParams);
+                    $components[] = [
+                        'type' => 'body',
+                        'parameters' => $parameters,
+                    ];
+                }
+                
+                $result = $cloudApi->sendTemplateMessage($config->whatsappInstance, $phone, $templateName, 'es', $components);
+            } else {
+                // Fallback a texto libre (solo funciona dentro de ventana de 24h)
+                $result = $cloudApi->sendTextMessage($config->whatsappInstance, $phone, $message);
+            }
 
-            $response = Http::timeout(10)->post($url, [
-                'phone' => $phone,
-                'message' => $message,
-                'options' => [
-                    'broker_id' => $config->broker_id,
-                    'label' => 'policy_notification_' . $type,
-                ]
-            ]);
-
-            if ($response->successful() && $response->json('success')) {
-                $messageId = $response->json('messageId');
+            if ($result['success'] ?? false) {
+                $messageId = $result['message_id'] ?? null;
                 $log->markAsSent($messageId);
                 $config->incrementSent();
 
@@ -553,24 +608,20 @@ class SendPolicyNotifications extends Command
                 ];
             }
 
-            $error = $response->json('error') ?? $response->json('message') ?? 'Error desconocido';
-            $statusCode = $response->status();
-            $fullError = "[HTTP {$statusCode}] {$error}";
+            $error = $result['error'] ?? 'Error desconocido';
             
-            Log::warning('WhatsApp send failed', [
-                'url' => $url,
+            Log::warning('WhatsApp Cloud API send failed for policy notification', [
                 'phone' => $phone,
-                'status' => $statusCode,
-                'response' => $response->json(),
+                'instance_id' => $config->whatsappInstance->instance_id,
                 'error' => $error
             ]);
             
-            $log->markAsFailed($fullError);
+            $log->markAsFailed($error);
             $config->incrementFailed();
 
             return [
                 'success' => false,
-                'error' => $fullError
+                'error' => $error
             ];
 
         } catch (\Exception $e) {

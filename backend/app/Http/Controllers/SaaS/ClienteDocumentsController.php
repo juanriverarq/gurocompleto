@@ -13,6 +13,7 @@ use Kreait\Firebase\Contract\Storage as FirebaseStorageContract;
 class ClienteDocumentsController extends Controller
 {
     use \App\Traits\ChecksStorageLimit;
+    use \App\Traits\StreamsDocuments;
     public function __construct(private FirebaseStorageContract $firebaseStorage) {}
 
     private function getBrokerId(Request $request)
@@ -279,7 +280,15 @@ return response()->json([
             if (!$path && !$name) return response()->json(['success'=>false,'message'=>'Debe enviar path o name'],422);
             $doc=null; foreach ((array)($cliente->documents??[]) as $d){ if (($path && ($d['path']??'')===$path)||($name && ($d['name']??'')===$name)){ $doc=$d; break; } }
             if (!$doc) return response()->json(['success'=>false,'message'=>'Documento no encontrado'],404);
-            $bucket = $this->getBucket(); $object=$bucket->object($doc['path']); if (!$object->exists()) return response()->json(['success'=>false,'message'=>'Archivo no existe'],404);
+            $bucket = $this->getBucket(); $object=$bucket->object($doc['path']);
+            if (!$object->exists()) {
+                // Fallback: if doc was imported from SoftSeguros, use the SS download URL or original URL
+                $fallbackUrl = $doc['ss_download_url'] ?? $doc['url'] ?? $doc['azure_url'] ?? null;
+                if ($fallbackUrl && (str_contains($fallbackUrl, 'softseguros.com') || str_contains($fallbackUrl, 'blob.core.windows.net'))) {
+                    return response()->json(['success'=>true,'data'=>['url'=>$fallbackUrl]]);
+                }
+                return response()->json(['success'=>false,'message'=>'Archivo no existe en almacenamiento'],404);
+            }
             $url = $object->signedUrl((new \DateTimeImmutable('+30 minutes')), ['version'=>'v4']);
             return response()->json(['success'=>true,'data'=>['url'=>$url]]);
         } catch (AuthenticationException $ae) {
@@ -288,6 +297,31 @@ return response()->json([
         } catch (\Throwable $e) {
             Log::error(' [CLIENTES_SIGNED_URL] Error al generar URL firmada', ['cliente_id'=>$id,'error'=>$e->getMessage()]);
             return response()->json(['success'=>false,'message'=>'No se pudo generar URL: '.$e->getMessage()],500);
+        }
+    }
+
+    public function stream(Request $request, int $id)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $cliente = Cliente::where('broker_id',$brokerId)->find($id);
+            if (!$cliente) return response()->json(['success'=>false,'message'=>'Cliente no encontrado'],404);
+            $path = $request->input('path') ?: $request->query('path');
+            $name = $request->input('name') ?: $request->query('name');
+            if (!$path && !$name) return response()->json(['success'=>false,'message'=>'Debe enviar path o name'],422);
+            $doc = null;
+            foreach ((array)($cliente->documents ?? []) as $d) {
+                if (is_object($d)) $d = (array) $d;
+                if (($path && ($d['path']??'')===$path) || ($name && ($d['name']??'')===$name)) { $doc=$d; break; }
+            }
+            if (!$doc) return response()->json(['success'=>false,'message'=>'Documento no encontrado'],404);
+            $bucket = $this->getBucket();
+            return $this->streamFromBucketOrFallback($bucket, $doc, $brokerId);
+        } catch (AuthenticationException $ae) {
+            return response()->json(['success'=>false,'message'=>'No autenticado'],401);
+        } catch (\Throwable $e) {
+            Log::error('[CLIENTES_STREAM] Error', ['cliente_id'=>$id,'error'=>$e->getMessage()]);
+            return response()->json(['success'=>false,'message'=>'Error al obtener documento: '.$e->getMessage()],500);
         }
     }
 }

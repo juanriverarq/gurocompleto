@@ -18,6 +18,8 @@ class WhatsAppQuickReply extends Model
         'shortcut',
         'title',
         'content',
+        'media_url',
+        'media_type',
         'is_active',
         'usage_count',
     ];

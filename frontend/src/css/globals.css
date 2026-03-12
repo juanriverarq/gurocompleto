@@ -1184,3 +1184,33 @@ html.dark [data-theme="light"] textarea:focus,
   color: #111827 !important;
   border-color: #d1d5db !important;
 }
+
+/* Trabaja con nosotros — dark form section: force white text on labels/inputs */
+#aplicar label,
+#aplicar input,
+#aplicar select,
+#aplicar textarea,
+[data-theme="light"] #aplicar label,
+[data-theme="light"] #aplicar input,
+[data-theme="light"] #aplicar select,
+[data-theme="light"] #aplicar textarea,
+html:not(.dark) #aplicar label,
+html:not(.dark) #aplicar input,
+html:not(.dark) #aplicar select,
+html:not(.dark) #aplicar textarea {
+  color: #ffffff !important;
+}
+#aplicar input::placeholder,
+#aplicar textarea::placeholder {
+  color: rgba(255, 255, 255, 0.25) !important;
+}
+#aplicar select option {
+  background: #1a1a2e !important;
+  color: #ffffff !important;
+}
+#aplicar input,
+#aplicar select,
+#aplicar textarea {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}

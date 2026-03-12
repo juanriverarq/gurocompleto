@@ -23,7 +23,8 @@ export type ModuleKey =
   | 'sitio_web'
   | 'facturacion_electronica'
   | 'nomina_electronica'
-  | 'lector_pdf_ia';
+  | 'lector_pdf_ia'
+  | 'creador_contenido';
 
 export type ModuleItem = {
   key: ModuleKey;
@@ -276,6 +277,15 @@ export const MODULES: ModuleItem[] = [
     annualPrice: 1310400, // 156,000 * 12 * 0.70 (30% descuento anual)
     consumptionBased: true,
     longDescription: 'Chatbot automatizado para WhatsApp con flujos personalizables, transferencia a agentes y respuestas automáticas. Incluye 1,000 contactos/mes. $91 por contacto adicional. $156,000/mes o $1,310,400/año (30% OFF).',
+  },
+  {
+    key: 'creador_contenido',
+    name: 'Creador de Contenido',
+    description: 'Generación de imágenes y contenido con IA',
+    icon: 'solar:palette-bold-duotone',
+    color: 'bg-lightsuccess',
+    pricePerUser: 15600,
+    longDescription: 'Genera imágenes, banners y contenido visual con IA para redes sociales y marketing. Incluye branding de la agencia.',
   },
   {
     key: 'ia_callcenter',

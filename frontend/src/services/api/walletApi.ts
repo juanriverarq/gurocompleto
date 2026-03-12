@@ -62,6 +62,21 @@ export interface TransactionHistoryResponse {
   message?: string;
 }
 
+export interface StudioChargeResponse {
+  success: boolean;
+  message?: string;
+  code?: 'INSUFFICIENT_FUNDS' | 'NO_WALLET';
+  data?: {
+    charged_cop?: number;
+    cost_per_image?: number;
+    images?: number;
+    balance_cop?: number;
+    formatted_balance?: string;
+    cost_cop?: number;
+    deficit?: number;
+  };
+}
+
 export const walletApi = {
   /**
    * Obtener saldo del wallet
@@ -118,6 +133,20 @@ export const walletApi = {
       return response.data;
     } catch (error: any) {
       console.error('Error getting transaction history:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Cobrar por generación de imágenes en Guro Studio
+   */
+  async chargeStudio(images: number = 1, description?: string): Promise<StudioChargeResponse> {
+    try {
+      const response = await api.post('/saas/wallet/charge-studio', { images, description });
+      return response.data;
+    } catch (error: any) {
+      // Return structured error for 402 (insufficient funds) and 404 (no wallet)
+      if (error?.response?.data) return error.response.data;
       throw error;
     }
   },

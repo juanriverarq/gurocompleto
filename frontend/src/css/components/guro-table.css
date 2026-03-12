@@ -3,7 +3,7 @@
 /* Import this in any view that uses the .guro-table class       */
 /* ═══════════════════════════════════════════════════════════════ */
 
-.guro-table-wrap { position: relative; overflow-x: auto; }
+.guro-table-wrap { position: relative; overflow-x: auto; overflow-y: visible; }
 .guro-table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .guro-table th, .guro-table td { padding: 10px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--color-border, #e5e7eb); vertical-align: middle; }
 .dark .guro-table th, .dark .guro-table td { border-bottom-color: rgba(255,255,255,0.06); }

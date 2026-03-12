@@ -219,3 +219,24 @@ Schedule::command('billing:process-subscriptions')
     ->dailyAt('00:30')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/subscription-billing.log'));
+
+/**
+ * Verifica conversaciones inactivas y envía recordatorios automáticos.
+ * - Cliente inactivo: si no responde en X minutos (máx 23h ventana WhatsApp)
+ * - Agente inactivo: si fue asignado y no ha contestado en X minutos
+ * Ver comando: chatbot:check-inactivity
+ */
+Schedule::command('chatbot:check-inactivity')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/chatbot-inactivity.log'));
+
+/**
+ * Envía notificaciones de clientes (cumpleaños, días especiales) cada minuto.
+ * Verifica hora programada internamente antes de ejecutar.
+ * Ver comando: client:send-notifications
+ */
+Schedule::command('client:send-notifications')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/client-notifications.log'));

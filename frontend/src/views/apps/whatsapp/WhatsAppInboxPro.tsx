@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Badge, Button, Spinner, Alert, Dropdown, Textarea, Modal } from 'flowbite-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { Badge, Button, Spinner, Alert, Textarea, Modal } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import whatsappInboxService, { 
   WhatsAppConversation, 
   WhatsAppMessage, 
   WhatsAppDepartment,
-  InboxStats 
+  InboxStats,
+  WhatsAppTag 
 } from 'src/services/whatsappInboxService';
 import MessageContent from 'src/components/whatsapp/MessageContent';
 import { ConversationUpdateEvent } from 'src/hooks/useWhatsAppSocket';
 import { auth } from 'src/config/firebase';
+import whatsappInstanceService from 'src/services/whatsappInstanceService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
 
@@ -20,6 +23,8 @@ interface QuickReply {
   message: string;
   content?: string;
   shortcut?: string;
+  media_url?: string | null;
+  media_type?: string | null;
 }
 
 const WhatsAppInboxPro: React.FC = () => {
@@ -42,27 +47,78 @@ const WhatsAppInboxPro: React.FC = () => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
-  const [filter, setFilter] = useState<'all' | 'mine' | 'unassigned' | 'pending' | 'urgent'>('all');
+  const [filter, setFilter] = useState<'all' | 'mine' | 'unassigned' | 'pending' | 'urgent'>('mine');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAgentFilter, setSelectedAgentFilter] = useState<number | null>(null);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showContactInfo, setShowContactInfo] = useState(true);
+  const [showContactInfo, setShowContactInfo] = useState(false);
   const [isTyping] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteText, setNoteText] = useState('');
-  const [selectedDepartment, setSelectedDepartment] = useState<number | null>(null);
+  const [selectedTransferAgent, setSelectedTransferAgent] = useState<number | null>(null);
+  const [brokerAgents, setBrokerAgents] = useState<{ id: number; name: string; email: string; role: string }[]>([]);
+  const [showTagMenu, setShowTagMenu] = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [conversationNotes, setConversationNotes] = useState<any[]>([]);
+  const [clientData, setClientData] = useState<any>(null);
+  const [clientPolicies, setClientPolicies] = useState<any[]>([]);
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [clientSearchResults, setClientSearchResults] = useState<any[]>([]);
+  const [searchingClients, setSearchingClients] = useState(false);
+  const [linkingClient, setLinkingClient] = useState(false);
+  const [assignmentNotification, setAssignmentNotification] = useState<{ conversationId: number; contactName: string; phone: string; assignedBy: string; escalation?: boolean; reason?: string } | null>(null);
+  const prevAssignedIdsRef = useRef<Set<number>>(new Set());
+  const [showQuickReplyModal, setShowQuickReplyModal] = useState(false);
+  const [editingReply, setEditingReply] = useState<QuickReply | null>(null);
+  const [replyForm, setReplyForm] = useState({ shortcut: '', title: '', content: '', media_url: '', media_type: '' });
+  const [replyMediaFile, setReplyMediaFile] = useState<File | null>(null);
+  const [replyMediaPreview, setReplyMediaPreview] = useState<string | null>(null);
+  const [uploadingReplyMedia, setUploadingReplyMedia] = useState(false);
+  const [slashResults, setSlashResults] = useState<QuickReply[]>([]);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const [instanceOptions, setInstanceOptions] = useState<Array<{ id: number; phone_number: string; status: string }>>([]);
+  const [selectedInstanceFilter, setSelectedInstanceFilter] = useState<string>('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null);
   const [pendingFileCaption, setPendingFileCaption] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [availableTags, setAvailableTags] = useState<WhatsAppTag[]>([]);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>('');
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const tagDropdownRef = useRef<HTMLDivElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const actionsPortalRef = useRef<HTMLDivElement>(null);
+  const actionsButtonRef = useRef<HTMLButtonElement>(null);
+  const [actionsMenuPos, setActionsMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+  const attachMenuRef = useRef<HTMLDivElement>(null);
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
+
+  // Ventana 24h del servidor (fuente de verdad)
+  const [serverWindow, setServerWindow] = useState<{ is_open: boolean; hours_remaining: number; last_client_message_at: string | null; closes_at: string | null; connection_type?: string } | null>(null);
+
+  // Paginación infinita (scroll hacia arriba para cargar más antiguos)
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [currentLastPage, setCurrentLastPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Buscador de mensajes
+  const [messageSearchTerm, setMessageSearchTerm] = useState('');
+  const [messageSearchResults, setMessageSearchResults] = useState<WhatsAppMessage[]>([]);
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [searchingMessages, setSearchingMessages] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -81,6 +137,17 @@ const WhatsAppInboxPro: React.FC = () => {
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
   }, [selectedConversation]);
+
+  // Click-outside handler for custom dropdown menus
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node) && !(actionsPortalRef.current && actionsPortalRef.current.contains(e.target as Node))) setShowActionsMenu(false);
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) setShowAttachMenu(false);
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target as Node)) setShowTagDropdown(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
 
   // Handler para actualizaciones de conversación via WebSocket (no usado actualmente)
@@ -179,6 +246,7 @@ const WhatsAppInboxPro: React.FC = () => {
   };
 
   // Polling cada 5 segundos para actualizar mensajes y conversaciones
+  // IMPORTANT: filter & searchTerm must be in deps so the interval captures the current values
   useEffect(() => {
     pollIntervalRef.current = setInterval(() => {
       if (selectedConversation) {
@@ -190,11 +258,11 @@ const WhatsAppInboxPro: React.FC = () => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [selectedConversation]);
+  }, [selectedConversation, filter, searchTerm, selectedTagFilter]);
 
   useEffect(() => {
     loadConversations();
-  }, [filter, searchTerm]);
+  }, [filter, searchTerm, selectedTagFilter]);
 
   useEffect(() => {
     scrollToBottom();
@@ -203,22 +271,50 @@ const WhatsAppInboxPro: React.FC = () => {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [depts, statsData] = await Promise.all([
+      // Obtener token para proxy de media (img/audio/video no pueden enviar headers)
+      const user = auth.currentUser;
+      if (user) {
+        const token = await user.getIdToken();
+        setAuthToken(token);
+      }
+      const [depts, statsData, instancesRes] = await Promise.all([
         whatsappInboxService.getDepartments(),
         whatsappInboxService.getStats(),
+        whatsappInstanceService.getInstances(),
       ]);
       setDepartments(depts);
       setStats(statsData);
+      if (instancesRes.success && instancesRes.data) {
+        const activeInst = instancesRes.data
+          .filter((i: any) => i.is_active)
+          .map((i: any) => ({ id: i.id, phone_number: i.phone_number || i.instance_id, status: i.status }));
+        setInstanceOptions(activeInst);
+      }
       
+      // Cargar etiquetas
+      try {
+        const tags = await whatsappInboxService.getTags();
+        setAvailableTags(tags);
+      } catch (e) { /* Tags opcionales */ }
+
+      // Cargar agentes del broker (para transferir)
+      try {
+        const agents = await whatsappInboxService.getAgents();
+        setBrokerAgents(agents);
+      } catch (e) { /* Agents opcionales */ }
+
       // Cargar respuestas rápidas
       try {
         const replies = await whatsappInboxService.getQuickReplies();
-        // Mapear a nuestro tipo QuickReply
+        // Mapear a nuestro tipo QuickReply (incluir media_url y media_type)
         setQuickReplies(replies.map((r: any) => ({
           id: r.id,
           title: r.title,
           message: r.content || r.message || '',
-          shortcut: r.shortcut || ''
+          content: r.content || r.message || '',
+          shortcut: r.shortcut || '',
+          media_url: r.media_url || null,
+          media_type: r.media_type || null,
         })));
       } catch (e) {
         // Quick replies opcionales
@@ -238,13 +334,43 @@ const WhatsAppInboxPro: React.FC = () => {
       let data;
       if (filter === 'mine') {
         data = await whatsappInboxService.getMyConversations();
+        // Detectar nuevas asignaciones para notificación
+        if (silent && data.length > 0) {
+          const newIds = new Set(data.map((c: any) => c.id));
+          const prevIds = prevAssignedIdsRef.current;
+          if (prevIds.size > 0) {
+            for (const c of data) {
+              if (!prevIds.has(c.id) && c.assigned_at) {
+                // Nueva conversación asignada a mí
+                const assignedRecently = (Date.now() - new Date(c.assigned_at).getTime()) < 30000; // últimos 30s
+                if (assignedRecently) {
+                  setAssignmentNotification({
+                    conversationId: c.id,
+                    contactName: c.contact_push_name || c.contact_name || c.phone,
+                    phone: c.phone,
+                    assignedBy: c.classification_reason?.includes('chatbot') ? 'Chatbot' : 'Sistema',
+                    escalation: c.classification_reason?.includes('Escalado'),
+                    reason: c.classification_reason || undefined,
+                  });
+                  // Reproducir sonido de notificación
+                  try { new Audio('/sounds/notification.mp3').play().catch(() => {}); } catch {}
+                  break;
+                }
+              }
+            }
+          }
+          prevAssignedIdsRef.current = newIds;
+        } else if (!silent && data.length > 0) {
+          prevAssignedIdsRef.current = new Set(data.map((c: any) => c.id));
+        }
         setConversations(data);
       } else {
-        const filters: any = {};
+        const filters: any = { per_page: 100 };
         if (filter === 'unassigned') filters.assigned_to = 'unassigned';
         if (filter === 'pending') filters.status = 'pending';
         if (filter === 'urgent') filters.priority = 'urgent';
         if (searchTerm) filters.search = searchTerm;
+        if (selectedTagFilter) filters.tag = selectedTagFilter;
         const response = await whatsappInboxService.getConversations(filters);
         setConversations(response.data);
       }
@@ -258,8 +384,19 @@ const WhatsAppInboxPro: React.FC = () => {
   const loadMessages = async (conversationId: number, silent = false) => {
     try {
       if (!silent) setLoadingMessages(true);
-      const response = await whatsappInboxService.getConversationMessages(conversationId);
+      // latest=true: backend ordena DESC y revierte, así page=1 trae los 100 mensajes más recientes en orden cronológico
+      const response = await whatsappInboxService.getConversationMessages(conversationId, 1, 100, true) as any;
       const newMessages = response.data;
+
+      // Guardar ventana 24h del servidor (fuente de verdad)
+      if (response.conversation_window) {
+        setServerWindow(response.conversation_window);
+      }
+
+      // Paginación: si hay más páginas, hay mensajes más antiguos disponibles
+      setCurrentLastPage(response.last_page || 1);
+      setCurrentPage(1);
+      setHasOlderMessages((response.last_page || 1) > 1);
       
       // Solo actualizar si hay cambios
       if (JSON.stringify(newMessages) !== JSON.stringify(messages)) {
@@ -274,9 +411,76 @@ const WhatsAppInboxPro: React.FC = () => {
     }
   };
 
+  // Cargar mensajes más antiguos (scroll infinito hacia arriba)
+  const loadOlderMessages = async () => {
+    if (!selectedConversation || loadingOlder || !hasOlderMessages) return;
+    try {
+      setLoadingOlder(true);
+      const container = chatContainerRef.current;
+      const prevScrollHeight = container?.scrollHeight || 0;
+
+      // Con latest=true, page 2 trae los siguientes 100 más recientes (más antiguos que los actuales)
+      const nextPage = currentPage + 1;
+      const response = await whatsappInboxService.getConversationMessages(selectedConversation.id, nextPage, 100, true);
+      const olderMessages = response.data;
+
+      if (olderMessages.length > 0) {
+        // Prepend: mensajes antiguos van al inicio
+        setMessages(prev => [...olderMessages, ...prev]);
+        setCurrentPage(nextPage);
+        setHasOlderMessages(nextPage < currentLastPage);
+
+        // Mantener posición de scroll después de prepend
+        requestAnimationFrame(() => {
+          if (container) {
+            container.scrollTop = container.scrollHeight - prevScrollHeight;
+          }
+        });
+      } else {
+        setHasOlderMessages(false);
+      }
+    } catch (err: any) {
+      console.error('Error loading older messages:', err);
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  // Buscador de mensajes dentro de la conversación
+  const searchMessagesInConversation = async (query: string) => {
+    if (!selectedConversation || query.length < 2) {
+      setMessageSearchResults([]);
+      return;
+    }
+    try {
+      setSearchingMessages(true);
+      const response = await whatsappInboxService.searchMessages(selectedConversation.id, query);
+      setMessageSearchResults(response.data);
+    } catch (err: any) {
+      console.error('Error searching messages:', err);
+    } finally {
+      setSearchingMessages(false);
+    }
+  };
+
   const selectConversation = async (conversation: WhatsAppConversation) => {
     setSelectedConversation(conversation);
+    setServerWindow(null);
+    setConversationNotes([]);
+    setClientData(null);
+    setClientPolicies([]);
     await loadMessages(conversation.id);
+    // Cargar notas de la conversación
+    try {
+      const notes = await whatsappInboxService.getNotes(conversation.id);
+      setConversationNotes(notes);
+    } catch (e) { /* notas opcionales */ }
+    // Cargar cliente y pólizas por teléfono
+    try {
+      const { client, policies } = await whatsappInboxService.getClientByPhone(conversation.phone);
+      setClientData(client);
+      setClientPolicies(policies);
+    } catch (e) { /* cliente opcional */ }
   };
 
   const sendMessage = async () => {
@@ -409,10 +613,32 @@ const WhatsAppInboxPro: React.FC = () => {
     }
   };
 
-  const handleQuickReply = (reply: QuickReply) => {
-    setNewMessage(reply.message);
+  const handleQuickReply = async (reply: QuickReply) => {
+    setNewMessage(reply.message || reply.content || '');
     setShowQuickReplies(false);
     inputRef.current?.focus();
+    // Si la plantilla tiene media adjunta (data URL), enviar como archivo
+    if (reply.media_url && reply.media_type && selectedConversation) {
+      try {
+        // Convertir data URL a File
+        const res = await fetch(reply.media_url);
+        const blob = await res.blob();
+        const extMap: Record<string, string> = { image: 'jpg', document: 'pdf', video: 'mp4', audio: 'mp3' };
+        const ext = extMap[reply.media_type] || 'bin';
+        const file = new File([blob], `template_${reply.shortcut || reply.id}.${ext}`, { type: blob.type || `${reply.media_type}/${ext}` });
+        // Para audio, enviar directamente sin preview
+        if (reply.media_type === 'audio') {
+          await sendFileDirectly(file, reply.message || reply.content || '');
+          return;
+        }
+        setPendingFile(file);
+        if (reply.media_type === 'image') {
+          setPendingFilePreview(reply.media_url);
+        }
+      } catch (e) {
+        console.error('Error loading quick reply media:', e);
+      }
+    }
   };
 
   const handleEmojiSelect = (emoji: string) => {
@@ -431,17 +657,17 @@ const WhatsAppInboxPro: React.FC = () => {
     }
   };
 
-  const handleAssignToDepartment = async () => {
-    if (!selectedConversation || !selectedDepartment) return;
+  const handleTransferToAgent = async () => {
+    if (!selectedConversation || !selectedTransferAgent) return;
     try {
-      // Asignar con razón de transferencia
+      const agent = brokerAgents.find(a => a.id === selectedTransferAgent);
       await whatsappInboxService.assignConversation(
         selectedConversation.id, 
-        0, 
-        `Transferido a departamento ${selectedDepartment}`
+        selectedTransferAgent, 
+        `Transferido a ${agent?.name || 'agente'}`
       );
       setShowAssignModal(false);
-      setSelectedDepartment(null);
+      setSelectedTransferAgent(null);
       loadConversations(true);
     } catch (err: any) {
       setError(err.message);
@@ -466,6 +692,9 @@ const WhatsAppInboxPro: React.FC = () => {
       await whatsappInboxService.addNote(selectedConversation.id, noteText);
       setNoteText('');
       setShowNoteModal(false);
+      // Recargar notas
+      const notes = await whatsappInboxService.getNotes(selectedConversation.id);
+      setConversationNotes(notes);
     } catch (err: any) {
       setError(err.message);
     }
@@ -474,8 +703,8 @@ const WhatsAppInboxPro: React.FC = () => {
   const handleChangePriority = async (newPriority: string) => {
     if (!selectedConversation) return;
     try {
-      // TODO: Implementar cambio de prioridad en el servicio
-      console.log('Cambiar prioridad a:', newPriority);
+      const updated = await whatsappInboxService.updateConversation(selectedConversation.id, { priority: newPriority as any });
+      setSelectedConversation(updated);
       loadConversations(true);
     } catch (err: any) {
       setError(err.message);
@@ -554,11 +783,21 @@ const WhatsAppInboxPro: React.FC = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // Meta Cloud API soporta: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg (opus)
-      // Intentar ogg/opus primero, luego webm/opus como fallback
-      let mimeType = 'audio/ogg;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm;codecs=opus';
+      // Intentar formatos compatibles con Meta en orden de preferencia
+      const metaCompatible = [
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+        'audio/aac',
+        'audio/mpeg',
+      ];
+      let mimeType = 'audio/webm;codecs=opus'; // fallback
+      for (const mt of metaCompatible) {
+        if (MediaRecorder.isTypeSupported(mt)) {
+          mimeType = mt;
+          break;
+        }
       }
+      console.log('🎙️ Recording with mimeType:', mimeType, 'isWebm:', mimeType.includes('webm'));
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -569,12 +808,67 @@ const WhatsAppInboxPro: React.FC = () => {
 
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const isOgg = mimeType.includes('ogg');
-        const blobType = isOgg ? 'audio/ogg' : 'audio/webm';
-        const ext = isOgg ? 'ogg' : 'webm';
-        const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
-        const audioFile = new File([audioBlob], `audio_${Date.now()}.${ext}`, { type: blobType });
-        await sendFileDirectly(audioFile);
+        const recordedBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        
+        // Si grabamos en formato compatible con Meta, enviar directo
+        if (!mimeType.includes('webm')) {
+          const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('aac') ? 'aac' : mimeType.includes('mpeg') ? 'mp3' : 'ogg';
+          const audioFile = new File([recordedBlob], `audio_${Date.now()}.${ext}`, { type: mimeType });
+          await sendFileDirectly(audioFile);
+          return;
+        }
+        
+        // WebM fallback: Convertir a WAV usando Web Audio API (Meta acepta audio/ogg)
+        try {
+          console.log('🎙️ Converting webm to wav for Meta compatibility...');
+          const audioContext = new AudioContext();
+          const arrayBuffer = await recordedBlob.arrayBuffer();
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          
+          // Encode to WAV
+          const numChannels = audioBuffer.numberOfChannels;
+          const sampleRate = audioBuffer.sampleRate;
+          const length = audioBuffer.length * numChannels * 2;
+          const wavBuffer = new ArrayBuffer(44 + length);
+          const view = new DataView(wavBuffer);
+          
+          // WAV header
+          const writeString = (offset: number, str: string) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+          writeString(0, 'RIFF');
+          view.setUint32(4, 36 + length, true);
+          writeString(8, 'WAVE');
+          writeString(12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true);
+          view.setUint16(22, numChannels, true);
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate * numChannels * 2, true);
+          view.setUint16(32, numChannels * 2, true);
+          view.setUint16(34, 16, true);
+          writeString(36, 'data');
+          view.setUint32(40, length, true);
+          
+          // Write PCM samples
+          let offset = 44;
+          for (let i = 0; i < audioBuffer.length; i++) {
+            for (let ch = 0; ch < numChannels; ch++) {
+              const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(ch)[i]));
+              view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+              offset += 2;
+            }
+          }
+          
+          // Meta no acepta wav directamente, pero el backend lo puede etiquetar como audio/mpeg
+          // Enviamos como .mp4 con tipo audio/mp4 que Meta sí acepta
+          const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+          const audioFile = new File([wavBlob], `audio_${Date.now()}.wav`, { type: 'audio/wav' });
+          await sendFileDirectly(audioFile);
+          audioContext.close();
+        } catch (convErr) {
+          console.error('🎙️ WAV conversion failed, sending webm anyway:', convErr);
+          const audioFile = new File([recordedBlob], `audio_${Date.now()}.ogg`, { type: 'audio/ogg; codecs=opus' });
+          await sendFileDirectly(audioFile);
+        }
       };
 
       mediaRecorder.start(250);
@@ -620,43 +914,38 @@ const WhatsAppInboxPro: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ========== META CLOUD API: 24h Conversation Window Validation ==========
-  // Per Meta's policy, businesses can only send free-form messages within 24h
-  // of the customer's last message. After that, only approved templates are allowed.
-  const getConversationWindowStatus = useCallback(() => {
-    if (!selectedConversation || !messages.length) {
-      return { isOpen: false, hoursRemaining: 0, lastClientMessageAt: null };
+  // ========== META CLOUD API: 24h Conversation Window (Server-side) ==========
+  // La ventana 24h se calcula en el servidor para máxima precisión según la política de Meta.
+  // El backend devuelve conversation_window en cada respuesta de mensajes.
+  const conversationWindow = useMemo(() => {
+    if (serverWindow) {
+      return {
+        isOpen: serverWindow.is_open,
+        hoursRemaining: serverWindow.hours_remaining,
+        lastClientMessageAt: serverWindow.last_client_message_at,
+        closesAt: serverWindow.closes_at,
+        connectionType: serverWindow.connection_type || 'cloud_api',
+      };
     }
-
-    // Find the last incoming (client) message
-    const lastClientMessage = [...messages]
-      .reverse()
-      .find(m => m.direction === 'incoming');
-
-    if (!lastClientMessage) {
-      return { isOpen: false, hoursRemaining: 0, lastClientMessageAt: null };
-    }
-
-    const lastClientTime = new Date(lastClientMessage.created_at).getTime();
-    const now = Date.now();
-    const diffMs = now - lastClientTime;
-    const diffHours = diffMs / (1000 * 60 * 60);
-    const hoursRemaining = Math.max(0, 24 - diffHours);
-
-    return {
-      isOpen: diffHours < 24,
-      hoursRemaining: Math.round(hoursRemaining * 10) / 10,
-      lastClientMessageAt: lastClientMessage.created_at,
-    };
-  }, [selectedConversation, messages]);
-
-  const conversationWindow = getConversationWindowStatus();
+    return { isOpen: false, hoursRemaining: 0, lastClientMessageAt: null, closesAt: null, connectionType: 'cloud_api' };
+  }, [serverWindow]);
 
   // Check if the WhatsApp instance linked to this conversation is connected
   const isInstanceConnected = useCallback(() => {
+    // First check instanceOptions (live status from API)
+    if (instanceOptions.length > 0) {
+      const convInstanceId = (selectedConversation as any)?.whatsapp_instance_id || selectedConversation?.instance?.id;
+      if (convInstanceId) {
+        const inst = instanceOptions.find(i => i.id === convInstanceId);
+        if (inst) return inst.status === 'connected' || inst.status === 'authenticated' || inst.status === 'ready';
+      }
+      // If we have any connected instance, consider it connected
+      return instanceOptions.some(i => i.status === 'connected' || i.status === 'authenticated' || i.status === 'ready');
+    }
+    // Fallback to conversation's embedded instance
     if (!selectedConversation?.instance) return false;
     return selectedConversation.instance.status === 'connected' || selectedConversation.instance.status === 'authenticated' || selectedConversation.instance.status === 'ready';
-  }, [selectedConversation]);
+  }, [selectedConversation, instanceOptions]);
 
   const instanceConnected = isInstanceConnected();
 
@@ -719,11 +1008,20 @@ const WhatsAppInboxPro: React.FC = () => {
     return Array.from(agentsMap.values()).sort((a, b) => b.count - a.count);
   }, [conversations]);
 
-  // Filtrar conversaciones por empleado seleccionado
+  // Filtrar conversaciones por empleado seleccionado y por línea/instancia
   const filteredConversations = React.useMemo(() => {
-    if (!selectedAgentFilter) return conversations;
-    return conversations.filter(conv => conv.assigned_agent?.id === selectedAgentFilter);
-  }, [conversations, selectedAgentFilter]);
+    let filtered = conversations;
+    if (selectedAgentFilter) {
+      filtered = filtered.filter(conv => conv.assigned_agent?.id === selectedAgentFilter);
+    }
+    if (selectedInstanceFilter) {
+      filtered = filtered.filter(conv => {
+        const convInstanceId = (conv as any).whatsapp_instance_id || (conv as any).instance?.id;
+        return String(convInstanceId) === selectedInstanceFilter;
+      });
+    }
+    return filtered;
+  }, [conversations, selectedAgentFilter, selectedInstanceFilter]);
 
   const formatTime = (dateString: string | null) => {
     if (!dateString) return '';
@@ -777,87 +1075,104 @@ const WhatsAppInboxPro: React.FC = () => {
   }
 
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col bg-gray-100 dark:bg-gray-900 -m-6 p-4">
-      {/* Header compacto */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center">
-            <Icon icon="solar:chat-round-dots-bold" width={24} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Live Chat</h1>
-            <p className="text-xs text-gray-500">
-              {stats ? `${stats.my_unread} sin leer • ${stats.pending} pendientes` : 'Cargando...'}
-            </p>
-          </div>
-        </div>
-        
-        {/* Stats mini */}
-        <div className="flex items-center gap-2">
-          {stats && (
-            <>
-              <div title="Mis conversaciones" className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-                <Icon icon="solar:user-bold" width={16} className="text-primary" />
-                <span className="font-semibold text-sm">{stats.my_conversations}</span>
-              </div>
-              <div title="Sin leer" className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-                <Icon icon="solar:letter-unread-bold" width={16} className="text-orange-500" />
-                <span className="font-semibold text-sm">{stats.my_unread}</span>
-              </div>
-              <div title="Sin asignar" className="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-                <Icon icon="solar:user-cross-bold" width={16} className="text-red-500" />
-                <span className="font-semibold text-sm">{stats.unassigned}</span>
-              </div>
-            </>
-          )}
-          <Button color="light" size="sm" onClick={() => loadInitialData()}>
-            <Icon icon="solar:refresh-bold" width={16} />
-          </Button>
-        </div>
-      </div>
+    <div className="h-[calc(100vh-64px)] flex flex-col -m-6 -mb-6 bg-[#d1d7db] dark:bg-[#0a0a0a]">
 
       {error && (
-        <Alert color="failure" onDismiss={() => setError(null)} className="mb-3">
+        <Alert color="failure" onDismiss={() => setError(null)} className="mx-4 mt-1 mb-0 relative z-10">
           {error}
         </Alert>
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex gap-3 min-h-0">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Lista de conversaciones */}
-        <div className="w-80 bg-white dark:bg-gray-800 rounded-2xl shadow-sm flex flex-col overflow-hidden">
+        <div className="w-[400px] bg-white dark:bg-[#111] flex flex-col overflow-hidden border-r border-[#d1d7db] dark:border-white/[0.06]">
+          {/* Header del sidebar */}
+          <div className="h-[59px] px-4 bg-[#f0f2f5] dark:bg-[#161616] flex items-center justify-between">
+            <div className="w-10 h-10 bg-[#dfe5e7] dark:bg-gray-700 rounded-full flex items-center justify-center cursor-pointer">
+              <Icon icon="solar:user-bold" width={20} className="text-[#54656f] dark:text-gray-300" />
+            </div>
+            <div className="flex items-center gap-1">
+              {stats && (
+                <span className="text-[12px] text-[#54656f] dark:text-gray-400 mr-1">{stats.my_unread} sin leer</span>
+              )}
+              <button onClick={() => loadInitialData()} className="p-[8px] rounded-full hover:bg-[#d9dbdf] dark:hover:bg-white/10 transition-colors text-[#54656f] dark:text-gray-400" title="Actualizar">
+                <Icon icon="solar:refresh-bold" width={20} />
+              </button>
+            </div>
+          </div>
           {/* Filtros */}
-          <div className="p-3 border-b border-gray-100 dark:border-gray-700">
-            <div className="flex gap-1 mb-2 overflow-x-auto pb-1">
+          <div className="px-2 py-[6px] bg-white dark:bg-[#111]">
+            {instanceOptions.length > 1 && (
+              <select
+                className="w-full mb-2 text-xs bg-[#f0f2f5] dark:bg-[#1e1e1e] border border-[#d1d7db] dark:border-white/[0.06] rounded-lg py-1.5 px-2 focus:ring-0 text-[#3b4a54] dark:text-gray-200"
+                value={selectedInstanceFilter}
+                onChange={(e) => setSelectedInstanceFilter(e.target.value)}
+              >
+                <option value="">Todas las líneas</option>
+                {instanceOptions.map((inst) => (
+                  <option key={inst.id} value={String(inst.id)}>
+                    {inst.phone_number}{inst.status === 'connected' ? ' ✓' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div className="flex gap-[6px] mb-[6px] overflow-x-auto scrollbar-hide">
               {[
-                { key: 'all', label: 'Todas', icon: 'solar:inbox-bold' },
-                { key: 'mine', label: 'Mías', icon: 'solar:user-bold' },
-                { key: 'unassigned', label: 'Sin asignar', icon: 'solar:user-cross-bold' },
-                { key: 'pending', label: 'Pendientes', icon: 'solar:clock-circle-bold' },
-                { key: 'urgent', label: 'Urgentes', icon: 'solar:danger-triangle-bold' },
+                { key: 'all', label: 'Todas' },
+                { key: 'mine', label: 'Mías' },
+                { key: 'unassigned', label: 'Sin asignar' },
+                { key: 'pending', label: 'Pendientes' },
+                { key: 'urgent', label: 'Urgentes' },
               ].map(f => (
                 <button
                   key={f.key}
-                  title={f.label}
                   onClick={() => setFilter(f.key as any)}
-                  className={`p-2 rounded-lg transition-all ${
+                  className={`px-3 py-[5px] rounded-full text-[13px] font-medium transition-all whitespace-nowrap ${
                     filter === f.key
-                      ? 'bg-primary text-white shadow-md'
-                      : 'bg-gray-50 dark:bg-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600'
+                      ? 'bg-primary text-white'
+                      : 'bg-[#e9edef] dark:bg-[#1e1e1e] text-[#54656f] dark:text-gray-400 hover:bg-[#d9dbdf] dark:hover:bg-white/10'
                   }`}
                 >
-                  <Icon icon={f.icon} width={18} />
+                  {f.label}
                 </button>
               ))}
             </div>
+            {/* Filtro por etiquetas */}
+            {availableTags.length > 0 && (
+              <div className="flex gap-1 mb-[6px] overflow-x-auto scrollbar-hide">
+                {availableTags.map(tag => (
+                  <button
+                    key={tag.id}
+                    onClick={() => setSelectedTagFilter(selectedTagFilter === tag.name ? '' : tag.name)}
+                    className={`px-2 py-[3px] rounded-full text-[11px] font-medium transition-all whitespace-nowrap border ${
+                      selectedTagFilter === tag.name
+                        ? 'bg-primary/15 border-primary text-primary'
+                        : 'bg-transparent border-gray-300 dark:border-gray-600 text-[#667781] dark:text-gray-400 hover:border-primary/50'
+                    }`}
+                  >
+                    <Icon icon="solar:tag-bold" className="inline mr-0.5" width={10} />
+                    {tag.name}
+                  </button>
+                ))}
+                {selectedTagFilter && (
+                  <button
+                    onClick={() => setSelectedTagFilter('')}
+                    className="px-2 py-[3px] rounded-full text-[11px] text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    ✕ Limpiar
+                  </button>
+                )}
+              </div>
+            )}
             <div className="relative">
-              <Icon icon="solar:magnifer-linear" width={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Icon icon="solar:magnifer-linear" width={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#54656f] dark:text-gray-500" />
               <input
                 type="text"
-                placeholder="Buscar conversación..."
+                placeholder="Buscar o empezar un chat nuevo"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 border-0 rounded-lg focus:ring-2 focus:ring-primary"
+                className="w-full pl-[34px] pr-3 py-[7px] text-[14px] bg-[#f0f2f5] dark:bg-[#1e1e1e] border-0 rounded-lg focus:ring-0 text-[#3b4a54] dark:text-gray-200 placeholder-[#667781] dark:placeholder-gray-500"
               />
             </div>
           </div>
@@ -865,10 +1180,10 @@ const WhatsAppInboxPro: React.FC = () => {
           {/* Lista */}
           <div className="flex-1 overflow-y-auto">
             {filteredConversations.length === 0 ? (
-              <div className="p-8 text-center text-gray-400">
+              <div className="p-8 text-center text-[#54656f] dark:text-gray-400">
                 <Icon icon="solar:inbox-line-duotone" width={48} className="mx-auto mb-3 opacity-50" />
-                <p className="text-sm font-medium">{selectedAgentFilter ? 'Sin conversaciones para este empleado' : 'No hay conversaciones'}</p>
-                <p className="text-xs mt-1">{selectedAgentFilter ? 'Selecciona otro empleado o "Todos"' : 'Las nuevas conversaciones aparecerán aquí'}</p>
+                <p className="text-sm">{selectedAgentFilter ? 'Sin conversaciones para este empleado' : 'No hay conversaciones'}</p>
+                <p className="text-xs mt-1 text-[#667781]">{selectedAgentFilter ? 'Selecciona otro empleado o "Todos"' : 'Las nuevas conversaciones aparecerán aquí'}</p>
               </div>
             ) : (
               filteredConversations.map(conv => {
@@ -877,53 +1192,33 @@ const WhatsAppInboxPro: React.FC = () => {
                   <div
                     key={conv.id}
                     onClick={() => selectConversation(conv)}
-                    className={`p-3 border-b border-gray-50 dark:border-gray-700/50 cursor-pointer transition-all ${
+                    className={`flex items-center px-3 py-0 cursor-pointer transition-colors ${
                       selectedConversation?.id === conv.id
-                        ? 'bg-primary/5 border-l-4 border-l-primary'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        ? 'bg-[#f0f2f5] dark:bg-[#1e1e1e]'
+                        : 'hover:bg-[#f5f6f6] dark:hover:bg-white/[0.04]'
                     }`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="relative flex-shrink-0">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm ${
-                          conv.unread_count > 0 ? 'bg-gradient-to-br from-green-400 to-green-600' : 'bg-gray-300 dark:bg-gray-600'
-                        }`}>
-                          {conv.contact_push_name?.charAt(0).toUpperCase() || conv.phone.slice(-2)}
-                        </div>
+                    <div className="w-[49px] h-[49px] rounded-full bg-[#dfe5e7] dark:bg-gray-700 flex items-center justify-center text-[#54656f] dark:text-gray-300 text-lg flex-shrink-0 mr-3">
+                      {conv.contact_push_name?.charAt(0).toUpperCase() || conv.phone.slice(-2)}
+                    </div>
+                    <div className="flex-1 min-w-0 py-[13px]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[16px] text-[#111b21] dark:text-white truncate">
+                          {conv.contact_push_name || conv.contact_name || conv.phone}
+                        </span>
+                        <span className={`text-[12px] ml-2 flex-shrink-0 ${conv.unread_count > 0 ? 'text-primary' : 'text-[#667781] dark:text-gray-400'}`}>
+                          {formatTime(conv.last_message_at)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-[2px]">
+                        <p className="text-[13.5px] text-[#667781] dark:text-gray-400 truncate flex-1 mr-2">
+                          {(conv as any).last_message_preview || conv.phone}
+                        </p>
                         {conv.unread_count > 0 && (
-                          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
+                          <span className="min-w-[20px] h-[20px] bg-primary text-white text-[11px] font-bold rounded-full flex items-center justify-center px-1 flex-shrink-0">
                             {conv.unread_count > 9 ? '9+' : conv.unread_count}
                           </span>
                         )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={`font-medium truncate ${conv.unread_count > 0 ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>
-                            {conv.contact_push_name || conv.contact_name || conv.phone}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <Icon icon={priorityInfo.icon} width={12} className={priorityInfo.color} />
-                            <span className="text-[10px] text-gray-400 whitespace-nowrap">
-                              {formatTime(conv.last_message_at)}
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-400 truncate mt-0.5">{conv.phone}</p>
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                            conv.status === 'pending' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
-                            conv.status === 'in_progress' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
-                            conv.status === 'resolved' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
-                            'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                          }`}>
-                            {getStatusLabel(conv.status)}
-                          </span>
-                          {conv.assigned_agent && (
-                            <span className="text-[10px] text-gray-400 truncate">
-                              • {conv.assigned_agent.name?.split(' ')[0]}
-                            </span>
-                          )}
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -934,19 +1229,21 @@ const WhatsAppInboxPro: React.FC = () => {
         </div>
 
         {/* Área de chat */}
-        <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm flex flex-col overflow-hidden">
+        <div className="flex-1 bg-[#f0f2f5] dark:bg-[#0a0a0a] flex flex-col overflow-hidden relative min-w-0">
+          {/* WhatsApp wallpaper pattern */}
+          <div className="absolute inset-0 opacity-[0.04] dark:opacity-[0.06]" style={{backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'400\' height=\'400\' viewBox=\'0 0 400 400\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23000\' fill-opacity=\'0.4\'%3E%3Cpath d=\'M20 20h8v8h-8zM60 60h8v8h-8zM100 20h8v8h-8zM140 60h8v8h-8zM180 20h8v8h-8zM220 60h8v8h-8zM260 20h8v8h-8zM300 60h8v8h-8zM340 20h8v8h-8zM380 60h8v8h-8zM20 100h8v8h-8zM60 140h8v8h-8zM100 100h8v8h-8zM140 140h8v8h-8zM180 100h8v8h-8zM220 140h8v8h-8zM260 100h8v8h-8zM300 140h8v8h-8zM340 100h8v8h-8zM380 140h8v8h-8zM20 180h8v8h-8zM60 220h8v8h-8zM100 180h8v8h-8zM140 220h8v8h-8zM180 180h8v8h-8zM220 220h8v8h-8zM260 180h8v8h-8zM300 220h8v8h-8zM340 180h8v8h-8zM380 220h8v8h-8zM20 260h8v8h-8zM60 300h8v8h-8zM100 260h8v8h-8zM140 300h8v8h-8zM180 260h8v8h-8zM220 300h8v8h-8zM260 260h8v8h-8zM300 300h8v8h-8zM340 260h8v8h-8zM380 300h8v8h-8zM20 340h8v8h-8zM60 380h8v8h-8zM100 340h8v8h-8zM140 380h8v8h-8zM180 340h8v8h-8zM220 380h8v8h-8zM260 340h8v8h-8zM300 380h8v8h-8zM340 340h8v8h-8zM380 380h8v8h-8z\'/%3E%3C/g%3E%3C/svg%3E")'}} />
           {/* Barra de filtro por empleados */}
           {assignedAgents.length > 0 && (
-            <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+            <div className="px-4 py-2 border-b border-[#d1d7db] dark:border-white/[0.06] bg-[#f0f2f5] dark:bg-[#161616] relative z-10">
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                <span className="text-xs text-gray-500 font-medium whitespace-nowrap mr-1">Filtrar por:</span>
+                <span className="text-xs text-[#54656f] dark:text-gray-400 font-medium whitespace-nowrap mr-1">Filtrar por:</span>
                 <button
                   title="Todas las conversaciones"
                   onClick={() => setSelectedAgentFilter(null)}
                   className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-all ${
                     selectedAgentFilter === null
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                      ? 'bg-primary text-white'
+                      : 'bg-[#e9edef] dark:bg-[#1e1e1e] text-[#54656f] dark:text-gray-200 hover:bg-[#d9dbdf] dark:hover:bg-white/10'
                   }`}
                 >
                   <Icon icon="solar:users-group-rounded-bold" width={16} />
@@ -959,8 +1256,8 @@ const WhatsAppInboxPro: React.FC = () => {
                     onClick={() => setSelectedAgentFilter(selectedAgentFilter === agent.id ? null : agent.id)}
                     className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-all ${
                       selectedAgentFilter === agent.id
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                        ? 'bg-primary text-white'
+                        : 'bg-[#e9edef] dark:bg-[#1e1e1e] text-[#54656f] dark:text-gray-200 hover:bg-[#d9dbdf] dark:hover:bg-white/10'
                     }`}
                   >
                     {agent.avatar ? (
@@ -974,7 +1271,7 @@ const WhatsAppInboxPro: React.FC = () => {
                     )}
                     <span className="text-xs font-medium whitespace-nowrap">{agent.name?.split(' ')[0]}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                      selectedAgentFilter === agent.id ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-600'
+                      selectedAgentFilter === agent.id ? 'bg-white/20' : 'bg-gray-100 dark:bg-white/10'
                     }`}>
                       {agent.count}
                     </span>
@@ -987,24 +1284,24 @@ const WhatsAppInboxPro: React.FC = () => {
           {selectedConversation ? (
             <>
               {/* Header del chat */}
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-semibold">
+              <div className="h-[59px] px-4 border-b border-[#d1d7db] dark:border-white/[0.06] flex items-center justify-between bg-[#f0f2f5] dark:bg-[#161616] relative z-40 overflow-visible">
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => setShowContactInfo(!showContactInfo)}>
+                  <div className="w-10 h-10 bg-[#dfe5e7] dark:bg-gray-700 rounded-full flex items-center justify-center text-[#54656f] dark:text-gray-300 font-medium text-sm hover:opacity-80 transition-opacity">
                     {selectedConversation.contact_push_name?.charAt(0).toUpperCase() || selectedConversation.phone.slice(-2)}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <h3 className="font-normal text-[16px] text-[#111b21] dark:text-white flex items-center gap-2 hover:underline">
                       {selectedConversation.contact_push_name || selectedConversation.contact_name || selectedConversation.phone}
                       <Icon icon={getPriorityIcon(selectedConversation.priority).icon} width={14} className={getPriorityIcon(selectedConversation.priority).color} />
                     </h3>
-                    <p className="text-xs text-gray-500 flex items-center gap-2">
+                    <p className="text-[13px] text-[#667781] dark:text-gray-400 flex items-center gap-2">
                       {selectedConversation.phone}
                       {isTyping && (
-                        <span className="text-green-500 flex items-center gap-1">
+                        <span className="text-primary flex items-center gap-1">
                           <span className="flex gap-0.5">
-                            <span className="w-1 h-1 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                            <span className="w-1 h-1 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                            <span className="w-1 h-1 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                            <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                            <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                            <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
                           </span>
                           escribiendo...
                         </span>
@@ -1012,67 +1309,237 @@ const WhatsAppInboxPro: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button title="Asignarme" onClick={handleAssignToMe} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <Icon icon="solar:user-plus-bold" width={18} className="text-gray-500" />
-                  </button>
-                  <button title="Agregar nota" onClick={() => setShowNoteModal(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <Icon icon="solar:document-add-bold" width={18} className="text-gray-500" />
-                  </button>
-                  <button title="Transferir" onClick={() => setShowAssignModal(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                    <Icon icon="solar:transfer-horizontal-bold" width={18} className="text-gray-500" />
-                  </button>
-                  <button title="Resolver" onClick={handleResolve} className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition-colors">
-                    <Icon icon="solar:check-circle-bold" width={18} className="text-green-500" />
-                  </button>
-                  <Dropdown
-                    label=""
-                    dismissOnClick
-                    renderTrigger={() => (
-                      <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                        <Icon icon="solar:menu-dots-bold" width={18} className="text-gray-500" />
-                      </button>
-                    )}
-                  >
-                    <Dropdown.Item onClick={() => handleChangePriority('urgent')}>
-                      <Icon icon="solar:danger-triangle-bold" className="mr-2 text-red-500" width={16} />
-                      Marcar urgente
-                    </Dropdown.Item>
-                    <Dropdown.Item onClick={() => handleChangePriority('high')}>
-                      <Icon icon="solar:arrow-up-bold" className="mr-2 text-orange-500" width={16} />
-                      Prioridad alta
-                    </Dropdown.Item>
-                    <Dropdown.Divider />
-                    <Dropdown.Item>
-                      <Icon icon="solar:tag-bold" className="mr-2" width={16} />
-                      Agregar etiqueta
-                    </Dropdown.Item>
-                    <Dropdown.Item>
-                      <Icon icon="solar:user-id-bold" className="mr-2" width={16} />
-                      Ver perfil de contacto
-                    </Dropdown.Item>
-                  </Dropdown>
+                <div className="flex items-center gap-0">
                   <button 
-                    onClick={() => setShowContactInfo(!showContactInfo)}
-                    className={`p-2 rounded-lg transition-colors ${showContactInfo ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'}`}
+                    onClick={() => setShowMessageSearch(!showMessageSearch)}
+                    className={`p-[8px] rounded-full transition-colors ${showMessageSearch ? 'bg-gray-200 dark:bg-white/10 text-primary' : 'hover:bg-gray-200 dark:hover:bg-white/10 text-[#54656f] dark:text-gray-400'}`}
+                    title="Buscar en conversación"
                   >
-                    <Icon icon="solar:info-circle-bold" width={18} />
+                    <Icon icon="solar:magnifer-bold" width={22} />
                   </button>
+                  <div className="relative" ref={actionsMenuRef}>
+                    <button 
+                      ref={actionsButtonRef}
+                      className="p-[8px] hover:bg-gray-200 dark:hover:bg-white/10 rounded-full transition-colors text-[#54656f] dark:text-gray-400"
+                      onClick={() => {
+                        if (!showActionsMenu && actionsButtonRef.current) {
+                          const rect = actionsButtonRef.current.getBoundingClientRect();
+                          setActionsMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                        }
+                        setShowActionsMenu(!showActionsMenu);
+                        setShowAttachMenu(false);
+                      }}
+                    >
+                      <Icon icon="tabler:dots-vertical" width={22} />
+                    </button>
+                    {showActionsMenu && createPortal(
+                      <div 
+                        ref={actionsPortalRef}
+                        className="fixed w-56 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-[#233138] z-[99999] py-1"
+                        style={{ top: actionsMenuPos.top, right: actionsMenuPos.right }}
+                      >
+                        <button onClick={() => { setShowContactInfo(!showContactInfo); setShowActionsMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:info-circle-bold" className="mr-2" width={16} />
+                          Info. del contacto
+                        </button>
+                        <button onClick={() => { handleAssignToMe(); setShowActionsMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:user-plus-bold" className="mr-2" width={16} />
+                          Asignarme
+                        </button>
+                        <button onClick={() => { setShowAssignModal(true); setShowActionsMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:transfer-horizontal-bold" className="mr-2" width={16} />
+                          Transferir
+                        </button>
+                        <button onClick={() => { setShowNoteModal(true); setShowActionsMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:document-add-bold" className="mr-2" width={16} />
+                          Agregar nota
+                        </button>
+                        {/* Etiquetas sub-menu */}
+                        <button onClick={() => setShowTagMenu(!showTagMenu)} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:tag-bold" className="mr-2" width={16} />
+                          Etiquetas
+                          <Icon icon={showTagMenu ? 'solar:alt-arrow-up-bold' : 'solar:alt-arrow-down-bold'} className="ml-auto" width={14} />
+                        </button>
+                        {showTagMenu && (
+                          <div className="px-3 py-2 border-t border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-[#1a2730]">
+                            {/* Tags existentes */}
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {availableTags.map(tag => {
+                                const isAssigned = (selectedConversation?.tags || []).includes(tag.name);
+                                return (
+                                  <button
+                                    key={tag.id}
+                                    onClick={async () => {
+                                      if (!selectedConversation) return;
+                                      try {
+                                        if (isAssigned) {
+                                          const tags = await whatsappInboxService.removeTagFromConversation(selectedConversation.id, tag.name);
+                                          setSelectedConversation({ ...selectedConversation, tags });
+                                        } else {
+                                          const tags = await whatsappInboxService.addTagToConversation(selectedConversation.id, tag.name);
+                                          setSelectedConversation({ ...selectedConversation, tags });
+                                        }
+                                        loadConversations(true);
+                                      } catch (e: any) { setError(e.message); }
+                                    }}
+                                    className={`text-xs px-2 py-1 rounded-full border transition-all ${
+                                      isAssigned
+                                        ? 'bg-primary/20 border-primary text-primary font-medium'
+                                        : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-500 text-gray-600 dark:text-gray-300 hover:border-primary/50'
+                                    }`}
+                                  >
+                                    {isAssigned && <Icon icon="solar:check-read-bold" className="inline mr-0.5" width={12} />}
+                                    {tag.name}
+                                  </button>
+                                );
+                              })}
+                              {availableTags.length === 0 && <p className="text-xs text-gray-400">Sin etiquetas</p>}
+                            </div>
+                            {/* Crear nueva etiqueta */}
+                            <div className="flex gap-1">
+                              <input
+                                type="text"
+                                value={newTagInput}
+                                onChange={(e) => setNewTagInput(e.target.value)}
+                                placeholder="Nueva etiqueta..."
+                                className="flex-1 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-primary focus:border-primary"
+                                onKeyDown={async (e) => {
+                                  if (e.key === 'Enter' && newTagInput.trim()) {
+                                    try {
+                                      const tag = await whatsappInboxService.createTag(newTagInput.trim());
+                                      setAvailableTags(prev => [...prev, tag]);
+                                      if (selectedConversation) {
+                                        const tags = await whatsappInboxService.addTagToConversation(selectedConversation.id, tag.name);
+                                        setSelectedConversation({ ...selectedConversation, tags });
+                                        loadConversations(true);
+                                      }
+                                      setNewTagInput('');
+                                    } catch (err: any) { setError(err.message); }
+                                  }
+                                }}
+                              />
+                              <button
+                                onClick={async () => {
+                                  if (!newTagInput.trim()) return;
+                                  try {
+                                    const tag = await whatsappInboxService.createTag(newTagInput.trim());
+                                    setAvailableTags(prev => [...prev, tag]);
+                                    if (selectedConversation) {
+                                      const tags = await whatsappInboxService.addTagToConversation(selectedConversation.id, tag.name);
+                                      setSelectedConversation({ ...selectedConversation, tags });
+                                      loadConversations(true);
+                                    }
+                                    setNewTagInput('');
+                                  } catch (err: any) { setError(err.message); }
+                                }}
+                                className="text-xs px-2 py-1 rounded bg-primary text-white hover:bg-primary/90"
+                              >
+                                <Icon icon="solar:add-circle-bold" width={14} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        <div className="my-1 border-t border-gray-200 dark:border-gray-600" />
+                        <button onClick={() => { handleResolve(); setShowActionsMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:check-circle-bold" className="mr-2 text-primary" width={16} />
+                          Resolver conversación
+                        </button>
+                        <button onClick={() => { handleChangePriority('urgent'); setShowActionsMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:danger-triangle-bold" className="mr-2 text-red-500" width={16} />
+                          Marcar urgente
+                        </button>
+                        <button onClick={() => { handleChangePriority('high'); setShowActionsMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:arrow-up-bold" className="mr-2 text-orange-500" width={16} />
+                          Prioridad alta
+                        </button>
+                      </div>,
+                      document.body
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* Buscador de mensajes */}
+              {showMessageSearch && (
+                <div className="px-3 py-2 border-b border-[#d1d7db] dark:border-white/[0.06] bg-[#f0f2f5] dark:bg-[#161616] absolute top-[59px] left-0 right-0 z-20 shadow-md">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        placeholder="Buscar en la conversación..."
+                        value={messageSearchTerm}
+                        onChange={(e) => {
+                          setMessageSearchTerm(e.target.value);
+                          if (e.target.value.length >= 2) {
+                            searchMessagesInConversation(e.target.value);
+                          } else {
+                            setMessageSearchResults([]);
+                          }
+                        }}
+                        className="w-full text-sm px-3 py-1.5 rounded-lg border-0 bg-white dark:bg-[#1e1e1e] text-[#111b21] dark:text-gray-200 placeholder-[#667781] dark:placeholder-gray-500 focus:ring-0"
+                        autoFocus
+                      />
+                      {searchingMessages && (
+                        <Spinner size="xs" className="absolute right-2 top-2" />
+                      )}
+                    </div>
+                    <button onClick={() => { setShowMessageSearch(false); setMessageSearchTerm(''); setMessageSearchResults([]); }} className="text-[#54656f] dark:text-gray-400 hover:text-[#111b21] dark:hover:text-gray-300">
+                      <Icon icon="solar:close-circle-bold" width={20} />
+                    </button>
+                  </div>
+                  {messageSearchResults.length > 0 && (
+                    <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
+                      {messageSearchResults.map(msg => (
+                        <div key={msg.id} className="text-xs p-2 rounded bg-gray-50 dark:bg-[#1e1e1e] cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10">
+                          <div className="flex justify-between">
+                            <span className={`font-medium ${msg.direction === 'incoming' ? 'text-primary' : 'text-primary/70'}`}>
+                              {msg.direction === 'incoming' ? selectedConversation?.contact_push_name || 'Cliente' : 'Tú'}
+                            </span>
+                            <span className="text-gray-400 dark:text-gray-500">{new Date(msg.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-200 mt-0.5 line-clamp-2">{msg.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {messageSearchTerm.length >= 2 && !searchingMessages && messageSearchResults.length === 0 && (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">No se encontraron mensajes</p>
+                  )}
+                </div>
+              )}
 
               {/* Mensajes */}
               <div 
                 ref={chatContainerRef}
-                className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/50"
+                className="flex-1 overflow-y-auto px-[5%] lg:px-[7%] py-2 space-y-[1px] relative z-10"
+                onScroll={(e) => {
+                  const target = e.currentTarget;
+                  if (target.scrollTop < 80 && hasOlderMessages && !loadingOlder) {
+                    loadOlderMessages();
+                  }
+                }}
               >
+                {/* Botón para cargar mensajes más antiguos */}
+                {hasOlderMessages && (
+                  <div className="text-center py-2">
+                    <button
+                      onClick={loadOlderMessages}
+                      disabled={loadingOlder}
+                      className="text-xs text-primary hover:underline disabled:opacity-50 flex items-center gap-1 mx-auto"
+                    >
+                      {loadingOlder ? <Spinner size="xs" /> : <Icon icon="solar:arrow-up-bold" width={12} />}
+                      {loadingOlder ? 'Cargando...' : 'Cargar mensajes anteriores'}
+                    </button>
+                  </div>
+                )}
+
                 {loadingMessages ? (
                   <div className="flex items-center justify-center h-full">
                     <Spinner />
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
-                    <div className="text-center text-gray-400">
+                    <div className="text-center text-[#667781] dark:text-gray-400">
                       <Icon icon="solar:chat-line-bold-duotone" width={48} className="mx-auto mb-3 opacity-50" />
                       <p className="font-medium">Sin mensajes</p>
                       <p className="text-sm mt-1">Envía el primer mensaje</p>
@@ -1082,37 +1549,34 @@ const WhatsAppInboxPro: React.FC = () => {
                   <>
                     {messages.map((msg, idx) => {
                       const isOutgoing = msg.direction === 'outgoing';
-                      const showAvatar = idx === 0 || messages[idx - 1].direction !== msg.direction;
+                      const isFirst = idx === 0 || messages[idx - 1].direction !== msg.direction;
                       
                       return (
                         <div
                           key={msg.id}
-                          className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'} ${!showAvatar ? 'mt-0.5' : 'mt-3'}`}
+                          className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'} ${isFirst ? 'mt-[12px]' : 'mt-[2px]'}`}
                         >
-                          {!isOutgoing && showAvatar && (
-                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-xs font-medium mr-2 flex-shrink-0">
-                              {selectedConversation.contact_push_name?.charAt(0) || '?'}
-                            </div>
-                          )}
-                          {!isOutgoing && !showAvatar && <div className="w-8 mr-2" />}
-                          
-                          <div className={`max-w-[65%] ${isOutgoing ? 'order-1' : ''}`}>
-                            {isOutgoing && msg.sender_type === 'agent' && msg.sender && showAvatar && (
-                              <div className="text-[10px] text-gray-400 text-right mb-0.5 mr-1">
-                                {msg.sender.name}
+                          <div className={`max-w-[65%] ${isOutgoing ? '' : ''}`}>
+                            {!isOutgoing && isFirst && msg.sender && (msg.sender_type as string) !== 'contact' && (
+                              <div className="text-[12.5px] text-primary mb-[2px] ml-1 font-medium">
+                                {msg.sender.name || selectedConversation?.contact_push_name || 'Cliente'}
                               </div>
                             )}
-                            {isOutgoing && msg.sender_type === 'bot' && showAvatar && (
-                              <div className="text-[10px] text-gray-400 text-right mb-0.5 mr-1 flex items-center justify-end gap-1">
-                                <Icon icon="solar:chat-round-dots-bold" width={10} className="text-green-500" />
+                            {isOutgoing && isFirst && msg.sender_type === 'bot' && (
+                              <div className="text-[12.5px] text-primary/70 text-right mb-[2px] mr-1">
                                 Chatbot
                               </div>
                             )}
+                            {isOutgoing && isFirst && msg.sender_type === 'agent' && msg.sender && (
+                              <div className="text-[12.5px] text-primary/70 text-right mb-[2px] mr-1">
+                                {msg.sender.name}
+                              </div>
+                            )}
                             <div
-                              className={`px-3 py-2 ${
+                              className={`px-[9px] py-[5px] text-[14.2px] leading-[19px] ${
                                 isOutgoing
-                                  ? 'bg-gradient-to-br from-green-500 to-green-600 text-white rounded-2xl rounded-tr-sm shadow-sm'
-                                  : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-2xl rounded-tl-sm shadow-sm'
+                                  ? `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ${isFirst ? 'rounded-[7.5px] rounded-tr-none' : 'rounded-[7.5px]'} shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]`
+                                  : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] ${isFirst ? 'rounded-[7.5px] rounded-tl-none' : 'rounded-[7.5px]'} shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]`
                               }`}
                             >
                               <MessageContent
@@ -1120,26 +1584,20 @@ const WhatsAppInboxPro: React.FC = () => {
                                 content={msg.content}
                                 media={msg.media}
                                 isOutgoing={isOutgoing}
+                                authToken={authToken}
                               />
-                              <div className={`flex items-center justify-end gap-1 mt-1 ${isOutgoing ? 'text-white/70' : 'text-gray-400'}`}>
-                                <span className="text-[10px]">{formatMessageTime(msg.created_at)}</span>
+                              <div className={`flex items-center justify-end gap-1 mt-[1px] ${isOutgoing ? 'text-[#667781] dark:text-[rgba(255,255,255,0.55)]' : 'text-[#667781] dark:text-gray-400'}`}>
+                                <span className="text-[11px]">{formatMessageTime(msg.created_at)}</span>
                                 {isOutgoing && (
                                   <Icon 
                                     icon={getMessageStatusIcon(msg.status)} 
-                                    width={14}
-                                    className={getMessageStatusColor(msg.status)}
+                                    width={16}
+                                    className={msg.status === 'read' ? 'text-[#53bdeb]' : 'text-[#667781] dark:text-[rgba(255,255,255,0.55)]'}
                                   />
                                 )}
                               </div>
                             </div>
                           </div>
-                          
-                          {isOutgoing && showAvatar && (
-                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-xs font-medium text-white ml-2 flex-shrink-0">
-                              {msg.sender?.name?.charAt(0) || (msg.sender_type === 'bot' ? '🤖' : 'A')}
-                            </div>
-                          )}
-                          {isOutgoing && !showAvatar && <div className="w-8 ml-2" />}
                         </div>
                       );
                     })}
@@ -1149,10 +1607,10 @@ const WhatsAppInboxPro: React.FC = () => {
               </div>
 
               {/* Input de mensaje mejorado */}
-              <div className="p-3 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <div className="px-3 py-[5px] bg-[#f0f2f5] dark:bg-[#161616] relative z-10">
                 {/* Preview de archivo pendiente */}
                 {pendingFile && pendingFilePreview && (
-                  <div className="mb-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                  <div className="mb-2 p-3 bg-gray-50 dark:bg-[#1e1e1e] rounded-xl">
                     <div className="flex items-start gap-3">
                       <img src={pendingFilePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg" />
                       <div className="flex-1">
@@ -1162,7 +1620,7 @@ const WhatsAppInboxPro: React.FC = () => {
                           value={pendingFileCaption}
                           onChange={(e) => setPendingFileCaption(e.target.value)}
                           placeholder="Agregar descripción..."
-                          className="w-full text-sm bg-white dark:bg-gray-600 border-0 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary"
+                          className="w-full text-sm bg-white dark:bg-[#1e1e1e] border-0 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-primary"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
@@ -1172,13 +1630,13 @@ const WhatsAppInboxPro: React.FC = () => {
                         />
                       </div>
                       <div className="flex gap-1">
-                        <button onClick={cancelPendingFile} className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors">
+                        <button onClick={cancelPendingFile} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition-colors">
                           <Icon icon="solar:close-circle-bold" width={18} className="text-gray-400" />
                         </button>
                         <button
                           onClick={sendPendingFile}
                           disabled={sendingMessage}
-                          className="p-1.5 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-sm hover:shadow-md transition-all"
+                          className="p-1.5 bg-primary text-white rounded-lg shadow-sm hover:shadow-md transition-all"
                         >
                           {sendingMessage ? <Spinner size="sm" /> : <Icon icon="solar:plain-bold" width={18} />}
                         </button>
@@ -1188,27 +1646,66 @@ const WhatsAppInboxPro: React.FC = () => {
                 )}
 
                 {/* Quick replies */}
-                {showQuickReplies && quickReplies.length > 0 && (
-                  <div className="mb-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg max-h-40 overflow-y-auto">
-                    <div className="text-xs text-gray-500 mb-2 font-medium">Respuestas rápidas</div>
-                    <div className="space-y-1">
-                      {quickReplies.map(reply => (
-                        <button
-                          key={reply.id}
-                          onClick={() => handleQuickReply(reply)}
-                          className="w-full text-left p-2 hover:bg-white dark:hover:bg-gray-600 rounded-lg transition-colors"
-                        >
-                          <div className="font-medium text-sm text-gray-900 dark:text-white">{reply.title}</div>
-                          <div className="text-xs text-gray-500 truncate">{reply.message}</div>
-                        </button>
-                      ))}
+                {showQuickReplies && (
+                  <div className="mb-2 p-3 bg-gray-50 dark:bg-[#1e1e1e] rounded-lg max-h-[280px] flex flex-col">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium">Respuestas rápidas</span>
+                      <button
+                        onClick={() => { setEditingReply(null); setReplyForm({ shortcut: '', title: '', content: '', media_url: '', media_type: '' }); setReplyMediaFile(null); setReplyMediaPreview(null); setShowQuickReplyModal(true); }}
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Icon icon="solar:add-circle-bold" width={14} /> Nueva
+                      </button>
                     </div>
+                    {quickReplies.length > 0 ? (
+                      <div className="space-y-1 overflow-y-auto flex-1">
+                        {quickReplies.map(reply => (
+                          <div key={reply.id} className="flex items-center gap-1 group">
+                            <button
+                              onClick={() => handleQuickReply(reply)}
+                              className="flex-1 text-left p-2 hover:bg-white dark:hover:bg-white/10 rounded-lg transition-colors min-w-0"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-primary font-mono bg-primary/10 px-1.5 py-0.5 rounded">/{reply.shortcut}</span>
+                                <span className="font-medium text-sm text-gray-900 dark:text-gray-200 truncate">{reply.title}</span>
+                                {reply.media_url && <Icon icon={reply.media_type === 'image' ? 'solar:gallery-bold' : reply.media_type === 'audio' ? 'solar:music-note-bold' : reply.media_type === 'video' ? 'solar:video-frame-bold' : 'solar:document-bold'} width={12} className="text-gray-400 shrink-0" />}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate mt-0.5">{reply.message}</div>
+                            </button>
+                            <div className="hidden group-hover:flex gap-0.5 shrink-0">
+                              <button
+                                onClick={() => { setEditingReply(reply); setReplyForm({ shortcut: reply.shortcut || '', title: reply.title, content: reply.message || reply.content || '', media_url: reply.media_url || '', media_type: reply.media_type || '' }); setReplyMediaFile(null); setReplyMediaPreview(null); setShowQuickReplyModal(true); }}
+                                className="p-1 text-gray-400 hover:text-primary rounded"
+                                title="Editar"
+                              >
+                                <Icon icon="solar:pen-bold" width={14} />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm('¿Eliminar esta respuesta rápida?')) return;
+                                  try {
+                                    await whatsappInboxService.deleteQuickReply(reply.id);
+                                    setQuickReplies(prev => prev.filter(r => r.id !== reply.id));
+                                  } catch (e: any) { setError(e.message); }
+                                }}
+                                className="p-1 text-gray-400 hover:text-red-500 rounded"
+                                title="Eliminar"
+                              >
+                                <Icon icon="solar:trash-bin-trash-bold" width={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 text-center py-4">No hay respuestas rápidas. Crea una para empezar.</p>
+                    )}
                   </div>
                 )}
 
                 {/* Picker de emojis completo */}
                 {showEmojiPicker && (
-                  <div className="mb-2 bg-gray-50 dark:bg-gray-700 rounded-xl overflow-hidden">
+                  <div className="mb-2 bg-gray-50 dark:bg-[#1e1e1e] rounded-xl overflow-hidden">
                     {/* Tabs de categorías */}
                     <div className="flex border-b border-gray-200 dark:border-gray-600 overflow-x-auto">
                       {Object.keys(emojiCategories).map(category => (
@@ -1217,7 +1714,7 @@ const WhatsAppInboxPro: React.FC = () => {
                           onClick={() => setSelectedEmojiCategory(category)}
                           className={`px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
                             selectedEmojiCategory === category
-                              ? 'text-primary border-b-2 border-primary bg-white dark:bg-gray-800'
+                              ? 'text-primary border-b-2 border-primary bg-white dark:bg-[#1e1e1e]'
                               : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                           }`}
                         >
@@ -1232,7 +1729,7 @@ const WhatsAppInboxPro: React.FC = () => {
                           <button
                             key={emoji}
                             onClick={() => handleEmojiSelect(emoji)}
-                            className="w-8 h-8 hover:bg-white dark:hover:bg-gray-600 rounded-lg transition-colors text-xl flex items-center justify-center"
+                            className="w-8 h-8 hover:bg-white dark:hover:bg-white/10 rounded-lg transition-colors text-xl flex items-center justify-center"
                           >
                             {emoji}
                           </button>
@@ -1245,7 +1742,7 @@ const WhatsAppInboxPro: React.FC = () => {
                 {/* Instance disconnected check */}
                 {!instanceConnected ? (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 px-3 py-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
                       <Icon icon="solar:link-broken-bold" width={20} className="text-red-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-red-700 dark:text-red-400">
@@ -1257,7 +1754,7 @@ const WhatsAppInboxPro: React.FC = () => {
                       </div>
                     </div>
                     <button
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-xl hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors text-sm font-medium"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary/20 transition-colors text-sm font-medium"
                       onClick={() => navigate('/apps/whatsapp/conexiones')}
                     >
                       <Icon icon="solar:plug-circle-bold" width={16} />
@@ -1287,13 +1784,13 @@ const WhatsAppInboxPro: React.FC = () => {
                     <button
                       onClick={stopRecording}
                       title="Enviar nota de voz"
-                      className="p-2.5 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                      className="p-2.5 bg-primary text-white rounded-xl shadow-md hover:shadow-lg transition-all"
                     >
                       <Icon icon="solar:plain-bold" width={20} />
                     </button>
                   </div>
-                ) : !conversationWindow.isOpen ? (
-                  /* 24h Window Closed - Meta Cloud API restriction */
+                ) : !conversationWindow.isOpen && conversationWindow.connectionType !== 'baileys' ? (
+                  /* 24h Window Closed - Meta Cloud API / YCloud restriction */
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
                       <Icon icon="solar:clock-circle-bold" width={18} className="text-amber-500 flex-shrink-0" />
@@ -1328,65 +1825,142 @@ const WhatsAppInboxPro: React.FC = () => {
                         </span>
                       </div>
                     )}
-                    <div className="flex items-end gap-2">
-                      <div className="flex gap-1">
+                    <div className="flex items-end gap-[5px]">
+                      {/* Left icons: emoji, quick replies, attach */}
+                      <button 
+                        title="Emojis"
+                        onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowQuickReplies(false); }}
+                        className={`p-[6px] rounded-full transition-colors ${showEmojiPicker ? 'text-primary' : 'text-[#54656f] dark:text-gray-400 hover:text-[#111b21] dark:hover:text-gray-300'}`}
+                      >
+                        <Icon icon="solar:emoji-funny-circle-bold" width={24} />
+                      </button>
+                      <button 
+                        title="Respuestas rápidas"
+                        onClick={() => { setShowQuickReplies(!showQuickReplies); setShowEmojiPicker(false); }}
+                        className={`p-[6px] rounded-full transition-colors ${showQuickReplies ? 'text-primary' : 'text-[#54656f] dark:text-gray-400 hover:text-[#111b21] dark:hover:text-gray-300'}`}
+                      >
+                        <Icon icon="solar:lightning-bold" width={24} />
+                      </button>
+                      <div className="relative" ref={attachMenuRef}>
                         <button 
-                          title="Respuestas rápidas"
-                          onClick={() => { setShowQuickReplies(!showQuickReplies); setShowEmojiPicker(false); }}
-                          className={`p-2 rounded-lg transition-colors ${showQuickReplies ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'}`}
+                          title="Adjuntar archivo" 
+                          className="p-[6px] rounded-full transition-colors text-[#54656f] dark:text-gray-400 hover:text-[#111b21] dark:hover:text-gray-300"
+                          onClick={() => { setShowAttachMenu(!showAttachMenu); setShowActionsMenu(false); }}
                         >
-                          <Icon icon="solar:lightning-bold" width={18} />
+                          <Icon icon="solar:paperclip-bold" width={24} style={{ transform: 'rotate(45deg)' }} />
                         </button>
-                        <button 
-                          title="Emojis"
-                          onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowQuickReplies(false); }}
-                          className={`p-2 rounded-lg transition-colors ${showEmojiPicker ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500'}`}
-                        >
-                          <Icon icon="solar:emoji-funny-circle-bold" width={18} />
-                        </button>
-                        <Dropdown
-                          label=""
-                          dismissOnClick
-                          renderTrigger={() => (
-                            <button title="Adjuntar archivo" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500">
-                              <Icon icon="solar:paperclip-bold" width={18} />
+                        {showAttachMenu && (
+                          <div className="absolute left-0 bottom-full mb-2 w-48 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-[#233138] z-[9999] py-1 overflow-hidden">
+                            <button onClick={() => { imageInputRef.current?.click(); setShowAttachMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                              <Icon icon="solar:gallery-bold" className="mr-2 text-blue-500" width={16} />
+                              Imagen
                             </button>
-                          )}
-                        >
-                          <Dropdown.Item onClick={() => imageInputRef.current?.click()}>
-                            <Icon icon="solar:gallery-bold" className="mr-2 text-blue-500" width={16} />
-                            Imagen
-                          </Dropdown.Item>
-                          <Dropdown.Item onClick={() => docInputRef.current?.click()}>
-                            <Icon icon="solar:document-bold" className="mr-2 text-red-500" width={16} />
-                            Documento
-                          </Dropdown.Item>
-                          <Dropdown.Item onClick={() => audioInputRef.current?.click()}>
-                            <Icon icon="solar:music-note-bold" className="mr-2 text-purple-500" width={16} />
-                            Audio
-                          </Dropdown.Item>
-                          <Dropdown.Item onClick={() => videoInputRef.current?.click()}>
-                            <Icon icon="solar:video-frame-bold" className="mr-2 text-green-500" width={16} />
-                            Video
-                          </Dropdown.Item>
-                        </Dropdown>
-                        {/* Hidden file inputs with correct accept types */}
-                        <input type="file" ref={imageInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
-                        <input type="file" ref={docInputRef} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar" onChange={handleFileSelect} />
-                        <input type="file" ref={audioInputRef} className="hidden" accept="audio/*" onChange={handleFileSelect} />
-                        <input type="file" ref={videoInputRef} className="hidden" accept="video/*" onChange={handleFileSelect} />
+                            <button onClick={() => { docInputRef.current?.click(); setShowAttachMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                              <Icon icon="solar:document-bold" className="mr-2 text-red-500" width={16} />
+                              Documento
+                            </button>
+                            <button onClick={() => { audioInputRef.current?.click(); setShowAttachMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                              <Icon icon="solar:music-note-bold" className="mr-2 text-purple-500" width={16} />
+                              Audio
+                            </button>
+                            <button onClick={() => { videoInputRef.current?.click(); setShowAttachMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                              <Icon icon="solar:video-frame-bold" className="mr-2 text-green-500" width={16} />
+                              Video
+                            </button>
+                          </div>
+                        )}
                       </div>
+                      {/* Hidden file inputs */}
+                      <input type="file" ref={imageInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
+                      <input type="file" ref={docInputRef} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar" onChange={handleFileSelect} />
+                      <input type="file" ref={audioInputRef} className="hidden" accept="audio/*" onChange={handleFileSelect} />
+                      <input type="file" ref={videoInputRef} className="hidden" accept="video/*" onChange={handleFileSelect} />
                       
+                      {/* Input field */}
                       <div className="flex-1 relative">
+                        {/* Slash command autocomplete menu */}
+                        {showSlashMenu && slashResults.length > 0 && (
+                          <div className="absolute bottom-full mb-1 left-0 right-0 bg-white dark:bg-[#233138] rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 z-50 max-h-[200px] overflow-y-auto">
+                            {slashResults.map((reply, idx) => (
+                              <button
+                                key={reply.id}
+                                onClick={() => {
+                                  setShowSlashMenu(false);
+                                  setSlashResults([]);
+                                  handleQuickReply(reply);
+                                }}
+                                className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
+                                  idx === slashSelectedIndex ? 'bg-primary/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'
+                                }`}
+                              >
+                                <span className="text-xs text-primary font-mono bg-primary/10 px-1.5 py-0.5 rounded shrink-0">/{reply.shortcut}</span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">{reply.title}</div>
+                                  <div className="text-xs text-gray-500 truncate">{reply.message || reply.content}</div>
+                                </div>
+                                {reply.media_url && <Icon icon={reply.media_type === 'image' ? 'solar:gallery-bold' : reply.media_type === 'audio' ? 'solar:music-note-bold' : reply.media_type === 'video' ? 'solar:video-frame-bold' : 'solar:document-bold'} width={14} className="text-gray-400 shrink-0" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <textarea
                           ref={inputRef}
                           value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
-                          placeholder="Escribe un mensaje..."
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewMessage(val);
+                            // Slash command detection
+                            if (val.startsWith('/') && val.length > 1) {
+                              const query = val.slice(1).toLowerCase();
+                              const matches = quickReplies.filter(r =>
+                                (r.shortcut && r.shortcut.toLowerCase().includes(query)) ||
+                                r.title.toLowerCase().includes(query)
+                              );
+                              setSlashResults(matches);
+                              setShowSlashMenu(matches.length > 0);
+                              setSlashSelectedIndex(0);
+                            } else if (val === '/') {
+                              setSlashResults(quickReplies);
+                              setShowSlashMenu(quickReplies.length > 0);
+                              setSlashSelectedIndex(0);
+                            } else {
+                              setShowSlashMenu(false);
+                              setSlashResults([]);
+                            }
+                          }}
+                          placeholder="Escribe un mensaje o / para plantillas"
                           rows={1}
-                          className="w-full px-4 py-2.5 text-sm bg-gray-50 dark:bg-gray-700 border-0 rounded-xl focus:ring-2 focus:ring-primary resize-none"
+                          className="w-full px-[12px] py-[9px] text-[15px] bg-white dark:bg-[#1e1e1e] border-0 rounded-[8px] focus:ring-0 text-[#111b21] dark:text-gray-200 placeholder-[#667781] dark:placeholder-gray-500 resize-none"
                           style={{ minHeight: '42px', maxHeight: '120px' }}
                           onKeyDown={(e) => {
+                            // Slash menu navigation
+                            if (showSlashMenu && slashResults.length > 0) {
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                setSlashSelectedIndex(prev => Math.min(prev + 1, slashResults.length - 1));
+                                return;
+                              }
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setSlashSelectedIndex(prev => Math.max(prev - 1, 0));
+                                return;
+                              }
+                              if (e.key === 'Enter' || e.key === 'Tab') {
+                                e.preventDefault();
+                                const selected = slashResults[slashSelectedIndex];
+                                if (selected) {
+                                  setShowSlashMenu(false);
+                                  setSlashResults([]);
+                                  handleQuickReply(selected);
+                                }
+                                return;
+                              }
+                              if (e.key === 'Escape') {
+                                setShowSlashMenu(false);
+                                setSlashResults([]);
+                                return;
+                              }
+                            }
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
                               sendMessage();
@@ -1400,15 +1974,15 @@ const WhatsAppInboxPro: React.FC = () => {
                         />
                       </div>
                       
-                      {/* Send or Mic button (like mobile app) */}
+                      {/* Mic or Send button */}
                       <button
                         onClick={newMessage.trim() ? sendMessage : startRecording}
                         disabled={newMessage.trim() ? sendingMessage : isRecording}
-                        className="p-2.5 bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                        className="p-[6px] rounded-full transition-colors text-[#54656f] dark:text-gray-400 hover:text-[#111b21] dark:hover:text-gray-300"
                         title={newMessage.trim() ? 'Enviar mensaje' : 'Grabar nota de voz'}
                       >
                         {sendingMessage ? <Spinner size="sm" /> : (
-                          <Icon icon={newMessage.trim() ? "solar:plain-bold" : "solar:microphone-bold"} width={20} />
+                          <Icon icon={newMessage.trim() ? "solar:plain-bold" : "solar:microphone-bold"} width={24} />
                         )}
                       </button>
                     </div>
@@ -1417,92 +1991,126 @@ const WhatsAppInboxPro: React.FC = () => {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Icon icon="solar:chat-round-dots-bold-duotone" width={40} className="text-gray-400" />
+            <div className="flex-1 flex items-center justify-center relative z-10">
+              {instanceOptions.length === 0 && !loading ? (
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                    <Icon icon="solar:smartphone-bold-duotone" className="text-gray-400" width={32} />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    No hay conexiones configuradas
+                  </h3>
+                  <p className="text-gray-500 mt-2 max-w-md mx-auto">
+                    Crea una nueva conexión para empezar a usar WhatsApp Business y enviar mensajes a tus clientes.
+                  </p>
+                  <div className="flex justify-center mt-6">
+                    <button
+                      onClick={() => navigate('/apps/whatsapp/conexiones')}
+                      className="px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
+                    >
+                      <Icon icon="solar:add-circle-bold" width={18} />
+                      Crear Primera Conexión
+                    </button>
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Selecciona una conversación</h3>
-                <p className="text-sm text-gray-500 mt-1">Elige una conversación de la lista para comenzar</p>
-              </div>
+              ) : (
+                <div className="text-center">
+                  <div className="w-[320px] mx-auto mb-6">
+                    <Icon icon="solar:chat-round-dots-bold-duotone" width={80} className="text-gray-300 dark:text-gray-800 mx-auto" />
+                  </div>
+                  <h3 className="text-[28px] font-light text-gray-600 dark:text-white">Guro Live Chat</h3>
+                  <p className="text-[14px] text-gray-500 dark:text-gray-400 mt-3 max-w-[480px]">Envía y recibe mensajes. Selecciona una conversación para empezar.</p>
+                  <div className="mt-6 flex items-center justify-center gap-2 text-gray-400 dark:text-gray-500 text-[14px]">
+                    <Icon icon="solar:lock-keyhole-bold" width={14} />
+                    <span>Cifrado de extremo a extremo</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Panel de información del contacto */}
         {selectedConversation && showContactInfo && (
-          <div className="w-80 bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 flex flex-col overflow-hidden">
-            <div className="text-center mb-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3">
+          <div className="w-[340px] bg-[#f0f2f5] dark:bg-[#111] border-l border-[#d1d7db] dark:border-white/[0.06] flex flex-col overflow-hidden">
+            {/* Right panel header */}
+            <div className="h-[59px] px-6 bg-[#f0f2f5] dark:bg-[#161616] border-b border-[#d1d7db] dark:border-white/[0.06] flex items-center gap-6">
+              <button onClick={() => setShowContactInfo(false)} className="text-[#54656f] dark:text-gray-400 hover:text-[#111b21] dark:hover:text-white transition-colors">
+                <Icon icon="solar:close-circle-bold" width={24} />
+              </button>
+              <span className="text-[16px] text-[#111b21] dark:text-white">Info. del contacto</span>
+            </div>
+            <div className="text-center py-8 bg-white dark:bg-[#111]">
+              <div className="w-[200px] h-[200px] bg-[#dfe5e7] dark:bg-gray-700 rounded-full flex items-center justify-center text-[#54656f] dark:text-gray-300 text-6xl font-light mx-auto mb-4">
                 {(selectedConversation.contact_first_name || selectedConversation.contact_push_name)?.charAt(0).toUpperCase() || selectedConversation.phone.slice(-2)}
               </div>
-              <h4 className="font-semibold text-gray-900 dark:text-white">
+              <h4 className="text-[22px] font-normal text-[#111b21] dark:text-white">
                 {selectedConversation.contact_first_name && selectedConversation.contact_last_name
                   ? `${selectedConversation.contact_first_name} ${selectedConversation.contact_last_name}`
                   : selectedConversation.contact_push_name || selectedConversation.contact_name || 'Sin nombre'}
               </h4>
-              <p className="text-sm text-gray-500">{selectedConversation.phone}</p>
+              <p className="text-[14px] text-[#667781] dark:text-gray-400 mt-1">{selectedConversation.phone}</p>
             </div>
 
-            <div className="space-y-3 flex-1 overflow-y-auto">
+            <div className="space-y-0 flex-1 overflow-y-auto">
               {/* Datos de contacto capturados */}
               {(selectedConversation.contact_first_name || selectedConversation.contact_last_name || 
                 selectedConversation.contact_document_id || selectedConversation.contact_email ||
                 selectedConversation.contact_company || selectedConversation.contact_city) && (
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
-                  <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 mb-2 font-medium">
+                <div className="px-7 py-4 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                  <div className="flex items-center gap-2 text-xs text-primary mb-3 font-medium">
                     <Icon icon="solar:user-id-bold" width={14} />
                     Datos del contacto
                   </div>
                   <div className="space-y-2 text-sm">
                     {selectedConversation.contact_first_name && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Nombre:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{selectedConversation.contact_first_name}</span>
+                        <span className="text-[#667781] dark:text-gray-400">Nombre:</span>
+                        <span className="font-medium text-[#111b21] dark:text-white">{selectedConversation.contact_first_name}</span>
                       </div>
                     )}
                     {selectedConversation.contact_last_name && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Apellido:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{selectedConversation.contact_last_name}</span>
+                        <span className="text-[#667781] dark:text-gray-400">Apellido:</span>
+                        <span className="font-medium text-[#111b21] dark:text-white">{selectedConversation.contact_last_name}</span>
                       </div>
                     )}
                     {selectedConversation.contact_document_id && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Cédula:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{selectedConversation.contact_document_id}</span>
+                        <span className="text-[#667781] dark:text-gray-400">Cédula:</span>
+                        <span className="font-medium text-[#111b21] dark:text-white">{selectedConversation.contact_document_id}</span>
                       </div>
                     )}
                     {selectedConversation.contact_email && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Email:</span>
-                        <span className="font-medium text-gray-900 dark:text-white truncate ml-2">{selectedConversation.contact_email}</span>
+                        <span className="text-[#667781] dark:text-gray-400">Email:</span>
+                        <span className="font-medium text-[#111b21] dark:text-white truncate ml-2">{selectedConversation.contact_email}</span>
                       </div>
                     )}
                     {selectedConversation.contact_phone_secondary && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Tel. secundario:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{selectedConversation.contact_phone_secondary}</span>
+                        <span className="text-[#667781] dark:text-gray-400">Tel. secundario:</span>
+                        <span className="font-medium text-[#111b21] dark:text-white">{selectedConversation.contact_phone_secondary}</span>
                       </div>
                     )}
                     {selectedConversation.contact_company && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Empresa:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{selectedConversation.contact_company}</span>
+                        <span className="text-[#667781] dark:text-gray-400">Empresa:</span>
+                        <span className="font-medium text-[#111b21] dark:text-white">{selectedConversation.contact_company}</span>
                       </div>
                     )}
                     {selectedConversation.contact_city && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Ciudad:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{selectedConversation.contact_city}</span>
+                        <span className="text-[#667781] dark:text-gray-400">Ciudad:</span>
+                        <span className="font-medium text-[#111b21] dark:text-white">{selectedConversation.contact_city}</span>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+              <div className="px-7 py-3 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                <div className="flex items-center gap-2 text-xs text-[#667781] dark:text-gray-400 mb-1">
                   <Icon icon="solar:tag-bold" width={14} />
                   Estado
                 </div>
@@ -1511,43 +2119,43 @@ const WhatsAppInboxPro: React.FC = () => {
                 </Badge>
               </div>
 
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+              <div className="px-7 py-3 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                <div className="flex items-center gap-2 text-xs text-[#667781] dark:text-gray-400 mb-1">
                   <Icon icon="solar:buildings-bold" width={14} />
                   Departamento
                 </div>
-                <p className="font-medium text-sm text-gray-900 dark:text-white">{selectedConversation.department?.name || 'Sin asignar'}</p>
+                <p className="font-medium text-sm text-[#111b21] dark:text-white">{selectedConversation.department?.name || 'Sin asignar'}</p>
               </div>
 
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+              <div className="px-7 py-3 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                <div className="flex items-center gap-2 text-xs text-[#667781] dark:text-gray-400 mb-1">
                   <Icon icon="solar:user-bold" width={14} />
                   Agente
                 </div>
-                <p className="font-medium text-sm text-gray-900 dark:text-white">{selectedConversation.assigned_agent?.name || 'Sin asignar'}</p>
+                <p className="font-medium text-sm text-[#111b21] dark:text-white">{selectedConversation.assigned_agent?.name || 'Sin asignar'}</p>
               </div>
 
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+              <div className="px-7 py-3 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                <div className="flex items-center gap-2 text-xs text-[#667781] dark:text-gray-400 mb-1">
                   <Icon icon="solar:chat-round-dots-bold" width={14} />
                   Mensajes
                 </div>
-                <p className="font-medium text-sm text-gray-900 dark:text-white">{selectedConversation.message_count}</p>
+                <p className="font-medium text-sm text-[#111b21] dark:text-white">{selectedConversation.message_count}</p>
               </div>
 
               {selectedConversation.contact_notes && (
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
-                  <div className="flex items-center gap-2 text-xs text-yellow-600 dark:text-yellow-400 mb-1">
+                <div className="px-7 py-3 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                  <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 mb-1">
                     <Icon icon="solar:notes-bold" width={14} />
                     Notas del contacto
                   </div>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{selectedConversation.contact_notes}</p>
+                  <p className="text-sm text-[#3b4a54] dark:text-gray-200">{selectedConversation.contact_notes}</p>
                 </div>
               )}
 
               {selectedConversation.tags && selectedConversation.tags.length > 0 && (
-                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                <div className="px-7 py-3 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                  <div className="flex items-center gap-2 text-xs text-[#667781] dark:text-gray-400 mb-2">
                     <Icon icon="solar:tag-horizontal-bold" width={14} />
                     Etiquetas
                   </div>
@@ -1558,10 +2166,168 @@ const WhatsAppInboxPro: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Notas internas de la conversación */}
+              <div className="px-7 py-3 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-xs text-[#667781] dark:text-gray-400">
+                    <Icon icon="solar:document-add-bold" width={14} />
+                    Notas internas ({conversationNotes.length})
+                  </div>
+                  <button 
+                    onClick={() => setShowNoteModal(true)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    + Agregar
+                  </button>
+                </div>
+                {conversationNotes.length > 0 ? (
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                    {conversationNotes.map((note: any) => (
+                      <div key={note.id} className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30">
+                        <p className="text-xs text-[#3b4a54] dark:text-gray-200 whitespace-pre-wrap">{note.content}</p>
+                        <div className="flex items-center gap-2 mt-1.5 text-[10px] text-[#667781] dark:text-gray-500">
+                          <span className="font-medium">{note.user?.name || 'Sistema'}</span>
+                          <span>·</span>
+                          <span>{new Date(note.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Sin notas</p>
+                )}
+              </div>
+
+              {/* Pólizas del cliente */}
+              <div className="px-7 py-3 bg-white dark:bg-[#111] border-b border-[#e9edef] dark:border-white/[0.04]">
+                <div className="flex items-center gap-2 text-xs text-[#667781] dark:text-gray-400 mb-2">
+                  <Icon icon="solar:shield-check-bold" width={14} />
+                  Pólizas del cliente ({clientPolicies.length})
+                </div>
+                {clientPolicies.length > 0 ? (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                    {clientPolicies.map((pol: any) => {
+                      const isActive = pol.status === 'active' || pol.status === 'vigente';
+                      return (
+                        <div key={pol.id} className={`p-2.5 rounded-lg border ${isActive ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/30' : 'bg-gray-50 dark:bg-gray-800/30 border-gray-200 dark:border-gray-700/30'}`}>
+                          <div className="flex items-start justify-between gap-1">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className={`inline-block w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                <span className="text-xs font-semibold text-[#111b21] dark:text-white truncate">{pol.policy_number}</span>
+                              </div>
+                              <p className="text-[11px] text-[#667781] dark:text-gray-400 truncate">{pol.insurance_company} · {pol.product_name || pol.type || 'Póliza'}</p>
+                              {pol.premium_amount && (
+                                <p className="text-[11px] text-[#111b21] dark:text-gray-300 font-medium mt-0.5">
+                                  ${Number(pol.premium_amount).toLocaleString('es-CO')} {pol.payment_frequency || ''}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-gray-400 mt-0.5">
+                                {pol.start_date ? new Date(pol.start_date).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '?'} → {pol.end_date ? new Date(pol.end_date).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '?'}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+                                const lines = [
+                                  `*Póliza No. ${pol.policy_number}*`,
+                                  ``,
+                                  `*Aseguradora:* ${pol.insurance_company || 'N/A'}`,
+                                  `*Producto:* ${pol.product_name || pol.type || 'N/A'}`,
+                                  pol.premium_amount ? `*Prima:* $${Number(pol.premium_amount).toLocaleString('es-CO')}` : null,
+                                  pol.insured_amount ? `*Valor asegurado:* $${Number(pol.insured_amount).toLocaleString('es-CO')}` : null,
+                                  `*Inicio:* ${fmtDate(pol.start_date)}`,
+                                  `*Vencimiento:* ${fmtDate(pol.end_date)}`,
+                                  pol.payment_frequency ? `*Frecuencia de pago:* ${pol.payment_frequency}` : null,
+                                  pol.vehicle_plates ? `*Placas:* ${pol.vehicle_plates}` : null,
+                                  pol.beneficiary_name ? `*Beneficiario:* ${pol.beneficiary_name}` : null,
+                                  pol.insured_name ? `*Asegurado:* ${pol.insured_name}` : null,
+                                  `*Estado:* ${isActive ? 'Vigente' : pol.status || 'N/A'}`,
+                                ].filter(Boolean).join('\n');
+                                setNewMessage(lines);
+                                inputRef.current?.focus();
+                              }}
+                              className="p-1 text-primary hover:bg-primary/10 rounded shrink-0"
+                              title="Enviar info al chat"
+                            >
+                              <Icon icon="solar:plain-bold" width={14} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : clientData ? (
+                  <p className="text-xs text-gray-400 italic">Sin pólizas registradas</p>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-400 italic">No se encontró cliente con este teléfono</p>
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] text-gray-500 font-medium">Vincular con un cliente existente:</p>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={clientSearchQuery}
+                          onChange={async (e) => {
+                            const val = e.target.value;
+                            setClientSearchQuery(val);
+                            if (val.length < 2) { setClientSearchResults([]); return; }
+                            setSearchingClients(true);
+                            try {
+                              const results = await whatsappInboxService.searchClients(val);
+                              setClientSearchResults(results);
+                            } catch { setClientSearchResults([]); }
+                            setSearchingClients(false);
+                          }}
+                          placeholder="Buscar por nombre, cédula, email..."
+                          className="w-full px-2.5 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:ring-primary focus:border-primary"
+                        />
+                        {searchingClients && <div className="absolute right-2 top-1.5"><Icon icon="svg-spinners:ring-resize" width={14} className="text-primary" /></div>}
+                      </div>
+                      {clientSearchResults.length > 0 && (
+                        <div className="space-y-1 max-h-[180px] overflow-y-auto">
+                          {clientSearchResults.map((c: any) => (
+                            <button
+                              key={c.id}
+                              disabled={linkingClient}
+                              onClick={async () => {
+                                if (!selectedConversation) return;
+                                setLinkingClient(true);
+                                try {
+                                  const result = await whatsappInboxService.linkClientPhone(c.id, selectedConversation.phone);
+                                  setClientData(result.client);
+                                  setClientPolicies(result.policies);
+                                  setClientSearchQuery('');
+                                  setClientSearchResults([]);
+                                } catch (err: any) {
+                                  setError(err.message || 'Error al vincular');
+                                }
+                                setLinkingClient(false);
+                              }}
+                              className="w-full text-left p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-primary/50 hover:bg-primary/5 transition-colors"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium text-[#111b21] dark:text-white truncate">{c.first_name} {c.last_name}</p>
+                                  <p className="text-[10px] text-gray-400 truncate">
+                                    {c.document_number && `CC ${c.document_number}`}{c.email && ` · ${c.email}`}
+                                  </p>
+                                </div>
+                                <Icon icon="solar:link-bold" width={14} className="text-primary shrink-0 ml-1" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Acciones rápidas */}
-            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-2">
+            <div className="px-7 py-4 border-t border-[#e9edef] dark:border-white/[0.04] space-y-2">
               {selectedConversation.contact_phone_secondary && (
                 <Button color="light" size="sm" className="w-full justify-start">
                   <Icon icon="solar:phone-bold" className="mr-2" width={16} />
@@ -1584,33 +2350,42 @@ const WhatsAppInboxPro: React.FC = () => {
         )}
       </div>
 
-      {/* Modal de asignación */}
-      <Modal show={showAssignModal} onClose={() => setShowAssignModal(false)} size="md">
+      {/* Modal de transferencia a agente */}
+      <Modal show={showAssignModal} onClose={() => { setShowAssignModal(false); setSelectedTransferAgent(null); }} size="md">
         <Modal.Header>Transferir conversación</Modal.Header>
         <Modal.Body>
           <div className="space-y-4">
-            <p className="text-sm text-gray-500">Selecciona el departamento al que deseas transferir esta conversación:</p>
-            <div className="space-y-2">
-              {departments.map(dept => (
+            <p className="text-sm text-gray-500">Selecciona el usuario al que deseas transferir esta conversación:</p>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {brokerAgents.map(agent => (
                 <button
-                  key={dept.id}
-                  onClick={() => setSelectedDepartment(dept.id)}
-                  className={`w-full p-3 rounded-xl text-left transition-all ${
-                    selectedDepartment === dept.id 
+                  key={agent.id}
+                  onClick={() => setSelectedTransferAgent(agent.id)}
+                  className={`w-full p-3 rounded-xl text-left transition-all flex items-center gap-3 ${
+                    selectedTransferAgent === agent.id 
                       ? 'bg-primary/10 border-2 border-primary' 
                       : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border-2 border-transparent'
                   }`}
                 >
-                  <div className="font-medium">{dept.name}</div>
-                  {dept.description && <div className="text-xs text-gray-500">{dept.description}</div>}
+                  <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm">
+                    {agent.name?.charAt(0).toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{agent.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{agent.email}</div>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">{agent.role}</span>
                 </button>
               ))}
+              {brokerAgents.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-4">No hay agentes disponibles</p>
+              )}
             </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button color="gray" onClick={() => setShowAssignModal(false)}>Cancelar</Button>
-          <Button color="primary" onClick={handleAssignToDepartment} disabled={!selectedDepartment}>
+          <Button color="gray" onClick={() => { setShowAssignModal(false); setSelectedTransferAgent(null); }}>Cancelar</Button>
+          <Button color="primary" onClick={handleTransferToAgent} disabled={!selectedTransferAgent}>
             Transferir
           </Button>
         </Modal.Footer>
@@ -1634,6 +2409,157 @@ const WhatsAppInboxPro: React.FC = () => {
           <Button color="gray" onClick={() => setShowNoteModal(false)}>Cancelar</Button>
           <Button color="primary" onClick={handleAddNote} disabled={!noteText.trim()}>
             Guardar nota
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal de crear/editar respuesta rápida */}
+      <Modal show={showQuickReplyModal} onClose={() => { setShowQuickReplyModal(false); setEditingReply(null); setReplyMediaFile(null); setReplyMediaPreview(null); }} size="md">
+        <Modal.Header>{editingReply ? 'Editar respuesta rápida' : 'Nueva respuesta rápida'}</Modal.Header>
+        <Modal.Body>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Atajo (sin /)</label>
+              <input
+                type="text"
+                value={replyForm.shortcut}
+                onChange={(e) => setReplyForm(prev => ({ ...prev, shortcut: e.target.value.replace(/\s/g, '').toLowerCase() }))}
+                placeholder="ej: saludo, precios, horario"
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:ring-primary focus:border-primary"
+              />
+              <p className="text-xs text-gray-400 mt-1">Escribe /{replyForm.shortcut || 'atajo'} en el chat para usar esta plantilla</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Título</label>
+              <input
+                type="text"
+                value={replyForm.title}
+                onChange={(e) => setReplyForm(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="ej: Saludo inicial"
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:ring-primary focus:border-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mensaje</label>
+              <Textarea
+                value={replyForm.content}
+                onChange={(e) => setReplyForm(prev => ({ ...prev, content: e.target.value }))}
+                placeholder="Escribe el contenido del mensaje..."
+                rows={4}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Archivo adjunto (opcional)</label>
+              {(replyMediaPreview || replyForm.media_url) ? (
+                <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  {replyForm.media_type === 'image' && (replyMediaPreview || replyForm.media_url) ? (
+                    <img src={replyMediaPreview || replyForm.media_url} alt="" className="w-12 h-12 object-cover rounded" />
+                  ) : (
+                    <div className="w-12 h-12 bg-primary/10 rounded flex items-center justify-center shrink-0">
+                      <Icon icon={replyForm.media_type === 'audio' ? 'solar:music-note-bold' : replyForm.media_type === 'video' ? 'solar:video-frame-bold' : 'solar:document-bold'} width={20} className="text-primary" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{replyMediaFile?.name || 'Archivo adjunto'}</p>
+                    <p className="text-[10px] text-gray-400">{replyForm.media_type === 'audio' ? 'Audio MP3' : replyForm.media_type}</p>
+                    {replyForm.media_type === 'audio' && replyMediaPreview && replyMediaPreview.startsWith('data:') && (
+                      <audio controls className="mt-1 h-7 w-full max-w-[240px]" src={replyMediaPreview} />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { setReplyMediaFile(null); setReplyMediaPreview(null); setReplyForm(prev => ({ ...prev, media_url: '', media_type: '' })); }}
+                    className="p-1 text-red-400 hover:text-red-600"
+                  >
+                    <Icon icon="solar:trash-bin-trash-bold" width={16} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-primary/50 transition-colors">
+                  <Icon icon="solar:upload-bold" width={20} className="text-gray-400" />
+                  <span className="text-sm text-gray-500">Haz clic para adjuntar imagen, audio o archivo</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,audio/*,.mp3,.ogg,.wav,.m4a,.pdf,.doc,.docx,.xls,.xlsx"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setReplyMediaFile(file);
+                      let mtype = 'document';
+                      if (file.type.startsWith('image/')) mtype = 'image';
+                      else if (file.type.startsWith('video/')) mtype = 'video';
+                      else if (file.type.startsWith('audio/')) mtype = 'audio';
+                      setReplyForm(prev => ({ ...prev, media_type: mtype }));
+                      if (file.type.startsWith('image/') || file.type.startsWith('audio/')) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setReplyMediaPreview(ev.target?.result as string);
+                        reader.readAsDataURL(file);
+                      } else {
+                        setReplyMediaPreview('file-attached');
+                      }
+                    }}
+                  />
+                </label>
+              )}
+              {uploadingReplyMedia && <p className="text-xs text-primary animate-pulse">Subiendo archivo...</p>}
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => { setShowQuickReplyModal(false); setEditingReply(null); setReplyMediaFile(null); setReplyMediaPreview(null); }}>Cancelar</Button>
+          <Button 
+            color="primary" 
+            disabled={!replyForm.shortcut.trim() || !replyForm.title.trim() || (!replyForm.content.trim() && !replyForm.media_url && !replyMediaFile) || uploadingReplyMedia}
+            onClick={async () => {
+              try {
+                let mediaUrl = replyForm.media_url;
+                let mediaType = replyForm.media_type;
+                
+                // Si hay archivo nuevo, subirlo via el endpoint de media (reutilizar sendMediaMessage concept)
+                if (replyMediaFile && !mediaUrl) {
+                  setUploadingReplyMedia(true);
+                  // Subir como plantilla media: usar un conversation temporal o endpoint dedicado
+                  // Por ahora guardar como data URL para archivos pequeños, o como referencia
+                  const reader = new FileReader();
+                  const dataUrl = await new Promise<string>((resolve) => {
+                    reader.onload = (ev) => resolve(ev.target?.result as string);
+                    reader.readAsDataURL(replyMediaFile);
+                  });
+                  mediaUrl = dataUrl;
+                  setUploadingReplyMedia(false);
+                }
+
+                if (editingReply) {
+                  const updated = await whatsappInboxService.updateQuickReply(editingReply.id, {
+                    shortcut: replyForm.shortcut,
+                    title: replyForm.title,
+                    content: replyForm.content,
+                    media_url: mediaUrl || null,
+                    media_type: mediaType || null,
+                  });
+                  setQuickReplies(prev => prev.map(r => r.id === editingReply.id ? { ...r, shortcut: updated.shortcut, title: updated.title, message: updated.content || replyForm.content, content: updated.content, media_url: updated.media_url, media_type: updated.media_type } : r));
+                } else {
+                  const created = await whatsappInboxService.createQuickReply({
+                    shortcut: replyForm.shortcut,
+                    title: replyForm.title,
+                    content: replyForm.content,
+                    media_url: mediaUrl || null,
+                    media_type: mediaType || null,
+                  });
+                  setQuickReplies(prev => [...prev, { id: created.id, shortcut: created.shortcut, title: created.title, message: created.content || replyForm.content, content: created.content, media_url: created.media_url, media_type: created.media_type }]);
+                }
+                setShowQuickReplyModal(false);
+                setEditingReply(null);
+                setReplyForm({ shortcut: '', title: '', content: '', media_url: '', media_type: '' });
+                setReplyMediaFile(null);
+                setReplyMediaPreview(null);
+              } catch (err: any) {
+                setUploadingReplyMedia(false);
+                setError(err.message);
+              }
+            }}
+          >
+            {editingReply ? 'Guardar cambios' : 'Crear respuesta'}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -1751,6 +2677,47 @@ const WhatsAppInboxPro: React.FC = () => {
           </div>
         </Modal.Body>
       </Modal>
+      {/* Notificación de asignación de conversación */}
+      {assignmentNotification && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center transform animate-bounceIn">
+            <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${assignmentNotification.escalation ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-primary/10'}`}>
+              <Icon icon={assignmentNotification.escalation ? 'solar:danger-triangle-bold' : 'solar:chat-round-call-bold'} width={32} className={assignmentNotification.escalation ? 'text-orange-500' : 'text-primary'} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+              {assignmentNotification.escalation ? 'Conversación escalada' : 'Nueva conversación asignada'}
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              {assignmentNotification.assignedBy === 'Chatbot' ? 'El chatbot transfirió esta conversación' : 'Se te asignó una nueva conversación'}
+            </p>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 mb-4">
+              <p className="text-base font-semibold text-gray-900 dark:text-white">{assignmentNotification.contactName}</p>
+              <p className="text-sm text-gray-400">{assignmentNotification.phone}</p>
+              {assignmentNotification.reason && (
+                <p className="text-xs text-orange-500 mt-1.5 italic">{assignmentNotification.reason}</p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAssignmentNotification(null)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => {
+                  const conv = conversations.find(c => c.id === assignmentNotification.conversationId);
+                  if (conv) selectConversation(conv);
+                  setAssignmentNotification(null);
+                }}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary rounded-xl hover:bg-primary/90 transition-colors"
+              >
+                Abrir conversación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

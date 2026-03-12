@@ -406,7 +406,7 @@ export interface ComisionAseguradora {
 export interface Ramo {
   id: string;
   nombre: string;
-  subramo: string;
+  subramo: string[];
   calcular_iva_pri_a_pre: boolean;
   vista_mapa_oportunidad: boolean;
   comisiones_aseguradoras: ComisionAseguradora[];
@@ -417,7 +417,7 @@ export interface Ramo {
 
 export interface RamoCreate {
   nombre: string;
-  subramo: string;
+  subramo: string[];
   calcular_iva_pri_a_pre: boolean;
   vista_mapa_oportunidad: boolean;
   comisiones_aseguradoras: Omit<ComisionAseguradora, 'aseguradora_nombre'>[];

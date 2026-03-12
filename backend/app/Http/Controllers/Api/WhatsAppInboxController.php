@@ -9,6 +9,7 @@ use App\Models\WhatsAppDepartment;
 use App\Models\WhatsAppDepartmentMember;
 use App\Models\WhatsAppQuickReply;
 use App\Models\WhatsAppInstance;
+use App\Models\WhatsAppTag;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -211,6 +212,11 @@ class WhatsAppInboxController extends Controller
             $query->where('priority', $request->priority);
         }
 
+        if ($request->has('tag') && !empty($request->tag)) {
+            $tag = $request->tag;
+            $query->whereJsonContains('tags', $tag);
+        }
+
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -270,16 +276,58 @@ class WhatsAppInboxController extends Controller
             return response(['error' => 'No autorizado'], 403);
         }
 
-        $messages = $conversation->messages()
-            ->with('sender')
-            ->orderBy('created_at', 'asc')
-            ->orderBy('id', 'asc')
-            ->paginate($request->per_page ?? 50);
+        $perPage = $request->per_page ?? 50;
+
+        if ($request->boolean('latest', false)) {
+            // Traer los más recientes: ordenar DESC, paginar, luego revertir para orden cronológico
+            $messages = $conversation->messages()
+                ->with('sender')
+                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->paginate($perPage);
+            // Revertir el array de datos para que queden en orden cronológico (ASC)
+            $messages->setCollection($messages->getCollection()->reverse()->values());
+        } else {
+            $messages = $conversation->messages()
+                ->with('sender')
+                ->orderBy('created_at', 'asc')
+                ->orderBy('id', 'asc')
+                ->paginate($perPage);
+        }
 
         // Marcar como leídos
         if ($request->boolean('mark_read', true)) {
             $conversation->markAsRead();
         }
+
+        $response = $messages->toArray();
+        $response['conversation_window'] = $conversation->getConversationWindow();
+
+        return response($response, 200);
+    }
+
+    /**
+     * Buscar mensajes dentro de una conversación
+     */
+    public function searchMessages(WhatsAppConversation $conversation, Request $request): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker || $conversation->broker_id !== $broker->id) {
+            return response(['error' => 'No autorizado'], 403);
+        }
+
+        $search = $request->input('q', '');
+        if (strlen($search) < 2) {
+            return response(['data' => [], 'total' => 0], 200);
+        }
+
+        $messages = $conversation->messages()
+            ->with('sender')
+            ->where('content', 'like', "%{$search}%")
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->per_page ?? 20);
 
         return response($messages, 200);
     }
@@ -460,37 +508,99 @@ class WhatsAppInboxController extends Controller
         }
 
         try {
-            // Subir archivo a storage público
-            $path = $file->store('whatsapp-media', 'public');
-            
-            // URL relativa para guardar en DB (el frontend la resuelve)
-            $localRelativeUrl = '/storage/' . $path;
-            
-            // URL pública para enviar a Meta Cloud API
-            $publicMediaUrl = rtrim(config('app.url') ?: env('APP_URL', ''), '/') . $localRelativeUrl;
-            if (app()->environment('local', 'development', 'testing')) {
-                $ngrokUrl = env('NGROK_URL', '');
-                if ($ngrokUrl) {
-                    $publicMediaUrl = rtrim($ngrokUrl, '/') . $localRelativeUrl;
+            $mimeType = $file->getMimeType() ?: 'application/octet-stream';
+            $originalName = $file->getClientOriginalName();
+            $fileSize = $file->getSize();
+            $tempPath = $file->getRealPath();
+
+            // Convert webm audio to ogg/opus if possible (WhatsApp prefers ogg)
+            $convertedTempFile = null;
+            if ($messageType === 'audio' && str_ends_with(strtolower($originalName), '.webm')) {
+                // Check if shell functions are available (disabled in some PHP-FPM configs)
+                $canExec = function_exists('shell_exec') && !in_array('shell_exec', array_map('trim', explode(',', ini_get('disable_functions'))));
+                if ($canExec) {
+                    $oggTmp = sys_get_temp_dir() . '/' . pathinfo($originalName, PATHINFO_FILENAME) . '.ogg';
+                    $cmd = "ffmpeg -y -i " . escapeshellarg($tempPath) . " -c:a libopus -b:a 48k " . escapeshellarg($oggTmp) . " 2>&1";
+                    shell_exec($cmd);
+                    if (file_exists($oggTmp) && filesize($oggTmp) > 0) {
+                        Log::info('📤 [MEDIA] Converted webm to ogg', ['original' => $originalName]);
+                        $tempPath = $oggTmp;
+                        $originalName = pathinfo($originalName, PATHINFO_FILENAME) . '.ogg';
+                        $mimeType = 'audio/ogg; codecs=opus';
+                        $fileSize = filesize($oggTmp);
+                        $convertedTempFile = $oggTmp;
+                    }
+                } else {
+                    // shell_exec disabled: rename to .ogg and set correct mime
+                    // Meta Cloud API rejects audio/webm, only accepts: audio/ogg, audio/mpeg, audio/amr, audio/mp4, audio/aac
+                    Log::info('📤 [MEDIA] shell_exec disabled, renaming webm to ogg for Meta compatibility', ['original' => $originalName]);
+                    $originalName = pathinfo($originalName, PATHINFO_FILENAME) . '.ogg';
+                    $mimeType = 'audio/ogg; codecs=opus';
                 }
             }
 
-            // Corregir mime_type para audio (PHP detecta .webm como video/webm)
-            $mimeType = $file->getMimeType();
-            if ($messageType === 'audio' && str_contains($mimeType, 'video/')) {
-                $mimeType = str_replace('video/', 'audio/', $mimeType);
+            // Forzar mime_type compatible con Meta para todo audio
+            // Meta acepta: audio/aac, audio/mp4, audio/mpeg, audio/amr, audio/ogg (opus)
+            if ($messageType === 'audio') {
+                $acceptedMimes = ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'];
+                $isAccepted = false;
+                foreach ($acceptedMimes as $accepted) {
+                    if (str_starts_with($mimeType, $accepted)) {
+                        $isAccepted = true;
+                        break;
+                    }
+                }
+                if (!$isAccepted) {
+                    Log::info('📤 [MEDIA] Forcing audio mime to audio/mpeg for Meta', ['original_mime' => $mimeType]);
+                    $mimeType = 'audio/mpeg';
+                    // Renombrar extensión si es necesario
+                    if (!str_ends_with(strtolower($originalName), '.mp3') && !str_ends_with(strtolower($originalName), '.ogg') && !str_ends_with(strtolower($originalName), '.mp4')) {
+                        $originalName = pathinfo($originalName, PATHINFO_FILENAME) . '.mp3';
+                    }
+                }
             }
-            
-            \Log::info('📤 [MEDIA] Enviando archivo multimedia via Cloud API', [
+
+            // ── Upload to Firebase Storage (Google Cloud Storage) ──
+            $firebaseStorage = app(\Kreait\Firebase\Contract\Storage::class);
+            $bucket = $this->getFirebaseBucket($firebaseStorage);
+
+            $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $originalName);
+            $timestamp = now()->timestamp;
+            $gcsPath = "brokers/{$broker->id}/whatsapp-media/{$timestamp}-{$safeName}";
+
+            $stream = fopen($tempPath, 'r');
+            $object = $bucket->upload($stream, [
+                'name' => $gcsPath,
+                'metadata' => ['contentType' => $mimeType],
+            ]);
+            if (is_resource($stream)) fclose($stream);
+
+            // Clean up converted temp file
+            if ($convertedTempFile && file_exists($convertedTempFile)) {
+                @unlink($convertedTempFile);
+            }
+
+            // Generate public URL for Meta Cloud API to download
+            $publicMediaUrl = null;
+            try {
+                $publicMediaUrl = $object->signedUrl(new \DateTimeImmutable('+7 days'), ['version' => 'v4']);
+            } catch (\Throwable $e) {
+                // Fallback: Firebase Storage REST URL
+                $enc = rawurlencode($gcsPath);
+                $bn = $bucket->name();
+                $publicMediaUrl = "https://firebasestorage.googleapis.com/v0/b/{$bn}/o/{$enc}?alt=media";
+            }
+
+            Log::info('📤 [MEDIA] Archivo subido a GCS, enviando via Cloud API', [
                 'type' => $messageType,
-                'path' => $path,
-                'publicMediaUrl' => $publicMediaUrl,
-                'localRelativeUrl' => $localRelativeUrl,
+                'gcsPath' => $gcsPath,
+                'publicMediaUrl' => substr($publicMediaUrl, 0, 200),
                 'phone' => $conversation->phone,
                 'mimeType' => $mimeType,
+                'size' => $fileSize,
             ]);
 
-            // Usar WhatsAppCloudApiService para enviar (con URL pública para Meta)
+            // ── Send via WhatsApp Cloud API ──
             $cloudApi = app(\App\Services\WhatsAppCloudApiService::class);
             
             $result = null;
@@ -505,17 +615,17 @@ class WhatsAppInboxController extends Controller
                     $result = $cloudApi->sendAudio($instance, $conversation->phone, $publicMediaUrl);
                     break;
                 case 'document':
-                    $result = $cloudApi->sendDocumentMessage($instance, $conversation->phone, $publicMediaUrl, $file->getClientOriginalName(), $caption ?: null);
+                    $result = $cloudApi->sendDocumentMessage($instance, $conversation->phone, $publicMediaUrl, $originalName, $caption ?: null);
                     break;
             }
 
-            \Log::info('📤 [MEDIA] Resultado Cloud API', ['result' => $result]);
+            Log::info('📤 [MEDIA] Resultado Cloud API', ['result' => $result]);
 
             $messageId = $result['message_id'] ?? ($result['messages'][0]['id'] ?? null);
             $success = ($result['success'] ?? false) || isset($result['messages']);
 
             if ($success) {
-                // Guardar mensaje con URL relativa (el frontend la resuelve)
+                // Save message with GCS public URL (accessible from frontend)
                 $message = $conversation->addMessage([
                     'message_id' => $messageId,
                     'direction' => 'outgoing',
@@ -525,10 +635,11 @@ class WhatsAppInboxController extends Controller
                     'content' => $caption ?: "[{$messageType}]",
                     'media' => [
                         'type' => $messageType,
-                        'url' => $localRelativeUrl,
-                        'filename' => $file->getClientOriginalName(),
+                        'url' => $publicMediaUrl,
+                        'gcs_path' => $gcsPath,
+                        'filename' => $originalName,
                         'mime_type' => $mimeType,
-                        'size' => $file->getSize(),
+                        'size' => $fileSize,
                     ],
                     'status' => 'sent',
                 ]);
@@ -541,16 +652,97 @@ class WhatsAppInboxController extends Controller
 
             return response([
                 'error' => 'Error al enviar archivo via Cloud API',
-                'details' => $result['error']['message'] ?? json_encode($result),
+                'details' => $result['error'] ?? $result['error_details'] ?? json_encode($result),
             ], 400);
 
         } catch (\Exception $e) {
-            Log::error('Error enviando archivo multimedia desde inbox', [
+            Log::error('❌ [MEDIA] Error enviando archivo multimedia desde inbox', [
                 'conversation_id' => $conversation->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response(['error' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Get Firebase Storage bucket (same pattern as ClienteDocumentsController)
+     */
+    private function getFirebaseBucket($firebaseStorage)
+    {
+        $bucketName = env('FIREBASE_STORAGE_BUCKET') ?: config('firebase.storage_bucket');
+        $projectId = config('firebase.project_id') ?: env('FIREBASE_PROJECT_ID');
+        $candidates = array_filter([
+            $bucketName,
+            $projectId ? ($projectId . '.appspot.com') : null,
+            $projectId ? ($projectId . '.firebasestorage.app') : null,
+        ]);
+        foreach ($candidates as $name) {
+            try {
+                $b = $firebaseStorage->getBucket($name);
+                if (method_exists($b, 'exists') && $b->exists()) return $b;
+            } catch (\Throwable $e) {}
+        }
+        return $firebaseStorage->getBucket();
+    }
+
+    /**
+     * Proxy para servir archivos multimedia de Firebase Storage.
+     * Recibe el gcs_path codificado en base64 y lo sirve con el content-type correcto.
+     * GET /api/saas/whatsapp-inbox/media/{encodedPath}
+     */
+    public function proxyMedia(Request $request, string $encodedPath): \Symfony\Component\HttpFoundation\Response
+    {
+        try {
+            $gcsPath = base64_decode($encodedPath);
+            if (!$gcsPath || !str_contains($gcsPath, 'brokers/')) {
+                return response('Not found', 404);
+            }
+
+            // Verificar que el usuario autenticado pertenece al broker del path
+            [$user, $broker] = $this->resolveUserAndBroker($request);
+            if (!$broker) {
+                return response('No autorizado', 403);
+            }
+
+            // Extraer broker_id del path (brokers/{id}/...)
+            if (preg_match('/^brokers\/(\d+)\//', $gcsPath, $matches)) {
+                $pathBrokerId = (int) $matches[1];
+                if ($pathBrokerId !== $broker->id) {
+                    return response('No autorizado', 403);
+                }
+            }
+
+            $firebaseStorage = app(\Kreait\Firebase\Contract\Storage::class);
+            $bucket = $this->getFirebaseBucket($firebaseStorage);
+            $object = $bucket->object($gcsPath);
+
+            if (!$object->exists()) {
+                return response('Not found', 404);
+            }
+
+            $body = $object->downloadAsString();
+            $info = $object->info();
+            $contentType = $info['contentType'] ?? $info['metadata']['contentType'] ?? 'application/octet-stream';
+
+            // Fix: si es .bin pero el audio es ogg, corregir content-type
+            if (str_ends_with($gcsPath, '.bin') && str_contains($gcsPath, 'whatsapp-media')) {
+                // Detectar audio por magic bytes (OggS)
+                if (substr($body, 0, 4) === 'OggS') {
+                    $contentType = 'audio/ogg';
+                }
+            }
+
+            return response($body, 200, [
+                'Content-Type' => $contentType,
+                'Content-Length' => strlen($body),
+                'Cache-Control' => 'public, max-age=86400',
+                'Content-Disposition' => 'inline',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('❌ [MEDIA PROXY] Error', ['path' => $encodedPath, 'error' => $e->getMessage()]);
+            return response('Error: ' . $e->getMessage(), 500);
         }
     }
 
@@ -621,6 +813,20 @@ class WhatsAppInboxController extends Controller
     // NOTAS
     // ==========================================
 
+    public function getNotes(WhatsAppConversation $conversation, Request $request): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker || $conversation->broker_id !== $broker->id) {
+            return response(['error' => 'No autorizado'], 403);
+        }
+
+        $notes = $conversation->notes()->with('user:id,name,email')->orderBy('created_at', 'desc')->get();
+
+        return response(['notes' => $notes], 200);
+    }
+
     public function addNote(WhatsAppConversation $conversation, Request $request): Response
     {
         [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
@@ -645,8 +851,184 @@ class WhatsAppInboxController extends Controller
     }
 
     // ==========================================
+    // CLIENTE + PÓLIZAS (desde inbox por teléfono)
+    // ==========================================
+
+    public function getClientByPhone(Request $request): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker) {
+            return response(['error' => 'Broker no encontrado'], 403);
+        }
+
+        $phone = $request->query('phone');
+        if (!$phone) {
+            return response(['error' => 'Teléfono requerido'], 400);
+        }
+
+        // Normalizar: quitar +, espacios, guiones
+        $phoneCleaned = preg_replace('/[^0-9]/', '', $phone);
+        // Buscar por últimos 10 dígitos (para coincidir sin código de país)
+        $phoneSuffix = substr($phoneCleaned, -10);
+
+        $client = \App\Models\Cliente::where('broker_id', $broker->id)
+            ->where(function ($q) use ($phoneCleaned, $phoneSuffix) {
+                $q->where('phone', 'like', "%{$phoneSuffix}")
+                  ->orWhere('mobile_phone', 'like', "%{$phoneSuffix}");
+            })
+            ->first();
+
+        if (!$client) {
+            return response(['client' => null, 'policies' => []], 200);
+        }
+
+        $policies = \App\Models\Poliza::where('client_id', $client->id)
+            ->where('broker_id', $broker->id)
+            ->whereNull('deleted_at')
+            ->select([
+                'id', 'policy_number', 'type', 'product_name', 'insurance_company',
+                'status', 'start_date', 'end_date', 'premium_amount', 'insured_amount',
+                'payment_frequency', 'beneficiary_name', 'vehicle_plates',
+                'client_name', 'insured_name',
+            ])
+            ->orderBy('end_date', 'desc')
+            ->get();
+
+        return response([
+            'client' => [
+                'id' => $client->id,
+                'first_name' => $client->first_name,
+                'last_name' => $client->last_name,
+                'document_number' => $client->document_number,
+                'email' => $client->email,
+                'phone' => $client->phone,
+                'mobile_phone' => $client->mobile_phone,
+                'city' => $client->city,
+                'address' => $client->address,
+            ],
+            'policies' => $policies,
+        ], 200);
+    }
+
+    public function searchClients(Request $request): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker) {
+            return response(['error' => 'Broker no encontrado'], 403);
+        }
+
+        $q = $request->query('q', '');
+        if (strlen($q) < 2) {
+            return response(['clients' => []], 200);
+        }
+
+        $clients = \App\Models\Cliente::where('broker_id', $broker->id)
+            ->where(function ($query) use ($q) {
+                $query->where('first_name', 'like', "%{$q}%")
+                      ->orWhere('last_name', 'like', "%{$q}%")
+                      ->orWhere('document_number', 'like', "%{$q}%")
+                      ->orWhere('email', 'like', "%{$q}%")
+                      ->orWhere('phone', 'like', "%{$q}%")
+                      ->orWhere('mobile_phone', 'like', "%{$q}%");
+            })
+            ->select(['id', 'first_name', 'last_name', 'document_number', 'email', 'phone', 'mobile_phone'])
+            ->limit(10)
+            ->get();
+
+        return response(['clients' => $clients], 200);
+    }
+
+    public function linkClientPhone(Request $request): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker) {
+            return response(['error' => 'Broker no encontrado'], 403);
+        }
+
+        $validated = $request->validate([
+            'client_id' => 'required|integer',
+            'phone' => 'required|string',
+        ]);
+
+        $client = \App\Models\Cliente::where('broker_id', $broker->id)
+            ->where('id', $validated['client_id'])
+            ->first();
+
+        if (!$client) {
+            return response(['error' => 'Cliente no encontrado'], 404);
+        }
+
+        // Guardar el teléfono en mobile_phone si está vacío, sino en phone
+        if (empty($client->mobile_phone)) {
+            $client->mobile_phone = $validated['phone'];
+        } elseif (empty($client->phone)) {
+            $client->phone = $validated['phone'];
+        } else {
+            // Ambos tienen valor, actualizar mobile_phone
+            $client->mobile_phone = $validated['phone'];
+        }
+        $client->save();
+
+        // Retornar cliente actualizado con pólizas
+        $policies = \App\Models\Poliza::where('client_id', $client->id)
+            ->where('broker_id', $broker->id)
+            ->whereNull('deleted_at')
+            ->select([
+                'id', 'policy_number', 'type', 'product_name', 'insurance_company',
+                'status', 'start_date', 'end_date', 'premium_amount', 'insured_amount',
+                'payment_frequency', 'beneficiary_name', 'vehicle_plates',
+                'client_name', 'insured_name',
+            ])
+            ->orderBy('end_date', 'desc')
+            ->get();
+
+        return response([
+            'message' => 'Cliente vinculado correctamente',
+            'client' => [
+                'id' => $client->id,
+                'first_name' => $client->first_name,
+                'last_name' => $client->last_name,
+                'document_number' => $client->document_number,
+                'email' => $client->email,
+                'phone' => $client->phone,
+                'mobile_phone' => $client->mobile_phone,
+                'city' => $client->city,
+                'address' => $client->address,
+            ],
+            'policies' => $policies,
+        ], 200);
+    }
+
+    // ==========================================
     // RESPUESTAS RÁPIDAS
     // ==========================================
+
+    /**
+     * Listar agentes/usuarios del broker (para transferir conversaciones)
+     */
+    public function getAgents(Request $request): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker) {
+            return response(['error' => 'Broker no encontrado'], 403);
+        }
+
+        $agents = \App\Models\User::where('broker_id', $broker->id)
+            ->where('is_active', true)
+            ->select('id', 'name', 'email', 'role')
+            ->orderBy('name')
+            ->get();
+
+        return response(['agents' => $agents], 200);
+    }
 
     public function getQuickReplies(Request $request): Response
     {
@@ -684,7 +1066,9 @@ class WhatsAppInboxController extends Controller
         $validated = $request->validate([
             'shortcut' => 'required|string|max:50',
             'title' => 'required|string|max:255',
-            'content' => 'required|string',
+            'content' => 'nullable|string',
+            'media_url' => 'nullable|string',
+            'media_type' => 'nullable|string|in:image,document,audio,video',
             'department_id' => 'nullable|exists:whatsapp_departments,id',
         ]);
 
@@ -694,6 +1078,141 @@ class WhatsAppInboxController extends Controller
         ]);
 
         return response(['quick_reply' => $reply], 201);
+    }
+
+    public function updateQuickReply(Request $request, WhatsAppQuickReply $quickReply): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker || $quickReply->broker_id !== $broker->id) {
+            return response(['error' => 'No autorizado'], 403);
+        }
+
+        $validated = $request->validate([
+            'shortcut' => 'sometimes|string|max:50',
+            'title' => 'sometimes|string|max:255',
+            'content' => 'nullable|string',
+            'media_url' => 'nullable|string',
+            'media_type' => 'nullable|string|in:image,document,audio,video',
+        ]);
+
+        $quickReply->update($validated);
+
+        return response(['quick_reply' => $quickReply->fresh()], 200);
+    }
+
+    public function deleteQuickReply(Request $request, WhatsAppQuickReply $quickReply): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker || $quickReply->broker_id !== $broker->id) {
+            return response(['error' => 'No autorizado'], 403);
+        }
+
+        $quickReply->delete();
+
+        return response(['message' => 'Eliminada'], 200);
+    }
+
+    // ==========================================
+    // DASHBOARD
+    // ==========================================
+
+    public function getDashboard(Request $request): Response
+    {
+        [$user, $broker_resolved] = $this->resolveUserAndBroker($request);
+        $broker = $broker_resolved;
+
+        if (!$broker) {
+            return response(['error' => 'Broker no encontrado'], 403);
+        }
+
+        $brokerId = $broker->id;
+
+        // ── Instances ──
+        $instances = WhatsAppInstance::where('broker_id', $brokerId)->get();
+        $instancesData = $instances->map(function ($i) {
+            return [
+                'id' => $i->id,
+                'instance_id' => $i->instance_id,
+                'connection_type' => $i->connection_type,
+                'phone_number' => $i->phone_number,
+                'is_active' => (bool) $i->is_active,
+                'status' => $i->status,
+                'phone_connected' => (bool) ($i->phone_number && $i->is_active),
+            ];
+        });
+        $connectedCount = $instancesData->where('phone_connected', true)->count();
+
+        // ── Conversations ──
+        $totalConversations = WhatsAppConversation::where('broker_id', $brokerId)->count();
+        $activeConversations = WhatsAppConversation::where('broker_id', $brokerId)->active()->count();
+        $pendingConversations = WhatsAppConversation::where('broker_id', $brokerId)->where('status', 'pending')->count();
+        $conversationsToday = WhatsAppConversation::where('broker_id', $brokerId)
+            ->whereDate('created_at', today())->count();
+        $unassigned = WhatsAppConversation::where('broker_id', $brokerId)
+            ->whereNull('assigned_to')
+            ->whereNotIn('status', ['closed', 'resolved'])
+            ->count();
+
+        // ── Messages (last 7 days) ──
+        $messagesLast7Days = WhatsAppConversationMessage::whereHas('conversation', function ($q) use ($brokerId) {
+            $q->where('broker_id', $brokerId);
+        })->where('created_at', '>=', now()->subDays(7))->count();
+
+        $messagesIncoming7d = WhatsAppConversationMessage::whereHas('conversation', function ($q) use ($brokerId) {
+            $q->where('broker_id', $brokerId);
+        })->where('created_at', '>=', now()->subDays(7))->where('direction', 'incoming')->count();
+
+        $messagesOutgoing7d = WhatsAppConversationMessage::whereHas('conversation', function ($q) use ($brokerId) {
+            $q->where('broker_id', $brokerId);
+        })->where('created_at', '>=', now()->subDays(7))->where('direction', 'outgoing')->count();
+
+        // ── Messages per day (last 7 days chart) ──
+        $messagesPerDay = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = now()->subDays($i)->toDateString();
+            $count = WhatsAppConversationMessage::whereHas('conversation', function ($q) use ($brokerId) {
+                $q->where('broker_id', $brokerId);
+            })->whereDate('created_at', $date)->count();
+            $messagesPerDay[] = ['date' => $date, 'count' => $count];
+        }
+
+        // ── Chatbots ──
+        $totalChatbots = \App\Models\Chatbot::where('broker_id', $brokerId)->count();
+        $activeChatbots = \App\Models\Chatbot::where('broker_id', $brokerId)->where('is_active', true)->count();
+
+        // ── Campaigns ──
+        $totalCampaigns = \App\Models\Campaign::where('broker_id', $brokerId)->count();
+
+        // ── Recent conversations (last 5 with activity) ──
+        $recentConversations = WhatsAppConversation::where('broker_id', $brokerId)
+            ->orderBy('last_message_at', 'desc')
+            ->limit(5)
+            ->get(['id', 'phone', 'contact_name', 'contact_push_name', 'status', 'unread_count', 'last_message_at', 'assigned_to']);
+
+        return response([
+            'instances' => $instancesData,
+            'stats' => [
+                'total_instances' => $instances->count(),
+                'connected_instances' => $connectedCount,
+                'total_conversations' => $totalConversations,
+                'active_conversations' => $activeConversations,
+                'pending_conversations' => $pendingConversations,
+                'conversations_today' => $conversationsToday,
+                'unassigned' => $unassigned,
+                'messages_last_7_days' => $messagesLast7Days,
+                'messages_incoming_7d' => $messagesIncoming7d,
+                'messages_outgoing_7d' => $messagesOutgoing7d,
+                'total_chatbots' => $totalChatbots,
+                'active_chatbots' => $activeChatbots,
+                'total_campaigns' => $totalCampaigns,
+            ],
+            'messages_per_day' => $messagesPerDay,
+            'recent_conversations' => $recentConversations,
+        ], 200);
     }
 
     // ==========================================
@@ -987,5 +1506,122 @@ class WhatsAppInboxController extends Controller
 
         $headers['Content-Length'] = $size;
         return response()->file($path, $headers);
+    }
+
+    // ==========================================
+    // ETIQUETAS (TAGS)
+    // ==========================================
+
+    public function getTags(Request $request): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker) return response(['error' => 'Broker no encontrado'], 403);
+
+        $tags = WhatsAppTag::where('broker_id', $broker->id)->orderBy('name')->get();
+        return response(['tags' => $tags], 200);
+    }
+
+    public function createTag(Request $request): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker) return response(['error' => 'Broker no encontrado'], 403);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:50',
+            'color' => 'sometimes|string|max:20',
+        ]);
+
+        $existing = WhatsAppTag::where('broker_id', $broker->id)
+            ->where('name', $validated['name'])->first();
+        if ($existing) {
+            return response(['error' => 'Ya existe una etiqueta con ese nombre', 'tag' => $existing], 422);
+        }
+
+        $tag = WhatsAppTag::create([
+            'broker_id' => $broker->id,
+            'name' => $validated['name'],
+            'color' => $validated['color'] ?? 'blue',
+        ]);
+
+        return response(['tag' => $tag, 'message' => 'Etiqueta creada'], 201);
+    }
+
+    public function updateTag(WhatsAppTag $tag, Request $request): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker || $tag->broker_id !== $broker->id) {
+            return response(['error' => 'No autorizado'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:50',
+            'color' => 'sometimes|string|max:20',
+        ]);
+
+        $tag->update($validated);
+        return response(['tag' => $tag, 'message' => 'Etiqueta actualizada'], 200);
+    }
+
+    public function deleteTag(WhatsAppTag $tag, Request $request): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker || $tag->broker_id !== $broker->id) {
+            return response(['error' => 'No autorizado'], 403);
+        }
+
+        $tagName = $tag->name;
+
+        // Remover la etiqueta de todas las conversaciones que la tengan
+        WhatsAppConversation::where('broker_id', $broker->id)
+            ->whereJsonContains('tags', $tagName)
+            ->each(function ($conv) use ($tagName) {
+                $tags = $conv->tags ?? [];
+                $conv->update(['tags' => array_values(array_filter($tags, fn($t) => $t !== $tagName))]);
+            });
+
+        $tag->delete();
+        return response(['message' => 'Etiqueta eliminada'], 200);
+    }
+
+    public function addTagToConversation(WhatsAppConversation $conversation, Request $request): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker || $conversation->broker_id !== $broker->id) {
+            return response(['error' => 'No autorizado'], 403);
+        }
+
+        $validated = $request->validate(['tag' => 'required|string|max:50']);
+        $tagName = $validated['tag'];
+
+        // Auto-crear tag si no existe
+        WhatsAppTag::firstOrCreate(
+            ['broker_id' => $broker->id, 'name' => $tagName],
+            ['color' => 'blue']
+        );
+
+        $tags = $conversation->tags ?? [];
+        if (!in_array($tagName, $tags)) {
+            $tags[] = $tagName;
+            $conversation->update(['tags' => $tags]);
+        }
+
+        return response(['tags' => $conversation->fresh()->tags, 'message' => 'Etiqueta agregada'], 200);
+    }
+
+    public function removeTagFromConversation(WhatsAppConversation $conversation, Request $request): Response
+    {
+        [$user, $broker] = $this->resolveUserAndBroker($request);
+        if (!$broker || $conversation->broker_id !== $broker->id) {
+            return response(['error' => 'No autorizado'], 403);
+        }
+
+        $validated = $request->validate(['tag' => 'required|string|max:50']);
+        $tagName = $validated['tag'];
+
+        $tags = $conversation->tags ?? [];
+        $tags = array_values(array_filter($tags, fn($t) => $t !== $tagName));
+        $conversation->update(['tags' => $tags]);
+
+        return response(['tags' => $conversation->fresh()->tags, 'message' => 'Etiqueta removida'], 200);
     }
 }

@@ -428,7 +428,10 @@ class OnboardingController extends Controller
                 ], 401);
             }
 
-            $broker = $user->getPrimaryBroker();
+            // Support both User (getPrimaryBroker) and EmpleadoBroker (->broker)
+            $broker = method_exists($user, 'getPrimaryBroker')
+                ? $user->getPrimaryBroker()
+                : ($user->broker ?? null);
             if (!$broker) {
                 return response()->json([
                     'success' => false,
@@ -445,6 +448,8 @@ class OnboardingController extends Controller
                 'phone' => $broker->phone,
                 'address' => $broker->address,
                 'city' => $broker->city,
+                'email' => $broker->email,
+                'logo_url' => $broker->getLogoUrl(),
             ]);
         } catch (\Exception $e) {
             Log::error('Error obteniendo perfil del broker: ' . $e->getMessage());
@@ -470,7 +475,10 @@ class OnboardingController extends Controller
                 ], 401);
             }
 
-            $broker = $user->getPrimaryBroker();
+            // Support both User (getPrimaryBroker) and EmpleadoBroker (->broker)
+            $broker = method_exists($user, 'getPrimaryBroker')
+                ? $user->getPrimaryBroker()
+                : ($user->broker ?? null);
             if (!$broker) {
                 return response()->json([
                     'success' => false,

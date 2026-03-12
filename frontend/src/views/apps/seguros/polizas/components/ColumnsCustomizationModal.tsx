@@ -87,6 +87,13 @@ const AVAILABLE_COLUMNS: ColumnOption[] = [
     description: 'Método de pago',
     icon: 'solar:card-bold',
     defaultVisible: false
+  },
+  {
+    key: 'renovaciones',
+    label: 'Renovaciones',
+    description: 'Número de renovaciones',
+    icon: 'solar:refresh-bold',
+    defaultVisible: false
   }
 ];
 

@@ -109,6 +109,31 @@ class ChatbotProcessorService
             return ['processed' => false, 'reason' => 'No active chatbot for instance', 'conversation_id' => $conversation->id];
         }
 
+        // Verificar horario de atención
+        if ($chatbot->business_hours_enabled && !$chatbot->isWithinBusinessHours()) {
+            $outOfHoursMsg = $chatbot->out_of_hours_message;
+            if ($outOfHoursMsg) {
+                // Enviar mensaje fuera de horario (máximo 1 vez cada 30 min por conversación)
+                $cacheKey = "out_of_hours_{$instanceId}_{$phone}";
+                if (!Cache::has($cacheKey)) {
+                    $this->bridge->sendMessage($instanceId, $phone, $outOfHoursMsg);
+                    $conversation->addMessage([
+                        'direction' => 'outgoing',
+                        'sender_type' => 'bot',
+                        'message_type' => 'text',
+                        'content' => $outOfHoursMsg,
+                        'status' => 'sent',
+                    ]);
+                    Cache::put($cacheKey, true, now()->addMinutes(30));
+                }
+            }
+            Log::info("🕐 [CHATBOT] Fuera de horario de atención", [
+                'chatbot_id' => $chatbot->id,
+                'timezone' => $chatbot->timezone,
+            ]);
+            return ['processed' => false, 'reason' => 'Outside business hours', 'conversation_id' => $conversation->id];
+        }
+
         // Verificar si hay una sesión activa (BD o Cache según configuración)
         $session = $this->getSession($chatbot->id, $instanceId, $phone);
         
@@ -260,16 +285,39 @@ class ChatbotProcessorService
 
     /**
      * Verificar si es el primer mensaje del usuario
+     * Usa ChatbotTriggerLog (BD persistente) + cache para performance
      */
     protected function isFirstMessage(int $chatbotId, string $phone): bool
     {
         $cacheKey = "first_message_{$chatbotId}_{$phone}";
         
+        // Fast path: cache dice que ya interactuó
         if (Cache::has($cacheKey)) {
             return false;
         }
 
-        // NO marcar aquí - se marca cuando se usa el trigger
+        // Verificar en BD: ¿hay algún trigger log de first_message para este contacto+chatbot?
+        $hasLog = ChatbotTriggerLog::whereHas('trigger', function ($q) use ($chatbotId) {
+            $q->where('chatbot_id', $chatbotId)
+              ->where('trigger_type', 'first_message');
+        })->where('contact_phone', $phone)->exists();
+
+        if ($hasLog) {
+            // Existe en BD pero no en cache — restaurar cache y retornar false
+            Cache::put($cacheKey, true, now()->addHours(24));
+            return false;
+        }
+
+        // Verificar también si hay sesiones previas (otro indicador de interacción previa)
+        $hasSession = ChatbotSession::where('chatbot_id', $chatbotId)
+            ->where('contact_phone', $phone)
+            ->exists();
+
+        if ($hasSession) {
+            Cache::put($cacheKey, true, now()->addHours(24));
+            return false;
+        }
+
         return true;
     }
     
@@ -578,9 +626,27 @@ class ChatbotProcessorService
                 break;
             }
 
-            // Ir al siguiente nodo
-            if ($currentNode->next_node_id && isset($nodeMap[$currentNode->next_node_id])) {
-                $currentNode = $nodeMap[$currentNode->next_node_id];
+            // Ir al siguiente nodo (con soporte cross-flow)
+            if ($currentNode->next_node_id) {
+                if (isset($nodeMap[$currentNode->next_node_id])) {
+                    $currentNode = $nodeMap[$currentNode->next_node_id];
+                } else {
+                    // Cross-flow: el siguiente nodo está en otro flujo
+                    $crossNode = ChatbotNode::find($currentNode->next_node_id);
+                    if ($crossNode) {
+                        $crossFlow = ChatbotFlow::find($crossNode->flow_id);
+                        if ($crossFlow && $crossFlow->chatbot_id == $session['chatbot_id']) {
+                            $session['flow_id'] = $crossFlow->id;
+                            $nodes = ChatbotNode::where('flow_id', $crossFlow->id)->get();
+                            $nodeMap = $nodes->keyBy('id');
+                            $currentNode = $nodeMap[$crossNode->id] ?? null;
+                        } else {
+                            $currentNode = null;
+                        }
+                    } else {
+                        $currentNode = null;
+                    }
+                }
             } else {
                 $currentNode = null;
             }
@@ -685,9 +751,12 @@ class ChatbotProcessorService
                 $options = $config['options'] ?? [];
                 $errorMessage = $config['error_message'] ?? null; // Mensaje de error personalizado
                 
-                $optionsText = $text . "\n\n";
+                $numberEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
+                $optionsText = $text . "\n";
                 foreach ($options as $i => $opt) {
-                    $optionsText .= ($i + 1) . ". " . ($opt['text'] ?? $opt['label'] ?? "Opción " . ($i + 1)) . "\n";
+                    $emoji = $numberEmojis[$i] ?? (($i + 1) . '.');
+                    $optionText = $opt['text'] ?? $opt['label'] ?? "Opción " . ($i + 1);
+                    $optionsText .= "\n" . $emoji . " " . $optionText;
                 }
 
                 $result = $this->bridge->sendMessage($instanceId, $phone, $optionsText);
@@ -816,6 +885,37 @@ class ChatbotProcessorService
                 }
                 break;
 
+            case 'add_tag':
+                // Agregar etiqueta a la conversación
+                $tagName = $config['tag_name'] ?? $config['tag'] ?? null;
+                if ($tagName) {
+                    $tagName = $this->replaceVariables($tagName, $session['variables']);
+                    $tags = $conversation->tags ?? [];
+                    if (!in_array($tagName, $tags)) {
+                        $tags[] = $tagName;
+                        $conversation->update(['tags' => $tags]);
+                    }
+                    // Auto-crear tag en el catálogo del broker
+                    $tagColor = $config['tag_color'] ?? 'blue';
+                    \App\Models\WhatsAppTag::firstOrCreate(
+                        ['broker_id' => $conversation->broker_id, 'name' => $tagName],
+                        ['color' => $tagColor]
+                    );
+                    Log::info('🏷️ [CHATBOT] Tag agregado', ['tag' => $tagName, 'conversation_id' => $conversation->id]);
+                }
+                break;
+
+            case 'remove_tag':
+                // Quitar etiqueta de la conversación
+                $tagName = $config['tag_name'] ?? $config['tag'] ?? null;
+                if ($tagName) {
+                    $tagName = $this->replaceVariables($tagName, $session['variables']);
+                    $tags = $conversation->tags ?? [];
+                    $tags = array_values(array_filter($tags, fn($t) => $t !== $tagName));
+                    $conversation->update(['tags' => $tags]);
+                }
+                break;
+
             case 'delay':
                 // Esperar antes de continuar (en segundos)
                 $seconds = min((int)($config['seconds'] ?? 1), 10); // Max 10 segundos
@@ -828,6 +928,13 @@ class ChatbotProcessorService
                 if (!empty($result['variables'])) {
                     $session['variables'] = array_merge($session['variables'], $result['variables']);
                 }
+                break;
+
+            case 'policy_lookup':
+                // Consulta de pólizas: pide documento + campo validación, muestra info y envía carátula
+                $result = $this->processPolicyLookupNode($node, $session, $instanceId, $phone, $conversation);
+                $response = $result['response'];
+                $stop = $result['stop'];
                 break;
         }
 
@@ -855,9 +962,28 @@ class ChatbotProcessorService
             $conversationHistory = array_slice($session['conversation_history'], -10); // Últimos 10 mensajes
         }
 
+        // Determinar system_prompt: nodo (ai_prompt o system_prompt) > chatbot.ai_system_prompt > default
+        $systemPrompt = $config['ai_prompt'] ?? $config['system_prompt'] ?? null;
+        if (!$systemPrompt) {
+            $chatbot = Chatbot::find($session['chatbot_id'] ?? null);
+            if ($chatbot && $chatbot->ai_system_prompt) {
+                $systemPrompt = $chatbot->ai_system_prompt;
+            }
+        }
+        // Reemplazar variables en el system prompt
+        if ($systemPrompt) {
+            $systemPrompt = $this->replaceVariables($systemPrompt, $session['variables']);
+        }
+
+        // Contexto adicional del nodo (ai_context en la UI)
+        $aiContext = $config['ai_context'] ?? $config['custom_instructions'] ?? null;
+        if ($aiContext) {
+            $aiContext = $this->replaceVariables($aiContext, $session['variables']);
+        }
+
         // Opciones de configuración del nodo
         $options = [
-            'system_prompt' => $config['system_prompt'] ?? null,
+            'system_prompt' => $systemPrompt,
             'conversation_history' => $conversationHistory,
             'model' => $config['model'] ?? null,
             'max_tokens' => $config['max_tokens'] ?? 300,
@@ -868,13 +994,22 @@ class ChatbotProcessorService
         $context = [
             'bot_name' => $session['variables']['bot_name'] ?? 'Asistente',
             'company_name' => $config['company_name'] ?? $session['variables']['company_name'] ?? null,
-            'custom_instructions' => $config['custom_instructions'] ?? null,
+            'custom_instructions' => $aiContext,
         ];
 
         $result = $this->aiService->generateResponse($userMessage, $context, $options);
 
         if ($result['success'] && $result['response']) {
-            $aiResponse = $this->replaceVariables($result['response'], $session['variables']);
+            $aiResponse = $result['response'];
+            
+            // Detectar si la IA quiere transferir a un asesor (tag [TRANSFER] en la respuesta)
+            $wantsTransfer = str_contains($aiResponse, '[TRANSFER]');
+            if ($wantsTransfer) {
+                $aiResponse = str_replace('[TRANSFER]', '', $aiResponse);
+                $aiResponse = trim($aiResponse);
+            }
+            
+            $aiResponse = $this->replaceVariables($aiResponse, $session['variables']);
             
             $sendResult = $this->bridge->sendMessage($instanceId, $phone, $aiResponse);
             
@@ -891,6 +1026,27 @@ class ChatbotProcessorService
 
                 // Guardar en historial de sesión
                 $session['conversation_history'][] = ['role' => 'assistant', 'content' => $aiResponse];
+
+                // Si la IA pidió transferir, escalar a asesor
+                if ($wantsTransfer) {
+                    return $this->escalateToAgent($session, $instanceId, $phone, $conversation,
+                        'La IA determinó que el cliente necesita atención de un asesor humano');
+                }
+
+                // Modo conversacional: el nodo se queda esperando la siguiente respuesta del usuario
+                $isConversational = $config['conversational'] ?? $config['loop'] ?? false;
+                if ($isConversational) {
+                    $session['waiting_for_response'] = true;
+                    $session['waiting_for_input'] = true;
+                    $session['input_node_id'] = $node->id;
+                    $session['input_variable_name'] = '_ai_user_message';
+                    $session['input_validation'] = null;
+                    $session['input_contact_field'] = null;
+                    // Limpiar opciones para evitar conflictos
+                    $session['expected_options'] = null;
+                    $session['expected_buttons'] = null;
+                    return ['response' => $aiResponse, 'stop' => true];
+                }
 
                 return ['response' => $aiResponse, 'stop' => false];
             }
@@ -1124,6 +1280,36 @@ class ChatbotProcessorService
      */
     protected function continueFlow(array $session, string $message, string $instanceId, string $phone, WhatsAppConversation $conversation): array
     {
+        // ── ESCAPE GLOBAL: detectar si el usuario pide ayuda/asesor en cualquier paso ──
+        $chatbot = Chatbot::find($session['chatbot_id'] ?? null);
+        if ($chatbot && ($chatbot->escape_enabled ?? true)) {
+            $defaultKw = 'asesor,ayuda,agente,humano,hablar con alguien,no puedo,no se,no sé,operador';
+            $keywords = array_map('trim', explode(',', strtolower($chatbot->escape_keywords ?: $defaultKw)));
+            $msgLower = strtolower(trim($message));
+
+            foreach ($keywords as $kw) {
+                if (!empty($kw) && str_contains($msgLower, $kw)) {
+                    $escapeMsg = $chatbot->escape_message
+                        ?: '🙋 Entendido, te vamos a comunicar con un asesor que podrá ayudarte. Por favor espera un momento.';
+
+                    $this->bridge->sendMessage($instanceId, $phone, $escapeMsg);
+                    $conversation->addMessage([
+                        'direction' => 'outgoing', 'sender_type' => 'bot',
+                        'message_type' => 'text', 'content' => $escapeMsg, 'status' => 'sent',
+                    ]);
+
+                    $conversation->update(['status' => 'pending', 'assigned_at' => now()]);
+                    $this->deleteSession($instanceId, $phone);
+
+                    Log::info('🚪 [CHATBOT] Escape global activado', [
+                        'phone' => $phone, 'keyword' => $kw, 'chatbot_id' => $chatbot->id,
+                    ]);
+
+                    return ['processed' => true, 'reason' => 'Escape to agent triggered'];
+                }
+            }
+        }
+
         // PRIMERO: Si hay opciones esperando respuesta, procesarlas (tiene prioridad sobre input)
         if (!empty($session['expected_options'])) {
             return $this->processOptionsResponse($session, $message, $instanceId, $phone, $conversation);
@@ -1131,9 +1317,38 @@ class ChatbotProcessorService
         
         // Si estamos esperando entrada de datos del usuario (nodo input)
         if (!empty($session['waiting_for_input'])) {
+            $inputNodeId = $session['input_node_id'] ?? null;
+            
+            // Si el nodo es ai_response conversacional, re-procesar con IA
+            if ($inputNodeId) {
+                $inputNode = ChatbotNode::find($inputNodeId);
+                if ($inputNode && $inputNode->node_type === 'ai_response') {
+                    $session['last_user_message'] = $message;
+                    $session['waiting_for_response'] = false;
+                    $session['waiting_for_input'] = false;
+                    $result = $this->processAIResponseNode($inputNode, $session, $instanceId, $phone, $conversation);
+                    $this->saveSession($session, $instanceId, $phone);
+                    return ['processed' => true, 'reason' => 'AI conversational response'];
+                }
+            }
+
+            // Si el nodo es policy_lookup, delegar al procesador de pólizas
+            if ($inputNodeId) {
+                $inputNode = ChatbotNode::find($inputNodeId);
+                if ($inputNode && $inputNode->node_type === 'policy_lookup') {
+                    $session['last_user_message'] = $message;
+                    $result = $this->processPolicyLookupNode($inputNode, $session, $instanceId, $phone, $conversation);
+                    $this->saveSession($session, $instanceId, $phone);
+                    // Si stop=false, continuar al siguiente nodo del policy_lookup
+                    if (!$result['stop'] && $inputNode->next_node_id) {
+                        return $this->executeFlowFromNode($session, $inputNode->next_node_id, $instanceId, $phone, $conversation);
+                    }
+                    return ['processed' => true, 'reason' => 'Policy lookup step processed'];
+                }
+            }
+
             $variableName = $session['input_variable_name'] ?? 'user_input';
             $validationType = $session['input_validation'] ?? null;
-            $inputNodeId = $session['input_node_id'] ?? null;
             $contactField = $session['input_contact_field'] ?? null;
             
             // Validar entrada si es necesario
@@ -1162,6 +1377,16 @@ class ChatbotProcessorService
             }
             
             if (!$isValid && $errorMessage) {
+                // Incrementar contador de intentos fallidos
+                $inputAttempts = ($session['variables']['_input_invalid_attempts'] ?? 0) + 1;
+                $session['variables']['_input_invalid_attempts'] = $inputAttempts;
+
+                if ($inputAttempts >= 2) {
+                    $this->saveSession($session, $instanceId, $phone);
+                    return $this->escalateToAgent($session, $instanceId, $phone, $conversation,
+                        'El cliente no pudo ingresar un dato válido (' . ($validationType ?? 'text') . ') después de ' . $inputAttempts . ' intentos');
+                }
+
                 $this->bridge->sendMessage($instanceId, $phone, $errorMessage);
                 $conversation->addMessage([
                     'direction' => 'outgoing',
@@ -1170,8 +1395,12 @@ class ChatbotProcessorService
                     'content' => $errorMessage,
                     'status' => 'sent',
                 ]);
+                $this->saveSession($session, $instanceId, $phone);
                 return ['processed' => true, 'reason' => 'Invalid input, waiting for valid response'];
             }
+            
+            // Resetear contador de intentos cuando la entrada es válida
+            unset($session['variables']['_input_invalid_attempts']);
             
             Log::info("📝 [CHATBOT] Entrada de datos recibida", [
                 'variable' => $variableName,
@@ -1399,8 +1628,30 @@ class ChatbotProcessorService
         $nodes = ChatbotNode::where('flow_id', $flow->id)->get();
         $nodeMap = $nodes->keyBy('id');
         
+        // Cross-flow navigation: if the target node is in a different flow, switch to it
         if (!isset($nodeMap[$nodeId])) {
-            return ['processed' => false, 'reason' => 'Node not found'];
+            $targetNode = ChatbotNode::find($nodeId);
+            if (!$targetNode) {
+                return ['processed' => false, 'reason' => 'Node not found'];
+            }
+            // Verify the target flow belongs to the same chatbot
+            $targetFlow = ChatbotFlow::find($targetNode->flow_id);
+            if (!$targetFlow || $targetFlow->chatbot_id !== $flow->chatbot_id) {
+                return ['processed' => false, 'reason' => 'Cross-flow node not in same chatbot'];
+            }
+            Log::info("🔀 [CHATBOT] Cross-flow navigation", [
+                'from_flow' => $flow->id,
+                'to_flow' => $targetFlow->id,
+                'to_flow_name' => $targetFlow->name,
+                'target_node' => $nodeId,
+            ]);
+            $flow = $targetFlow;
+            $session['flow_id'] = $flow->id;
+            $nodes = ChatbotNode::where('flow_id', $flow->id)->get();
+            $nodeMap = $nodes->keyBy('id');
+            if (!isset($nodeMap[$nodeId])) {
+                return ['processed' => false, 'reason' => 'Node not found in target flow'];
+            }
         }
         
         $currentNode = $nodeMap[$nodeId];
@@ -1427,8 +1678,26 @@ class ChatbotProcessorService
                 break;
             }
             
-            if ($currentNode->next_node_id && isset($nodeMap[$currentNode->next_node_id])) {
-                $currentNode = $nodeMap[$currentNode->next_node_id];
+            // Ir al siguiente nodo (con soporte cross-flow)
+            if ($currentNode->next_node_id) {
+                if (isset($nodeMap[$currentNode->next_node_id])) {
+                    $currentNode = $nodeMap[$currentNode->next_node_id];
+                } else {
+                    $crossNode = ChatbotNode::find($currentNode->next_node_id);
+                    if ($crossNode) {
+                        $crossFlow = ChatbotFlow::find($crossNode->flow_id);
+                        if ($crossFlow && $crossFlow->chatbot_id == $session['chatbot_id']) {
+                            $session['flow_id'] = $crossFlow->id;
+                            $nodes = ChatbotNode::where('flow_id', $crossFlow->id)->get();
+                            $nodeMap = $nodes->keyBy('id');
+                            $currentNode = $nodeMap[$crossNode->id] ?? null;
+                        } else {
+                            $currentNode = null;
+                        }
+                    } else {
+                        $currentNode = null;
+                    }
+                }
             } else {
                 $currentNode = null;
             }
@@ -1453,6 +1722,8 @@ class ChatbotProcessorService
                 $text = str_replace("{{ $key }}", (string)$value, $text);
             }
         }
+        // Convertir \n literales a saltos de línea reales
+        $text = str_replace('\\n', "\n", $text);
         return $text;
     }
     
@@ -1489,6 +1760,7 @@ class ChatbotProcessorService
             
             // Limpiar estado de opciones e input
             $session['variables']['selected_option'] = $selectedOption['text'] ?? '';
+            unset($session['variables']['_invalid_attempts']);
             $session['waiting_for_response'] = false;
             $session['waiting_for_input'] = false;
             $session['expected_options'] = null;
@@ -1569,7 +1841,23 @@ class ChatbotProcessorService
             return ['processed' => true, 'reason' => 'Flow completed after option selection'];
         }
         
-        // Opción no válida - mostrar error
+        // Opción no válida - incrementar contador de intentos fallidos
+        $invalidAttempts = ($session['variables']['_invalid_attempts'] ?? 0) + 1;
+        $session['variables']['_invalid_attempts'] = $invalidAttempts;
+        $maxAttempts = 2;
+
+        Log::info("⚠️ [CHATBOT] Respuesta inválida a opciones", [
+            'message' => $message,
+            'attempt' => $invalidAttempts,
+            'max' => $maxAttempts,
+        ]);
+
+        // Si superó el máximo de intentos, transferir a asesor
+        if ($invalidAttempts >= $maxAttempts) {
+            return $this->escalateToAgent($session, $instanceId, $phone, $conversation,
+                'El cliente no pudo seleccionar una opción válida después de ' . $invalidAttempts . ' intentos');
+        }
+
         $errorText = "Por favor, selecciona una opción válida:\n\n";
         foreach ($options as $i => $opt) {
             $errorText .= ($i + 1) . ". " . ($opt['text'] ?? $opt['label'] ?? "Opción " . ($i + 1)) . "\n";
@@ -1583,7 +1871,475 @@ class ChatbotProcessorService
             'content' => $errorText,
             'status' => 'sent',
         ]);
-        
+
+        $this->saveSession($session, $instanceId, $phone);
         return ['processed' => true, 'reason' => 'Invalid option, resent options'];
+    }
+
+    // =========================================================================
+    // ESCALAMIENTO AUTOMÁTICO A ASESOR
+    // =========================================================================
+
+    /**
+     * Escalar conversación a un asesor humano cuando el cliente se enreda.
+     * Se activa tras N respuestas inválidas consecutivas.
+     */
+    protected function escalateToAgent(array $session, string $instanceId, string $phone, WhatsAppConversation $conversation, string $reason): array
+    {
+        Log::info("🚨 [CHATBOT] Escalando a asesor", [
+            'phone' => $phone,
+            'reason' => $reason,
+            'conversation_id' => $conversation->id,
+        ]);
+
+        // Mensaje al cliente
+        $escalationMsg = "Un momento, te voy a comunicar con un asesor para ayudarte mejor. 🙂";
+        $this->bridge->sendMessage($instanceId, $phone, $escalationMsg);
+        $conversation->addMessage([
+            'direction' => 'outgoing',
+            'sender_type' => 'bot',
+            'message_type' => 'text',
+            'content' => $escalationMsg,
+            'status' => 'sent',
+        ]);
+
+        // Asignar a un agente: buscar en el departamento de la conversación o el primer agente disponible
+        $assignedUserId = null;
+        $assignedUserName = null;
+
+        // 1. Si la conversación tiene departamento, buscar un agente del departamento
+        if ($conversation->department_id) {
+            $dept = WhatsAppDepartment::find($conversation->department_id);
+            if ($dept) {
+                $conversation->classifyAndAssign($dept, 'Escalado por chatbot: ' . $reason);
+                $conversation->refresh();
+                $assignedUserId = $conversation->assigned_to;
+                if ($assignedUserId) {
+                    $agent = \App\Models\User::find($assignedUserId);
+                    $assignedUserName = $agent?->name ?? 'Agente';
+                }
+            }
+        }
+
+        // 2. Si no se asignó por departamento, asignar al primer agente/admin del broker
+        if (!$assignedUserId) {
+            $brokerUser = DB::table('users')
+                ->join('brokers', 'brokers.user_id', '=', 'users.id')
+                ->where('brokers.id', $conversation->broker_id)
+                ->select('users.id', 'users.name')
+                ->first();
+
+            if ($brokerUser) {
+                $assignedUserId = $brokerUser->id;
+                $assignedUserName = $brokerUser->name;
+            }
+        }
+
+        // Actualizar conversación
+        $updateData = [
+            'status' => $assignedUserId ? 'assigned' : 'pending',
+            'assigned_at' => now(),
+        ];
+        if ($assignedUserId) {
+            $updateData['assigned_to'] = $assignedUserId;
+        }
+        $conversation->update($updateData);
+
+        // Agregar nota interna sobre el escalamiento
+        $conversation->addMessage([
+            'direction' => 'incoming',
+            'sender_type' => 'bot',
+            'message_type' => 'text',
+            'content' => "[Sistema] Conversación escalada automáticamente. Razón: {$reason}",
+            'metadata' => ['system_note' => true, 'escalation_reason' => $reason],
+            'status' => 'delivered',
+        ]);
+
+        // Emitir evento de asignación via Socket.IO para notificación en pantalla
+        if ($assignedUserId) {
+            $this->bridge->emitSocketEvent('conversation_assigned', [
+                'conversationId' => $conversation->id,
+                'assignedTo' => $assignedUserId,
+                'assignedToName' => $assignedUserName ?? 'Agente',
+                'assignedBy' => 0,
+                'assignedByName' => 'Chatbot (auto-escalamiento)',
+                'phone' => $phone,
+                'contactName' => $conversation->contact_push_name ?? $conversation->contact_name ?? $phone,
+                'fromChatbot' => true,
+                'escalation' => true,
+                'escalationReason' => $reason,
+            ]);
+        }
+
+        // Limpiar sesión de chatbot
+        $this->deleteSession($instanceId, $phone);
+
+        return ['processed' => true, 'reason' => 'Escalated to agent: ' . $reason];
+    }
+
+    // =========================================================================
+    // NODO: CONSULTA DE PÓLIZAS (policy_lookup)
+    // =========================================================================
+
+    /**
+     * Procesar nodo de consulta de pólizas.
+     * 
+     * Multi-step stateful:
+     *   step=null  → enviar prompt pidiendo documento
+     *   step=1     → recibir documento, pedir campo de validación
+     *   step=2     → recibir validación, buscar pólizas, mostrar listado
+     *   step=3     → recibir selección de póliza, enviar carátula
+     *
+     * Config del nodo:
+     *   ask_document_message  → Mensaje para pedir documento
+     *   validation_field      → Campo de validación: email, phone, birth_date, policy_number
+     *   ask_validation_message→ Mensaje para pedir el campo de validación
+     *   no_results_message    → Mensaje cuando no hay pólizas
+     *   validation_error_message → Mensaje cuando la validación falla
+     *   success_message       → Mensaje introductorio cuando se encuentran pólizas
+     *   send_documents        → bool: si enviar archivos/carátulas
+     */
+    protected function processPolicyLookupNode(
+        ChatbotNode $node,
+        array &$session,
+        string $instanceId,
+        string $phone,
+        WhatsAppConversation $conversation
+    ): array {
+        $config = $node->config ?? [];
+        $step = $session['variables']['_policy_lookup_step'] ?? null;
+        $userMessage = trim($session['last_user_message'] ?? '');
+
+        // ── STEP 0: Primera vez → pedir documento ──
+        if ($step === null) {
+            $msg = $config['ask_document_message']
+                ?? '📋 Para consultar tus pólizas, por favor escribe tu número de documento (cédula):';
+            $msg = $this->replaceVariables($msg, $session['variables']);
+
+            $this->bridge->sendMessage($instanceId, $phone, $msg);
+            $conversation->addMessage([
+                'direction' => 'outgoing', 'sender_type' => 'bot',
+                'message_type' => 'text', 'content' => $msg, 'status' => 'sent',
+            ]);
+
+            $session['variables']['_policy_lookup_step'] = 1;
+            $session['variables']['_policy_lookup_node_id'] = $node->id;
+            $session['waiting_for_response'] = true;
+            $session['waiting_for_input'] = true;
+            $session['input_node_id'] = $node->id;
+            // Limpiar campos de opciones para evitar conflictos
+            $session['expected_options'] = null;
+            $session['expected_buttons'] = null;
+
+            return ['response' => $msg, 'stop' => true];
+        }
+
+        // ── STEP 1: Recibir documento → pedir campo de validación ──
+        if ($step == 1) {
+            $document = preg_replace('/[^0-9]/', '', $userMessage);
+            if (strlen($document) < 4) {
+                $errorMsg = 'Por favor escribe un número de documento válido:';
+                $this->bridge->sendMessage($instanceId, $phone, $errorMsg);
+                $conversation->addMessage([
+                    'direction' => 'outgoing', 'sender_type' => 'bot',
+                    'message_type' => 'text', 'content' => $errorMsg, 'status' => 'sent',
+                ]);
+                return ['response' => $errorMsg, 'stop' => true];
+            }
+
+            $session['variables']['_policy_lookup_document'] = $document;
+
+            $validationField = $config['validation_field'] ?? 'email';
+            $validationLabels = [
+                'email' => 'correo electrónico',
+                'phone' => 'número de teléfono',
+                'birth_date' => 'fecha de nacimiento (DD/MM/AAAA)',
+                'policy_number' => 'número de póliza',
+            ];
+            $fieldLabel = $validationLabels[$validationField] ?? $validationField;
+
+            $msg = $config['ask_validation_message']
+                ?? "🔐 Para verificar tu identidad, por favor escribe tu {$fieldLabel}:";
+            $msg = str_replace('{field_label}', $fieldLabel, $msg);
+            $msg = $this->replaceVariables($msg, $session['variables']);
+
+            $this->bridge->sendMessage($instanceId, $phone, $msg);
+            $conversation->addMessage([
+                'direction' => 'outgoing', 'sender_type' => 'bot',
+                'message_type' => 'text', 'content' => $msg, 'status' => 'sent',
+            ]);
+
+            $session['variables']['_policy_lookup_step'] = 2;
+            $session['waiting_for_response'] = true;
+            $session['waiting_for_input'] = true;
+            $session['input_node_id'] = $node->id;
+
+            return ['response' => $msg, 'stop' => true];
+        }
+
+        // ── STEP 2: Recibir validación → buscar pólizas ──
+        if ($step == 2) {
+            $document = $session['variables']['_policy_lookup_document'] ?? '';
+            $validationField = $config['validation_field'] ?? 'email';
+            $validationValue = trim($userMessage);
+
+            // Obtener broker_id desde la instancia
+            $instance = WhatsAppInstance::where('instance_id', $instanceId)->first();
+            if (!$instance) {
+                return ['response' => null, 'stop' => true];
+            }
+            $brokerId = $instance->broker_id;
+
+            // Buscar pólizas por documento del cliente
+            $polizas = \App\Models\Poliza::where('broker_id', $brokerId)
+                ->where('client_document', $document)
+                ->whereIn('status', ['active', 'vigente', 'Vigente', 'VIGENTE'])
+                ->with(['client:id,first_name,last_name,document_number,email,phone,mobile_phone,birth_date'])
+                ->get();
+
+            if ($polizas->isEmpty()) {
+                $msg = $config['no_results_message']
+                    ?? '❌ No encontramos pólizas activas asociadas a ese documento. Verifica e intenta de nuevo o comunícate con tu asesor.';
+                $this->bridge->sendMessage($instanceId, $phone, $msg);
+                $conversation->addMessage([
+                    'direction' => 'outgoing', 'sender_type' => 'bot',
+                    'message_type' => 'text', 'content' => $msg, 'status' => 'sent',
+                ]);
+                // Limpiar estado y continuar flujo
+                $this->cleanupPolicyLookupState($session);
+                return ['response' => $msg, 'stop' => false];
+            }
+
+            // Validar campo de verificación
+            $validated = false;
+            $client = $polizas->first()->client;
+
+            switch ($validationField) {
+                case 'email':
+                    $validated = $client && strtolower(trim($client->email ?? '')) === strtolower($validationValue);
+                    break;
+                case 'phone':
+                    $cleanPhone = preg_replace('/[^0-9]/', '', $validationValue);
+                    $clientPhone = preg_replace('/[^0-9]/', '', $client->phone ?? $client->mobile_phone ?? '');
+                    $validated = $client && strlen($cleanPhone) >= 7 && str_contains($clientPhone, $cleanPhone);
+                    break;
+                case 'birth_date':
+                    // Aceptar DD/MM/AAAA, DD-MM-AAAA, AAAA-MM-DD
+                    $parsed = null;
+                    foreach (['d/m/Y', 'd-m-Y', 'Y-m-d', 'd/m/y'] as $fmt) {
+                        $parsed = \DateTime::createFromFormat($fmt, $validationValue);
+                        if ($parsed) break;
+                    }
+                    $validated = $client && $parsed && $client->birth_date
+                        && $parsed->format('Y-m-d') === \Carbon\Carbon::parse($client->birth_date)->format('Y-m-d');
+                    break;
+                case 'policy_number':
+                    $validated = $polizas->contains(function ($p) use ($validationValue) {
+                        return strtolower(trim($p->policy_number)) === strtolower(trim($validationValue));
+                    });
+                    break;
+                default:
+                    $validated = true;
+            }
+
+            if (!$validated) {
+                $msg = $config['validation_error_message']
+                    ?? '❌ Los datos de verificación no coinciden. Intenta de nuevo o comunícate con tu asesor.';
+                $this->bridge->sendMessage($instanceId, $phone, $msg);
+                $conversation->addMessage([
+                    'direction' => 'outgoing', 'sender_type' => 'bot',
+                    'message_type' => 'text', 'content' => $msg, 'status' => 'sent',
+                ]);
+                $this->cleanupPolicyLookupState($session);
+                return ['response' => $msg, 'stop' => false];
+            }
+
+            // ✅ Validación exitosa — mostrar listado de pólizas
+            $successMsg = $config['success_message'] ?? '✅ Identidad verificada. Estas son tus pólizas activas:';
+            $this->bridge->sendMessage($instanceId, $phone, $successMsg);
+            $conversation->addMessage([
+                'direction' => 'outgoing', 'sender_type' => 'bot',
+                'message_type' => 'text', 'content' => $successMsg, 'status' => 'sent',
+            ]);
+
+            $polizaList = '';
+            $polizaIds = [];
+            foreach ($polizas as $i => $p) {
+                $num = $i + 1;
+                $endDate = $p->end_date ? \Carbon\Carbon::parse($p->end_date)->format('d/m/Y') : 'N/A';
+                $startDate = $p->start_date ? \Carbon\Carbon::parse($p->start_date)->format('d/m/Y') : 'N/A';
+                $premium = $p->premium_amount ? '$' . number_format($p->premium_amount, 0, ',', '.') : 'N/A';
+                $company = $p->insurance_company ?? 'N/A';
+                $product = $p->product_name ?? $p->type ?? 'N/A';
+
+                $polizaList .= "{$num}️⃣ *{$p->policy_number}*\n";
+                $polizaList .= "   📦 {$product}\n";
+                $polizaList .= "   🏢 {$company}\n";
+                $polizaList .= "   📅 {$startDate} - {$endDate}\n";
+                $polizaList .= "   💰 Prima: {$premium}\n\n";
+
+                $polizaIds[] = $p->id;
+            }
+
+            $sendDocs = $config['send_documents'] ?? true;
+            if ($sendDocs) {
+                $polizaList .= "📄 Escribe el *número* de la póliza de la lista para recibir el documento (carátula).";
+            }
+
+            $this->bridge->sendMessage($instanceId, $phone, $polizaList);
+            $conversation->addMessage([
+                'direction' => 'outgoing', 'sender_type' => 'bot',
+                'message_type' => 'text', 'content' => $polizaList, 'status' => 'sent',
+            ]);
+
+            // Guardar IDs de pólizas encontradas para step 3
+            if ($sendDocs && count($polizaIds) > 0) {
+                $session['variables']['_policy_lookup_step'] = 3;
+                $session['variables']['_policy_lookup_ids'] = $polizaIds;
+                $session['waiting_for_response'] = true;
+                $session['waiting_for_input'] = true;
+                $session['input_node_id'] = $node->id;
+                return ['response' => $polizaList, 'stop' => true];
+            }
+
+            // Si no se envían docs, limpiar y continuar flujo
+            $this->cleanupPolicyLookupState($session);
+            return ['response' => $polizaList, 'stop' => false];
+        }
+
+        // ── STEP 3: Recibir selección de póliza → enviar carátula ──
+        if ($step == 3) {
+            $polizaIds = $session['variables']['_policy_lookup_ids'] ?? [];
+            $selection = (int) preg_replace('/[^0-9]/', '', $userMessage);
+
+            if ($selection < 1 || $selection > count($polizaIds)) {
+                $msg = "Por favor escribe un número del 1 al " . count($polizaIds) . ":";
+                $this->bridge->sendMessage($instanceId, $phone, $msg);
+                $conversation->addMessage([
+                    'direction' => 'outgoing', 'sender_type' => 'bot',
+                    'message_type' => 'text', 'content' => $msg, 'status' => 'sent',
+                ]);
+                return ['response' => $msg, 'stop' => true];
+            }
+
+            $polizaId = $polizaIds[$selection - 1];
+            $poliza = \App\Models\Poliza::find($polizaId);
+
+            if (!$poliza) {
+                $this->cleanupPolicyLookupState($session);
+                return ['response' => null, 'stop' => false];
+            }
+
+            // Buscar documento tipo carátula o el primer documento disponible
+            $documents = is_array($poliza->documents) ? $poliza->documents : [];
+            $caratula = null;
+            foreach ($documents as $doc) {
+                $type = strtolower($doc['type'] ?? '');
+                $name = strtolower($doc['name'] ?? '');
+                if ($type === 'caratula' || $type === 'carátula' || str_contains($name, 'caratula') || str_contains($name, 'carátula')) {
+                    $caratula = $doc;
+                    break;
+                }
+            }
+            // Fallback: primer documento PDF
+            if (!$caratula) {
+                foreach ($documents as $doc) {
+                    $mime = strtolower($doc['contentType'] ?? '');
+                    if (str_contains($mime, 'pdf') || str_contains(strtolower($doc['name'] ?? ''), '.pdf')) {
+                        $caratula = $doc;
+                        break;
+                    }
+                }
+            }
+            // Fallback: primer documento disponible
+            if (!$caratula && !empty($documents)) {
+                $caratula = $documents[0];
+            }
+
+            if ($caratula) {
+                // Intentar obtener URL firmada
+                $docUrl = $caratula['url'] ?? null;
+                if (!empty($caratula['path'])) {
+                    try {
+                        $firebaseStorage = app(\Kreait\Firebase\Contract\Storage::class);
+                        $bucketName = env('FIREBASE_STORAGE_BUCKET') ?: config('firebase.storage_bucket');
+                        $projectId = config('firebase.project_id') ?: env('FIREBASE_PROJECT_ID');
+                        $bucket = null;
+                        foreach (array_filter([$bucketName, $projectId ? ($projectId . '.appspot.com') : null, $projectId ? ($projectId . '.firebasestorage.app') : null]) as $name) {
+                            try {
+                                $b = $firebaseStorage->getBucket($name);
+                                if (method_exists($b, 'exists') && $b->exists()) { $bucket = $b; break; }
+                            } catch (\Throwable $e) {}
+                        }
+                        if (!$bucket) $bucket = $firebaseStorage->getBucket();
+                        
+                        $object = $bucket->object($caratula['path']);
+                        if ($object->exists()) {
+                            $docUrl = $object->signedUrl(new \DateTimeImmutable('+1 hour'), ['version' => 'v4']);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('📄 [POLICY_LOOKUP] Error generando URL firmada', ['error' => $e->getMessage()]);
+                    }
+                }
+
+                if ($docUrl) {
+                    $fileName = $caratula['name'] ?? ('Poliza_' . $poliza->policy_number . '.pdf');
+                    $mime = $caratula['contentType'] ?? 'application/pdf';
+
+                    // Enviar documento vía WhatsApp
+                    $this->bridge->sendDocument($instanceId, $phone, $docUrl, $fileName);
+                    $conversation->addMessage([
+                        'direction' => 'outgoing', 'sender_type' => 'bot',
+                        'message_type' => 'document', 'content' => "📄 {$fileName}",
+                        'media' => ['url' => $docUrl, 'filename' => $fileName, 'mimetype' => $mime],
+                        'status' => 'sent',
+                    ]);
+
+                    $msg = "📄 Aquí tienes el documento de tu póliza *{$poliza->policy_number}*.";
+                    $this->bridge->sendMessage($instanceId, $phone, $msg);
+                    $conversation->addMessage([
+                        'direction' => 'outgoing', 'sender_type' => 'bot',
+                        'message_type' => 'text', 'content' => $msg, 'status' => 'sent',
+                    ]);
+                } else {
+                    $msg = "⚠️ No se pudo obtener el documento en este momento. Comunícate con tu asesor para recibirlo.";
+                    $this->bridge->sendMessage($instanceId, $phone, $msg);
+                    $conversation->addMessage([
+                        'direction' => 'outgoing', 'sender_type' => 'bot',
+                        'message_type' => 'text', 'content' => $msg, 'status' => 'sent',
+                    ]);
+                }
+            } else {
+                $msg = "📋 La póliza *{$poliza->policy_number}* no tiene documentos adjuntos en este momento. Comunícate con tu asesor.";
+                $this->bridge->sendMessage($instanceId, $phone, $msg);
+                $conversation->addMessage([
+                    'direction' => 'outgoing', 'sender_type' => 'bot',
+                    'message_type' => 'text', 'content' => $msg, 'status' => 'sent',
+                ]);
+            }
+
+            $this->cleanupPolicyLookupState($session);
+            return ['response' => null, 'stop' => false];
+        }
+
+        // Fallback: limpiar estado
+        $this->cleanupPolicyLookupState($session);
+        return ['response' => null, 'stop' => false];
+    }
+
+    /**
+     * Limpiar variables temporales del flujo policy_lookup
+     */
+    private function cleanupPolicyLookupState(array &$session): void
+    {
+        unset(
+            $session['variables']['_policy_lookup_step'],
+            $session['variables']['_policy_lookup_node_id'],
+            $session['variables']['_policy_lookup_document'],
+            $session['variables']['_policy_lookup_ids']
+        );
+        $session['waiting_for_response'] = false;
+        $session['waiting_for_input'] = false;
+        $session['input_node_id'] = null;
     }
 }

@@ -220,9 +220,12 @@ class WhatsAppInstanceService {
   /**
    * Completar Embedded Signup (enviar code al backend)
    */
-  async embeddedSignup(code: string): Promise<{ success: boolean; data?: any; message?: string }> {
+  async embeddedSignup(code: string, waba_id?: string, phone_number_id?: string): Promise<{ success: boolean; data?: any; message?: string }> {
     try {
-      const response = await this.makeRequest('/saas/whatsapp-instances/embedded-signup', 'POST', { code });
+      const body: any = { code };
+      if (waba_id) body.waba_id = waba_id;
+      if (phone_number_id) body.phone_number_id = phone_number_id;
+      const response = await this.makeRequest('/saas/whatsapp-instances/embedded-signup', 'POST', body);
       return {
         success: response.success ?? true,
         data: response.instance || response.data || response,
@@ -250,6 +253,56 @@ class WhatsAppInstanceService {
         success: false,
         message: error.message || 'Error al eliminar instancia'
       };
+    }
+  }
+
+  // ─── YCloud Contacts ──────────────────────────────────────
+
+  /**
+   * Listar contactos de YCloud (paginados)
+   */
+  async getYCloudContacts(instanceId: number, limit = 100, offset = 0): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const response = await this.makeRequest(`/saas/whatsapp-instances/${instanceId}/ycloud-contacts?limit=${limit}&offset=${offset}`);
+      return response;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Obtener un contacto YCloud por ID
+   */
+  async getYCloudContact(instanceId: number, contactId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const response = await this.makeRequest(`/saas/whatsapp-instances/${instanceId}/ycloud-contacts/${contactId}`);
+      return response;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Actualizar un contacto YCloud
+   */
+  async updateYCloudContact(instanceId: number, contactId: string, data: Record<string, any>): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const response = await this.makeRequest(`/saas/whatsapp-instances/${instanceId}/ycloud-contacts/${contactId}`, 'PATCH', data);
+      return response;
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Eliminar un contacto YCloud
+   */
+  async deleteYCloudContact(instanceId: number, contactId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await this.makeRequest(`/saas/whatsapp-instances/${instanceId}/ycloud-contacts/${contactId}`, 'DELETE');
+      return response;
+    } catch (error: any) {
+      return { success: false, error: error.message };
     }
   }
 }

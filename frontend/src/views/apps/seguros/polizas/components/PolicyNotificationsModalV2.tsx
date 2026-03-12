@@ -56,6 +56,12 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
   const [loadingScheduled, setLoadingScheduled] = useState(false);
   const [clienteSearch, setClienteSearch] = useState('');
   const [skippingId, setSkippingId] = useState<string | null>(null);
+  const [waTemplates, setWaTemplates] = useState<{ name: string; status: string; category: string; language: string; body_text: string; param_count: number }[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [creatingTemplateFor, setCreatingTemplateFor] = useState<string | null>(null);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateBody, setNewTemplateBody] = useState('');
+  const [submittingTemplate, setSubmittingTemplate] = useState(false);
   
   // Ref para acceder al config actual sin causar re-renders
   const configRef = useRef(config);
@@ -220,6 +226,20 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   }, []);
 
+  const loadWhatsAppTemplates = useCallback(async () => {
+    try {
+      setLoadingTemplates(true);
+      const response = await api.get('/saas/policy-notifications/whatsapp-templates');
+      if (response.data?.success && response.data?.data) {
+        setWaTemplates(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error cargando plantillas de WhatsApp:', error);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, []);
+
   const loadScheduledNotifications = useCallback(async () => {
     try {
       setLoadingScheduled(true);
@@ -247,11 +267,12 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
         loadScheduledNotifications();
       } else if (activeTab === 'history') {
         loadLogs();
-      } else if (activeTab === 'config' && openSections.exclusions) {
-        loadClientes();
+      } else if (activeTab === 'config') {
+        if (openSections.exclusions) loadClientes();
+        if (openSections.templates) loadWhatsAppTemplates();
       }
     }
-  }, [isOpen, config, activeTab, openSections.exclusions, loadScheduledNotifications, loadLogs, loadClientes]);
+  }, [isOpen, config, activeTab, openSections.exclusions, openSections.templates, loadScheduledNotifications, loadLogs, loadClientes, loadWhatsAppTemplates]);
 
   const updateConfig = (updates: Partial<PolicyNotificationConfig>) => {
     if (config) {
@@ -329,6 +350,57 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const handleCreateTemplate = async (configKey: string, exampleBody: string, exampleParams: string[]) => {
+    if (creatingTemplateFor === configKey) {
+      // Toggle off
+      setCreatingTemplateFor(null);
+      setNewTemplateName('');
+      setNewTemplateBody('');
+      return;
+    }
+    // Pre-fill
+    const suffix = configKey.replace('_template', '').replace('payment', 'pago');
+    setNewTemplateName(`guro_${suffix}_${Date.now().toString(36)}`);
+    setNewTemplateBody(exampleBody);
+    setCreatingTemplateFor(configKey);
+  };
+
+  const submitNewTemplate = async (configKey: string, exampleParams: string[]) => {
+    if (!newTemplateName || !newTemplateBody || !config?.whatsapp_instance_id) return;
+    try {
+      setSubmittingTemplate(true);
+      const instance = whatsappInstances.find(i => i.id === config.whatsapp_instance_id);
+      if (!instance) throw new Error('No hay instancia seleccionada');
+
+      const res = await api.post('/saas/whatsapp-inbox/templates', {
+        instance_id: instance.id,
+        name: newTemplateName.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+        category: 'UTILITY',
+        language: 'es',
+        body: newTemplateBody,
+        example_body_params: exampleParams,
+      });
+
+      if (res.data?.success || res.data?.data) {
+        toast({ title: 'Plantilla enviada', description: 'Se envió a Meta para aprobación. Puede tomar minutos o hasta 24 horas.' });
+        // Auto-select the new template
+        updateConfig({ [configKey]: newTemplateName.toLowerCase().replace(/[^a-z0-9_]/g, '_') });
+        setCreatingTemplateFor(null);
+        setNewTemplateName('');
+        setNewTemplateBody('');
+        // Reload templates after short delay
+        setTimeout(() => loadWhatsAppTemplates(), 3000);
+      } else {
+        throw new Error(res.data?.error || 'Error al crear plantilla');
+      }
+    } catch (error: any) {
+      const msg = error.response?.data?.error || error.message || 'Error al crear';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    } finally {
+      setSubmittingTemplate(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -543,7 +615,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
               {activeTab === 'config' && (
                 <div className="space-y-4">
                   {/* Sección: WhatsApp */}
-                  <div className="p-4 border rounded-lg bg-white dark:bg-gray-800">
+                  <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
                     <div className="flex items-center gap-3 mb-4">
                       <Icon icon="logos:whatsapp-icon" className="w-6 h-6" />
                       <div className="flex-1">
@@ -586,7 +658,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                   {/* Sección: Tipos de Notificación */}
                   <Collapsible open={openSections.notifications} onOpenChange={() => toggleSection('notifications')}>
                     <CollapsibleTrigger className="w-full">
-                      <div className="flex items-center justify-between p-4 border rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-3">
                           <Icon icon="solar:bell-bold-duotone" className="w-6 h-6 text-orange-500" />
                           <div className="text-left">
@@ -598,14 +670,14 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="mt-2 p-4 border rounded-lg space-y-4">
+                      <div className="mt-2 p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
                         {/* Vencimiento */}
                         <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
                           <div className="flex items-center gap-3">
                             <Icon icon="solar:danger-triangle-bold" className="w-5 h-5 text-orange-500" />
                             <div>
                               <p className="font-medium text-sm">Vencimiento</p>
-                              <p className="text-xs text-gray-500">Días: {(config.expiration_days_before_multiple || [config.expiration_days_before]).join(', ')}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Días: {(config.expiration_days_before_multiple || [config.expiration_days_before]).join(', ')}</p>
                             </div>
                           </div>
                           <Switch
@@ -623,7 +695,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                               <Label className="text-xs">Días de anticipación</Label>
                               <div className="flex flex-wrap gap-2 mt-1">
                                 {(config.expiration_days_before_multiple || [config.expiration_days_before]).map((days, idx) => (
-                                  <div key={idx} className="flex items-center gap-1 bg-white border rounded px-2 py-1">
+                                  <div key={idx} className="flex items-center gap-1 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded px-2 py-1">
                                     <Input
                                       type="number"
                                       min="0"
@@ -637,7 +709,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                                       }}
                                       className="w-14 h-7 text-center text-sm"
                                     />
-                                    <span className="text-xs text-gray-500">días</span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">días</span>
                                     {(config.expiration_days_before_multiple || []).length > 1 && (
                                       <button onClick={() => {
                                         const arr = (config.expiration_days_before_multiple || []).filter((_, i) => i !== idx);
@@ -665,7 +737,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                             <Icon icon="solar:refresh-bold" className="w-5 h-5 text-blue-500" />
                             <div>
                               <p className="font-medium text-sm">Renovación</p>
-                              <p className="text-xs text-gray-500">Días: {(config.renewal_days_before_multiple || [config.renewal_days_before]).join(', ')}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Días: {(config.renewal_days_before_multiple || [config.renewal_days_before]).join(', ')}</p>
                             </div>
                           </div>
                           <Switch
@@ -677,13 +749,55 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                           </Switch>
                         </div>
 
+                        {config.notify_renewal && (
+                          <div className="pl-8 space-y-3">
+                            <div>
+                              <Label className="text-xs">Días de anticipación</Label>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {(config.renewal_days_before_multiple || [config.renewal_days_before]).map((days, idx) => (
+                                  <div key={idx} className="flex items-center gap-1 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded px-2 py-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="365"
+                                      defaultValue={days}
+                                      onBlur={(e) => {
+                                        const val = parseInt(e.target.value);
+                                        const arr = [...(config.renewal_days_before_multiple || [config.renewal_days_before])];
+                                        arr[idx] = isNaN(val) ? 30 : val;
+                                        updateConfig({ renewal_days_before_multiple: arr, renewal_days_before: Math.max(...arr) });
+                                      }}
+                                      className="w-14 h-7 text-center text-sm"
+                                    />
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">días</span>
+                                    {(config.renewal_days_before_multiple || []).length > 1 && (
+                                      <button onClick={() => {
+                                        const arr = (config.renewal_days_before_multiple || []).filter((_, i) => i !== idx);
+                                        updateConfig({ renewal_days_before_multiple: arr, renewal_days_before: Math.max(...arr) || 30 });
+                                      }} className="text-red-500 hover:text-red-700">
+                                        <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                <Button size="xs" color="light" onClick={() => {
+                                  const arr = [...(config.renewal_days_before_multiple || [config.renewal_days_before]), 7];
+                                  updateConfig({ renewal_days_before_multiple: arr.sort((a, b) => b - a) });
+                                }}>
+                                  <Icon icon="solar:add-circle-bold" className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Pago */}
                         <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
                           <div className="flex items-center gap-3">
                             <Icon icon="solar:wallet-money-bold" className="w-5 h-5 text-green-500" />
                             <div>
                               <p className="font-medium text-sm">Pago Pendiente</p>
-                              <p className="text-xs text-gray-500">Días: {(config.payment_days_before_multiple || [config.payment_days_before]).join(', ')}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Días: {(config.payment_days_before_multiple || [config.payment_days_before]).join(', ')}</p>
                             </div>
                           </div>
                           <Switch
@@ -694,6 +808,48 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                             <span className="size-4 translate-x-1 rounded-full bg-white transition group-data-[checked]:translate-x-6" />
                           </Switch>
                         </div>
+
+                        {config.notify_payment_due && (
+                          <div className="pl-8 space-y-3">
+                            <div>
+                              <Label className="text-xs">Días de anticipación</Label>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {(config.payment_days_before_multiple || [config.payment_days_before]).map((days, idx) => (
+                                  <div key={idx} className="flex items-center gap-1 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded px-2 py-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="365"
+                                      defaultValue={days}
+                                      onBlur={(e) => {
+                                        const val = parseInt(e.target.value);
+                                        const arr = [...(config.payment_days_before_multiple || [config.payment_days_before])];
+                                        arr[idx] = isNaN(val) ? 30 : val;
+                                        updateConfig({ payment_days_before_multiple: arr, payment_days_before: Math.max(...arr) });
+                                      }}
+                                      className="w-14 h-7 text-center text-sm"
+                                    />
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">días</span>
+                                    {(config.payment_days_before_multiple || []).length > 1 && (
+                                      <button onClick={() => {
+                                        const arr = (config.payment_days_before_multiple || []).filter((_, i) => i !== idx);
+                                        updateConfig({ payment_days_before_multiple: arr, payment_days_before: Math.max(...arr) || 30 });
+                                      }} className="text-red-500 hover:text-red-700">
+                                        <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                <Button size="xs" color="light" onClick={() => {
+                                  const arr = [...(config.payment_days_before_multiple || [config.payment_days_before]), 7];
+                                  updateConfig({ payment_days_before_multiple: arr.sort((a, b) => b - a) });
+                                }}>
+                                  <Icon icon="solar:add-circle-bold" className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
@@ -701,7 +857,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                   {/* Sección: Horario */}
                   <Collapsible open={openSections.schedule} onOpenChange={() => toggleSection('schedule')}>
                     <CollapsibleTrigger className="w-full">
-                      <div className="flex items-center justify-between p-4 border rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-3">
                           <Icon icon="solar:clock-circle-bold-duotone" className="w-6 h-6 text-purple-500" />
                           <div className="text-left">
@@ -713,7 +869,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="mt-2 p-4 border rounded-lg space-y-4">
+                      <div className="mt-2 p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label>Hora de envío</Label>
@@ -768,7 +924,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                   {/* Sección: Destinatarios */}
                   <Collapsible open={openSections.recipients} onOpenChange={() => toggleSection('recipients')}>
                     <CollapsibleTrigger className="w-full">
-                      <div className="flex items-center justify-between p-4 border rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-3">
                           <Icon icon="solar:users-group-rounded-bold-duotone" className="w-6 h-6 text-cyan-500" />
                           <div className="text-left">
@@ -780,7 +936,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="mt-2 p-4 border rounded-lg space-y-3">
+                      <div className="mt-2 p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
                         {[
                           { key: 'send_to_client_phone', label: 'Teléfono principal', desc: 'Campo phone del cliente' },
                           { key: 'send_to_client_mobile', label: 'Teléfono móvil', desc: 'Campo mobile_phone del cliente' },
@@ -807,7 +963,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                   {/* Sección: Exclusiones */}
                   <Collapsible open={openSections.exclusions} onOpenChange={() => toggleSection('exclusions')}>
                     <CollapsibleTrigger className="w-full">
-                      <div className="flex items-center justify-between p-4 border rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-3">
                           <Icon icon="solar:shield-cross-bold-duotone" className="w-6 h-6 text-red-500" />
                           <div className="text-left">
@@ -819,7 +975,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="mt-2 p-4 border rounded-lg space-y-4">
+                      <div className="mt-2 p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
                         {/* Estados excluidos */}
                         <div>
                           <Label className="text-xs">Estados de póliza excluidos</Label>
@@ -908,49 +1064,182 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                   {/* Sección: Plantillas */}
                   <Collapsible open={openSections.templates} onOpenChange={() => toggleSection('templates')}>
                     <CollapsibleTrigger className="w-full">
-                      <div className="flex items-center justify-between p-4 border rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <div className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
                         <div className="flex items-center gap-3">
                           <Icon icon="solar:document-text-bold-duotone" className="w-6 h-6 text-indigo-500" />
                           <div className="text-left">
-                            <h4 className="font-medium">Plantillas de Mensaje</h4>
-                            <p className="text-xs text-gray-500">Personaliza los mensajes de WhatsApp</p>
+                            <h4 className="font-medium">Plantillas de WhatsApp</h4>
+                            <p className="text-xs text-gray-500">Selecciona o crea plantillas para cada notificación</p>
                           </div>
                         </div>
                         <Icon icon={openSections.templates ? 'solar:alt-arrow-up-bold' : 'solar:alt-arrow-down-bold'} className="w-5 h-5 text-gray-400" />
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <div className="mt-2 p-4 border rounded-lg space-y-4">
-                        <div>
-                          <Label className="text-xs">Plantilla de Vencimiento</Label>
-                          <Textarea
-                            value={config.expiration_template || policyNotificationService.getDefaultTemplate('expiration')}
-                            onChange={(e) => updateConfig({ expiration_template: e.target.value })}
-                            rows={3}
-                            className="mt-1 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Plantilla de Renovación</Label>
-                          <Textarea
-                            value={config.renewal_template || policyNotificationService.getDefaultTemplate('renewal')}
-                            onChange={(e) => updateConfig({ renewal_template: e.target.value })}
-                            rows={3}
-                            className="mt-1 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Plantilla de Pago</Label>
-                          <Textarea
-                            value={config.payment_template || policyNotificationService.getDefaultTemplate('payment_due')}
-                            onChange={(e) => updateConfig({ payment_template: e.target.value })}
-                            rows={3}
-                            className="mt-1 text-sm"
-                          />
-                        </div>
-                        <Alert color="info">
-                          <p className="text-xs">Variables: {'{{client_name}}'}, {'{{policy_number}}'}, {'{{end_date}}'}, {'{{days_until}}'}, {'{{insurance_company}}'}</p>
-                        </Alert>
+                      <div className="mt-2 p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-4">
+                        {loadingTemplates && (
+                          <div className="flex items-center justify-center py-4">
+                            <Spinner size="sm" />
+                            <span className="ml-2 text-sm text-gray-500">Cargando plantillas...</span>
+                          </div>
+                        )}
+
+                        {[
+                          {
+                            key: 'expiration_template' as const,
+                            label: 'Vencimiento',
+                            icon: 'solar:danger-triangle-bold',
+                            color: 'text-orange-500',
+                            bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+                            borderColor: 'border-orange-200 dark:border-orange-700/50',
+                            requiredParams: 5,
+                            variableChips: ['Nombre cliente', 'Nro póliza', 'Aseguradora', 'Fecha vencimiento', 'Ramo'],
+                            exampleParams: ['Juan Pérez', 'POL-12345', 'Sura', '15/04/2026', 'Vida'],
+                            exampleTemplate: 'Hola {{1}}, te recordamos que tu póliza {{2}} ({{5}}) de {{3}} vence el {{4}}. Contáctanos para renovarla.',
+                          },
+                          {
+                            key: 'renewal_template' as const,
+                            label: 'Renovación',
+                            icon: 'solar:refresh-bold',
+                            color: 'text-blue-500',
+                            bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+                            borderColor: 'border-blue-200 dark:border-blue-700/50',
+                            requiredParams: 5,
+                            variableChips: ['Nombre cliente', 'Nro póliza', 'Aseguradora', 'Fecha renovación', 'Ramo'],
+                            exampleParams: ['Juan Pérez', 'POL-12345', 'Sura', '15/04/2026', 'Vida'],
+                            exampleTemplate: 'Hola {{1}}, es momento de renovar tu póliza {{2}} ({{5}}) de {{3}}. La fecha de renovación es {{4}}. ¿Te ayudamos?',
+                          },
+                          {
+                            key: 'payment_template' as const,
+                            label: 'Pago Pendiente',
+                            icon: 'solar:wallet-money-bold',
+                            color: 'text-green-500',
+                            bgColor: 'bg-green-50 dark:bg-green-900/20',
+                            borderColor: 'border-green-200 dark:border-green-700/50',
+                            requiredParams: 5,
+                            variableChips: ['Nombre cliente', 'Nro póliza', 'Fecha pago', 'Monto prima', 'Ramo'],
+                            exampleParams: ['Juan Pérez', 'POL-12345', '15/04/2026', '$1.500.000', 'Autos'],
+                            exampleTemplate: 'Hola {{1}}, tu póliza {{2}} ({{5}}) tiene un pago pendiente para el {{3}} por un valor de {{4}}. No olvides pagarlo.',
+                          },
+                        ].map((item) => {
+                          const selectedName = (config as any)[item.key] || '';
+                          const selectedTemplate = waTemplates.find(t => t.name === selectedName);
+                          const paramMismatch = selectedTemplate && selectedTemplate.param_count !== item.requiredParams;
+                          const isCreating = creatingTemplateFor === item.key;
+                          return (
+                            <div key={item.key} className={`p-4 rounded-xl border ${item.borderColor} ${item.bgColor} space-y-3`}>
+                              {/* Header + variable chips */}
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Icon icon={item.icon} className={`w-5 h-5 ${item.color}`} />
+                                  <span className="font-semibold text-sm">{item.label}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {item.variableChips.map((chip, i) => (
+                                    <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-white/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-600 rounded text-[10px] text-gray-500 dark:text-gray-400">
+                                      <code className="font-mono text-purple-600 dark:text-purple-400">{`{{${i + 1}}}`}</code> {chip}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Template selector + create button */}
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  <Select
+                                    value={selectedName || 'none'}
+                                    onValueChange={(value) => updateConfig({ [item.key]: value === 'none' ? '' : value })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecciona plantilla" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">— Sin plantilla —</SelectItem>
+                                      {waTemplates.map((t) => (
+                                        <SelectItem key={t.name} value={t.name}>
+                                          <div className="flex items-center gap-2">
+                                            <span>{t.name}</span>
+                                            <span className={`text-xs ${t.param_count === item.requiredParams ? 'text-green-500' : 'text-red-500'}`}>
+                                              ({t.param_count} var{t.param_count === item.requiredParams ? ' ✓' : ` ✗`})
+                                            </span>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <Tooltip content={isCreating ? 'Cancelar' : (!config?.whatsapp_instance_id ? 'Selecciona una instancia de WhatsApp primero' : 'Crear nueva plantilla')}>
+                                  <Button
+                                    size="sm"
+                                    color={isCreating ? 'light' : 'purple'}
+                                    onClick={() => {
+                                      if (!config?.whatsapp_instance_id) {
+                                        toast({ title: 'Instancia requerida', description: 'Selecciona una instancia de WhatsApp en la sección de conexión antes de crear plantillas', variant: 'destructive' });
+                                        return;
+                                      }
+                                      handleCreateTemplate(item.key, item.exampleTemplate, item.exampleParams);
+                                    }}
+                                  >
+                                    <Icon icon={isCreating ? 'solar:close-circle-bold' : 'solar:add-circle-bold'} className="w-4 h-4" />
+                                  </Button>
+                                </Tooltip>
+                              </div>
+
+                              {/* Selected template preview with validation */}
+                              {selectedTemplate && !isCreating && (
+                                <div className={`p-2.5 rounded-lg border text-xs ${paramMismatch ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700/50' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600'}`}>
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <Icon icon={paramMismatch ? 'solar:danger-triangle-bold' : 'solar:check-circle-bold'} className={`w-3.5 h-3.5 ${paramMismatch ? 'text-red-500' : 'text-green-500'}`} />
+                                    <span className={`font-semibold ${paramMismatch ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                      {paramMismatch ? `Necesita ${item.requiredParams} variables, tiene ${selectedTemplate.param_count}` : 'Compatible ✓'}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-500 dark:text-gray-400 whitespace-pre-wrap">{selectedTemplate.body_text}</p>
+                                </div>
+                              )}
+
+                              {/* Inline template creator */}
+                              {isCreating && (
+                                <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border-2 border-purple-300 dark:border-purple-600 space-y-3">
+                                  <div className="flex items-center gap-2 text-xs font-semibold text-purple-700 dark:text-purple-300">
+                                    <Icon icon="solar:pen-new-square-bold" className="w-4 h-4" />
+                                    Crear plantilla para {item.label}
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-gray-500 dark:text-gray-400">Nombre (solo letras minúsculas, números y _)</Label>
+                                    <Input
+                                      value={newTemplateName}
+                                      onChange={(e) => setNewTemplateName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
+                                      placeholder="guro_vencimiento_poliza"
+                                      className="mt-1 h-8 text-sm font-mono"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-gray-500 dark:text-gray-400">Texto del mensaje (edita libremente, mantén las variables {'{{1}}'} {'{{2}}'} etc.)</Label>
+                                    <Textarea
+                                      value={newTemplateBody}
+                                      onChange={(e) => setNewTemplateBody(e.target.value)}
+                                      rows={3}
+                                      className="mt-1 text-sm font-mono"
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-[10px] text-gray-400">Se enviará a Meta para aprobación (puede tomar minutos a 24h)</p>
+                                    <Button
+                                      size="xs"
+                                      color="purple"
+                                      onClick={() => submitNewTemplate(item.key, item.exampleParams)}
+                                      disabled={submittingTemplate || !newTemplateName || !newTemplateBody}
+                                    >
+                                      {submittingTemplate ? <Spinner size="xs" className="mr-1" /> : <Icon icon="solar:plain-bold" className="w-3.5 h-3.5 mr-1" />}
+                                      Enviar a Meta
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </CollapsibleContent>
                   </Collapsible>

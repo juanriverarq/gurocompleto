@@ -12,6 +12,7 @@ use Kreait\Firebase\Contract\Storage as FirebaseStorageContract;
 class InternalDocumentsController extends Controller
 {
     use \App\Traits\ChecksStorageLimit;
+    use \App\Traits\StreamsDocuments;
     public function __construct(private FirebaseStorageContract $firebaseStorage) {}
 
     private function getBrokerId(Request $request)
@@ -286,6 +287,36 @@ class InternalDocumentsController extends Controller
         } catch (\Throwable $e) {
             Log::error('[INTERNAL_DOCS_SIGNED_URL] Error al generar URL', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => 'No se pudo generar URL: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function stream(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $path = $request->input('path') ?: $request->query('path');
+
+            if (!$path) {
+                return response()->json(['success' => false, 'message' => 'Debe enviar path'], 422);
+            }
+
+            $expectedPrefix = "brokers/{$brokerId}/internos/";
+            if (strpos($path, $expectedPrefix) !== 0) {
+                return response()->json(['success' => false, 'message' => 'Acceso denegado'], 403);
+            }
+
+            $bucket = $this->getBucket();
+            $doc = [
+                'path' => $path,
+                'name' => basename($path),
+                'contentType' => null,
+            ];
+            return $this->streamFromBucketOrFallback($bucket, $doc, $brokerId);
+        } catch (AuthenticationException $ae) {
+            return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
+        } catch (\Throwable $e) {
+            Log::error('[INTERNAL_DOCS_STREAM] Error', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al obtener documento: ' . $e->getMessage()], 500);
         }
     }
 }

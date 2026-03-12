@@ -99,6 +99,11 @@ const defaultModulosDisponibles = {
     icon: 'solar:wallet-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'importar', 'exportar'],
   },
+  recibos_caja: {
+    label: 'Recibos de Caja',
+    icon: 'solar:bill-list-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'anular', 'imprimir'],
+  },
   comisiones: {
     label: 'Comisiones',
     icon: 'solar:dollar-minimalistic-bold-duotone',
@@ -134,6 +139,11 @@ const defaultModulosDisponibles = {
   mini_web: {
     label: 'Mini Web',
     icon: 'solar:smartphone-2-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
+  pagina_web: {
+    label: 'Mi Página Web',
+    icon: 'solar:globe-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar'],
   },
   creador_contenido: {
@@ -278,8 +288,8 @@ const buildCategorias = (
     ['Inicio', ['dashboard']],
     ['Seguros', ['clientes', 'polizas', 'renovaciones', 'automoviles', 'siniestros']],
     ['Comercial', ['embudo_ventas', 'seguimiento_comercial', 'metas_objetivos', 'analisis_rendimiento']],
-    ['Finanzas', ['cartera_clientes', 'comisiones', 'liquidar_vendedores', 'reportes_financieros']],
-    ['Comunicaciones', ['whatsapp_business', 'email_marketing', 'enlaces_cotizacion', 'mini_web', 'creador_contenido']],
+    ['Finanzas', ['cartera_clientes', 'recibos_caja', 'comisiones', 'liquidar_vendedores', 'reportes_financieros']],
+    ['Comunicaciones', ['whatsapp_business', 'email_marketing', 'enlaces_cotizacion', 'mini_web', 'pagina_web', 'creador_contenido']],
     ['Inteligencia Artificial', ['asistentes_ia', 'voice_ai', 'analytics_predictivo']],
     ['Documentos', ['documentos_clientes', 'documentos_poliza', 'documentos_siniestro', 'cumplimiento_legal']],
     ['Mi Agencia', ['informacion_agencia', 'sedes', 'aseguradoras', 'ramos']],

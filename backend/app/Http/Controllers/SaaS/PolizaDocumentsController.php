@@ -13,6 +13,7 @@ use Kreait\Firebase\Contract\Storage as FirebaseStorageContract;
 class PolizaDocumentsController extends Controller
 {
     use \App\Traits\ChecksStorageLimit;
+    use \App\Traits\StreamsDocuments;
     public function __construct(private FirebaseStorageContract $firebaseStorage) {}
 
     private function getBrokerId(Request $request)
@@ -461,7 +462,14 @@ usort($allDocuments, function ($a, $b) {
 
             $bucket = $this->getBucket();
             $object = $bucket->object($doc['path']);
-            if (!$object->exists()) { return response()->json(['success'=>false,'message'=>'Archivo no existe en el almacenamiento'],404); }
+            if (!$object->exists()) {
+                // Fallback: if doc was imported from SoftSeguros, use the SS download URL or original URL
+                $fallbackUrl = $doc['ss_download_url'] ?? $doc['url'] ?? $doc['azure_url'] ?? null;
+                if ($fallbackUrl && (str_contains($fallbackUrl, 'softseguros.com') || str_contains($fallbackUrl, 'blob.core.windows.net'))) {
+                    return response()->json(['success'=>true,'data'=>['url'=>$fallbackUrl]]);
+                }
+                return response()->json(['success'=>false,'message'=>'Archivo no existe en el almacenamiento'],404);
+            }
             $url = $object->signedUrl((new \DateTimeImmutable('+30 minutes')), ['version' => 'v4']);
             return response()->json(['success' => true, 'data' => ['url' => $url]]);
         } catch (AuthenticationException $ae) {
@@ -469,6 +477,43 @@ usort($allDocuments, function ($a, $b) {
             return response()->json(['success'=>false,'message'=>'No autenticado'],401);
         } catch (\Throwable $e) {
             return response()->json(['success' => false, 'message' => 'No se pudo generar URL: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function stream(Request $request, int $id)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $poliza = Poliza::where('broker_id', $brokerId)->where('id', $id)->first();
+            if (!$poliza) {
+                return response()->json(['success' => false, 'message' => 'Póliza no encontrada'], 404);
+            }
+
+            $path = $request->input('path') ?: $request->query('path');
+            $name = $request->input('name') ?: $request->query('name');
+            if (!$path && !$name) {
+                return response()->json(['success' => false, 'message' => 'Debe enviar "path" o "name" del documento'], 422);
+            }
+
+            $doc = null;
+            foreach ((array)($poliza->documents ?? []) as $d) {
+                if (is_object($d)) $d = (array) $d;
+                if (($path && isset($d['path']) && $d['path'] === $path) || ($name && isset($d['name']) && $d['name'] === $name)) {
+                    $doc = $d;
+                    break;
+                }
+            }
+            if (!$doc) {
+                return response()->json(['success' => false, 'message' => 'Documento no encontrado en la póliza'], 404);
+            }
+
+            $bucket = $this->getBucket();
+            return $this->streamFromBucketOrFallback($bucket, $doc, $brokerId);
+        } catch (AuthenticationException $ae) {
+            return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
+        } catch (\Throwable $e) {
+            Log::error('[POLIZAS_STREAM] Error', ['poliza_id' => $id, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error al obtener documento: ' . $e->getMessage()], 500);
         }
     }
 }

@@ -108,6 +108,8 @@ export interface WhatsAppQuickReply {
   shortcut: string;
   title: string;
   content: string;
+  media_url?: string | null;
+  media_type?: string | null;
   is_active: boolean;
   usage_count: number;
 }
@@ -127,9 +129,19 @@ export interface ConversationFilters {
   department_id?: number;
   assigned_to?: string | number;
   priority?: string;
+  tag?: string;
   search?: string;
   per_page?: number;
   page?: number;
+}
+
+export interface WhatsAppTag {
+  id: number;
+  broker_id: number;
+  name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
 }
 
 class WhatsAppInboxService {
@@ -241,8 +253,12 @@ class WhatsAppInboxService {
     return response.conversation;
   }
 
-  async getConversationMessages(conversationId: number, page: number = 1, perPage: number = 50): Promise<{ data: WhatsAppMessage[]; total: number; current_page: number; last_page: number }> {
-    return await this.makeRequest(`/saas/whatsapp-inbox/conversations/${conversationId}/messages?page=${page}&per_page=${perPage}`);
+  async getConversationMessages(conversationId: number, page: number = 1, perPage: number = 50, latest: boolean = true): Promise<{ data: WhatsAppMessage[]; total: number; current_page: number; last_page: number }> {
+    return await this.makeRequest(`/saas/whatsapp-inbox/conversations/${conversationId}/messages?page=${page}&per_page=${perPage}&latest=${latest ? '1' : '0'}`);
+  }
+
+  async searchMessages(conversationId: number, query: string, page: number = 1): Promise<{ data: WhatsAppMessage[]; total: number; current_page: number; last_page: number }> {
+    return await this.makeRequest(`/saas/whatsapp-inbox/conversations/${conversationId}/messages/search?q=${encodeURIComponent(query)}&page=${page}`);
   }
 
   async sendMessage(conversationId: number, message: string, options?: { message_type?: string; media_url?: string }): Promise<WhatsAppMessage> {
@@ -287,12 +303,23 @@ class WhatsAppInboxService {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
         },
         body: formData,
       });
 
-      console.log('📤 [sendMediaMessage] Response status:', response.status);
-      const responseData = await response.json();
+      console.log('📤 [sendMediaMessage] Response status:', response.status, 'content-type:', response.headers.get('content-type'));
+      
+      const contentType = response.headers.get('content-type') || '';
+      const responseText = await response.text();
+      
+      // Si no es JSON, mostrar lo que devolvió el servidor
+      if (!contentType.includes('application/json')) {
+        console.error('📤 [sendMediaMessage] Server returned non-JSON:', responseText.substring(0, 500));
+        throw new Error(`Error del servidor (${response.status}): Respuesta no válida. Intenta de nuevo.`);
+      }
+
+      const responseData = JSON.parse(responseText);
       console.log('📤 [sendMediaMessage] Response data:', responseData);
 
       if (!response.ok) {
@@ -328,12 +355,41 @@ class WhatsAppInboxService {
     return response.conversation;
   }
 
+  async getNotes(conversationId: number): Promise<any[]> {
+    const response = await this.makeRequest(`/saas/whatsapp-inbox/conversations/${conversationId}/notes`);
+    return response.notes;
+  }
+
   async addNote(conversationId: number, content: string, isPinned: boolean = false): Promise<any> {
     const response = await this.makeRequest(`/saas/whatsapp-inbox/conversations/${conversationId}/notes`, 'POST', {
       content,
       is_pinned: isPinned,
     });
     return response.note;
+  }
+
+  // ==========================================
+  // AGENTES
+  // ==========================================
+
+  async getClientByPhone(phone: string): Promise<{ client: any; policies: any[] }> {
+    const response = await this.makeRequest(`/saas/whatsapp-inbox/client-by-phone?phone=${encodeURIComponent(phone)}`);
+    return { client: response.client, policies: response.policies };
+  }
+
+  async searchClients(query: string): Promise<any[]> {
+    const response = await this.makeRequest(`/saas/whatsapp-inbox/search-clients?q=${encodeURIComponent(query)}`);
+    return response.clients;
+  }
+
+  async linkClientPhone(clientId: number, phone: string): Promise<any> {
+    const response = await this.makeRequest('/saas/whatsapp-inbox/link-client-phone', 'POST', { client_id: clientId, phone });
+    return response;
+  }
+
+  async getAgents(): Promise<{ id: number; name: string; email: string; role: string }[]> {
+    const response = await this.makeRequest('/saas/whatsapp-inbox/agents');
+    return response.agents;
   }
 
   // ==========================================
@@ -349,6 +405,48 @@ class WhatsAppInboxService {
   async createQuickReply(data: Partial<WhatsAppQuickReply>): Promise<WhatsAppQuickReply> {
     const response = await this.makeRequest('/saas/whatsapp-inbox/quick-replies', 'POST', data);
     return response.quick_reply;
+  }
+
+  async updateQuickReply(id: number, data: Partial<WhatsAppQuickReply>): Promise<WhatsAppQuickReply> {
+    const response = await this.makeRequest(`/saas/whatsapp-inbox/quick-replies/${id}`, 'PUT', data);
+    return response.quick_reply;
+  }
+
+  async deleteQuickReply(id: number): Promise<void> {
+    await this.makeRequest(`/saas/whatsapp-inbox/quick-replies/${id}`, 'DELETE');
+  }
+
+  // ==========================================
+  // ETIQUETAS (TAGS)
+  // ==========================================
+
+  async getTags(): Promise<WhatsAppTag[]> {
+    const response = await this.makeRequest('/saas/whatsapp-inbox/tags');
+    return response.tags;
+  }
+
+  async createTag(name: string, color: string = 'blue'): Promise<WhatsAppTag> {
+    const response = await this.makeRequest('/saas/whatsapp-inbox/tags', 'POST', { name, color });
+    return response.tag;
+  }
+
+  async updateTag(tagId: number, data: { name?: string; color?: string }): Promise<WhatsAppTag> {
+    const response = await this.makeRequest(`/saas/whatsapp-inbox/tags/${tagId}`, 'PUT', data);
+    return response.tag;
+  }
+
+  async deleteTag(tagId: number): Promise<void> {
+    await this.makeRequest(`/saas/whatsapp-inbox/tags/${tagId}`, 'DELETE');
+  }
+
+  async addTagToConversation(conversationId: number, tag: string): Promise<string[]> {
+    const response = await this.makeRequest(`/saas/whatsapp-inbox/conversations/${conversationId}/tags`, 'POST', { tag });
+    return response.tags;
+  }
+
+  async removeTagFromConversation(conversationId: number, tag: string): Promise<string[]> {
+    const response = await this.makeRequest(`/saas/whatsapp-inbox/conversations/${conversationId}/tags`, 'DELETE', { tag });
+    return response.tags;
   }
 }
 

@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Lottie from 'lottie-react';
-import guroLogoAnimation from '../../../assets/LOTTIE.json';
 import { useUnifiedAuth } from '../../../context/UnifiedAuthContext';
 import { saasApi } from '../../../services/saasApi';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/shadcn-ui/Default-Ui/card';
@@ -53,7 +51,7 @@ interface DashboardMetrics {
 }
 
 const Dashboard: React.FC = () => {
-  const { usuarioSaas, tenant, hasPermission } = useUnifiedAuth();
+  const { hasPermission } = useUnifiedAuth();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [clientesChart, setClientesChart] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,12 +161,6 @@ const Dashboard: React.FC = () => {
     }).format(value);
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Buenos días';
-    if (hour < 18) return 'Buenas tardes';
-    return 'Buenas noches';
-  };
 
 
   if (!canViewMetrics) {
@@ -185,25 +177,8 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 flex-shrink-0">
-            <Lottie
-              animationData={guroLogoAnimation}
-              loop
-              autoplay
-              style={{ width: 64, height: 64 }}
-            />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {getGreeting()}, {usuarioSaas?.nombre}
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Bienvenido a {tenant?.branding.nombre_comercial || tenant?.nombre}
-            </p>
-          </div>
-        </div>
+      <div className="flex justify-between items-center">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
         <div className="flex items-center gap-2">
           <Select value={chartPeriod} onValueChange={(value: any) => setChartPeriod(value)}>
             <SelectTrigger className="w-32">

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Badge, Button, Spinner, Tooltip, Modal, Table, Textarea } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { auth } from 'src/config/firebase';
+import whatsappInstanceService from 'src/services/whatsappInstanceService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
 
@@ -33,11 +34,21 @@ interface TemplateStats {
 
 type ButtonFormItem = { type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'; text: string; url: string; phone_number: string };
 
+interface InstanceOption {
+  id: number;
+  instance_id: string;
+  phone_number: string;
+  cloud_api_business_id?: string;
+  status: string;
+}
+
 const WhatsAppPlantillas: React.FC = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [stats, setStats] = useState<TemplateStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [instances, setInstances] = useState<InstanceOption[]>([]);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -76,11 +87,37 @@ const WhatsAppPlantillas: React.FC = () => {
     return data;
   };
 
+  const loadInstances = useCallback(async () => {
+    try {
+      const res = await whatsappInstanceService.getInstances();
+      if (res.success && res.data) {
+        const cloudInstances = res.data
+          .filter((i: any) => i.connection_type === 'cloud_api' && i.is_active)
+          .map((i: any) => ({
+            id: i.id,
+            instance_id: i.instance_id,
+            phone_number: i.phone_number || i.instance_id,
+            cloud_api_business_id: i.cloud_api_business_id,
+            status: i.status,
+          }));
+        setInstances(cloudInstances);
+        if (cloudInstances.length > 0 && !selectedInstanceId) {
+          setSelectedInstanceId(String(cloudInstances[0].id));
+        }
+      }
+    } catch (err) {
+      console.error('Error cargando instancias:', err);
+    }
+  }, []);
+
   const loadTemplates = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const params = statusFilter ? `?status=${statusFilter}` : '';
+      const queryParts: string[] = [];
+      if (statusFilter) queryParts.push(`status=${statusFilter}`);
+      if (selectedInstanceId) queryParts.push(`instance_id=${selectedInstanceId}`);
+      const params = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
       const data = await makeRequest(`/saas/whatsapp-inbox/templates${params}`);
       setTemplates(data.templates || []);
       setStats(data.stats || null);
@@ -89,11 +126,17 @@ const WhatsAppPlantillas: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, selectedInstanceId]);
 
   useEffect(() => {
-    loadTemplates();
-  }, [loadTemplates]);
+    loadInstances();
+  }, [loadInstances]);
+
+  useEffect(() => {
+    if (selectedInstanceId) {
+      loadTemplates();
+    }
+  }, [loadTemplates, selectedInstanceId]);
 
   // Auto-dismiss success messages
   useEffect(() => {
@@ -138,6 +181,7 @@ const WhatsAppPlantillas: React.FC = () => {
         language: form.language,
         header_type: form.header_type,
         body: form.body,
+        instance_id: selectedInstanceId || undefined,
       };
       if (form.header_type === 'TEXT' && form.header_text) {
         payload.header_text = form.header_text;
@@ -300,6 +344,29 @@ const WhatsAppPlantillas: React.FC = () => {
           <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600">
             <Icon icon="solar:close-circle-bold" width={16} />
           </button>
+        </div>
+      )}
+
+      {/* Instance Selector */}
+      {instances.length > 1 && (
+        <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 border border-gray-100 dark:border-gray-700">
+          <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <Icon icon="solar:phone-bold-duotone" width={20} className="text-green-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs text-gray-500 mb-1">Línea de WhatsApp</p>
+            <select
+              className="w-full text-sm bg-transparent border-0 p-0 focus:ring-0 text-gray-900 dark:text-white font-medium cursor-pointer"
+              value={selectedInstanceId}
+              onChange={(e) => setSelectedInstanceId(e.target.value)}
+            >
+              {instances.map((inst) => (
+                <option key={inst.id} value={String(inst.id)}>
+                  {inst.phone_number}{inst.status === 'connected' ? ' ✓' : ' (desconectada)'}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 

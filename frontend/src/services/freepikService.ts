@@ -438,13 +438,20 @@ class FreepikService {
     };
   }
 
-  private async nanoBananaGenerate(prompt: string, aspectRatio: string, imageUrls?: string[]): Promise<string> {
+  private async nanoBananaGenerate(prompt: string, aspectRatio: string, imageUrls?: string[], base64Images?: string[]): Promise<string> {
     const body: Record<string, any> = {
       prompt,
       resolution: '2K',
       aspectRatio,
     };
-    if (imageUrls?.length) body.imageUrls = imageUrls;
+    // Combine public URLs + base64 data URIs into a single imageUrls array
+    const allUrls: string[] = [...(imageUrls || [])];
+    if (base64Images?.length) {
+      for (const b64 of base64Images) {
+        allUrls.push(`data:image/png;base64,${b64}`);
+      }
+    }
+    if (allUrls.length) body.imageUrls = allUrls;
 
     const response = await fetch(`${NANOBANANA_BASE_URL}/generate-pro`, {
       method: 'POST',
@@ -518,6 +525,8 @@ class FreepikService {
     autoImprovePrompt?: boolean;
     referenceImage?: string;
     referenceImageUrl?: string;
+    referenceImageUrls?: string[];
+    base64Images?: string[];
   }): Promise<TextToImageResponse> {
     // Map ImageSize to NanoBanana aspect ratio format
     const sizeToNanoBanana: Record<string, string> = {
@@ -542,8 +551,10 @@ class FreepikService {
     const useNanoBanana = (params.aiModel || 'gemini') !== 'flux-kontext';
 
     if (useNanoBanana) {
-      const imageUrls = params.referenceImageUrl ? [params.referenceImageUrl] : undefined;
-      const taskId = await this.nanoBananaGenerate(finalPrompt, nanoBananaSize, imageUrls);
+      const imageUrls = params.referenceImageUrls?.length
+        ? params.referenceImageUrls
+        : params.referenceImageUrl ? [params.referenceImageUrl] : undefined;
+      const taskId = await this.nanoBananaGenerate(finalPrompt, nanoBananaSize, imageUrls, params.base64Images);
       const imageUrl = await this.nanoBananaPoll(taskId);
 
       // Fetch the image and convert to base64

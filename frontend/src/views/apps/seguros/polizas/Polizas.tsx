@@ -180,8 +180,8 @@ const Polizas: React.FC = () => {
     fecha_recepcion_desde: '',
     fecha_recepcion_hasta: '',
     renovable: '',
-    sort_field: 'created_at',
-    sort_direction: 'desc',
+    sort_field: undefined,
+    sort_direction: undefined,
     page: 1,
     per_page: 15,
   });
@@ -244,6 +244,7 @@ const Polizas: React.FC = () => {
     { value: 'CANCELADA', label: 'Cancelada', color: 'failure' },
     { value: 'SUSPENDIDA', label: 'Suspendida', color: 'gray' },
     { value: 'POR_VENCER', label: 'Por Vencer', color: 'info' },
+    { value: 'RENOVADA', label: 'Renovada', color: 'purple' },
   ];
 
   // Cargar pólizas
@@ -543,9 +544,14 @@ const Polizas: React.FC = () => {
     switch (columnKey) {
       case 'numero_poliza':
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {getTipoIcon(poliza.ramo_principal)}
             {poliza.numero_poliza}
+            {(poliza as any).numero_renovacion > 0 && (
+              <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full leading-none">
+                R{(poliza as any).numero_renovacion}
+              </span>
+            )}
           </div>
         );
       case 'cliente':
@@ -599,6 +605,18 @@ const Polizas: React.FC = () => {
         return poliza.sede || '-';
       case 'forma_pago':
         return poliza.forma_pago || '-';
+      case 'renovaciones': {
+        const numRen = (poliza as any).numero_renovacion || 0;
+        if (numRen > 0) {
+          return (
+            <Badge color="lightinfo" className="text-xs">
+              <Icon icon="solar:refresh-bold-duotone" className="w-3 h-3 inline mr-1 -mt-0.5" />
+              {numRen}
+            </Badge>
+          );
+        }
+        return <span className="text-gray-400">—</span>;
+      }
       default:
         return '-';
     }
@@ -617,6 +635,7 @@ const Polizas: React.FC = () => {
       vendedor: 'Vendedor',
       sede: 'Sede',
       forma_pago: 'Forma de Pago',
+      renovaciones: 'Renov.',
     };
     return columnMap[columnKey] || columnKey;
   };

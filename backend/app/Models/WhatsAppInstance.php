@@ -52,6 +52,7 @@ class WhatsAppInstance extends Model
     // Constantes para tipos de conexión
     const CONNECTION_BAILEYS = 'baileys';
     const CONNECTION_CLOUD_API = 'cloud_api';
+    const CONNECTION_YCLOUD = 'ycloud';
 
     public function isBaileys(): bool
     {
@@ -60,7 +61,12 @@ class WhatsAppInstance extends Model
 
     public function isCloudApi(): bool
     {
-        return $this->connection_type === self::CONNECTION_CLOUD_API;
+        return in_array($this->connection_type, [self::CONNECTION_CLOUD_API, self::CONNECTION_YCLOUD]);
+    }
+
+    public function isYCloud(): bool
+    {
+        return $this->connection_type === self::CONNECTION_YCLOUD;
     }
 
     // Relaciones

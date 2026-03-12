@@ -12,9 +12,31 @@ class CobroComision extends Model
 
     protected $table = 'cobros_comisiones';
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($cobro) {
+            // Auto-set numero_renovacion from the poliza if not explicitly provided
+            if (is_null($cobro->numero_renovacion) && $cobro->poliza_id) {
+                $poliza = Poliza::find($cobro->poliza_id);
+                $cobro->numero_renovacion = $poliza ? ((int) ($poliza->numero_renovacion ?? 0)) : 0;
+            }
+
+            // Validate aseguradora_id exists to avoid FK constraint violations
+            if ($cobro->aseguradora_id) {
+                $exists = \DB::table('aseguradoras')->where('id', $cobro->aseguradora_id)->exists();
+                if (!$exists) {
+                    $cobro->aseguradora_id = null;
+                }
+            }
+        });
+    }
+
     protected $fillable = [
         'broker_id',
         'poliza_id',
+        'numero_renovacion',
         'aseguradora_id',
         'pago_poliza_id',
         'monto_comision',
@@ -25,6 +47,8 @@ class CobroComision extends Model
         'comprobante_url',
         'estado',
         'observaciones',
+        'recibo_caja_id',
+        'source',
     ];
 
     protected $casts = [
@@ -53,6 +77,11 @@ class CobroComision extends Model
     public function pagoPoliza(): BelongsTo
     {
         return $this->belongsTo(PagoPoliza::class);
+    }
+
+    public function reciboCaja(): BelongsTo
+    {
+        return $this->belongsTo(ReciboCaja::class);
     }
 
     // Scopes

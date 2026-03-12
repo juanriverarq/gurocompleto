@@ -59,6 +59,23 @@ class LiquidacionesVendedoresController extends Controller
     }
 
     /**
+     * Resolver nombre del cliente correctamente (persona y empresa)
+     */
+    private function resolveClienteName($client): string
+    {
+        if (!$client) return 'Sin nombre';
+
+        $nombre = trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? ''));
+
+        if (empty($nombre) || $nombre === ' ') {
+            // Fallback para empresas: company_legal_name o company
+            $nombre = $client->company_legal_name ?? $client->company ?? '';
+        }
+
+        return !empty(trim($nombre)) ? trim($nombre) : 'Sin nombre';
+    }
+
+    /**
      * Obtener user_id del usuario autenticado
      */
     private function getUserId(Request $request): ?int
@@ -368,7 +385,7 @@ class LiquidacionesVendedoresController extends Controller
                 $detalles[] = [
                     'poliza_id' => $poliza->id,
                     'numero_poliza' => $poliza->policy_number,
-                    'cliente_nombre' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'Sin nombre',
+                    'cliente_nombre' => $this->resolveClienteName($poliza->client),
                     'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company,
                     'ramo' => $poliza->ramo?->nombre ?? $poliza->type,
                     'fecha_poliza' => $poliza->start_date?->format('Y-m-d'),
@@ -479,7 +496,7 @@ class LiquidacionesVendedoresController extends Controller
                 $detalles[] = [
                     'poliza_id' => $poliza->id,
                     'numero_poliza' => $poliza->policy_number,
-                    'cliente_nombre' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'Sin nombre',
+                    'cliente_nombre' => $this->resolveClienteName($poliza->client),
                     'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company,
                     'ramo' => $poliza->ramo?->nombre ?? $poliza->type,
                     'fecha_poliza' => $poliza->start_date?->format('Y-m-d'),
@@ -811,11 +828,22 @@ class LiquidacionesVendedoresController extends Controller
                     $comisionBruta = (float) $detalle->comision_bruta;
                     $ivaComision = $comisionBruta * ($vendedor->porcentaje_iva / 100);
 
+                    // Resolver nombre del cliente en tiempo real si está vacío
+                    $clienteNombre = $detalle->cliente_nombre;
+                    if (empty(trim($clienteNombre ?? ''))) {
+                        if (isset($poliza) && $poliza && $poliza->client_id) {
+                            $cliente = $poliza->client ?? \App\Models\Cliente::find($poliza->client_id);
+                            $clienteNombre = $this->resolveClienteName($cliente);
+                        } else {
+                            $clienteNombre = $poliza->client_name ?? 'Sin nombre';
+                        }
+                    }
+
                     $polizas[] = [
                         'liquidacion_codigo' => $liq->codigo,
                         'liquidacion_fecha' => $liq->fecha_generacion,
                         'numero_poliza' => $detalle->numero_poliza,
-                        'cliente' => $detalle->cliente_nombre,
+                        'cliente' => $clienteNombre,
                         'aseguradora' => $detalle->aseguradora,
                         'ramo' => $detalle->ramo,
                         'fecha_poliza' => $detalle->fecha_poliza,
@@ -1322,7 +1350,7 @@ class LiquidacionesVendedoresController extends Controller
                     $detalles[] = [
                         'poliza_id' => $esPrimeraFila ? $poliza->id : null, // Solo primera fila tiene poliza_id
                         'numero_poliza' => $poliza->policy_number . ($com['anexo'] ? ' - Anexo ' . $com['anexo'] : ''),
-                        'cliente_nombre' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'N/A',
+                        'cliente_nombre' => $this->resolveClienteName($poliza->client),
                         'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company ?? 'N/A',
                         'ramo' => $poliza->ramo?->nombre ?? $poliza->type ?? 'N/A',
                         'fecha_poliza' => $poliza->start_date?->format('Y-m-d'),
@@ -1534,7 +1562,7 @@ class LiquidacionesVendedoresController extends Controller
                 $detalles[] = [
                     'poliza_id' => $esPrimeraFila ? $poliza->id : null,
                     'numero_poliza' => $poliza->policy_number . ($com['anexo'] ? ' - Anexo ' . $com['anexo'] : ''),
-                    'cliente_nombre' => $poliza->client ? trim($poliza->client->first_name . ' ' . $poliza->client->last_name) : 'N/A',
+                    'cliente_nombre' => $this->resolveClienteName($poliza->client),
                     'aseguradora' => $poliza->aseguradora?->nombre ?? $poliza->insurance_company ?? 'N/A',
                     'ramo' => $poliza->ramo?->nombre ?? $poliza->type ?? 'N/A',
                     'fecha_poliza' => $poliza->start_date?->format('Y-m-d'),

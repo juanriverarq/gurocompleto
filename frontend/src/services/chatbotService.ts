@@ -30,6 +30,15 @@ export interface Chatbot {
   business_hours_enabled: boolean;
   business_hours?: BusinessHours;
   timezone: string;
+  client_inactivity_enabled?: boolean;
+  client_inactivity_minutes?: number;
+  client_inactivity_message?: string;
+  agent_inactivity_enabled?: boolean;
+  agent_inactivity_minutes?: number;
+  agent_inactivity_message?: string;
+  escape_enabled?: boolean;
+  escape_keywords?: string;
+  escape_message?: string;
   created_at: string;
   updated_at: string;
   flows_count?: number;
@@ -87,7 +96,10 @@ export type NodeType =
   | 'ai_response'
   | 'transfer'
   | 'delay'
-  | 'end';
+  | 'end'
+  | 'policy_lookup'
+  | 'add_tag'
+  | 'remove_tag';
 
 export interface NodeConfig {
   // Común
@@ -157,6 +169,22 @@ export interface NodeConfig {
   
   // Nodo Fin
   goodbye_message?: string;
+
+  // Nodo IA (adicional)
+  max_tokens?: number;
+  temperature?: number;
+
+  // Nodo Consultar Póliza
+  validation_field?: 'email' | 'phone' | 'birth_date' | 'policy_number';
+  send_documents?: boolean;
+  ask_document_message?: string;
+  ask_validation_message?: string;
+  no_results_message?: string;
+  validation_error_message?: string;
+  success_message?: string;
+  // Nodo Etiqueta
+  tag_name?: string;
+  tag_color?: string;
 }
 
 export interface ChatbotTrigger {
@@ -320,13 +348,14 @@ const chatbotService = {
   /**
    * Actualizar un chatbot
    */
-  async updateChatbot(id: number, data: UpdateChatbotRequest): Promise<{ success: boolean; data?: Chatbot; message?: string }> {
+  async updateChatbot(id: number, data: UpdateChatbotRequest & { force_deactivate_other?: boolean }): Promise<{ success: boolean; data?: Chatbot; message?: string; active_chatbot_id?: number; active_chatbot_name?: string; deactivated_chatbot_name?: string }> {
     try {
       const response = await api.put(`/saas/chatbots/${id}`, data);
       return response.data;
     } catch (error: any) {
       console.error('Error actualizando chatbot:', error);
-      return { success: false, message: error.response?.data?.message || 'Error al actualizar chatbot' };
+      const respData = error.response?.data || {};
+      return { success: false, message: respData.message || 'Error al actualizar chatbot', active_chatbot_id: respData.active_chatbot_id, active_chatbot_name: respData.active_chatbot_name };
     }
   },
 
@@ -596,6 +625,9 @@ const chatbotService = {
       transfer: { label: 'Transferir', icon: 'solar:user-hand-up-bold', color: 'red', description: 'Transferir a agente humano' },
       delay: { label: 'Espera', icon: 'solar:clock-circle-bold', color: 'gray', description: 'Esperar antes de continuar' },
       end: { label: 'Fin', icon: 'solar:stop-circle-bold', color: 'slate', description: 'Finalizar el flujo' },
+      policy_lookup: { label: 'Consultar Póliza', icon: 'solar:shield-check-bold', color: 'teal', description: 'Consulta de pólizas por documento' },
+      add_tag: { label: 'Agregar Etiqueta', icon: 'solar:tag-horizontal-bold', color: 'emerald', description: 'Agregar etiqueta a la conversación' },
+      remove_tag: { label: 'Quitar Etiqueta', icon: 'solar:tag-horizontal-bold-duotone', color: 'rose', description: 'Quitar etiqueta de la conversación' },
     };
     return configs[type];
   },

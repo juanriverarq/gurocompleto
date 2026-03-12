@@ -25,7 +25,7 @@ import { MODULES } from '../../components/landingpage/pricing-calculator/modules
 
 const PLAN_PRESETS: Record<string, string[]> = {
   starter: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','crm','cartera'],
-  professional: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','crm','cartera','whatsapp','email','miniweb','ia_chatbot','lector_pdf_ia'],
+  professional: ['clientes','polizas','siniestros','renovaciones','automoviles','seguimiento','documentos','crm','cartera','whatsapp','email','miniweb','ia_chatbot','lector_pdf_ia','creador_contenido'],
   business: MODULES.map(m => m.key),
   custom: [],
 };

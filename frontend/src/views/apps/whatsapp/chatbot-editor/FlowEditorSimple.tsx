@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useContext } from 'react';
 import {
   ReactFlow,
   Node,
@@ -15,7 +15,10 @@ import {
   BackgroundVariant,
   Handle,
   Position,
+  EdgeLabelRenderer,
+  getBezierPath,
   type NodeProps,
+  type EdgeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button, Modal, TextInput, Textarea, Select, Badge, Spinner } from 'flowbite-react';
@@ -31,6 +34,13 @@ import ChatbotSettings from './ChatbotSettings';
 import guroToast from 'src/components/GuroToast/GuroToast';
 import ChatbotAnalyticsPanel from './ChatbotAnalyticsPanel';
 import { useEmpleadosBroker } from '../../../../hooks/useAdminCrudApi';
+import { CustomizerContext } from '../../../../context/CustomizerContext';
+
+// ==================== DARK MODE HOOK ====================
+const useIsDark = () => {
+  const customizer = useContext(CustomizerContext);
+  return customizer?.activeMode === 'dark';
+};
 
 // ==================== TIPOS ====================
 
@@ -53,19 +63,25 @@ const nodePalette: NodePaletteItem[] = [
   { type: 'transfer', label: 'Transferir', icon: 'solar:user-hand-up-bold', color: 'red', description: 'Transferir a agente humano' },
   { type: 'delay', label: 'Espera', icon: 'solar:clock-circle-bold', color: 'gray', description: 'Pausar antes de continuar' },
   { type: 'end', label: 'Fin', icon: 'solar:stop-circle-bold', color: 'slate', description: 'Finalizar conversación' },
+  { type: 'policy_lookup', label: 'Consultar Póliza', icon: 'solar:shield-check-bold', color: 'teal', description: 'Consulta de pólizas por documento' },
+  { type: 'add_tag', label: 'Agregar Etiqueta', icon: 'solar:tag-horizontal-bold', color: 'emerald', description: 'Agregar etiqueta a la conversación' },
+  { type: 'remove_tag', label: 'Quitar Etiqueta', icon: 'solar:tag-horizontal-bold-duotone', color: 'rose', description: 'Quitar etiqueta de la conversación' },
 ];
 
-const nodeStyles: Record<string, { bg: string; border: string; text: string }> = {
-  start: { bg: '#1a2e1a', border: '#22c55e', text: '#86efac' },
-  message: { bg: '#1a2233', border: '#3b82f6', text: '#93c5fd' },
-  options: { bg: '#231a33', border: '#a855f7', text: '#d8b4fe' },
-  input: { bg: '#1a2b2e', border: '#06b6d4', text: '#67e8f9' },
-  condition: { bg: '#2e2215', border: '#f97316', text: '#fdba74' },
-  action: { bg: '#2e2b15', border: '#eab308', text: '#fde047' },
-  ai_response: { bg: '#2e1a27', border: '#ec4899', text: '#f9a8d4' },
-  transfer: { bg: '#2e1a1a', border: '#ef4444', text: '#fca5a5' },
-  delay: { bg: '#1e1e1e', border: '#6b7280', text: '#d1d5db' },
-  end: { bg: '#1c1e22', border: '#64748b', text: '#cbd5e1' },
+const nodeStyles: Record<string, { accent: string; accentLight: string; accentDark: string }> = {
+  start: { accent: '#22c55e', accentLight: '#dcfce7', accentDark: '#16a34a' },
+  message: { accent: '#3b82f6', accentLight: '#dbeafe', accentDark: '#2563eb' },
+  options: { accent: '#a855f7', accentLight: '#f3e8ff', accentDark: '#9333ea' },
+  input: { accent: '#06b6d4', accentLight: '#cffafe', accentDark: '#0891b2' },
+  condition: { accent: '#f97316', accentLight: '#ffedd5', accentDark: '#ea580c' },
+  action: { accent: '#eab308', accentLight: '#fef9c3', accentDark: '#ca8a04' },
+  ai_response: { accent: '#ec4899', accentLight: '#fce7f3', accentDark: '#db2777' },
+  transfer: { accent: '#ef4444', accentLight: '#fee2e2', accentDark: '#dc2626' },
+  delay: { accent: '#6b7280', accentLight: '#f3f4f6', accentDark: '#4b5563' },
+  end: { accent: '#64748b', accentLight: '#f1f5f9', accentDark: '#475569' },
+  policy_lookup: { accent: '#14b8a6', accentLight: '#ccfbf1', accentDark: '#0d9488' },
+  add_tag: { accent: '#10b981', accentLight: '#d1fae5', accentDark: '#059669' },
+  remove_tag: { accent: '#f43f5e', accentLight: '#ffe4e6', accentDark: '#e11d48' },
 };
 
 const nodeIcons: Record<string, string> = {
@@ -79,12 +95,16 @@ const nodeIcons: Record<string, string> = {
   transfer: 'solar:user-hand-up-bold',
   delay: 'solar:clock-circle-bold',
   end: 'solar:stop-circle-bold',
+  policy_lookup: 'solar:shield-check-bold',
+  add_tag: 'solar:tag-horizontal-bold',
+  remove_tag: 'solar:tag-horizontal-bold-duotone',
 };
 
 // ==================== CUSTOM NODE WITH HOVER ACTIONS ====================
 
 const GuroFlowNode: React.FC<NodeProps> = ({ data, id, selected }) => {
   const [hovered, setHovered] = useState(false);
+  const dark = useIsDark();
   const nodeType = (data as any).nodeType || 'message';
   const nodeName = (data as any).nodeName || 'Nodo';
   const config = (data as any).config || {};
@@ -94,9 +114,42 @@ const GuroFlowNode: React.FC<NodeProps> = ({ data, id, selected }) => {
   const onEdit = (data as any).onEdit;
   const onDelete = (data as any).onDelete;
   const onDuplicate = (data as any).onDuplicate;
+  const activeUsers = (data as any).activeUsers || 0;
+  const nodeIndex = (data as any).nodeIndex;
 
   const hasOptionHandles = (nodeType === 'options' || nodeType === 'question') && config.options?.length > 0;
   const hasConditionHandles = nodeType === 'condition';
+
+  const indexLabel = nodeIndex !== undefined ? String.fromCharCode(65 + nodeIndex) : '';
+
+  // Dark/light palette
+  const cardBg = dark ? '#161616' : '#fff';
+  const cardBorder = dark ? '#ffffff10' : '#e5e7eb';
+  const handleBg = dark ? '#1e1e1e' : '#fff';
+  const textPrimary = dark ? '#e5e7eb' : '#1f2937';
+  const textSecondary = dark ? '#9ca3af' : '#6b7280';
+  const textTertiary = dark ? '#6b7280' : '#9ca3af';
+  const divider = dark ? '#ffffff08' : '#f3f4f6';
+  const mediaBg = dark ? '#1e1e1e' : '#f9fafb';
+  const mediaBorder = dark ? '#ffffff08' : '#f3f4f6';
+  const iconBg = dark ? `${style.accent}15` : style.accentLight;
+  const hoverBarBg = dark ? '#1a1a1a' : '#fff';
+  const hoverBarBorder = dark ? '#ffffff10' : '#e5e7eb';
+
+  const getContentPreview = () => {
+    if (nodeType === 'start') return config.keywords ? `Keywords: ${config.keywords}` : 'Punto de inicio del flujo';
+    if (nodeType === 'message') return config.text || null;
+    if (nodeType === 'input') return config.variable_name ? `Variable: @${config.variable_name}` : null;
+    if (nodeType === 'ai_response') return 'Genera respuesta con IA';
+    if (nodeType === 'transfer') return config.transfer_to_user_name || config.transfer_to || 'Transferir a agente';
+    if (nodeType === 'delay') return `Esperar ${config.delay_seconds || 3} segundos`;
+    if (nodeType === 'end') return config.goodbye_message || 'Finaliza el flujo';
+    if (nodeType === 'condition') return config.variable ? `${config.variable} ${config.condition_type || '='} ${config.condition_value || '?'}` : null;
+    if (nodeType === 'action') return config.action_type || null;
+    return null;
+  };
+
+  const preview = getContentPreview();
 
   return (
     <div
@@ -104,50 +157,86 @@ const GuroFlowNode: React.FC<NodeProps> = ({ data, id, selected }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: style.bg,
-        border: `1px solid ${selected ? style.border : style.border + '40'}`,
+        background: cardBg,
+        border: selected ? `2px solid ${style.accent}` : `1px solid ${cardBorder}`,
         borderRadius: '12px',
-        minWidth: hasOptionHandles ? '220px' : '180px',
+        minWidth: '240px',
+        maxWidth: '280px',
         boxShadow: selected
-          ? `0 0 0 2px ${style.border}60, 0 4px 20px rgba(0,0,0,0.4)`
-          : '0 4px 20px rgba(0,0,0,0.3)',
+          ? `0 0 0 3px ${style.accent}20, 0 4px 16px rgba(0,0,0,${dark ? '0.3' : '0.08'})`
+          : dark ? '0 2px 8px rgba(0,0,0,0.4)' : '0 1px 4px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.04)',
         transition: 'border-color 0.2s, box-shadow 0.2s',
       }}
     >
-      {/* Target handle (left) — always present */}
-      <Handle type="target" position={Position.Left} style={{ background: style.border, width: 8, height: 8, border: '2px solid #0a0a0a' }} />
+      {/* Target handle (left) */}
+      <Handle type="target" position={Position.Left} style={{ background: handleBg, width: 10, height: 10, border: `2px solid ${style.accent}`, boxShadow: `0 1px 3px rgba(0,0,0,${dark ? '0.3' : '0.1'})` }} />
 
-      {/* Default source handle (right) — for non-options, non-condition nodes */}
+      {/* Default source handle (right) */}
       {!hasOptionHandles && !hasConditionHandles && (
-        <Handle type="source" position={Position.Right} style={{ background: style.border, width: 8, height: 8, border: '2px solid #0a0a0a' }} />
+        <Handle type="source" position={Position.Right} style={{ background: handleBg, width: 10, height: 10, border: `2px solid ${style.accent}`, boxShadow: `0 1px 3px rgba(0,0,0,${dark ? '0.3' : '0.1'})` }} />
       )}
 
-      {/* Node header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px' }}>
-        <Icon icon={icon} width={20} style={{ color: style.border, flexShrink: 0 }} />
-        <span style={{ color: style.text, fontWeight: 500, fontSize: '13px' }}>{nodeName}</span>
+      {/* Node header with colored icon badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px 8px' }}>
+        <div style={{
+          width: '32px', height: '32px', borderRadius: '8px',
+          background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <Icon icon={icon} width={17} style={{ color: style.accent }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {indexLabel && (
+              <span style={{ color: style.accent, fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px' }}>{indexLabel}.</span>
+            )}
+            <span style={{ color: textPrimary, fontWeight: 600, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nodeName}</span>
+          </div>
+          {activeUsers > 0 && (
+            <span style={{
+              background: dark ? '#16a34a20' : '#dcfce7', color: '#16a34a',
+              fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '10px', lineHeight: '14px', marginTop: '2px', display: 'inline-block',
+            }} title={`${activeUsers} usuario${activeUsers > 1 ? 's' : ''} en este paso`}>
+              {activeUsers} activo{activeUsers > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Content preview */}
+      {preview && (
+        <div style={{ padding: '0 14px 6px', fontSize: '12px', color: textSecondary, lineHeight: '1.4', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any }}>
+          {preview}
+        </div>
+      )}
+
+      {/* Media preview for message nodes */}
+      {nodeType === 'message' && config.media_url && (
+        <div style={{ padding: '0 14px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px', background: mediaBg, borderRadius: '6px', border: `1px solid ${mediaBorder}` }}>
+            <Icon icon={config.media_type === 'image' ? 'solar:gallery-bold' : config.media_type === 'video' ? 'solar:video-frame-bold' : 'solar:file-bold'} width={14} style={{ color: style.accent }} />
+            <span style={{ fontSize: '10px', color: textTertiary }}>{config.media_type || 'Archivo'}</span>
+          </div>
+        </div>
+      )}
 
       {/* Per-option source handles for options nodes */}
       {hasOptionHandles && (
-        <div style={{ borderTop: `1px solid ${style.border}30`, padding: '4px 0' }}>
+        <div style={{ borderTop: `1px solid ${divider}`, padding: '4px 0 6px' }}>
           {config.options.map((opt: any, idx: number) => (
-            <div key={opt.id || idx} className="relative flex items-center" style={{ padding: '3px 10px 3px 12px', minHeight: '26px' }}>
-              <span style={{ color: style.text, fontSize: '10px', opacity: 0.8, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {opt.text || `Opción ${idx + 1}`}
-              </span>
+            <div key={opt.id || idx} className="relative flex items-center" style={{ padding: '4px 14px', minHeight: '30px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, overflow: 'hidden' }}>
+                <span style={{ color: textTertiary, fontSize: '10px', fontWeight: 600, flexShrink: 0 }}>§ {idx + 1}</span>
+                <span style={{ color: dark ? '#d1d5db' : '#374151', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {opt.text || `Opción ${idx + 1}`}
+                </span>
+              </div>
               <Handle
                 type="source"
                 position={Position.Right}
                 id={`opt-${idx}`}
                 style={{
-                  background: '#a855f7',
-                  width: 7,
-                  height: 7,
-                  border: '2px solid #0a0a0a',
-                  right: -4,
-                  top: '50%',
-                  position: 'absolute',
+                  background: handleBg, width: 9, height: 9, border: '2px solid #a855f7',
+                  right: -5, top: '50%', position: 'absolute', boxShadow: `0 1px 3px rgba(0,0,0,${dark ? '0.3' : '0.1'})`,
                 }}
               />
             </div>
@@ -157,63 +246,50 @@ const GuroFlowNode: React.FC<NodeProps> = ({ data, id, selected }) => {
 
       {/* Per-branch source handles for condition nodes */}
       {hasConditionHandles && (
-        <div style={{ borderTop: `1px solid ${style.border}30`, padding: '4px 0' }}>
-          <div className="relative flex items-center" style={{ padding: '3px 10px 3px 12px', minHeight: '26px' }}>
-            <span style={{ color: '#86efac', fontSize: '10px', fontWeight: 600 }}>✓ Sí</span>
-            <Handle
-              type="source"
-              position={Position.Right}
-              id="condition-true"
-              style={{ background: '#22c55e', width: 7, height: 7, border: '2px solid #0a0a0a', right: -4, top: '50%', position: 'absolute' }}
-            />
+        <div style={{ borderTop: `1px solid ${divider}`, padding: '4px 0 6px' }}>
+          <div className="relative flex items-center" style={{ padding: '4px 14px', minHeight: '30px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+              <span style={{ color: dark ? '#4ade80' : '#16a34a', fontSize: '12px', fontWeight: 500 }}>Sí</span>
+            </div>
+            <Handle type="source" position={Position.Right} id="condition-true"
+              style={{ background: handleBg, width: 9, height: 9, border: '2px solid #22c55e', right: -5, top: '50%', position: 'absolute', boxShadow: `0 1px 3px rgba(0,0,0,${dark ? '0.3' : '0.1'})` }} />
           </div>
-          <div className="relative flex items-center" style={{ padding: '3px 10px 3px 12px', minHeight: '26px' }}>
-            <span style={{ color: '#fca5a5', fontSize: '10px', fontWeight: 600 }}>✗ No</span>
-            <Handle
-              type="source"
-              position={Position.Right}
-              id="condition-false"
-              style={{ background: '#ef4444', width: 7, height: 7, border: '2px solid #0a0a0a', right: -4, top: '50%', position: 'absolute' }}
-            />
+          <div className="relative flex items-center" style={{ padding: '4px 14px', minHeight: '30px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
+              <span style={{ color: dark ? '#f87171' : '#dc2626', fontSize: '12px', fontWeight: 500 }}>No</span>
+            </div>
+            <Handle type="source" position={Position.Right} id="condition-false"
+              style={{ background: handleBg, width: 9, height: 9, border: '2px solid #ef4444', right: -5, top: '50%', position: 'absolute', boxShadow: `0 1px 3px rgba(0,0,0,${dark ? '0.3' : '0.1'})` }} />
           </div>
         </div>
       )}
 
       {/* Invisible hover bridge */}
-      {hovered && (
-        <div className="absolute -top-10 left-0 right-0 h-10" style={{ zIndex: 9 }} />
-      )}
+      {hovered && <div className="absolute -top-10 left-0 right-0 h-10" style={{ zIndex: 9 }} />}
 
       {/* Hover action bar */}
       {hovered && (
         <div
-          className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 px-1.5 py-1 rounded-xl border border-white/[0.08] shadow-xl shadow-black/50"
-          style={{ background: '#1a1a1a', zIndex: 10 }}
+          className="absolute -top-9 left-1/2 -translate-x-1/2 flex items-center gap-0.5 px-1 py-0.5 rounded-lg border shadow-lg"
+          style={{ background: hoverBarBg, borderColor: hoverBarBorder, zIndex: 10 }}
         >
           {onEdit && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onEdit(id); }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all active:scale-90"
-              title="Editar"
-            >
+            <button onClick={(e) => { e.stopPropagation(); onEdit(id); }}
+              className={`w-7 h-7 rounded-md flex items-center justify-center transition-all active:scale-90 ${dark ? 'text-gray-400 hover:text-blue-400 hover:bg-blue-500/10' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`} title="Editar">
               <Icon icon="solar:pen-bold" width={13} />
             </button>
           )}
           {onDuplicate && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDuplicate(id); }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all active:scale-90"
-              title="Duplicar"
-            >
+            <button onClick={(e) => { e.stopPropagation(); onDuplicate(id); }}
+              className={`w-7 h-7 rounded-md flex items-center justify-center transition-all active:scale-90 ${dark ? 'text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`} title="Duplicar">
               <Icon icon="solar:copy-bold" width={13} />
             </button>
           )}
           {onDelete && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(id); }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all active:scale-90"
-              title="Eliminar"
-            >
+            <button onClick={(e) => { e.stopPropagation(); onDelete(id); }}
+              className={`w-7 h-7 rounded-md flex items-center justify-center transition-all active:scale-90 ${dark ? 'text-gray-400 hover:text-red-400 hover:bg-red-500/10' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'}`} title="Eliminar">
               <Icon icon="solar:trash-bin-trash-bold" width={13} />
             </button>
           )}
@@ -223,7 +299,81 @@ const GuroFlowNode: React.FC<NodeProps> = ({ data, id, selected }) => {
   );
 };
 
+// ==================== CUSTOM EDGE WITH DELETE BUTTON ====================
+
+const DeletableEdge: React.FC<EdgeProps> = ({
+  id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, label, labelStyle, labelBgStyle, labelBgPadding, labelBgBorderRadius, markerEnd,
+}) => {
+  const [hovered, setHovered] = useState(false);
+  const dark = useIsDark();
+  const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+
+  // In dark mode, use darker label backgrounds
+  const labelBgColor = (() => {
+    const lightBg = (labelBgStyle as any)?.fill || '#f5f3ff';
+    if (!dark) return lightBg;
+    // Map light backgrounds to dark equivalents
+    if (lightBg === '#f5f3ff') return '#a855f715'; // purple
+    if (lightBg === '#f0fdf4') return '#22c55e15'; // green
+    if (lightBg === '#fef2f2') return '#ef444415'; // red
+    return '#ffffff08';
+  })();
+
+  return (
+    <g
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Invisible wider path for easier hover */}
+      <path d={edgePath} fill="none" stroke="transparent" strokeWidth={20} />
+      {/* Visible path */}
+      <path d={edgePath} fill="none" stroke={(style as any)?.stroke || (dark ? '#ffffff15' : '#c4c9d4')} strokeWidth={(style as any)?.strokeWidth || 1.5} className="animated" markerEnd={markerEnd as string} />
+      <EdgeLabelRenderer>
+        {label && (
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all',
+              fontSize: (labelStyle as any)?.fontSize || 10,
+              color: (labelStyle as any)?.fill || '#8b5cf6',
+              fontWeight: (labelStyle as any)?.fontWeight || 500,
+              background: labelBgColor,
+              padding: `${(labelBgPadding as any)?.[1] || 3}px ${(labelBgPadding as any)?.[0] || 6}px`,
+              borderRadius: (labelBgBorderRadius as number) || 4,
+            }}
+          >
+            {label as string}
+          </div>
+        )}
+        {hovered && (
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${(sourceX + targetX) / 2}px,${(sourceY + targetY) / 2 - 16}px)`,
+              pointerEvents: 'all',
+            }}
+          >
+            <button
+              className="w-5 h-5 rounded-full bg-red-500 hover:bg-red-400 text-white flex items-center justify-center shadow-lg shadow-red-500/30 transition-all hover:scale-110 active:scale-90"
+              onClick={(e) => {
+                e.stopPropagation();
+                const event = new CustomEvent('delete-edge', { detail: { edgeId: id } });
+                window.dispatchEvent(event);
+              }}
+              title="Eliminar conexión"
+            >
+              <Icon icon="solar:close-circle-bold" width={12} />
+            </button>
+          </div>
+        )}
+      </EdgeLabelRenderer>
+    </g>
+  );
+};
+
 const customNodeTypes = { guroNode: GuroFlowNode };
+const customEdgeTypes = { deletable: DeletableEdge };
 
 // ==================== COMPONENTE PRINCIPAL ====================
 
@@ -248,6 +398,7 @@ const FlowEditorContent: React.FC = () => {
   const [newFlowName, setNewFlowName] = useState('');
   const [activeTab, setActiveTab] = useState<'flows' | 'settings' | 'analytics'>('flows');
   const [showPalette, setShowPalette] = useState(false);
+  const [nodeSessionCounts, setNodeSessionCounts] = useState<Record<number, number>>({});
 
   // Modales
 
@@ -322,7 +473,7 @@ const FlowEditorContent: React.FC = () => {
         source: String(node.id),
         target: String(node.next_node_id),
         animated: true,
-        style: { stroke: '#94a3b8', strokeWidth: 2 },
+        style: { stroke: '#c4c9d4', strokeWidth: 1.5 },
       }));
 
     // Edges from options[].next_node_id (branching connections)
@@ -337,7 +488,7 @@ const FlowEditorContent: React.FC = () => {
           target: String(opt.next_node_id),
           animated: true,
           label: opt.text || `Opción ${idx + 1}`,
-          style: { stroke: '#8b5cf6', strokeWidth: 2 },
+          style: { stroke: '#a855f7', strokeWidth: 1.5 },
           labelStyle: { fontSize: 10, fill: '#8b5cf6', fontWeight: 500 },
           labelBgStyle: { fill: '#f5f3ff', fillOpacity: 0.9 },
           labelBgPadding: [6, 3] as [number, number],
@@ -393,7 +544,7 @@ const FlowEditorContent: React.FC = () => {
 
   const onConnect = useCallback((params: Connection) => {
     const sourceHandle = params.sourceHandle || '';
-    let edgeStyle: any = { animated: true, style: { stroke: '#94a3b8', strokeWidth: 2 } };
+    let edgeStyle: any = { animated: true, style: { stroke: '#c4c9d4', strokeWidth: 1.5 } };
 
     if (sourceHandle.startsWith('opt-')) {
       // Find the option label from the source node
@@ -403,7 +554,7 @@ const FlowEditorContent: React.FC = () => {
       edgeStyle = {
         animated: true,
         label: optText,
-        style: { stroke: '#8b5cf6', strokeWidth: 2 },
+        style: { stroke: '#a855f7', strokeWidth: 1.5 },
         labelStyle: { fontSize: 10, fill: '#8b5cf6', fontWeight: 500 },
         labelBgStyle: { fill: '#f5f3ff', fillOpacity: 0.9 },
         labelBgPadding: [6, 3] as [number, number],
@@ -413,7 +564,7 @@ const FlowEditorContent: React.FC = () => {
       edgeStyle = {
         animated: true,
         label: 'Sí',
-        style: { stroke: '#22c55e', strokeWidth: 2 },
+        style: { stroke: '#22c55e', strokeWidth: 1.5 },
         labelStyle: { fontSize: 10, fill: '#22c55e', fontWeight: 600 },
         labelBgStyle: { fill: '#f0fdf4', fillOpacity: 0.9 },
         labelBgPadding: [6, 3] as [number, number],
@@ -423,7 +574,7 @@ const FlowEditorContent: React.FC = () => {
       edgeStyle = {
         animated: true,
         label: 'No',
-        style: { stroke: '#ef4444', strokeWidth: 2 },
+        style: { stroke: '#ef4444', strokeWidth: 1.5 },
         labelStyle: { fontSize: 10, fill: '#ef4444', fontWeight: 600 },
         labelBgStyle: { fill: '#fef2f2', fillOpacity: 0.9 },
         labelBgPadding: [6, 3] as [number, number],
@@ -434,11 +585,33 @@ const FlowEditorContent: React.FC = () => {
     setEdges((eds) => addEdge({ ...params, ...edgeStyle }, eds));
   }, [setEdges, nodes]);
 
-  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
-    if (confirm('¿Eliminar esta conexión?')) {
-      setEdges((eds) => eds.filter((e) => e.id !== edge.id));
-    }
+  // Listen for edge delete events from custom edge component
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const edgeId = (e as CustomEvent).detail?.edgeId;
+      if (edgeId) setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
+    };
+    window.addEventListener('delete-edge', handler);
+    return () => window.removeEventListener('delete-edge', handler);
   }, [setEdges]);
+
+  // Fetch session counts per node for the current chatbot
+  useEffect(() => {
+    if (!chatbotId) return;
+    const fetchCounts = async () => {
+      try {
+        const data = await chatbotService.getChatbotAnalytics(Number(chatbotId), 'all');
+        if (data?.node_stats) {
+          const counts: Record<number, number> = {};
+          data.node_stats.forEach((ns: any) => {
+            if (ns.active_users > 0) counts[ns.node_id] = ns.active_users;
+          });
+          setNodeSessionCounts(counts);
+        }
+      } catch {}
+    };
+    fetchCounts();
+  }, [chatbotId]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -490,6 +663,20 @@ const FlowEditorContent: React.FC = () => {
         return { delay_ms: 1000 };
       case 'transfer':
         return { transfer_to: '' };
+      case 'policy_lookup':
+        return { 
+          validation_field: 'email', 
+          send_documents: true,
+          ask_document_message: '',
+          ask_validation_message: '',
+          no_results_message: '',
+          validation_error_message: '',
+          success_message: '',
+        };
+      case 'add_tag':
+        return { tag_name: '', tag_color: 'blue' };
+      case 'remove_tag':
+        return { tag_name: '' };
       default:
         return {};
     }
@@ -525,18 +712,26 @@ const FlowEditorContent: React.FC = () => {
     setNodes((nds) => nds.concat(newNode));
   }, [nodes, setNodes]);
 
-  // Inject callbacks into nodes so the custom GuroFlowNode can use them
+  // Inject callbacks and index into nodes so the custom GuroFlowNode can use them
   const nodesWithCallbacks = useMemo(() =>
-    nodes.map((node) => ({
+    nodes.map((node, index) => ({
       ...node,
       data: {
         ...node.data,
         onEdit: onEditNode,
         onDelete: onNodeDelete,
         onDuplicate: onDuplicateNode,
+        activeUsers: nodeSessionCounts[Number(node.id)] || 0,
+        nodeIndex: index,
       },
     })),
-    [nodes, onEditNode, onNodeDelete, onDuplicateNode]
+    [nodes, onEditNode, onNodeDelete, onDuplicateNode, nodeSessionCounts]
+  );
+
+  // Add 'deletable' type to all edges
+  const edgesWithType = useMemo(() =>
+    edges.map((edge) => ({ ...edge, type: 'deletable' })),
+    [edges]
   );
 
   const handleSaveFlow = async () => {
@@ -794,7 +989,7 @@ const FlowEditorContent: React.FC = () => {
                   title={item.label}
                   className="group relative w-8 h-8 rounded-lg flex items-center justify-center cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-all duration-200 active:scale-90"
                 >
-                  <Icon icon={item.icon} width={15} style={{ color: nodeStyles[item.type]?.border }} />
+                  <Icon icon={item.icon} width={15} style={{ color: nodeStyles[item.type]?.accent }} />
                   <div className="absolute left-full ml-2 px-2 py-0.5 rounded-md bg-gray-800 dark:bg-[#222] text-[9px] font-medium text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 z-50 shadow-xl">{item.label}</div>
                 </div>
               ))}
@@ -833,8 +1028,8 @@ const FlowEditorContent: React.FC = () => {
                     }}
                     className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/[0.04] cursor-grab hover:bg-gray-100 dark:hover:bg-white/[0.05] hover:border-gray-300 dark:hover:border-white/[0.08] transition-all active:cursor-grabbing active:scale-[0.97]"
                   >
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${nodeStyles[item.type]?.border}15` }}>
-                      <Icon icon={item.icon} width={14} style={{ color: nodeStyles[item.type]?.border }} />
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${nodeStyles[item.type]?.accent}15` }}>
+                      <Icon icon={item.icon} width={14} style={{ color: nodeStyles[item.type]?.accent }} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] font-medium text-gray-700 dark:text-gray-300">{item.label}</p>
@@ -849,43 +1044,42 @@ const FlowEditorContent: React.FC = () => {
 
         {/* ── Main content area ── */}
         {activeTab === 'flows' && (
-          <div className="flex-1 bg-gray-100 dark:bg-[#0a0a0a]">
+          <div className="flex-1 bg-[#f8f9fb] dark:bg-[#0a0a0a]">
             <ReactFlow
               nodes={nodesWithCallbacks}
-              edges={edges}
+              edges={edgesWithType}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
-              onEdgeClick={onEdgeClick}
               onDrop={onDrop}
               onDragOver={onDragOver}
               onNodeDoubleClick={onNodeDoubleClick}
               nodeTypes={customNodeTypes}
+              edgeTypes={customEdgeTypes}
               fitView
               snapToGrid
               snapGrid={[20, 20]}
               defaultEdgeOptions={{
                 animated: true,
-                style: { stroke: '#22c55e80', strokeWidth: 2 },
+                style: { stroke: '#c4c9d4', strokeWidth: 1.5 },
               }}
-              style={{ background: 'var(--rf-bg, #0a0a0a)' }}
-              className="[--rf-bg:#f3f4f6] dark:[--rf-bg:#0a0a0a]"
+              style={{ background: 'var(--rf-bg, #f8f9fb)' }}
+              className="[--rf-bg:#f8f9fb] dark:[--rf-bg:#0a0a0a] [--rf-dot:rgba(0,0,0,0.06)] dark:[--rf-dot:rgba(255,255,255,0.04)] [--rf-minimap-mask:rgba(0,0,0,0.08)] dark:[--rf-minimap-mask:rgba(0,0,0,0.7)]"
             >
               <Controls
                 position="bottom-right"
-                style={{ background: '#161616', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', overflow: 'hidden' }}
-                className="!shadow-xl !shadow-black/40 [&>button]:!bg-[#161616] [&>button]:!border-white/[0.04] [&>button]:!text-gray-400 [&>button:hover]:!bg-white/5 [&>button:hover]:!text-white [&>button>svg]:!fill-current"
+                className="!rounded-xl !overflow-hidden !shadow-lg !border bg-white dark:bg-[#161616] !border-gray-200 dark:!border-white/[0.06] !shadow-black/5 dark:!shadow-black/40 [&>button]:!bg-white dark:[&>button]:!bg-[#161616] [&>button]:!border-gray-200 dark:[&>button]:!border-white/[0.04] [&>button]:!text-gray-500 dark:[&>button]:!text-gray-400 [&>button:hover]:!bg-gray-50 dark:[&>button:hover]:!bg-white/5 [&>button:hover]:!text-gray-800 dark:[&>button:hover]:!text-white [&>button>svg]:!fill-current"
               />
               <MiniMap
-                nodeColor={(node) => nodeStyles[(node.data as any)?.nodeType]?.border || '#6b7280'}
-                style={{ background: '#111', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px' }}
-                maskColor="rgba(0,0,0,0.7)"
+                nodeColor={(node) => nodeStyles[(node.data as any)?.nodeType]?.accent || '#6b7280'}
+                className="!rounded-xl !border !shadow-lg bg-white dark:bg-[#111] !border-gray-200 dark:!border-white/[0.06]"
+                maskColor="var(--rf-minimap-mask, rgba(0,0,0,0.08))"
               />
-              <Background variant={BackgroundVariant.Dots} gap={20} size={0.8} color="rgba(255,255,255,0.04)" />
+              <Background variant={BackgroundVariant.Dots} gap={20} size={0.8} color="var(--rf-dot, rgba(0,0,0,0.06))" />
 
               <Panel position="bottom-center">
-                <div className="bg-[#161616] rounded-xl px-4 py-2 border border-white/[0.06] shadow-xl shadow-black/40">
-                  <span className="text-[9px] text-gray-500">Arrastra componentes • Doble clic para editar • Conecta nodos arrastrando</span>
+                <div className="bg-white dark:bg-[#161616] rounded-xl px-4 py-2 border border-gray-200 dark:border-white/[0.06] shadow-lg shadow-black/5 dark:shadow-black/40">
+                  <span className="text-[9px] text-gray-400 dark:text-gray-500">Arrastra componentes • Doble clic para editar • Conecta nodos arrastrando • Hover en línea para eliminar</span>
                 </div>
               </Panel>
             </ReactFlow>
@@ -893,7 +1087,7 @@ const FlowEditorContent: React.FC = () => {
         )}
 
         {activeTab === 'settings' && (
-          <div className="flex-1 overflow-y-auto p-6 bg-[#0a0a0a]">
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-[#0a0a0a]">
             <div className="max-w-4xl mx-auto">
               <ChatbotSettings 
                 chatbot={chatbot} 
@@ -904,7 +1098,7 @@ const FlowEditorContent: React.FC = () => {
         )}
 
         {activeTab === 'analytics' && (
-          <div className="flex-1 overflow-y-auto p-6 bg-[#0a0a0a]">
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-[#0a0a0a]">
             <ChatbotAnalyticsPanel chatbotId={chatbot.id} chatbotName={chatbot.name} />
           </div>
         )}
@@ -1061,9 +1255,9 @@ const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ show, node, onClose, 
         <div className="flex items-center gap-3">
           <div 
             className="p-2 rounded-lg"
-            style={{ backgroundColor: nodeStyles[nodeType]?.bg, borderColor: nodeStyles[nodeType]?.border }}
+            style={{ backgroundColor: nodeStyles[nodeType]?.accentLight, borderColor: nodeStyles[nodeType]?.accent }}
           >
-            <Icon icon={paletteItem?.icon || 'solar:widget-bold'} width={24} style={{ color: nodeStyles[nodeType]?.border }} />
+            <Icon icon={paletteItem?.icon || 'solar:widget-bold'} width={24} style={{ color: nodeStyles[nodeType]?.accent }} />
           </div>
           <div>
             <h3 className="text-lg font-semibold">{paletteItem?.label || nodeType}</h3>
@@ -1257,36 +1451,25 @@ const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ show, node, onClose, 
                     </div>
 
                     <div className="flex gap-2 items-center text-sm">
-                      <span className="text-gray-500">→ Ir a:</span>
+                      <span className="text-gray-500 shrink-0">→ Ir a:</span>
                       <Select
                         sizing="sm"
-                        value={opt.transfer_to ? '_transfer' : (opt.next_flow_id ? `flow_${opt.next_flow_id}` : (opt.next_node_id || ''))}
+                        value={opt.transfer_to ? '_transfer' : (opt.next_node_id || '')}
                         onChange={(e) => {
                           const value = e.target.value;
                           const newOptions = [...(config.options || [])];
                           
                           if (value === '_transfer') {
-                            // Transferir a agente
                             newOptions[index] = { 
                               ...newOptions[index], 
                               next_node_id: undefined,
                               next_flow_id: undefined,
                               transfer_to: { department_id: null, user_id: null }
                             };
-                          } else if (value.startsWith('flow_')) {
-                            // Es un flujo
-                            const flowId = parseInt(value.replace('flow_', ''));
-                            newOptions[index] = { 
-                              ...newOptions[index], 
-                              next_node_id: undefined,
-                              next_flow_id: flowId,
-                              transfer_to: undefined
-                            };
                           } else {
-                            // Es un nodo o acción especial
                             newOptions[index] = { 
                               ...newOptions[index], 
-                              next_node_id: value,
+                              next_node_id: value || undefined,
                               next_flow_id: undefined,
                               transfer_to: undefined
                             };
@@ -1298,17 +1481,35 @@ const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ show, node, onClose, 
                         <option value="">Siguiente paso (por defecto)</option>
                         <option value="_end">Finalizar flujo</option>
                         <option value="_transfer">🔀 Transferir a agente</option>
-                        {otherFlows.length > 0 && (
-                          <optgroup label="📂 Ir a otro flujo">
-                            {otherFlows.map((flow) => (
-                              <option key={flow.id} value={`flow_${flow.id}`}>
-                                🔀 {flow.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
+                        {availableFlows.map((flow) => {
+                          const flowNodes = (flow.nodes || []).filter(n => n.node_type !== 'start');
+                          if (flowNodes.length === 0) return null;
+                          const isCurrent = flow.id === currentFlowId;
+                          return (
+                            <optgroup key={flow.id} label={`${isCurrent ? '📌' : '📂'} ${flow.name}${isCurrent ? ' (actual)' : ''}`}>
+                              {flowNodes.map((n) => (
+                                <option key={n.id} value={String(n.id)}>
+                                  {isCurrent ? '' : '↗ '}{n.name || n.node_type} ({n.node_type})
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
                       </Select>
                     </div>
+                    {/* Show cross-flow indicator */}
+                    {opt.next_node_id && (() => {
+                      const targetNode = availableFlows.flatMap(f => (f.nodes || []).map(n => ({ ...n, flowName: f.name, flowId: f.id }))).find(n => String(n.id) === String(opt.next_node_id));
+                      if (targetNode && targetNode.flowId !== currentFlowId) {
+                        return (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-blue-600">
+                            <Icon icon="solar:arrow-right-up-bold" width={12} />
+                            <span>Cross-flow → <strong>{targetNode.flowName}</strong> › {targetNode.name || targetNode.node_type}</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
 
                     {/* Configuración de transferencia */}
                     {opt.transfer_to && (
@@ -1363,12 +1564,6 @@ const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ show, node, onClose, 
                       </div>
                     )}
 
-                    {opt.next_flow_id && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-blue-600">
-                        <Icon icon="solar:arrow-right-up-bold" width={12} />
-                        <span>Redirige al flujo: <strong>{otherFlows.find(f => f.id === opt.next_flow_id)?.name || `#${opt.next_flow_id}`}</strong></span>
-                      </div>
-                    )}
                   </div>
                 ))}
                 {(config.options || []).length < 10 && (
@@ -1635,14 +1830,18 @@ const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ show, node, onClose, 
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Instrucciones para la IA
+                  Instrucciones para la IA (System Prompt)
                 </label>
                 <Textarea
                   value={config.ai_prompt || ''}
                   onChange={(e) => updateConfig('ai_prompt', e.target.value)}
-                  placeholder="Responde de manera amable y profesional. Si el usuario pregunta por precios, menciona que un asesor se comunicará pronto..."
-                  rows={4}
+                  placeholder="Eres un asistente experto en... Tu objetivo es calcular/responder... Usa las variables {nombre_variable} para personalizar."
+                  rows={10}
+                  className="font-mono text-sm"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Usa <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{'{variable}'}</code> para insertar datos del flujo. Si está vacío, se usará el prompt general del chatbot.
+                </p>
               </div>
               <div className="mt-3">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1652,8 +1851,35 @@ const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ show, node, onClose, 
                   value={config.ai_context || ''}
                   onChange={(e) => updateConfig('ai_context', e.target.value)}
                   placeholder="Información sobre tu negocio, productos, servicios..."
-                  rows={2}
+                  rows={3}
                 />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Máx. tokens
+                  </label>
+                  <TextInput
+                    type="number"
+                    value={config.max_tokens || 300}
+                    onChange={(e) => updateConfig('max_tokens', parseInt(e.target.value) || 300)}
+                    min={50}
+                    max={2000}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Temperatura
+                  </label>
+                  <TextInput
+                    type="number"
+                    value={config.temperature ?? 0.7}
+                    onChange={(e) => updateConfig('temperature', parseFloat(e.target.value) || 0.7)}
+                    min={0}
+                    max={2}
+                    step={0.1}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1764,6 +1990,161 @@ const NodeEditorModal: React.FC<NodeEditorModalProps> = ({ show, node, onClose, 
                 El bot esperará este tiempo antes de continuar al siguiente paso
               </p>
             </div>
+          </div>
+        )}
+
+        {/* ===== CONFIGURACIÓN NODO CONSULTAR PÓLIZA ===== */}
+        {nodeType === 'policy_lookup' && (
+          <div className="space-y-4">
+            <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-lg border border-teal-200 dark:border-teal-800">
+              <div className="flex items-center gap-2 mb-3">
+                <Icon icon="solar:shield-check-bold" className="text-teal-600" width={20} />
+                <span className="font-medium text-teal-800 dark:text-teal-300">Consulta de Pólizas</span>
+              </div>
+              <p className="text-sm text-teal-700 dark:text-teal-400">
+                El bot pedirá el documento de identidad y un campo de verificación para mostrar las pólizas del cliente y enviar la carátula.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <Icon icon="solar:lock-bold" className="inline mr-1 text-teal-500" width={16} />
+                Campo de verificación
+              </label>
+              <Select
+                value={config.validation_field || 'email'}
+                onChange={(e) => updateConfig('validation_field', e.target.value)}
+              >
+                <option value="email">Correo electrónico</option>
+                <option value="phone">Número de teléfono</option>
+                <option value="birth_date">Fecha de nacimiento</option>
+                <option value="policy_number">Número de póliza</option>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                Después del documento, se pedirá este dato para verificar la identidad del cliente.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="send_documents"
+                checked={config.send_documents !== false}
+                onChange={(e) => updateConfig('send_documents', e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <label htmlFor="send_documents" className="text-sm text-gray-700 dark:text-gray-300">
+                Permitir enviar documentos/carátula de la póliza
+              </label>
+            </div>
+
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Mensajes personalizados (opcional)</p>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Pedir documento
+                  </label>
+                  <Textarea
+                    value={config.ask_document_message || ''}
+                    onChange={(e) => updateConfig('ask_document_message', e.target.value)}
+                    placeholder="📋 Para consultar tus pólizas, por favor escribe tu número de documento (cédula):"
+                    rows={2}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Pedir verificación
+                  </label>
+                  <Textarea
+                    value={config.ask_validation_message || ''}
+                    onChange={(e) => updateConfig('ask_validation_message', e.target.value)}
+                    placeholder="🔐 Para verificar tu identidad, por favor escribe tu {field_label}:"
+                    rows={2}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Usa <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{'{field_label}'}</code> para el nombre del campo.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Sin resultados
+                  </label>
+                  <TextInput
+                    value={config.no_results_message || ''}
+                    onChange={(e) => updateConfig('no_results_message', e.target.value)}
+                    placeholder="❌ No encontramos pólizas activas asociadas a ese documento."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Error de verificación
+                  </label>
+                  <TextInput
+                    value={config.validation_error_message || ''}
+                    onChange={(e) => updateConfig('validation_error_message', e.target.value)}
+                    placeholder="❌ Los datos de verificación no coinciden."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Verificación exitosa
+                  </label>
+                  <TextInput
+                    value={config.success_message || ''}
+                    onChange={(e) => updateConfig('success_message', e.target.value)}
+                    placeholder="✅ Identidad verificada. Estas son tus pólizas activas:"
+                  />
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ===== CONFIGURACIÓN NODO AGREGAR/QUITAR ETIQUETA ===== */}
+        {(nodeType === 'add_tag' || nodeType === 'remove_tag') && (
+          <div className="space-y-4">
+            <div className={`p-4 rounded-lg border ${nodeType === 'add_tag' ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Icon icon={nodeType === 'add_tag' ? 'solar:tag-horizontal-bold' : 'solar:tag-horizontal-bold-duotone'} className={nodeType === 'add_tag' ? 'text-emerald-600' : 'text-rose-600'} width={20} />
+                <span className={`font-medium ${nodeType === 'add_tag' ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300'}`}>
+                  {nodeType === 'add_tag' ? 'Agregar etiqueta' : 'Quitar etiqueta'}
+                </span>
+              </div>
+              <p className={`text-sm ${nodeType === 'add_tag' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
+                {nodeType === 'add_tag' ? 'Agrega una etiqueta a la conversación para clasificarla.' : 'Remueve una etiqueta de la conversación.'}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Nombre de la etiqueta
+              </label>
+              <TextInput
+                value={config.tag_name || ''}
+                onChange={(e) => updateConfig('tag_name', e.target.value)}
+                placeholder="Ej: interesado, cotización, cliente_nuevo"
+              />
+            </div>
+            {nodeType === 'add_tag' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Color
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {['blue','green','red','yellow','purple','pink','orange','teal','gray'].map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => updateConfig('tag_color', c)}
+                      className={`w-8 h-8 rounded-full border-2 transition-all ${config.tag_color === c ? 'border-gray-800 dark:border-white scale-110' : 'border-transparent'}`}
+                      style={{ backgroundColor: { blue:'#3b82f6', green:'#22c55e', red:'#ef4444', yellow:'#eab308', purple:'#a855f7', pink:'#ec4899', orange:'#f97316', teal:'#14b8a6', gray:'#6b7280' }[c] }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

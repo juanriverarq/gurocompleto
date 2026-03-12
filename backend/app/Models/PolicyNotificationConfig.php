@@ -281,6 +281,7 @@ class PolicyNotificationConfig extends Model
             '{{policy_number}}' => $policy->policy_number,
             '{{insurance_company}}' => $policy->insurance_company,
             '{{product_name}}' => $policy->product_name,
+            '{{ramo_name}}' => $policy->ramo ? ($policy->ramo->nombre ?? '-') : ($policy->product_name ?? '-'),
             '{{end_date}}' => $policy->end_date ? $policy->end_date->format('d/m/Y') : 'N/A',
             '{{renewal_date}}' => $policy->renewal_date ? $policy->renewal_date->format('d/m/Y') : 'N/A',
             '{{payment_due_date}}' => $policy->payment_due_date ? $policy->payment_due_date->format('d/m/Y') : 'N/A',

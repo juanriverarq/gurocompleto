@@ -209,6 +209,11 @@ class RolBroker extends Model
             'icon' => 'solar:wallet-money-bold-duotone',
             'permisos' => ['ver', 'crear', 'editar', 'eliminar', 'importar', 'exportar']
         ],
+        'recibos_caja' => [
+            'label' => 'Recibos de Caja',
+            'icon' => 'solar:bill-list-bold-duotone',
+            'permisos' => ['ver', 'crear', 'editar', 'eliminar', 'anular', 'imprimir']
+        ],
         'recaudos' => [
             'label' => 'Recaudos',
             'icon' => 'solar:hand-money-bold-duotone',
@@ -368,7 +373,22 @@ class RolBroker extends Model
             'label' => 'Recursos Humanos',
             'icon' => 'solar:users-group-two-rounded-bold-duotone',
             'permisos' => ['ver', 'crear', 'editar', 'eliminar']
-        ]
+        ],
+        'reporte_actividades' => [
+            'label' => 'Reporte de Actividades',
+            'icon' => 'solar:clipboard-list-bold-duotone',
+            'permisos' => ['ver', 'exportar']
+        ],
+        'robots_ia' => [
+            'label' => 'Robots IA',
+            'icon' => 'solar:robot-bold-duotone',
+            'permisos' => ['ver', 'crear', 'editar', 'eliminar', 'configurar']
+        ],
+        'comparador_autos' => [
+            'label' => 'Comparador de Seguros',
+            'icon' => 'solar:car-bold-duotone',
+            'permisos' => ['ver', 'usar']
+        ],
     ];
 
     /**

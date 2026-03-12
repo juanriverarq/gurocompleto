@@ -26,6 +26,43 @@ class Ramo extends Model
         'vista_mapa_oportunidad' => 'boolean',
     ];
 
+    /**
+     * Accessor: subramo siempre retorna un array.
+     * Compatible con valores legacy (string plano) y nuevos (JSON array).
+     */
+    public function getSubramoAttribute($value)
+    {
+        if (is_null($value) || $value === '') {
+            return [];
+        }
+        $decoded = json_decode($value, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+        // Legacy: string plano → array de un solo elemento
+        return [$value];
+    }
+
+    /**
+     * Mutator: acepta array o string y guarda como JSON.
+     */
+    public function setSubramoAttribute($value)
+    {
+        if (is_null($value)) {
+            $this->attributes['subramo'] = null;
+            return;
+        }
+        if (is_array($value)) {
+            // Filtrar vacíos y re-indexar
+            $value = array_values(array_filter(array_map('trim', $value), fn($v) => $v !== ''));
+            $this->attributes['subramo'] = count($value) > 0 ? json_encode($value, JSON_UNESCAPED_UNICODE) : null;
+        } else {
+            // String plano legacy
+            $trimmed = trim($value);
+            $this->attributes['subramo'] = $trimmed !== '' ? json_encode([$trimmed], JSON_UNESCAPED_UNICODE) : null;
+        }
+    }
+
     // ===== RELACIONES =====
 
     /**

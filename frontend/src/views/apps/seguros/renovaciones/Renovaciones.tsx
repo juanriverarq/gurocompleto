@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Badge, Spinner, Modal, Table, Button, Dropdown, TextInput, Label } from 'flowbite-react';
-import { IconDots } from '@tabler/icons-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, Badge, Spinner, Modal, Table, Button, TextInput, Label } from 'flowbite-react';
+import TableActionMenu, { TableMenuItem } from 'src/components/TableActionMenu';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from 'src/hooks/use-toast';
@@ -21,6 +21,15 @@ const Renovaciones: React.FC = () => {
   const [selectedRenovacion, setSelectedRenovacion] = useState<Renovacion | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showRenovarModal, setShowRenovarModal] = useState(false);
+  const [renAseguradoraId, setRenAseguradoraId] = useState<string>('');
+  const [renRamoId, setRenRamoId] = useState<string>('');
+  const [renPrimaNeta, setRenPrimaNeta] = useState<string>('');
+  const [renPorcentajeIva, setRenPorcentajeIva] = useState<string>('19');
+  const [renIva, setRenIva] = useState<string>('');
+  const [renGastosAdicionales, setRenGastosAdicionales] = useState<string>('');
+  const [renTotal, setRenTotal] = useState<string>('');
+  const [renPorcentajeComision, setRenPorcentajeComision] = useState<string>('');
+  const [renComision, setRenComision] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'todas' | 'pendientes' | 'renovadas' | 'vencidas'>('pendientes');
 
   // Estados para filtros y columnas
@@ -169,6 +178,33 @@ const Renovaciones: React.FC = () => {
     }));
   }, [activeTab]);
 
+  // Auto-calculate financial fields in renewal modal
+  useEffect(() => {
+    const prima = parseFloat(renPrimaNeta) || 0;
+    const pctIva = parseFloat(renPorcentajeIva) || 0;
+    const gastos = parseFloat(renGastosAdicionales) || 0;
+    const iva = Math.round((prima * pctIva) / 100);
+    const total = prima + iva + gastos;
+    const pctComision = parseFloat(renPorcentajeComision) || 0;
+    const comision = Math.round((prima * pctComision) / 100);
+    setRenIva(String(iva));
+    setRenTotal(String(total));
+    setRenComision(String(comision));
+  }, [renPrimaNeta, renPorcentajeIva, renGastosAdicionales, renPorcentajeComision]);
+
+  // Auto-fill commission % and IVA % from comisiones_aseguradoras when ramo+aseguradora change
+  useEffect(() => {
+    if (!renRamoId || !renAseguradoraId) return;
+    const ramo = ramosList.find((r: any) => String(r.id) === String(renRamoId));
+    const comision = ramo?.comisiones_aseguradoras?.find((c: any) => String(c.aseguradora_id) === String(renAseguradoraId));
+    if (comision) {
+      setRenPorcentajeComision(String(comision.porcentaje_comision || ''));
+      if (comision.porcentaje_iva > 0) {
+        setRenPorcentajeIva(String(comision.porcentaje_iva));
+      }
+    }
+  }, [renRamoId, renAseguradoraId, ramosList]);
+
   // Calcular contadores para los tabs
   const getTabCounts = () => {
     if (!estadisticas) return { todas: 0, pendientes: 0, renovadas: 0, vencidas: 0 };
@@ -203,6 +239,22 @@ const Renovaciones: React.FC = () => {
 
   const handleRenovar = (renovacion: Renovacion) => {
     setSelectedRenovacion(renovacion);
+    // Pre-fill financial fields from current poliza data
+    const prima = (renovacion as any).valorPrima || 0;
+    const pctIva = (renovacion as any).porcentajeIva ?? 19;
+    const ivaVal = (renovacion as any).iva ?? Math.round((prima * pctIva) / 100);
+    const gastos = (renovacion as any).gastosAdicionales ?? 0;
+    const totalVal = (renovacion as any).total ?? (prima + ivaVal + gastos);
+    setRenPrimaNeta(String(Math.round(prima)));
+    setRenPorcentajeIva(String(pctIva));
+    setRenIva(String(Math.round(ivaVal)));
+    setRenGastosAdicionales(gastos ? String(Math.round(gastos)) : '');
+    setRenTotal(String(Math.round(totalVal)));
+    setRenPorcentajeComision(String((renovacion as any).comisionPorcentaje || ''));
+    setRenComision(String(Math.round((prima * ((renovacion as any).comisionPorcentaje || 0)) / 100)));
+    // Pre-fill aseguradora/ramo from poliza
+    setRenAseguradoraId((renovacion as any).aseguradora_id ? String((renovacion as any).aseguradora_id) : '');
+    setRenRamoId((renovacion as any).ramo_id ? String((renovacion as any).ramo_id) : '');
     setShowRenovarModal(true);
   };
 
@@ -352,20 +404,20 @@ const Renovaciones: React.FC = () => {
       }
 
       // Validar prima requerida y en rango
-      if (!nuevoValorPrima || nuevoValorPrima < 10000 || nuevoValorPrima > 100000000) {
+      if (isNaN(nuevoValorPrima) || nuevoValorPrima < 0) {
         toast({
           title: "Error de validación",
-          description: "El valor de la prima debe estar entre $10,000 y $100,000,000",
+          description: "El valor de la prima es obligatorio y debe ser mayor o igual a 0",
           variant: "destructive",
         });
         return;
       }
 
-      // Validar formato de número de póliza si se proporciona
-      if (nuevoNumero && !/^[A-Z]{3}-\d{4}-\d{4}$/.test(nuevoNumero)) {
+      // Validar que el número de póliza no esté vacío si se proporcionó algo
+      if (nuevoNumero && nuevoNumero.length < 3) {
         toast({
           title: "Error de validación",
-          description: "El formato del número de póliza debe ser AAA-0000-0000",
+          description: "El número de póliza debe tener al menos 3 caracteres",
           variant: "destructive",
         });
         return;
@@ -379,7 +431,8 @@ const Renovaciones: React.FC = () => {
         : '';
       const fechaFinal = nuevaFechaV || fallbackNuevaFecha;
 
-      const nuevaAseguradora = (formData.get('nueva_aseguradora') as string || '').trim();
+      const nuevaAseguradora = renAseguradoraId || '';
+      const nuevoRamo = renRamoId || '';
 
       const renovacionData = {
         nuevaFechaVencimiento: fechaFinal,
@@ -387,36 +440,47 @@ const Renovaciones: React.FC = () => {
         observaciones: formData.get('observaciones_renovacion') as string,
         nuevoNumeroPoliza: nuevoNumero || undefined,
         nuevaAseguradora: nuevaAseguradora || undefined,
+        nuevoRamoId: nuevoRamo || undefined,
+        porcentajeIva: parseFloat(renPorcentajeIva) || 19,
+        iva: parseFloat(renIva) || 0,
+        gastosAdicionales: parseFloat(renGastosAdicionales) || 0,
+        total: parseFloat(renTotal) || 0,
       };
       const caratulaFile = formData.get('caratula') as File | null;
 
-      await renovacionesService.procesarRenovacion(selectedRenovacion.id, renovacionData);
+      const resultado = await renovacionesService.procesarRenovacion(selectedRenovacion.id, renovacionData);
 
-      // Si se especificó nuevo número de póliza o nueva aseguradora, actualizar la póliza
-      if ((nuevoNumero || nuevaAseguradora) && selectedRenovacion.poliza_id) {
-        try {
-          const updateData: any = {};
-          if (nuevoNumero) updateData.numero_poliza = nuevoNumero;
-          if (nuevaAseguradora) updateData.aseguradora_id = nuevaAseguradora;
-          await polizaService.updatePoliza(String(selectedRenovacion.poliza_id), updateData);
-        } catch (err) {
-          // Continuar aunque falle esta parte
-          console.warn('No se pudo actualizar datos de póliza en renovación:', err);
-        }
-      }
+      // Determine target poliza for file upload
+      const resData = (resultado as any)?.data;
+      const targetPolizaId = resData?.nueva_poliza?.id
+        ? String(resData.nueva_poliza.id)
+        : String(selectedRenovacion.poliza_id);
 
-      // Si se adjuntó carátula, subirla como documento de la póliza
-      if (caratulaFile && caratulaFile.size > 0 && selectedRenovacion.poliza_id) {
+      // Si se adjuntó carátula, subirla a la póliza resultado
+      if (caratulaFile && caratulaFile.size > 0) {
         try {
-          await polizaService.subirDocumento(String(selectedRenovacion.poliza_id), caratulaFile, { type: 'caratula' });
+          await polizaService.subirDocumento(targetPolizaId, caratulaFile, { type: 'caratula' });
         } catch (err) {
           console.warn('No se pudo subir carátula en renovación:', err);
         }
       }
-      
+
+      const numRenovacion = resData?.nueva_poliza?.numero_renovacion;
+      const mode = resData?.mode;
+      const np = resData?.nueva_poliza;
+      const op = resData?.poliza_original;
+      const descParts: string[] = [];
+      if (mode === 'updated') {
+        descParts.push(`Póliza renovada en sitio (renovación #${numRenovacion || 1})`);
+      } else {
+        descParts.push(`Nueva póliza ${np?.numero_poliza || ''} creada (renovación #${numRenovacion || 1})`);
+        if (op?.nuevo_estado === 'cancelada') descParts.push(`Póliza anterior ${op?.numero_poliza} cancelada`);
+      }
+      if (np?.aseguradora) descParts.push(`Aseg: ${np.aseguradora}`);
+      if (np?.comision_porcentaje) descParts.push(`Comisión: ${np.comision_porcentaje}%`);
       toast({
-        title: "Éxito",
-        description: "Renovación procesada exitosamente",
+        title: "Renovación exitosa",
+        description: descParts.join(' · '),
         variant: "default",
       });
       
@@ -429,6 +493,8 @@ const Renovaciones: React.FC = () => {
 
       setShowRenovarModal(false);
       setSelectedRenovacion(null);
+      setRenAseguradoraId('');
+      setRenRamoId('');
       loadRenovaciones();
       loadEstadisticas();
     } catch (error) {
@@ -804,7 +870,14 @@ const Renovaciones: React.FC = () => {
                   {renovaciones.map((renovacion) => (
                     <tr key={renovacion.id} className="group">
                       <td className="whitespace-nowrap">
-                        <h6 className="text-sm font-medium">{renovacion.numeroPoliza}</h6>
+                        <div className="flex items-center gap-1.5">
+                          <h6 className="text-sm font-medium">{renovacion.numeroPoliza}</h6>
+                          {renovacion.numeroRenovacion != null && renovacion.numeroRenovacion > 0 && (
+                            <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full leading-none">
+                              R{renovacion.numeroRenovacion}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="whitespace-nowrap">
                         <div className="truncate line-clamp-2 max-w-44">
@@ -840,39 +913,27 @@ const Renovaciones: React.FC = () => {
                       <td className="whitespace-nowrap">
                         <h6 className="text-sm">{formatCurrency(renovacion.valorPrima)}</h6>
                       </td>
-                      <td className="sticky-right">
-                        <div className="relative inline-block">
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            style={{ minWidth: '220px' }}
-                            renderTrigger={() => (
-                              <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
-                                <IconDots size={18} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item onClick={() => handleViewRenovacion(renovacion)} className="flex gap-2 text-sm">
-                              <Icon icon="solar:eye-bold" height={16} />
-                              <span>Ver Detalles</span>
-                            </Dropdown.Item>
-                            <Dropdown.Item onClick={() => handleViewPoliza(renovacion)} className="flex gap-2 text-sm text-blue-600">
-                              <Icon icon="solar:document-bold" height={16} />
-                              <span>Ver Póliza</span>
-                            </Dropdown.Item>
-                            <Dropdown.Item onClick={() => handleRegistrarContacto(renovacion)} className="flex gap-2 text-sm">
-                              <Icon icon="solar:phone-bold" height={16} />
-                              <span>Registrar Contacto</span>
-                            </Dropdown.Item>
-                            {renovacion.estado !== 'RENOVADO' && (
-                              <Dropdown.Item onClick={() => handleRenovar(renovacion)} className="flex gap-2 text-sm text-green-600">
-                                <Icon icon="solar:refresh-bold" height={16} />
-                                <span>Renovar</span>
-                              </Dropdown.Item>
-                            )}
-                          </Dropdown>
-                        </div>
+                      <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                        <TableActionMenu>
+                          <TableMenuItem onClick={() => handleViewRenovacion(renovacion)}>
+                            <Icon icon="solar:eye-bold-duotone" height={18} />
+                            <span>Ver Detalles</span>
+                          </TableMenuItem>
+                          <TableMenuItem onClick={() => handleViewPoliza(renovacion)}>
+                            <Icon icon="solar:document-bold-duotone" height={18} className="text-blue-600" />
+                            <span>Ver Póliza</span>
+                          </TableMenuItem>
+                          <TableMenuItem onClick={() => handleRegistrarContacto(renovacion)}>
+                            <Icon icon="solar:phone-bold-duotone" height={18} />
+                            <span>Registrar Contacto</span>
+                          </TableMenuItem>
+                          {renovacion.estado !== 'RENOVADO' && (
+                            <TableMenuItem className="text-green-600" onClick={() => handleRenovar(renovacion)}>
+                              <Icon icon="solar:refresh-bold-duotone" height={18} />
+                              <span>Renovar</span>
+                            </TableMenuItem>
+                          )}
+                        </TableActionMenu>
                       </td>
                     </tr>
                   ))}
@@ -1182,33 +1243,46 @@ const Renovaciones: React.FC = () => {
         <Modal.Body>
           <form onSubmit={handleProcesarRenovacion} id="renovacion-form">
             <div className="space-y-4">
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                <div className="flex">
-                  <Icon icon="solar:info-circle-bold-duotone" className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-blue-800 dark:text-blue-200"><strong>Información:</strong> Estás a punto de procesar la renovación de esta póliza.</p>
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                      • La nueva fecha debe ser posterior a la fecha de vencimiento actual<br/>
-                      • El cambio de prima no puede superar el 50%<br/>
-                      • La fecha máxima permitida es 2 años desde hoy
-                    </p>
-                  </div>
+              {/* Current poliza details */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon icon="solar:shield-check-bold-duotone" className="w-5 h-5 text-blue-600" />
+                  <span className="font-semibold text-sm text-gray-900 dark:text-white">Póliza actual</span>
+                  {selectedRenovacion?.numeroRenovacion != null && selectedRenovacion.numeroRenovacion > 0 && (
+                    <span className="ml-auto text-xs font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                      Renovación #{selectedRenovacion.numeroRenovacion}
+                    </span>
+                  )}
                 </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs">
+                  <div><span className="text-gray-500">Número:</span> <span className="font-medium text-gray-900 dark:text-white">{selectedRenovacion?.numeroPoliza}</span></div>
+                  <div><span className="text-gray-500">Aseguradora:</span> <span className="font-medium text-gray-900 dark:text-white">{selectedRenovacion?.aseguradora || '—'}</span></div>
+                  <div><span className="text-gray-500">Ramo:</span> <span className="font-medium text-gray-900 dark:text-white">{selectedRenovacion?.ramo || selectedRenovacion?.tipoSeguro || '—'}</span></div>
+                  <div><span className="text-gray-500">Prima actual:</span> <span className="font-medium text-gray-900 dark:text-white">${selectedRenovacion?.valorPrima?.toLocaleString('es-CO') || '0'}</span></div>
+                  <div><span className="text-gray-500">Vigencia:</span> <span className="font-medium text-gray-900 dark:text-white">{selectedRenovacion?.fechaInicio?.split('T')[0] || '—'} → {selectedRenovacion?.fechaVencimiento?.split('T')[0] || '—'}</span></div>
+                  <div><span className="text-gray-500">Cliente:</span> <span className="font-medium text-gray-900 dark:text-white">{selectedRenovacion?.cliente || '—'}</span></div>
+                </div>
+              </div>
+              {/* Instructions */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  <Icon icon="solar:info-circle-bold-duotone" className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
+                  <strong>Sin</strong> nuevo número → se actualiza la póliza existente &nbsp;|&nbsp;
+                  <strong>Con</strong> nuevo número → se crea nueva póliza y la anterior queda <strong>cancelada</strong> &nbsp;|&nbsp;
+                  La comisión se calcula automáticamente
+                </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="nuevo_numero_poliza" className="mb-2 block text-gray-900 dark:text-white">
                     Nuevo número de póliza (opcional)
-                    <span className="text-xs text-gray-500 ml-2">Formato: AAA-0000-0000</span>
                   </Label>
                   <TextInput
                     type="text"
                     id="nuevo_numero_poliza"
                     name="nuevo_numero_poliza"
-                    placeholder="Ej: POL-2025-0001"
+                    placeholder="Número de la nueva póliza"
                     className="bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
-                    pattern="^[A-Z]{3}-\d{4}-\d{4}$"
-                    title="Formato requerido: AAA-0000-0000"
                   />
                 </div>
                 <div>
@@ -1219,7 +1293,8 @@ const Renovaciones: React.FC = () => {
                     id="nueva_aseguradora"
                     name="nueva_aseguradora"
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
-                    defaultValue=""
+                    value={renAseguradoraId}
+                    onChange={(e) => { setRenAseguradoraId(e.target.value); setRenRamoId(''); }}
                   >
                     <option value="">Mantener aseguradora actual ({selectedRenovacion?.aseguradora})</option>
                     {!loadingAseguradoras && aseguradorasList.map((aseg) => (
@@ -1228,6 +1303,53 @@ const Renovaciones: React.FC = () => {
                   </select>
                 </div>
               </div>
+              {renAseguradoraId && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="nuevo_ramo" className="mb-2 block text-gray-900 dark:text-white">
+                      Nuevo Ramo
+                    </Label>
+                    <select
+                      id="nuevo_ramo"
+                      name="nuevo_ramo"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
+                      value={renRamoId}
+                      onChange={(e) => setRenRamoId(e.target.value)}
+                    >
+                      <option value="">Mantener ramo actual ({selectedRenovacion?.ramo || selectedRenovacion?.tipoSeguro})</option>
+                      {!loadingRamos && ramosList.map((r: any) => (
+                        <option key={r.id} value={r.id}>{r.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    {(() => {
+                      const targetRamoId = renRamoId;
+                      const targetAsegId = renAseguradoraId;
+                      if (targetRamoId && targetAsegId) {
+                        const ramo = ramosList.find((r: any) => String(r.id) === String(targetRamoId));
+                        const comision = ramo?.comisiones_aseguradoras?.find((c: any) => String(c.aseguradora_id) === String(targetAsegId));
+                        if (comision) {
+                          return (
+                            <div className="w-full p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                              <p className="text-xs text-green-600 dark:text-green-400 font-medium">Comisión configurada</p>
+                              <p className="text-lg font-bold text-green-700 dark:text-green-300">{comision.porcentaje_comision}%</p>
+                              {comision.porcentaje_iva > 0 && <p className="text-xs text-green-600 dark:text-green-400">IVA: {comision.porcentaje_iva}%</p>}
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="w-full p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
+                              <p className="text-xs text-yellow-600 dark:text-yellow-400">Sin comisión configurada para esta combinación</p>
+                            </div>
+                          );
+                        }
+                      }
+                      return null;
+                    })()}
+                  </div>
+                </div>
+              )}
               <div>
                 <Label htmlFor="nueva_fecha" className="mb-2 block text-gray-900 dark:text-white">
                   Nueva Fecha de Vencimiento <span className="text-red-500">*</span>
@@ -1244,50 +1366,120 @@ const Renovaciones: React.FC = () => {
                   required
                 />
               </div>
-              <div>
-                <Label htmlFor="nuevo_valor" className="mb-2 block text-gray-900 dark:text-white">
-                  Nuevo Valor Prima <span className="text-red-500">*</span>
-                  <span className="text-xs text-gray-500 ml-2">$10,000 - $100,000,000</span>
-                </Label>
-                <TextInput
-                  type="number"
-                  id="nuevo_valor"
-                  name="nuevo_valor"
-                  placeholder="Valor de la prima"
-                  className="bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500"
-                  defaultValue={selectedRenovacion?.valorPrima}
-                  step="0.01"
-                  min="10000"
-                  max="100000000"
-                  required
-                />
+              {/* Información Financiera */}
+              <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon icon="solar:wallet-bold-duotone" className="w-4 h-4 text-green-600" />
+                  <span className="font-semibold text-sm text-gray-900 dark:text-white">Información Financiera</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="nuevo_valor" className="text-xs font-medium text-gray-900 dark:text-white">Prima Neta <span className="text-red-500">*</span></Label>
+                    <TextInput
+                      type="number"
+                      id="nuevo_valor"
+                      name="nuevo_valor"
+                      placeholder="0"
+                      className="mt-1 bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                      value={renPrimaNeta}
+                      onChange={(e) => setRenPrimaNeta(e.target.value)}
+                      step="1"
+                      min="0"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="ren_pct_iva" className="text-xs font-medium text-gray-900 dark:text-white">% IVA</Label>
+                    <TextInput
+                      type="number"
+                      id="ren_pct_iva"
+                      placeholder="19"
+                      className="mt-1 bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                      value={renPorcentajeIva}
+                      onChange={(e) => setRenPorcentajeIva(e.target.value)}
+                      step="0.01"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-gray-900 dark:text-white">IVA</Label>
+                    <TextInput
+                      type="text"
+                      value={renIva ? Number(renIva).toLocaleString('es-CO') : '0'}
+                      readOnly
+                      className="mt-1 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="ren_gastos" className="text-xs font-medium text-gray-900 dark:text-white">Gastos Adic.</Label>
+                    <TextInput
+                      type="number"
+                      id="ren_gastos"
+                      placeholder="0"
+                      className="mt-1 bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                      value={renGastosAdicionales}
+                      onChange={(e) => setRenGastosAdicionales(e.target.value)}
+                      step="1"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-gray-900 dark:text-white">Total</Label>
+                    <TextInput
+                      type="text"
+                      value={renTotal ? Number(renTotal).toLocaleString('es-CO') : '0'}
+                      readOnly
+                      className="mt-1 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="ren_pct_comision" className="text-xs font-medium text-gray-900 dark:text-white">% Comisión</Label>
+                    <TextInput
+                      type="number"
+                      id="ren_pct_comision"
+                      placeholder="0"
+                      className="mt-1 bg-white dark:bg-darkgray border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                      value={renPorcentajeComision}
+                      onChange={(e) => setRenPorcentajeComision(e.target.value)}
+                      step="0.01"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
+                </div>
+                {renComision && parseFloat(renComision) > 0 && (
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    Comisión estimada: <span className="font-bold text-green-600">${Number(renComision).toLocaleString('es-CO')}</span>
+                  </div>
+                )}
               </div>
-              <div>
-                <Label htmlFor="caratula" className="mb-2 block text-gray-900 dark:text-white">
-                  Carátula (PDF, opcional)
-                  <span className="text-xs text-gray-500 ml-2">Máximo 10MB</span>
-                </Label>
-                <input
-                  type="file"
-                  id="caratula"
-                  name="caratula"
-                  accept="application/pdf"
-                  className="block w-full text-sm text-gray-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-              </div>
-              <div>
-                <Label htmlFor="observaciones_renovacion" className="mb-2 block text-gray-900 dark:text-white">
-                  Observaciones de Renovación
-                  <span className="text-xs text-gray-500 ml-2">Máximo 1000 caracteres</span>
-                </Label>
-                <textarea
-                  id="observaciones_renovacion"
-                  name="observaciones_renovacion"
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white"
-                  rows={2}
-                  placeholder="Notas sobre la renovación..."
-                  maxLength={1000}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="caratula" className="mb-2 block text-gray-900 dark:text-white">
+                    Carátula (PDF, opcional)
+                  </Label>
+                  <input
+                    type="file"
+                    id="caratula"
+                    name="caratula"
+                    accept="application/pdf"
+                    className="block w-full text-sm text-gray-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="observaciones_renovacion" className="mb-2 block text-gray-900 dark:text-white">
+                    Observaciones
+                  </Label>
+                  <textarea
+                    id="observaciones_renovacion"
+                    name="observaciones_renovacion"
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-darkgray text-gray-900 dark:text-white text-sm"
+                    rows={2}
+                    placeholder="Notas sobre la renovación..."
+                    maxLength={1000}
+                  />
+                </div>
               </div>
             </div>
           </form>

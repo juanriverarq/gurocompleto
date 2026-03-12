@@ -46,6 +46,7 @@ interface Client {
   ciudad?: string;
   estado: string;
   polizas?: any[];
+  etiquetas?: string;
 }
 
 // Variable mapping options from client data
@@ -87,6 +88,11 @@ const WhatsAppCampanas: React.FC = () => {
   const [selectAllClients, setSelectAllClients] = useState(true);
   const [selectedClientIds, setSelectedClientIds] = useState<Set<number>>(new Set());
   const [clientSearch, setClientSearch] = useState('');
+
+  // Tag filtering
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagMatchMode, setTagMatchMode] = useState<'any' | 'all'>('any');
+  const [tagInput, setTagInput] = useState('');
 
   // Sending
   const [sending, setSending] = useState(false);
@@ -149,7 +155,7 @@ const WhatsAppCampanas: React.FC = () => {
   const loadClients = async () => {
     try {
       setLoadingClients(true);
-      const data = await apiFetch('/saas/clientes?per_page=500');
+      const data = await apiFetch('/saas/clientes?per_page=5000');
       setClients(data.data || data || []);
     } catch (err: any) {
       console.error('Error loading clients:', err);
@@ -175,6 +181,9 @@ const WhatsAppCampanas: React.FC = () => {
     setSelectAllClients(true);
     setSelectedClientIds(new Set());
     setSendResult(null);
+    setSelectedTags([]);
+    setTagMatchMode('any');
+    setTagInput('');
     loadTemplates();
   };
 
@@ -220,8 +229,41 @@ const WhatsAppCampanas: React.FC = () => {
     });
   };
 
-  // Filtered clients
-  const filteredClients = clients.filter(c => {
+  // Normalize tag for comparison (lowercase, trim, remove accents)
+  const normalizeTag = (t: string) => t.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/_/g, ' ');
+
+  // Extract unique tags from all clients
+  const availableTags = React.useMemo(() => {
+    const tagMap = new Map<string, string>(); // normalized -> original display
+    clients.forEach(c => {
+      const tags = (c.etiquetas || '').split(',').filter(Boolean);
+      tags.forEach(t => {
+        const norm = normalizeTag(t);
+        if (norm && !tagMap.has(norm)) tagMap.set(norm, t.trim());
+      });
+    });
+    return Array.from(tagMap.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([norm, display]) => ({ normalized: norm, display }));
+  }, [clients]);
+
+  // Filter by tags
+  const clientsFilteredByTags = React.useMemo(() => {
+    if (selectedTags.length === 0) return clients;
+    const selectedNormalized = selectedTags.map(normalizeTag);
+    return clients.filter(c => {
+      const clientTags = (c.etiquetas || '').split(',').filter(Boolean).map(normalizeTag);
+      if (tagMatchMode === 'all') {
+        return selectedNormalized.every(st => clientTags.includes(st));
+      } else {
+        return selectedNormalized.some(st => clientTags.includes(st));
+      }
+    });
+  }, [clients, selectedTags, tagMatchMode]);
+
+  // Filtered clients (tags + search)
+  const filteredClients = clientsFilteredByTags.filter(c => {
     if (!clientSearch.trim()) return true;
     const q = clientSearch.toLowerCase();
     return (
@@ -259,9 +301,10 @@ const WhatsAppCampanas: React.FC = () => {
       setSending(true);
       setError('');
 
+      const baseClients = selectedTags.length > 0 ? clientsFilteredByTags : clients;
       const targetClients = selectAllClients
-        ? clients.filter(c => c.celular_principal)
-        : clients.filter(c => selectedClientIds.has(c.id) && c.celular_principal);
+        ? baseClients.filter(c => c.celular_principal)
+        : baseClients.filter(c => selectedClientIds.has(c.id) && c.celular_principal);
 
       if (targetClients.length === 0) {
         setError('No hay clientes con teléfono para enviar');
@@ -648,6 +691,125 @@ const WhatsAppCampanas: React.FC = () => {
                 <p className="text-sm text-gray-500">Elige a quién enviar la plantilla <span className="font-mono text-primary">{selectedTemplate?.name}</span></p>
               </div>
 
+              {/* Tag segmentation filter */}
+              {availableTags.length > 0 && (
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon icon="solar:tag-bold-duotone" width={18} className="text-indigo-500" />
+                      <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Segmentar por etiquetas</h4>
+                    </div>
+                    {selectedTags.length > 0 && (
+                      <button
+                        className="text-xs text-red-500 hover:text-red-700 underline"
+                        onClick={() => setSelectedTags([])}
+                      >
+                        Limpiar filtros
+                      </button>
+                    )}
+                  </div>
+
+                  {/* AND/OR toggle */}
+                  {selectedTags.length > 1 && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-500">Coincidencia:</span>
+                      <button
+                        className={`px-3 py-1 rounded-full font-medium transition-all ${
+                          tagMatchMode === 'any'
+                            ? 'bg-indigo-500 text-white shadow-sm'
+                            : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border'
+                        }`}
+                        onClick={() => setTagMatchMode('any')}
+                      >
+                        Cualquiera (OR)
+                      </button>
+                      <button
+                        className={`px-3 py-1 rounded-full font-medium transition-all ${
+                          tagMatchMode === 'all'
+                            ? 'bg-indigo-500 text-white shadow-sm'
+                            : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border'
+                        }`}
+                        onClick={() => setTagMatchMode('all')}
+                      >
+                        Todas (AND)
+                      </button>
+                      <span className="text-gray-400 ml-1">
+                        {tagMatchMode === 'any' ? 'Clientes que tengan al menos una' : 'Clientes que tengan todas las etiquetas'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Tag input + suggestions */}
+                  <div className="relative">
+                    <TextInput
+                      placeholder="Buscar etiqueta..."
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      sizing="sm"
+                      icon={() => <Icon icon="solar:magnifer-bold" width={14} />}
+                    />
+                    {tagInput.trim() && (
+                      <div className="absolute z-10 top-full mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                        {availableTags
+                          .filter(t => t.normalized.includes(normalizeTag(tagInput)) && !selectedTags.map(normalizeTag).includes(t.normalized))
+                          .map(t => (
+                            <button
+                              key={t.normalized}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                              onClick={() => {
+                                setSelectedTags(prev => [...prev, t.display]);
+                                setTagInput('');
+                              }}
+                            >
+                              <span className="font-medium">{t.display.replace(/_/g, ' ')}</span>
+                              <span className="text-xs text-gray-400 ml-2">
+                                ({clients.filter(c => (c.etiquetas || '').split(',').some(ct => normalizeTag(ct) === t.normalized)).length})
+                              </span>
+                            </button>
+                          ))}
+                        {availableTags.filter(t => t.normalized.includes(normalizeTag(tagInput)) && !selectedTags.map(normalizeTag).includes(t.normalized)).length === 0 && (
+                          <div className="px-3 py-2 text-sm text-gray-400">No se encontraron etiquetas</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Available tags as clickable chips */}
+                  {!tagInput.trim() && selectedTags.length === 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {availableTags.slice(0, 20).map(t => (
+                        <button
+                          key={t.normalized}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-indigo-400 hover:text-indigo-600 transition-all"
+                          onClick={() => setSelectedTags(prev => [...prev, t.display])}
+                        >
+                          {t.display.replace(/_/g, ' ')}
+                          <span className="text-gray-400">({clients.filter(c => (c.etiquetas || '').split(',').some(ct => normalizeTag(ct) === t.normalized)).length})</span>
+                        </button>
+                      ))}
+                      {availableTags.length > 20 && <span className="text-xs text-gray-400 self-center">+{availableTags.length - 20} más...</span>}
+                    </div>
+                  )}
+
+                  {/* Selected tags */}
+                  {selectedTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedTags.map(tag => (
+                        <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
+                          {tag.replace(/_/g, ' ')}
+                          <button onClick={() => setSelectedTags(prev => prev.filter(t => normalizeTag(t) !== normalizeTag(tag)))} className="ml-0.5 hover:text-red-500">
+                            <Icon icon="solar:close-circle-bold" width={14} />
+                          </button>
+                        </span>
+                      ))}
+                      <span className="self-center text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                        → {clientsFilteredByTags.filter(c => c.celular_principal).length} clientes con teléfono
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Select all toggle */}
               <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
                 <Checkbox
@@ -656,9 +818,11 @@ const WhatsAppCampanas: React.FC = () => {
                   onChange={e => setSelectAllClients(e.target.checked)}
                 />
                 <Label htmlFor="select-all" className="cursor-pointer">
-                  <span className="font-medium">Enviar a todos los clientes con teléfono</span>
+                  <span className="font-medium">
+                    {selectedTags.length > 0 ? 'Enviar a todos los filtrados con teléfono' : 'Enviar a todos los clientes con teléfono'}
+                  </span>
                   <span className="text-xs text-gray-500 ml-2">
-                    ({clients.filter(c => c.celular_principal).length} clientes)
+                    ({(selectedTags.length > 0 ? clientsFilteredByTags : clients).filter(c => c.celular_principal).length} clientes)
                   </span>
                 </Label>
               </div>
@@ -723,7 +887,7 @@ const WhatsAppCampanas: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                   <div>
                     <p className="text-2xl font-bold text-blue-600">
-                      {selectAllClients ? clients.filter(c => c.celular_principal).length : selectedClientIds.size}
+                      {selectAllClients ? (selectedTags.length > 0 ? clientsFilteredByTags : clients).filter(c => c.celular_principal).length : selectedClientIds.size}
                     </p>
                     <p className="text-[10px] text-gray-500 uppercase">Destinatarios</p>
                   </div>

@@ -151,6 +151,7 @@ const Footer = () => {
           <a href="/terminos-condiciones" className="hover:text-white transition-colors">Términos</a>
           <a href="/politica-privacidad" className="hover:text-white transition-colors">Privacidad</a>
           <a href="/politica-privacidad" className="hover:text-white transition-colors">Cookies</a>
+          <a href="/trabaja-con-nosotros" className="hover:text-white transition-colors">Trabaja con Nosotros</a>
           <button onClick={scrollToTop} className="hover:text-white transition-colors flex items-center gap-1">
             <Icon icon="solar:arrow-up-linear" className="w-3 h-3" />
             Volver arriba

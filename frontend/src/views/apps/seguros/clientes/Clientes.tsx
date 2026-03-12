@@ -24,9 +24,11 @@ import {
   SelectValue,
 } from 'src/components/shadcn-ui/Default-Ui/select';
 import { saasApi } from '../../../../services/saasApi';
+import api from 'src/config/api';
 // import { ClienteSaaS } from '../../../../types/saas';
 import { TIPOS_CLIENTE, TIPOS_DOCUMENTO, GENEROS, ESTADOS_CLIENTE } from 'src/constants/catalogos';
 import ClientesExportModal from './components/ClientesExportModal';
+import ClientNotificationsModal from './components/ClientNotificationsModal'; // v2
 import { useAutoTour } from 'src/components/GuroTour/useAutoTour';
 import { TOUR_CLIENTES } from 'src/components/GuroTour/tourConfigs';
 import { ClienteSaaS } from 'src/types/saas';
@@ -262,6 +264,8 @@ const Clientes: React.FC = () => {
   const [loadingFull, setLoadingFull] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   // Página y tamaño por página (persistidos)
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -307,8 +311,7 @@ const Clientes: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const [deleteEnabled, setDeleteEnabled] = useState<boolean>(false);
-  const { user, loading: saasLoading, usuarioSaas, hasPermission } = useUnifiedAuth();
+  const { user, loading: saasLoading, hasPermission } = useUnifiedAuth();
   const canCreateClient = hasPermission('clientes', 'crear');
   const canEditClient = hasPermission('clientes', 'editar');
   const canDeleteClient = hasPermission('clientes', 'eliminar');
@@ -391,63 +394,6 @@ const Clientes: React.FC = () => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
-
-  useEffect(() => {
-    // Inicializar deleteEnabled desde runtime config (window.__ENV__), luego env, query param y localStorage
-    const init = () => {
-      // 1) Runtime config (producción): public/env.js -> window.__ENV__.CLIENTES_DELETE_ENABLED
-      const runtimeVal = (window as any)?.__ENV__?.CLIENTES_DELETE_ENABLED;
-      let enabled = typeof runtimeVal === 'boolean' ? runtimeVal : false;
-
-      // 2) Build-time (Vite env)
-      if (!enabled) {
-        const rawEnv = (import.meta as any)?.env?.VITE_CLIENTES_DELETE_ENABLED;
-        const envVal = String(rawEnv || '')
-          .trim()
-          .toLowerCase();
-        enabled = envVal === 'true';
-      }
-
-      // 3) Query param: ?enableDelete=1|true (persiste en localStorage y limpia la URL)
-      const params = new URLSearchParams(location.search);
-      const qp = params.get('enableDelete');
-      if (!enabled && qp && ['1', 'true', 'yes', 'on'].includes(qp.toLowerCase())) {
-        localStorage.setItem('clientes_delete_enabled', 'true');
-        enabled = true;
-        try {
-          params.delete('enableDelete');
-          const newUrl = `${location.pathname}${params.toString() ? `?${params.toString()}` : ''}${
-            location.hash || ''
-          }`;
-          window.history.replaceState({}, '', newUrl);
-        } catch {}
-      }
-
-      // 4) Fallback: localStorage
-      if (!enabled) {
-        const ls = String(localStorage.getItem('clientes_delete_enabled') || '')
-          .trim()
-          .toLowerCase();
-        enabled = ls === 'true';
-      }
-
-      setDeleteEnabled(enabled);
-    };
-    init();
-
-    // Escuchar cambios en localStorage desde otras pestañas (opcional en dev)
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'clientes_delete_enabled') {
-        setDeleteEnabled(
-          String(e.newValue || '')
-            .trim()
-            .toLowerCase() === 'true',
-        );
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
   }, [location.search]);
 
   useEffect(() => {
@@ -687,8 +633,20 @@ const Clientes: React.FC = () => {
     cargarClientes();
   }, [filters]);
 
+  const loadNotificationStatus = async () => {
+    try {
+      const res = await api.get('/saas/client-notifications/config');
+      if (res.data?.success && res.data?.data) {
+        setNotificationStatus(res.data.data);
+      }
+    } catch {
+      setNotificationStatus({ is_active: false, whatsapp_status: null });
+    }
+  };
+
   useEffect(() => {
     loadEstadisticas();
+    loadNotificationStatus();
   }, []);
 
   // Ordenamiento: mapa de columnas a campos del backend
@@ -1419,6 +1377,51 @@ const Clientes: React.FC = () => {
 
               <Button
                 color="light"
+                onClick={() => setShowNotificationsModal(true)}
+                className={`relative h-10 w-10 p-0 rounded-[10px] flex items-center justify-center transition-all border-2 ${
+                  notificationStatus?.is_active &&
+                  notificationStatus?.whatsapp_status?.connected
+                    ? 'border-green-500 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-500 shadow-green-200 shadow-md'
+                    : notificationStatus?.is_active &&
+                      !notificationStatus?.whatsapp_status?.connected
+                    ? 'border-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-500 animate-pulse shadow-red-200 shadow-md'
+                    : 'border-gray-300 bg-white hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:bg-gray-800'
+                }`}
+                title={
+                  notificationStatus?.is_active &&
+                  notificationStatus?.whatsapp_status?.connected
+                    ? '✅ Notificaciones Activas - WhatsApp Conectado'
+                    : notificationStatus?.is_active &&
+                      !notificationStatus?.whatsapp_status?.connected
+                    ? '⚠️ Notificaciones Activas - WhatsApp Desconectado'
+                    : 'Notificaciones Inactivas - Click para configurar'
+                }
+                data-feature="client-notifications-v2"
+              >
+                {notificationStatus?.is_active &&
+                  notificationStatus?.whatsapp_status?.connected && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
+                  )}
+                {notificationStatus?.is_active &&
+                  !notificationStatus?.whatsapp_status?.connected && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
+                  )}
+                <Icon
+                  icon="solar:bell-bold-duotone"
+                  className={`w-5 h-5 transition-colors ${
+                    notificationStatus?.is_active &&
+                    notificationStatus?.whatsapp_status?.connected
+                      ? 'text-green-600 dark:text-green-400'
+                      : notificationStatus?.is_active &&
+                        !notificationStatus?.whatsapp_status?.connected
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                />
+              </Button>
+
+              <Button
+                color="light"
                 onClick={() => setShowExportModal(true)}
                 className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
                 title="Exportar clientes"
@@ -1537,7 +1540,7 @@ const Clientes: React.FC = () => {
                       <Icon icon="solar:settings-bold-duotone" className="w-3.5 h-3.5 inline mr-1" />
                       Cambiar estado
                     </button>
-                    {deleteEnabled && canDeleteClient && (
+                    {canDeleteClient && (
                       <>
                         <button
                           onClick={handleBulkDeleteClientes}
@@ -1658,7 +1661,7 @@ const Clientes: React.FC = () => {
                               <span>Nueva Póliza</span>
                             </TableMenuItem>
                           )}
-                          {deleteEnabled && canDeleteClient && (
+                          {canDeleteClient && (
                             <TableMenuItem className="text-red-600 hover:text-red-700" onClick={() => handleDeleteCliente(cliente)}>
                               <Icon icon="solar:trash-bin-minimalistic-bold-duotone" height={18} />
                               <span>Eliminar</span>
@@ -2388,6 +2391,15 @@ const Clientes: React.FC = () => {
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         currentFilters={filters}
+      />
+
+      {/* Modal de Notificaciones de Clientes */}
+      <ClientNotificationsModal
+        isOpen={showNotificationsModal}
+        onClose={() => {
+          setShowNotificationsModal(false);
+          loadNotificationStatus();
+        }}
       />
 
       {/* Modal cambio de estado masivo */}
