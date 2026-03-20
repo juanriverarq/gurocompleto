@@ -114,9 +114,14 @@ class RecibosCajaController extends Controller
         }
 
         // Sort
-        $sortField = $request->get('sort_field', 'fecha_realizo_pago_oficina');
-        $sortDir = $request->get('sort_dir', 'desc');
-        $query->orderBy($sortField, $sortDir);
+        $allowedSortFields = ['id', 'numero_recibo', 'fecha_realizo_pago_oficina', 'valor_recaudado_en_oficina', 'valor_a_pagar', 'created_at'];
+        $sortField = in_array($request->get('sort_field'), $allowedSortFields) ? $request->get('sort_field') : 'numero_recibo';
+        $sortDir = $request->get('sort_dir') === 'asc' ? 'asc' : 'desc';
+        if ($sortField === 'numero_recibo') {
+            $query->orderByRaw("CAST(numero_recibo AS UNSIGNED) {$sortDir}");
+        } else {
+            $query->orderBy($sortField, $sortDir);
+        }
 
         $perPage = (int) $request->get('per_page', 25);
         $paginated = $query->paginate($perPage);
@@ -222,7 +227,7 @@ class RecibosCajaController extends Controller
 
         $data = $request->validate([
             'poliza_id' => 'nullable|integer|exists:polizas,id',
-            'cliente_id' => 'required|integer|exists:clientes,id',
+            'cliente_id' => 'nullable|integer|exists:clientes,id',
             'tipo' => 'required|in:recibo,anticipo,ajuste',
             'tipo_recaudo' => 'required|in:oficina,aseguradora,directo',
             'forma_pago' => 'nullable|string|max:100',
@@ -386,6 +391,7 @@ class RecibosCajaController extends Controller
 
         $poliza = \App\Models\Poliza::withoutGlobalScopes()
             ->where('broker_id', $brokerId)
+            ->whereNull('deleted_at')
             ->findOrFail($validated['poliza_id']);
 
         $monto = (float) ($recibo->valor_recaudado_en_oficina ?: $recibo->valor_a_pagar ?: 0);
@@ -500,6 +506,7 @@ class RecibosCajaController extends Controller
         $polizas = \App\Models\Poliza::withoutGlobalScopes()
             ->where('broker_id', $brokerId)
             ->where('client_id', $clienteId)
+            ->whereNull('deleted_at')
             ->whereIn('status', ['active', 'pending', 'issued'])
             ->with(['aseguradora:id,nombre', 'ramo:id,nombre'])
             ->select('id', 'policy_number', 'insurance_company', 'aseguradora_id', 'ramo_id', 'product_name',

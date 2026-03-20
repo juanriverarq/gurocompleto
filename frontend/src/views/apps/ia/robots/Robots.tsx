@@ -3,7 +3,7 @@ import { Card, Badge, Button, Modal, Checkbox, Label, ToggleSwitch, Spinner, Tex
 import { Icon } from '@iconify/react';
 import { CustomizerContext } from 'src/context/CustomizerContext';
 import { useToast } from 'src/hooks/use-toast';
-import { suraScraperService, SuraConnectionStatus, SuraPoliza, SuraCliente, SuraDataType } from 'src/services/suraScraperService';
+import { suraScraperService, SuraConnectionStatus, SuraPoliza, SuraPolizaDetail, SuraCliente, SuraDataType } from 'src/services/suraScraperService';
 
 // Tipos para las aseguradoras
 interface Aseguradora {
@@ -122,14 +122,13 @@ const Robots = () => {
   const [suraConnecting, setSuraConnecting] = useState(false);
   const [suraCookies, setSuraCookies] = useState('');
   const [showSuraLoginModal, setShowSuraLoginModal] = useState(false);
-  const [suraStep, setSuraStep] = useState<1 | 2 | 3>(1);
-  const suraPopupRef = React.useRef<Window | null>(null);
-
-  const openSuraPopup = () => {
-    const w = window.open('https://asistentevirtualasesores.sura.com', 'sura_login', 'width=1100,height=700,scrollbars=yes,resizable=yes');
-    suraPopupRef.current = w;
-    setSuraStep(2);
-  };
+  const [suraLoginMode, setSuraLoginMode] = useState<'credentials' | 'cookies'>('credentials');
+  const [suraUser, setSuraUser] = useState('');
+  const [suraPassword, setSuraPassword] = useState('');
+  const [suraShowPassword, setSuraShowPassword] = useState(false);
+  const [suraMfaCode, setSuraMfaCode] = useState('');
+  const [suraMfaRequired, setSuraMfaRequired] = useState(false);
+  const [suraDocType, setSuraDocType] = useState('C');
 
   const [suraPage, setSuraPage] = useState(1);
   const [suraMeta, setSuraMeta] = useState<{ total: number; has_more: boolean }>({ total: 0, has_more: false });
@@ -138,6 +137,9 @@ const Robots = () => {
   const [suraImporting, setSuraImporting] = useState(false);
   const [existingDocs, setExistingDocs] = useState<Set<string>>(new Set());
   const [suraClientView, setSuraClientView] = useState<'nuevos' | 'importados'>('nuevos');
+  const [suraExpandedPoliza, setSuraExpandedPoliza] = useState<string | null>(null);
+  const [suraDetailCache, setSuraDetailCache] = useState<Record<string, SuraPolizaDetail>>({});
+  const [suraDetailLoading, setSuraDetailLoading] = useState(false);
   const [showImportReport, setShowImportReport] = useState(false);
   const [importReport, setImportReport] = useState<{
     imported: { id: number; nombre: string; documento: string }[];
@@ -190,19 +192,48 @@ const Robots = () => {
   };
 
   const handleSuraConnect = async () => {
-    if (!suraCookies.trim()) return;
     setSuraConnecting(true);
     try {
-      const cookieString = parseCookieInput(suraCookies);
-      const res = await suraScraperService.connect(cookieString);
+      let res: any;
+      if (suraLoginMode === 'credentials') {
+        if (!suraUser.trim() || !suraPassword.trim()) {
+          toast({ title: 'Campos requeridos', description: 'Ingresa tu usuario y contraseña de SURA', variant: 'destructive' });
+          setSuraConnecting(false);
+          return;
+        }
+        if (suraMfaRequired && !suraMfaCode.trim()) {
+          toast({ title: 'Código requerido', description: 'Ingresa el código de tu app autenticadora', variant: 'destructive' });
+          setSuraConnecting(false);
+          return;
+        }
+        res = await suraScraperService.connectWithCredentials(
+          suraUser.trim(),
+          suraPassword,
+          suraMfaRequired ? suraMfaCode.trim() : undefined,
+          suraDocType
+        );
+      } else {
+        if (!suraCookies.trim()) {
+          setSuraConnecting(false);
+          return;
+        }
+        const cookieString = parseCookieInput(suraCookies);
+        res = await suraScraperService.connect(cookieString);
+      }
       if (res.success && res.data) {
         setSuraStatus(res.data);
         setAseguradoras(prev => prev.map(a => a.id === 'sura' ? { ...a, conectada: true } : a));
         setShowSuraLoginModal(false);
         setSuraCookies('');
+        setSuraPassword('');
+        setSuraMfaCode('');
+        setSuraMfaRequired(false);
         toast({ title: 'Conectado con SURA', description: res.message || 'Sesión iniciada correctamente' });
+      } else if (res.mfa_required) {
+        setSuraMfaRequired(true);
+        toast({ title: 'Código de verificación', description: 'Ingresa el código de tu app autenticadora (6 dígitos)' });
       } else {
-        toast({ title: 'Error de conexión', description: res.message || 'Cookies inválidas o sesión expirada', variant: 'destructive' });
+        toast({ title: 'Error de conexión', description: res.message || 'Credenciales inválidas o sesión expirada', variant: 'destructive' });
       }
     } catch (e: any) {
       toast({ title: 'Error', description: e?.message || 'No se pudo conectar', variant: 'destructive' });
@@ -278,17 +309,17 @@ const Robots = () => {
         setSuraPage(page);
         setSuraMeta({ total: res.meta?.total || res.data.length, has_more: res.meta?.has_more || false });
       } else {
-        toast({ title: 'Error', description: res.message || `No se pudieron obtener los ${t}`, variant: 'destructive' });
+        // Check if backend flagged session as expired
+        if ((res as any).session_expired) {
+          setSuraStatus(prev => prev ? { ...prev, session_valid: false } : prev);
+          toast({ title: 'Sesión expirada', description: res.message || 'La sesión de SURA expiró. Reconecta con tus credenciales.', variant: 'destructive' });
+        } else {
+          toast({ title: 'Error', description: res.message || `No se pudieron obtener los ${t}`, variant: 'destructive' });
+        }
       }
     } catch (e: any) {
-      // Detectar sesión expirada en errores de fetch
       const errMsg = e?.message || 'Error al consultar SURA';
-      if (errMsg.toLowerCase().includes('sesión') || errMsg.toLowerCase().includes('cookie') || errMsg.toLowerCase().includes('401') || errMsg.toLowerCase().includes('autenticación')) {
-        setSuraStatus(prev => prev ? { ...prev, session_valid: false } : prev);
-        toast({ title: 'Sesión expirada', description: 'La sesión de SURA ha expirado. Por favor reconecta.', variant: 'destructive' });
-      } else {
-        toast({ title: 'Error', description: errMsg, variant: 'destructive' });
-      }
+      toast({ title: 'Error', description: errMsg, variant: 'destructive' });
     } finally {
       setSuraLoading(false);
     }
@@ -421,6 +452,35 @@ const Robots = () => {
     const keys = items.map(i => suraGetRowKey(i, suraDataType));
     setSuraApprovedRows(prev => new Set([...prev, ...keys]));
     toast({ title: 'Aprobados', description: `${keys.length} registros aprobados` });
+  };
+
+  // Toggle poliza detail expansion - fetch detail from SURA API on first expand
+  const handleTogglePolizaDetail = async (poliza: SuraPoliza) => {
+    const key = poliza.numero_poliza;
+    if (suraExpandedPoliza === key) {
+      setSuraExpandedPoliza(null);
+      return;
+    }
+    setSuraExpandedPoliza(key);
+    // If already cached, don't re-fetch
+    if (suraDetailCache[key]) return;
+    setSuraDetailLoading(true);
+    try {
+      const res = await suraScraperService.fetchPolizaDetail(
+        key,
+        poliza.ramo_codigo,
+        poliza.fecha_fin,
+      );
+      if (res.success && res.data) {
+        setSuraDetailCache(prev => ({ ...prev, [key]: res.data! }));
+      } else {
+        toast({ title: 'Error', description: res.message || 'No se pudo obtener el detalle', variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Error de conexión', variant: 'destructive' });
+    } finally {
+      setSuraDetailLoading(false);
+    }
   };
 
   // Import selected SURA clients to Guro
@@ -697,13 +757,32 @@ const Robots = () => {
                     </div>
                     <div>
                       <p className="font-semibold text-red-700 dark:text-red-300">Sesión expirada</p>
-                      <p className="text-sm text-red-600 dark:text-red-400">La sesión de SURA ha expirado. Reconecta para seguir descargando datos.</p>
+                      <p className="text-sm text-red-600 dark:text-red-400">
+                        {suraStatus?.auth_method === 'credentials'
+                          ? 'Renovando sesión automáticamente...'
+                          : 'La sesión de SURA ha expirado. Reconecta para seguir descargando datos.'}
+                      </p>
                     </div>
                   </div>
-                  <Button color="failure" size="sm" onClick={() => setShowSuraLoginModal(true)}>
-                    <Icon icon="solar:login-2-bold" width={16} className="mr-1" />
-                    Reconectar
-                  </Button>
+                  {suraStatus?.auth_method === 'credentials' ? (
+                    <Button color="warning" size="sm" onClick={async () => {
+                      const res = await suraScraperService.refreshSession();
+                      if (res.success && res.data) {
+                        setSuraStatus(res.data);
+                        toast({ title: 'Sesión renovada', description: 'La sesión de SURA se renovó automáticamente.' });
+                      } else {
+                        toast({ title: 'Error', description: res.message || 'No se pudo renovar. Reconecta manualmente.', variant: 'destructive' });
+                      }
+                    }}>
+                      <Icon icon="solar:refresh-bold" width={16} className="mr-1" />
+                      Renovar sesión
+                    </Button>
+                  ) : (
+                    <Button color="failure" size="sm" onClick={() => setShowSuraLoginModal(true)}>
+                      <Icon icon="solar:login-2-bold" width={16} className="mr-1" />
+                      Reconectar
+                    </Button>
+                  )}
                 </div>
               )}
               {!isSuraConnected ? (
@@ -736,6 +815,15 @@ const Robots = () => {
                         <h3 className="font-semibold text-dark dark:text-white flex items-center gap-2">
                           SURA Asesores
                           <Icon icon="solar:check-circle-bold" className="text-green-500" width={18} />
+                          {suraStatus.auth_method === 'credentials' ? (
+                            <Badge color="success" size="xs">
+                              <Icon icon="solar:refresh-circle-bold" width={12} className="mr-0.5" />Auto-renovación
+                            </Badge>
+                          ) : (
+                            <Badge color="warning" size="xs">
+                              <Icon icon="solar:cookie-bold" width={12} className="mr-0.5" />Cookies
+                            </Badge>
+                          )}
                         </h3>
                         <p className="text-sm text-gray-500">
                           Usuario: <strong>{suraStatus.username}</strong>
@@ -1008,13 +1096,17 @@ const Robots = () => {
                                   <th className="whitespace-nowrap">Fin</th>
                                   <th className="whitespace-nowrap">Forma Pago</th>
                                   <th className="text-center whitespace-nowrap">Estado</th>
+                                  <th className="text-center whitespace-nowrap w-10">Detalle</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {filteredSuraPolizas.map((p, idx) => {
                                   const isApproved = suraApprovedRows.has(p.numero_poliza);
+                                  const isExpanded = suraExpandedPoliza === p.numero_poliza;
+                                  const detail = suraDetailCache[p.numero_poliza];
                                   return (
-                                  <tr key={`${p.numero_poliza}-${idx}`} className={suraSelectedRows.has(p.numero_poliza) ? 'bg-primary/5' : !isApproved ? 'bg-yellow-50/50 dark:bg-yellow-900/5' : ''}>
+                                  <React.Fragment key={`${p.numero_poliza}-${idx}`}>
+                                  <tr className={`cursor-pointer ${suraSelectedRows.has(p.numero_poliza) ? 'bg-primary/5' : !isApproved ? 'bg-yellow-50/50 dark:bg-yellow-900/5' : ''}`}>
                                     <td>
                                       <Checkbox
                                         checked={suraSelectedRows.has(p.numero_poliza)}
@@ -1048,7 +1140,255 @@ const Robots = () => {
                                         </button>
                                       )}
                                     </td>
+                                    <td className="text-center">
+                                      <button
+                                        onClick={() => handleTogglePolizaDetail(p)}
+                                        className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center gap-0.5 font-medium"
+                                        title="Ver detalle completo"
+                                      >
+                                        {suraDetailLoading && isExpanded ? (
+                                          <Spinner size="xs" />
+                                        ) : (
+                                          <Icon icon={isExpanded ? 'solar:alt-arrow-up-linear' : 'solar:alt-arrow-down-linear'} width={16} />
+                                        )}
+                                      </button>
+                                    </td>
                                   </tr>
+                                  {/* Expanded detail row */}
+                                  {isExpanded && (
+                                    <tr className="bg-blue-50/50 dark:bg-blue-900/10">
+                                      <td colSpan={16} className="p-0">
+                                        <div className="p-4">
+                                          {suraDetailLoading && !detail ? (
+                                            <div className="flex items-center gap-2 text-sm text-gray-500 py-3">
+                                              <Spinner size="sm" /> Cargando detalle de póliza...
+                                            </div>
+                                          ) : detail ? (
+                                            <div className="space-y-4">
+                                              {/* Header info */}
+                                              <div className="flex items-center gap-2 mb-2">
+                                                <Icon icon="solar:document-text-bold" width={18} className="text-blue-600" />
+                                                <span className="font-semibold text-sm text-blue-800 dark:text-blue-300">
+                                                  Detalle completo — {p.ramo_nombre}
+                                                </span>
+                                                <Badge color="gray" size="xs">{detail._endpoint_used}</Badge>
+                                              </div>
+
+                                              {/* General info grid */}
+                                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                                {detail.poliza && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Póliza</div>
+                                                    <div className="text-sm font-semibold font-mono">{detail.poliza}</div>
+                                                  </div>
+                                                )}
+                                                {detail.estado && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Estado</div>
+                                                    <div className="text-sm"><Badge color={detail.estado === 'VIGENTE' ? 'success' : 'warning'} size="xs">{detail.estado}</Badge></div>
+                                                  </div>
+                                                )}
+                                                {detail.plan && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Plan</div>
+                                                    <div className="text-sm">{detail.plan}</div>
+                                                  </div>
+                                                )}
+                                                {detail.tipoPoliza && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Tipo Póliza</div>
+                                                    <div className="text-sm">{detail.tipoPoliza}</div>
+                                                  </div>
+                                                )}
+                                                {detail.nombreTomador && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Tomador</div>
+                                                    <div className="text-sm font-medium">{detail.nombreTomador}</div>
+                                                  </div>
+                                                )}
+                                                {detail.nombreAsegurado && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Asegurado</div>
+                                                    <div className="text-sm font-medium">{detail.nombreAsegurado}</div>
+                                                  </div>
+                                                )}
+                                                {detail.nombreBeneficiario && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Beneficiario</div>
+                                                    <div className="text-sm">{detail.nombreBeneficiario}</div>
+                                                  </div>
+                                                )}
+                                                {detail.oficina && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Oficina</div>
+                                                    <div className="text-sm">{detail.oficina}</div>
+                                                  </div>
+                                                )}
+                                                {detail.fechaExpedicion && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Expedición</div>
+                                                    <div className="text-sm">{detail.fechaExpedicion}</div>
+                                                  </div>
+                                                )}
+                                                {detail.fechaInicioVigenciaRiesgo && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Inicio Vigencia</div>
+                                                    <div className="text-sm">{detail.fechaInicioVigenciaRiesgo}</div>
+                                                  </div>
+                                                )}
+                                                {detail.fechaFinVigenciaRiesgo && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Fin Vigencia</div>
+                                                    <div className="text-sm">{detail.fechaFinVigenciaRiesgo}</div>
+                                                  </div>
+                                                )}
+                                                {detail.ptprimaformapago && (
+                                                  <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Prima</div>
+                                                    <div className="text-sm font-semibold text-green-700">${Number(detail.ptprimaformapago).toLocaleString('es-CO')}</div>
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              {/* Autos-specific fields */}
+                                              {(detail.placa || detail.vehiculo || detail.marca) && (
+                                                <div>
+                                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                                                    <Icon icon="solar:car-bold" width={14} /> Vehículo
+                                                  </h4>
+                                                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                                    {detail.placa && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Placa</div>
+                                                        <div className="text-sm font-bold font-mono">{detail.placa}</div>
+                                                      </div>
+                                                    )}
+                                                    {detail.vehiculo && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Vehículo</div>
+                                                        <div className="text-sm">{detail.vehiculo}</div>
+                                                      </div>
+                                                    )}
+                                                    {detail.marca && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Marca</div>
+                                                        <div className="text-sm">{detail.marca}</div>
+                                                      </div>
+                                                    )}
+                                                    {detail.modelo && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Modelo</div>
+                                                        <div className="text-sm">{detail.modelo}</div>
+                                                      </div>
+                                                    )}
+                                                    {detail.chasis && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Chasis</div>
+                                                        <div className="text-sm font-mono text-xs">{detail.chasis}</div>
+                                                      </div>
+                                                    )}
+                                                    {detail.motor && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Motor</div>
+                                                        <div className="text-sm font-mono text-xs">{detail.motor}</div>
+                                                      </div>
+                                                    )}
+                                                    {detail.zona && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Zona</div>
+                                                        <div className="text-sm">{detail.zona}</div>
+                                                      </div>
+                                                    )}
+                                                    {detail.valorVehiculo && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Valor Vehículo</div>
+                                                        <div className="text-sm font-semibold text-green-700">${Number(detail.valorVehiculo).toLocaleString('es-CO')}</div>
+                                                      </div>
+                                                    )}
+                                                    {detail.bonificacion && (
+                                                      <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 border border-gray-100 dark:border-gray-700">
+                                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide">Bonificación</div>
+                                                        <div className="text-sm">{detail.bonificacion}%</div>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* Coberturas table */}
+                                              {detail.coberturas && detail.coberturas.length > 0 && (
+                                                <div>
+                                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                                                    <Icon icon="solar:shield-check-bold" width={14} /> Coberturas ({detail.coberturas.length})
+                                                  </h4>
+                                                  <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                                    <table className="text-xs w-full">
+                                                      <thead className="bg-gray-50 dark:bg-gray-800">
+                                                        <tr>
+                                                          <th className="px-3 py-1.5 text-left font-medium">Cobertura</th>
+                                                          <th className="px-3 py-1.5 text-right font-medium">Valor Asegurado</th>
+                                                          <th className="px-3 py-1.5 text-right font-medium">Deducible</th>
+                                                          <th className="px-3 py-1.5 text-right font-medium">Prima</th>
+                                                        </tr>
+                                                      </thead>
+                                                      <tbody>
+                                                        {detail.coberturas.map((cob, ci) => (
+                                                          <tr key={ci} className="border-t border-gray-100 dark:border-gray-700">
+                                                            <td className="px-3 py-1.5">{cob.cobertura || cob.nombreCobertura || '-'}</td>
+                                                            <td className="px-3 py-1.5 text-right font-mono">{cob.valorAsegurado ? `$${Number(cob.valorAsegurado).toLocaleString('es-CO')}` : '-'}</td>
+                                                            <td className="px-3 py-1.5 text-right">{cob.deducible || '-'}</td>
+                                                            <td className="px-3 py-1.5 text-right font-mono">{cob.prima ? `$${Number(cob.prima).toLocaleString('es-CO')}` : '-'}</td>
+                                                          </tr>
+                                                        ))}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* Asesores */}
+                                              {detail.asesores && detail.asesores.length > 0 && (
+                                                <div>
+                                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                                                    <Icon icon="solar:users-group-rounded-bold" width={14} /> Asesores ({detail.asesores.length})
+                                                  </h4>
+                                                  <div className="flex flex-wrap gap-2">
+                                                    {detail.asesores.map((a, ai) => (
+                                                      <div key={ai} className="bg-white dark:bg-gray-800 rounded-lg px-3 py-1.5 border border-gray-100 dark:border-gray-700 text-xs">
+                                                        <span className="font-medium">{a.nombreAsesor || a.codigoAsesor}</span>
+                                                        {a.participacion && <span className="text-gray-400 ml-1">({a.participacion}%)</span>}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* Recibos pendientes */}
+                                              {detail._recibos_pendientes && detail._recibos_pendientes.length > 0 && (
+                                                <div>
+                                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                                                    <Icon icon="solar:bill-list-bold" width={14} /> Recibos Pendientes ({detail._recibos_pendientes.length})
+                                                  </h4>
+                                                  <Badge color="warning" size="xs">{detail._recibos_pendientes.length} recibo(s) pendiente(s)</Badge>
+                                                </div>
+                                              )}
+
+                                              {/* Raw data toggle for debugging */}
+                                              <details className="mt-2">
+                                                <summary className="text-[10px] text-gray-400 cursor-pointer hover:text-gray-600">Ver JSON crudo</summary>
+                                                <pre className="mt-1 text-[10px] bg-gray-100 dark:bg-gray-900 rounded p-2 max-h-60 overflow-auto">
+                                                  {JSON.stringify(detail, null, 2)}
+                                                </pre>
+                                              </details>
+                                            </div>
+                                          ) : (
+                                            <div className="text-sm text-gray-400 py-2">No se pudo cargar el detalle.</div>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                  </React.Fragment>
                                   );
                                 })}
                               </tbody>
@@ -1219,8 +1559,8 @@ const Robots = () => {
         )}
       </Card>
 
-      {/* Modal Login SURA - Wizard de 3 pasos */}
-      <Modal show={showSuraLoginModal} onClose={() => { setShowSuraLoginModal(false); setSuraStep(1); setSuraCookies(''); }} size="xl">
+      {/* Modal Login SURA - Credenciales o Cookies */}
+      <Modal show={showSuraLoginModal} onClose={() => { setShowSuraLoginModal(false); setSuraCookies(''); setSuraPassword(''); setSuraMfaCode(''); setSuraMfaRequired(false); }} size="lg">
         <Modal.Header>
           <div className="flex items-center gap-3">
             <img src={COMPANY_LOGOS['sura'].url} alt="SURA" className="w-8 h-8 object-contain" />
@@ -1228,96 +1568,168 @@ const Robots = () => {
           </div>
         </Modal.Header>
         <Modal.Body>
-          {/* Progress steps */}
-          <div className="flex items-center justify-center gap-2 mb-6">
-            {[1, 2, 3].map((s) => (
-              <div key={s} className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                  suraStep >= s ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-400'
-                }`}>{suraStep > s ? <Icon icon="solar:check-circle-bold" width={18} /> : s}</div>
-                <span className={`text-xs font-medium ${suraStep >= s ? 'text-primary' : 'text-gray-400'}`}>
-                  {s === 1 ? 'Abrir SURA' : s === 2 ? 'Iniciar sesión' : 'Capturar sesión'}
-                </span>
-                {s < 3 && <Icon icon="solar:arrow-right-linear" width={14} className="text-gray-300 mx-1" />}
-              </div>
-            ))}
+          {/* Mode toggle */}
+          <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 mb-5">
+            <button
+              onClick={() => setSuraLoginMode('credentials')}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                suraLoginMode === 'credentials'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <Icon icon="solar:lock-password-bold" width={16} />
+              Credenciales
+              <Badge color="success" size="xs">Recomendado</Badge>
+            </button>
+            <button
+              onClick={() => setSuraLoginMode('cookies')}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                suraLoginMode === 'cookies'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              <Icon icon="solar:cookie-bold" width={16} />
+              Cookies (manual)
+            </button>
           </div>
 
-          {/* Step 1: Open SURA */}
-          {suraStep === 1 && (
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto">
-                <Icon icon="solar:global-bold-duotone" width={32} className="text-blue-500" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-1">Paso 1: Abrir portal SURA</h3>
-                <p className="text-sm text-gray-500">Se abrirá una ventana con el portal de SURA Asesores para que inicies sesión.</p>
-              </div>
-              <Button color="primary" size="lg" onClick={openSuraPopup}>
-                <Icon icon="solar:login-2-bold" width={20} className="mr-2" />
-                Abrir SURA Asesores
-              </Button>
-            </div>
-          )}
-
-          {/* Step 2: Wait for login */}
-          {suraStep === 2 && (
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 bg-yellow-50 dark:bg-yellow-900/30 rounded-2xl flex items-center justify-center mx-auto">
-                <Icon icon="solar:user-check-bold-duotone" width={32} className="text-yellow-500" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-1">Paso 2: Inicia sesión en SURA</h3>
-                <p className="text-sm text-gray-500">Loguéate normalmente en la ventana de SURA que se abrió. Cuando estés dentro, continúa aquí.</p>
-              </div>
-              <div className="flex justify-center gap-3">
-                <Button color="light" onClick={openSuraPopup}>
-                  <Icon icon="solar:refresh-bold" width={16} className="mr-1" />Reabrir ventana
-                </Button>
-                <Button color="primary" onClick={() => setSuraStep(3)}>
-                  <Icon icon="solar:check-circle-bold" width={16} className="mr-1" />Ya inicié sesión
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Capture cookies */}
-          {suraStep === 3 && (
+          {/* Credentials mode */}
+          {suraLoginMode === 'credentials' && (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
-                <Icon icon="solar:clipboard-check-bold-duotone" width={24} className="text-green-500 mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                <Icon icon="solar:shield-check-bold-duotone" width={24} className="text-blue-500 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-green-800 dark:text-green-300 mb-2">Paso 3: Capturar sesión</h3>
-                  <p className="text-sm text-green-700 dark:text-green-400 mb-3">En la ventana de SURA (ya logueado), sigue estos pasos rápidos:</p>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 bg-green-200 dark:bg-green-800 rounded-full flex items-center justify-center text-xs font-bold text-green-800 dark:text-green-200">1</span>
-                      <span>Presiona <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border text-xs font-mono">F12</kbd> en la ventana de SURA</span>
+                  <h3 className="font-semibold text-blue-800 dark:text-blue-300 mb-1">Inicio de sesión automático</h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-400">
+                    Ingresa tus credenciales del portal SURA Asesores. Se almacenan encriptadas y la sesión se renueva automáticamente.
+                  </p>
+                </div>
+              </div>
+
+              {!suraMfaRequired ? (
+                <>
+                  <div className="flex gap-3">
+                    <div className="w-1/3">
+                      <Label htmlFor="sura-doctype" className="mb-1.5 block font-medium text-sm">Tipo Doc.</Label>
+                      <select
+                        id="sura-doctype"
+                        value={suraDocType}
+                        onChange={(e) => setSuraDocType(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 p-2.5 text-sm dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="C">Cédula</option>
+                        <option value="E">Cédula Ext.</option>
+                        <option value="A">NIT</option>
+                        <option value="P">Pasaporte</option>
+                        <option value="T">Tarj. Identidad</option>
+                      </select>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 bg-green-200 dark:bg-green-800 rounded-full flex items-center justify-center text-xs font-bold text-green-800 dark:text-green-200">2</span>
-                      <span>Ve a la pestaña <strong>Application</strong> → <strong>Cookies</strong> → <strong>asistentevirtualasesores.sura.com</strong></span>
+                    <div className="flex-1">
+                      <Label htmlFor="sura-user" className="mb-1.5 block font-medium text-sm">Número de identificación</Label>
+                      <TextInput
+                        id="sura-user"
+                        placeholder="Ej: 1020397190"
+                        value={suraUser}
+                        onChange={(e) => setSuraUser(e.target.value)}
+                        icon={() => <Icon icon="solar:user-id-bold" width={16} />}
+                        autoFocus
+                      />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 bg-green-200 dark:bg-green-800 rounded-full flex items-center justify-center text-xs font-bold text-green-800 dark:text-green-200">3</span>
-                      <span>Selecciona todas (<kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border text-xs font-mono">Ctrl+A</kbd>) y copia (<kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border text-xs font-mono">Ctrl+C</kbd>)</span>
+                  </div>
+                  <div>
+                    <Label htmlFor="sura-pass" className="mb-1.5 block font-medium text-sm">PIN (4 dígitos)</Label>
+                    <div className="relative">
+                      <TextInput
+                        id="sura-pass"
+                        type={suraShowPassword ? 'text' : 'password'}
+                        placeholder="Tu PIN de SURA"
+                        value={suraPassword}
+                        onChange={(e) => setSuraPassword(e.target.value)}
+                        icon={() => <Icon icon="solar:lock-bold" width={16} />}
+                        maxLength={4}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSuraConnect()}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSuraShowPassword(!suraShowPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <Icon icon={suraShowPassword ? 'solar:eye-bold' : 'solar:eye-closed-bold'} width={18} />
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 bg-green-200 dark:bg-green-800 rounded-full flex items-center justify-center text-xs font-bold text-green-800 dark:text-green-200">4</span>
-                      <span>Pega aquí abajo (<kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border text-xs font-mono">Ctrl+V</kbd>)</span>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
+                    <Icon icon="solar:smartphone-bold-duotone" width={24} className="text-yellow-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-1">Verificación de doble factor</h3>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                        Abre tu app autenticadora y escribe el código de 6 dígitos que aparece para SURA.
+                      </p>
                     </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="sura-mfa" className="mb-1.5 block font-medium text-sm">Código de verificación</Label>
+                    <TextInput
+                      id="sura-mfa"
+                      placeholder="Código de 6 dígitos"
+                      value={suraMfaCode}
+                      onChange={(e) => setSuraMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      icon={() => <Icon icon="solar:shield-keyhole-bold" width={16} />}
+                      maxLength={6}
+                      autoFocus
+                      onKeyDown={(e) => e.key === 'Enter' && handleSuraConnect()}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">El código cambia cada 30 segundos. Al marcar "Recordar dispositivo", no se pedirá MFA por 8 días.</p>
+                  </div>
+                  <button
+                    onClick={() => { setSuraMfaRequired(false); setSuraMfaCode(''); }}
+                    className="text-sm text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Icon icon="solar:arrow-left-linear" width={14} />
+                    Volver a credenciales
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <Icon icon="solar:refresh-circle-bold-duotone" width={20} className="text-green-500 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-green-700 dark:text-green-400">
+                  <strong>Sesión persistente:</strong> Después de verificar, la sesión se renueva automáticamente sin MFA por 8 días.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Cookies mode (fallback) */}
+          {suraLoginMode === 'cookies' && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl">
+                <Icon icon="solar:info-circle-bold-duotone" width={24} className="text-yellow-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-1">Método manual</h3>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                    Copia las cookies desde el navegador. La sesión no se renovará automáticamente.
+                  </p>
+                  <div className="mt-2 space-y-1.5 text-sm text-yellow-700 dark:text-yellow-400">
+                    <p>1. Abre <a href="https://asistentevirtualasesores.sura.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">SURA Asesores</a> e inicia sesión</p>
+                    <p>2. Presiona <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border text-xs font-mono">F12</kbd> → Application → Cookies</p>
+                    <p>3. Selecciona todo y copia (<kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border text-xs font-mono">Ctrl+A</kbd>, <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border text-xs font-mono">Ctrl+C</kbd>)</p>
                   </div>
                 </div>
               </div>
               <div>
-                <Label htmlFor="sura-cookies" className="mb-1 block font-medium">Cookies de sesión SURA</Label>
+                <Label htmlFor="sura-cookies" className="mb-1.5 block font-medium">Cookies de sesión SURA</Label>
                 <textarea
                   id="sura-cookies"
                   className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm p-3 h-24 font-mono resize-none focus:ring-2 focus:ring-primary focus:border-primary"
                   placeholder="Pega aquí las cookies copiadas..."
                   value={suraCookies}
                   onChange={(e) => setSuraCookies(e.target.value)}
-                  autoFocus
                 />
                 <p className="text-xs text-gray-400 mt-1">Se almacenan encriptadas y solo se usan para consultar el API de SURA.</p>
               </div>
@@ -1325,15 +1737,20 @@ const Robots = () => {
           )}
         </Modal.Body>
         <Modal.Footer>
-          {suraStep === 3 && (
-            <Button color="primary" onClick={handleSuraConnect} disabled={suraConnecting || !suraCookies.trim()}>
-              {suraConnecting ? <><Spinner size="sm" className="mr-2" />Validando sesión...</> : <><Icon icon="solar:link-circle-bold" width={16} className="mr-1" />Conectar con SURA</>}
-            </Button>
-          )}
-          {suraStep > 1 && (
-            <Button color="light" onClick={() => setSuraStep((suraStep - 1) as 1 | 2 | 3)}>Atrás</Button>
-          )}
-          <Button color="light" onClick={() => { setShowSuraLoginModal(false); setSuraStep(1); setSuraCookies(''); }}>Cancelar</Button>
+          <Button
+            color="primary"
+            onClick={handleSuraConnect}
+            disabled={suraConnecting || (suraLoginMode === 'credentials'
+              ? (suraMfaRequired ? !suraMfaCode.trim() : (!suraUser.trim() || !suraPassword.trim()))
+              : !suraCookies.trim())}
+          >
+            {suraConnecting ? (
+              <><Spinner size="sm" className="mr-2" />{suraMfaRequired ? 'Verificando código...' : suraLoginMode === 'credentials' ? 'Iniciando sesión...' : 'Validando sesión...'}</>
+            ) : (
+              <><Icon icon={suraMfaRequired ? 'solar:shield-keyhole-bold' : 'solar:link-circle-bold'} width={16} className="mr-1" />{suraMfaRequired ? 'Verificar código' : 'Conectar con SURA'}</>
+            )}
+          </Button>
+          <Button color="light" onClick={() => { setShowSuraLoginModal(false); setSuraCookies(''); setSuraPassword(''); setSuraMfaCode(''); setSuraMfaRequired(false); }}>Cancelar</Button>
         </Modal.Footer>
       </Modal>
 

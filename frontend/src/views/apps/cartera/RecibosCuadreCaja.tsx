@@ -117,6 +117,8 @@ const RecibosCuadreCaja = () => {
   const [cuadre, setCuadre] = useState<CuadreCaja | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [sortField, setSortField] = useState('numero_recibo');
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
 
   // Cuadre date range
   const [cuadreDesde, setCuadreDesde] = useState(() => new Date().toISOString().split('T')[0]);
@@ -214,7 +216,7 @@ const RecibosCuadreCaja = () => {
     } else {
       loadRecibos();
     }
-  }, [tab, page]);
+  }, [tab, page, sortField, sortDir]);
 
   const loadStats = async () => {
     try {
@@ -231,7 +233,7 @@ const RecibosCuadreCaja = () => {
   const loadRecibos = async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number> = { page, per_page: 25 };
+      const params: Record<string, string | number> = { page, per_page: 25, sort_field: sortField, sort_dir: sortDir };
       if (search) params.search = search;
       if (tab !== 'cuadre') params.tab = tab;
       const res = await api.get('/saas/cartera/recibos-caja', { params });
@@ -509,9 +511,9 @@ const RecibosCuadreCaja = () => {
         />
       ) : (
         <>
-          {/* Search */}
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
+          {/* Search + Sort */}
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex-1 min-w-[200px] relative">
               <Icon icon="solar:magnifer-linear" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Buscar por # recibo, cliente, observaciones..."
@@ -521,6 +523,25 @@ const RecibosCuadreCaja = () => {
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
               />
             </div>
+            <select
+              className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm px-3 py-2 text-gray-700 dark:text-gray-200"
+              value={`${sortField}:${sortDir}`}
+              onChange={e => {
+                const [f, d] = e.target.value.split(':');
+                setSortField(f);
+                setSortDir(d as 'asc' | 'desc');
+                setPage(1);
+              }}
+            >
+              <option value="numero_recibo:desc"># Recibo (mayor a menor)</option>
+              <option value="numero_recibo:asc"># Recibo (menor a mayor)</option>
+              <option value="id:desc">ID más reciente primero</option>
+              <option value="id:asc">ID más antiguo primero</option>
+              <option value="valor_recaudado_en_oficina:desc">Mayor valor primero</option>
+              <option value="valor_recaudado_en_oficina:asc">Menor valor primero</option>
+              <option value="fecha_realizo_pago_oficina:desc">Fecha más reciente</option>
+              <option value="fecha_realizo_pago_oficina:asc">Fecha más antigua</option>
+            </select>
             <Button color="primary" onClick={handleSearch}>
               <Icon icon="solar:magnifer-bold" className="mr-2" />Buscar
             </Button>

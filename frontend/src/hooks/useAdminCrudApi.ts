@@ -775,13 +775,24 @@ export const useRamos = () => {
     }
   };
 
-  const deleteRamo = async (id: string) => {
+  const deleteRamo = async (id: string, replacementRamoId?: string) => {
     try {
-      const response = await makeRequest(`/saas/ramos/${id}`, {
+      const url = replacementRamoId
+        ? `/saas/ramos/${id}?replacement_ramo_id=${replacementRamoId}`
+        : `/saas/ramos/${id}`;
+      const response = await makeRequest(url, {
         method: 'DELETE',
       });
       await fetchRamos();
       return response;
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const getRamoPolizasCount = async (id: string) => {
+    try {
+      return await makeRequest(`/saas/ramos/${id}/polizas-count`);
     } catch (err) {
       throw err;
     }
@@ -799,6 +810,7 @@ export const useRamos = () => {
     createRamo,
     updateRamo,
     deleteRamo,
+    getRamoPolizasCount,
   };
 };
 

@@ -8,8 +8,7 @@ use App\Models\PolicyNotificationLog;
 use App\Models\WhatsAppInstance;
 use App\Models\Poliza;
 use App\Models\Cliente;
-use App\Models\Wallet;
-use App\Models\WalletTransaction;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -1075,42 +1074,6 @@ class PolicyNotificationController extends Controller
 
             if ($result['success'] ?? false) {
                 $messageId = $result['message_id'] ?? null;
-
-                // Cobrar 50 pesos por WhatsApp enviado
-                $costPerWhatsApp = 50;
-                $wallet = Wallet::firstOrCreate(
-                    ['broker_id' => $instance->broker_id],
-                    [
-                        'balance_cop' => 0,
-                        'balance_usd' => 0,
-                        'pending_balance' => 0,
-                        'total_earnings' => 0,
-                        'is_active' => true
-                    ]
-                );
-
-                $balanceBefore = (float) $wallet->balance_cop;
-                $wallet->balance_cop = $balanceBefore - $costPerWhatsApp;
-                $wallet->save();
-
-                WalletTransaction::create([
-                    'wallet_id' => $wallet->id,
-                    'broker_id' => $instance->broker_id,
-                    'user_id' => null,
-                    'type' => 'debit',
-                    'amount_cop' => $costPerWhatsApp,
-                    'amount_usd' => 0,
-                    'currency' => 'COP',
-                    'description' => "WhatsApp enviado - Notificación de póliza",
-                    'reference_type' => 'whatsapp_message',
-                    'reference_id' => null,
-                    'balance_cop_after' => $wallet->balance_cop,
-                    'metadata' => [
-                        'phone' => $phone,
-                        'message_preview' => substr($message, 0, 100),
-                        'cost_per_whatsapp' => $costPerWhatsApp
-                    ]
-                ]);
 
                 return [
                     'success' => true,

@@ -37,6 +37,13 @@ interface CarteraItem {
   forma_pago: string;
   numero_pago: string | null;
   estado_cartera: 'por_cobrar' | 'por_pagar' | 'comision_por_cobrar' | 'comision_recibida';
+  // 3 flags SS-style
+  recaudado_en_oficina: boolean;
+  recaudado_aseguradora: boolean;
+  comisionada: boolean;
+  recibo_pago_directo: boolean;
+  es_anticipo: boolean;
+  recibo_anulado: boolean;
   // Financial
   prima_neta: number;
   valor_neto_a_pagar: number;
@@ -155,7 +162,7 @@ const CarteraClientes = () => {
     ordenDireccion: 'asc' as 'asc' | 'desc',
   });
 
-  const [tabActivo, setTabActivo] = useState<'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida'>('porCobrar');
+  const [tabActivo, setTabActivo] = useState<'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida' | 'pagoDirecto' | 'anticipos' | 'anulados'>('porCobrar');
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [polizaSeleccionada, setPolizaSeleccionada] = useState<PolizaCartera | null>(null);
 
@@ -175,6 +182,8 @@ const CarteraClientes = () => {
   const [fechaPago, setFechaPago] = useState('');
   const [observacionesPago, setObservacionesPago] = useState('');
   const [procesandoPago, setProcesandoPago] = useState(false);
+  const [carteraItemActivo, setCarteraItemActivo] = useState<CarteraItem | null>(null);
+  const [polizaSiblingItems, setPolizaSiblingItems] = useState<CarteraItem[]>([]);
 
   // Recibo print state
   const [reciboParaImprimir, setReciboParaImprimir] = useState<any>(null);
@@ -220,6 +229,56 @@ const CarteraClientes = () => {
   } | null>(null);
   const [cargandoPagosAseguradora, setCargandoPagosAseguradora] = useState(false);
 
+  // Estado para selección masiva (acciones masivas estilo SS)
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [procesandoAccionMasiva, setProcesandoAccionMasiva] = useState(false);
+
+  const toggleSelectItem = (id: number) => {
+    setSelectedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.size === carteraItems.length) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(carteraItems.map(i => i.id)));
+    }
+  };
+
+  const ejecutarAccionMasiva = async (accion: 'recaudar_oficina' | 'recaudar_aseguradora' | 'comisionar') => {
+    if (selectedItems.size === 0) return;
+    const labelAccion = accion === 'recaudar_oficina' ? 'Recaudar en Oficina' : accion === 'recaudar_aseguradora' ? 'Recaudar Aseguradora' : 'Comisionar';
+    if (!window.confirm(`¿${labelAccion} ${selectedItems.size} items seleccionados?`)) return;
+    try {
+      setProcesandoAccionMasiva(true);
+      const res = await polizaService.accionMasivaCartera(accion, Array.from(selectedItems));
+      if (res.success) {
+        toast({ title: 'Acción completada', description: res.message || `${selectedItems.size} items procesados` });
+        setSelectedItems(new Set());
+        await cargarCartera();
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Error al ejecutar acción', variant: 'destructive' });
+    } finally {
+      setProcesandoAccionMasiva(false);
+    }
+  };
+
+  const anularItem = async (itemId: number) => {
+    if (!window.confirm('¿Anular este recibo?')) return;
+    try {
+      const res = await polizaService.anularCarteraItem(itemId);
+      if (res.success) {
+        toast({ title: 'Anulado', description: 'El recibo ha sido anulado' });
+        await cargarCartera();
+      }
+    } catch { toast({ title: 'Error', variant: 'destructive' }); }
+  };
+
   // Estado para paginación del servidor
   const [serverPagination, setServerPagination] = useState<{
     current_page: number;
@@ -235,13 +294,18 @@ const CarteraClientes = () => {
     porPagar: number;
     comisionPorCobrar: number;
     comisionRecibida: number;
-  }>({ general: 0, porCobrar: 0, porPagar: 0, comisionPorCobrar: 0, comisionRecibida: 0 });
+    pagoDirecto: number;
+    anticipos: number;
+    anulados: number;
+  }>({ general: 0, porCobrar: 0, porPagar: 0, comisionPorCobrar: 0, comisionRecibida: 0, pagoDirecto: 0, anticipos: 0, anulados: 0 });
 
   // Cargar datos con paginación del servidor (cartera_items)
+  type TabCartera = 'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida' | 'pagoDirecto' | 'anticipos' | 'anulados';
+
   const cargarCartera = async (
     page: number = 1,
     search: string = '',
-    tab: 'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida' = tabActivo,
+    tab: TabCartera = tabActivo,
   ) => {
     try {
       setLoading(true);
@@ -276,6 +340,9 @@ const CarteraClientes = () => {
           porPagar: response.contadoresTabs.porPagar ?? 0,
           comisionPorCobrar: response.contadoresTabs.comisionPorCobrar ?? 0,
           comisionRecibida: response.contadoresTabs.comisionRecibida ?? 0,
+          pagoDirecto: response.contadoresTabs.pagoDirecto ?? 0,
+          anticipos: response.contadoresTabs.anticipos ?? 0,
+          anulados: response.contadoresTabs.anulados ?? 0,
         });
       }
 
@@ -347,8 +414,33 @@ const CarteraClientes = () => {
     setShowCarteraClienteModal(true);
   };
 
+  // Load all cartera_items for a poliza (across all states) for global summary in modals
+  const loadPolizaSiblings = async (polizaId: number | null) => {
+    if (!polizaId) { setPolizaSiblingItems([]); return; }
+    try {
+      const res = await api.get(`/saas/polizas/${polizaId}/cartera-items`);
+      if (res.data?.success) {
+        setPolizaSiblingItems(res.data.data || []);
+      }
+    } catch { setPolizaSiblingItems([]); }
+  };
+
   // Funciones para manejar pagos
-  const abrirModalPagoOficina = (poliza: PolizaCartera) => {
+  const abrirModalPagoOficina = async (poliza: PolizaCartera, carteraItem?: CarteraItem) => {
+    setCarteraItemActivo(carteraItem || null);
+    // Use cartera_item amounts if available (cuota-specific), else poliza totals
+    if (carteraItem) {
+      poliza = { ...poliza, carteraItemId: carteraItem.id };
+      poliza.recaudo_oficina = {
+        recaudado: carteraItem.valor_recaudado_oficina || 0,
+        pendiente: carteraItem.saldo_pendiente_oficina || 0,
+        total: carteraItem.prima_total_pago || 0,
+      };
+      poliza.total = carteraItem.prima_total_pago || 0;
+      await loadPolizaSiblings(carteraItem.poliza_id);
+    } else {
+      setPolizaSiblingItems([]);
+    }
     setPolizaSeleccionada(poliza);
     setMontoPago((poliza.recaudo_oficina?.pendiente || 0).toString());
     setMetodoPago('');
@@ -358,7 +450,19 @@ const CarteraClientes = () => {
     setShowPagoOficinaModal(true);
   };
 
-  const abrirModalPagoAseguradora = (poliza: PolizaCartera) => {
+  const abrirModalPagoAseguradora = async (poliza: PolizaCartera, carteraItem?: CarteraItem) => {
+    setCarteraItemActivo(carteraItem || null);
+    if (carteraItem) {
+      poliza = { ...poliza, carteraItemId: carteraItem.id };
+      poliza.recaudo_aseguradora = {
+        pagado: carteraItem.valor_pagado_aseguradora || 0,
+        pendiente: carteraItem.saldo_pendiente_aseguradora || 0,
+        total: carteraItem.valor_neto_a_pagar || 0,
+      };
+      await loadPolizaSiblings(carteraItem.poliza_id);
+    } else {
+      setPolizaSiblingItems([]);
+    }
     setPolizaSeleccionada(poliza);
     setMontoPago((poliza.recaudo_aseguradora?.pendiente || 0).toString());
     setMetodoPago('');
@@ -369,9 +473,17 @@ const CarteraClientes = () => {
   };
 
   // Recaudo directo por aseguradora (va directo a recaudos completados)
-  const abrirModalRecaudoAseguradoraDirecto = (poliza: PolizaCartera) => {
+  const abrirModalRecaudoAseguradoraDirecto = async (poliza: PolizaCartera, carteraItem?: CarteraItem) => {
+    setCarteraItemActivo(carteraItem || null);
+    if (carteraItem) {
+      poliza = { ...poliza, carteraItemId: carteraItem.id };
+      poliza.total = carteraItem.prima_total_pago || 0;
+      poliza.valorPendienteCliente = carteraItem.saldo_pendiente_oficina || 0;
+      await loadPolizaSiblings(carteraItem.poliza_id);
+    } else {
+      setPolizaSiblingItems([]);
+    }
     setPolizaSeleccionada(poliza);
-    // Default to pending amount (total - already collected)
     const pendiente = poliza.valorPendienteCliente || poliza.recaudo_oficina?.pendiente || poliza.total || 0;
     setMontoPago(pendiente.toString());
     setMetodoPago('');
@@ -381,7 +493,16 @@ const CarteraClientes = () => {
     setShowRecaudoAseguradoraDirectoModal(true);
   };
 
-  const abrirModalCobroComision = (poliza: PolizaCartera) => {
+  const abrirModalCobroComision = (poliza: PolizaCartera, carteraItem?: CarteraItem) => {
+    setCarteraItemActivo(carteraItem || null);
+    if (carteraItem) {
+      poliza = { ...poliza, carteraItemId: carteraItem.id };
+      poliza.cobro_comision = {
+        cobrada: carteraItem.comision_recibida || 0,
+        pendiente: Math.max(0, (carteraItem.comision_a_recibir || 0) - (carteraItem.comision_recibida || 0)),
+        total: carteraItem.comision_a_recibir || 0,
+      };
+    }
     setPolizaSeleccionada(poliza);
     setMontoPago((poliza.cobro_comision?.pendiente || 0).toString());
     setReferenciaPago('');
@@ -413,7 +534,7 @@ const CarteraClientes = () => {
         referenciaPago,
         observacionesPago,
         fechaPago,
-        polizaSeleccionada.carteraItemId
+        carteraItemActivo?.id || polizaSeleccionada.carteraItemId
       );
 
       if (response.success) {
@@ -457,7 +578,7 @@ const CarteraClientes = () => {
         referenciaPago,
         observacionesPago,
         fechaPago,
-        polizaSeleccionada.carteraItemId
+        carteraItemActivo?.id || polizaSeleccionada.carteraItemId
       );
 
       if (response.success) {
@@ -839,7 +960,7 @@ const CarteraClientes = () => {
         referenciaPago,
         observacionesPago,
         fechaPago,
-        polizaSeleccionada.carteraItemId
+        carteraItemActivo?.id || polizaSeleccionada.carteraItemId
       );
 
       if (response.success) {
@@ -880,7 +1001,8 @@ const CarteraClientes = () => {
         parseFloat(montoPago),
         referenciaPago,
         observacionesPago,
-        fechaPago
+        fechaPago,
+        carteraItemActivo?.id || polizaSeleccionada.carteraItemId
       );
 
       if (response.success) {
@@ -901,6 +1023,38 @@ const CarteraClientes = () => {
     }
   };
 
+  // Revertir un cartera_item individual a por_cobrar (cuota-específico)
+  const revertirItem = async (item: CarteraItem, descripcion?: string) => {
+    if (!item.poliza_id) return;
+    const label = item.numero_pago ? `cuota ${item.numero_pago}` : `póliza ${item.numero_poliza}`;
+    if (!confirm(`¿Está seguro de revertir ${descripcion || 'el estado de'} ${label}? Regresará a "Por Cobrar".`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await polizaService.revertirCarteraItem(item.poliza_id, item.id);
+
+      if (response.success) {
+        toast({
+          title: 'Revertido',
+          description: (response as any).message || `${label} revertida a Por Cobrar`,
+        });
+        await cargarCartera();
+      }
+    } catch (error: any) {
+      console.error('Error revirtiendo item:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || error.message || 'No se pudo revertir',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Revertir recaudo oficina (desde Recaudos Pendientes)
   const revertirRecaudoOficina = async (poliza: PolizaCartera) => {
     if (!confirm('¿Está seguro de revertir todos los recaudos de oficina de esta póliza? Esta acción eliminará todos los abonos registrados.')) {
       return;
@@ -908,15 +1062,24 @@ const CarteraClientes = () => {
 
     try {
       setLoading(true);
-      const response = await polizaService.revertirRecaudosOficina(poliza.id);
-
-      if (response.success) {
-        toast({
-          title: 'Recaudos revertidos',
-          description: 'Los recaudos de oficina han sido revertidos exitosamente',
-        });
-        // Recargar datos
-        await cargarCartera();
+      if (poliza.carteraItemId) {
+        const response = await polizaService.revertirCarteraItem(poliza.id, poliza.carteraItemId);
+        if (response.success) {
+          toast({
+            title: 'Recaudos revertidos',
+            description: 'Los recaudos de oficina han sido revertidos exitosamente',
+          });
+          await cargarCartera();
+        }
+      } else {
+        const response = await polizaService.revertirRecaudosOficina(poliza.id);
+        if (response.success) {
+          toast({
+            title: 'Recaudos revertidos',
+            description: 'Los recaudos de oficina han sido revertidos exitosamente',
+          });
+          await cargarCartera();
+        }
       }
     } catch (error) {
       console.error('Error revirtiendo recaudos:', error);
@@ -1002,6 +1165,7 @@ const CarteraClientes = () => {
 
   // Cargar datos cuando el usuario esté autenticado
   useEffect(() => {
+    setSelectedItems(new Set()); // Clear selection when changing tabs
     if (!authLoading && authUser) {
       cargarCartera(1, filtros.busqueda, tabActivo);
       // Load broker info for recibo printing
@@ -1229,6 +1393,49 @@ const CarteraClientes = () => {
     }
   };
 
+  const renderPolizaCell = (item: CarteraItem) => {
+    const hasAnexo = item.anexo_numero && item.anexo_numero.trim() !== '';
+    const anexoLabel = hasAnexo ? item.anexo_numero!.trim() : null;
+    const anexoNumOnly = anexoLabel ? anexoLabel.match(/^(\d+)/)?.[1] : null;
+
+    return (
+      <div className="min-w-[160px]">
+        <div className="font-medium flex items-center gap-1 flex-wrap">
+          {item.numero_poliza}
+          {item.numero_renovacion > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Renovación ${item.numero_renovacion}`}>
+              R{item.numero_renovacion}
+            </span>
+          )}
+          {hasAnexo && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title={`Anexo: ${anexoLabel}`}>
+              <Icon icon="solar:document-add-bold" className="w-3 h-3 mr-0.5" />
+              Anexo {anexoNumOnly || ''}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {item.numero_pago && (
+            <span className="inline-flex items-center text-[11px] text-gray-500 dark:text-gray-400">
+              <Icon icon="solar:bill-list-bold-duotone" className="w-3 h-3 mr-0.5 text-gray-400" />
+              Cuota {item.numero_pago}
+            </span>
+          )}
+          {item.forma_pago && item.forma_pago.toLowerCase().includes('fraccion') && !item.numero_pago && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+              Fraccionado
+            </span>
+          )}
+        </div>
+        {hasAnexo && anexoLabel && anexoLabel.length > 2 && (
+          <div className="text-[10px] text-gray-400 dark:text-gray-500 truncate max-w-[200px]" title={anexoLabel}>
+            {anexoLabel}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Mostrar spinner mientras se verifica la autenticación
   if (authLoading) {
     return <GuroLoader size={80} />;
@@ -1350,7 +1557,7 @@ const CarteraClientes = () => {
               <div className="relative">
                 <Icon icon="solar:magnifer-bold-duotone" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
-                  placeholder="Buscar por póliza, cliente o aseguradora..."
+                  placeholder="Buscar por póliza, cliente, aseguradora o placa..."
                   value={filtros.busqueda || ''}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFiltros({ ...filtros, busqueda: e.target.value })}
                   onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') ejecutarBusqueda(); }}
@@ -1410,7 +1617,7 @@ const CarteraClientes = () => {
       <Card>
         <Tabs
           onActiveTabChange={(tab) => {
-            const tabNames: ('general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida')[] = ['porCobrar', 'porPagar', 'comisionPorCobrar', 'comisionRecibida'];
+            const tabNames: TabCartera[] = ['porCobrar', 'porPagar', 'comisionPorCobrar', 'comisionRecibida'];
             if (tabNames[tab] && tabNames[tab] !== tabActivo) {
               setTabActivo(tabNames[tab]);
             }
@@ -1551,10 +1758,30 @@ const CarteraClientes = () => {
               </div>
             </div>
 
+            {/* Barra de acciones masivas */}
+            {selectedItems.size > 0 && (
+              <div className="mb-3 flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800/40">
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{selectedItems.size} seleccionados</span>
+                <Button size="xs" color="success" onClick={() => ejecutarAccionMasiva('recaudar_oficina')} disabled={procesandoAccionMasiva}>
+                  <Icon icon="solar:wallet-money-bold-duotone" className="w-3.5 h-3.5 mr-1" />
+                  Recaudar Oficina
+                </Button>
+                <Button size="xs" color="blue" onClick={() => ejecutarAccionMasiva('recaudar_aseguradora')} disabled={procesandoAccionMasiva}>
+                  <Icon icon="solar:shield-check-bold-duotone" className="w-3.5 h-3.5 mr-1" />
+                  Recaudar Aseguradora
+                </Button>
+                <Button size="xs" color="light" onClick={() => setSelectedItems(new Set())}>
+                  <Icon icon="solar:close-circle-bold-duotone" className="w-3.5 h-3.5 mr-1" />
+                  Limpiar
+                </Button>
+              </div>
+            )}
+
             <div className="guro-table-wrap">
               <table className="guro-table">
                 <thead>
                   <tr>
+                    <th className="w-10"><input type="checkbox" checked={selectedItems.size === carteraItems.length && carteraItems.length > 0} onChange={toggleSelectAll} className="rounded" /></th>
                     <th>Póliza</th>
                     <th>Cliente</th>
                     <th>Aseguradora</th>
@@ -1568,20 +1795,9 @@ const CarteraClientes = () => {
                 </thead>
                 <tbody>
                   {carteraItems.map((item) => (
-                    <tr key={item.id} className="group">
-                      <td>
-                        <div>
-                          <div className="font-medium flex items-center gap-1.5">
-                            {item.numero_poliza}
-                            {item.numero_renovacion > 0 && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-                                R{item.numero_renovacion}
-                              </span>
-                            )}
-                          </div>
-                          {item.numero_pago && <div className="text-xs text-gray-500">Pago #{item.numero_pago}</div>}
-                        </div>
-                      </td>
+                    <tr key={item.id} className={`group ${selectedItems.has(item.id) ? 'bg-blue-50 dark:bg-blue-900/10' : ''}`}>
+                      <td><input type="checkbox" checked={selectedItems.has(item.id)} onChange={() => toggleSelectItem(item.id)} className="rounded" /></td>
+                      <td>{renderPolizaCell(item)}</td>
                       <td>
                         <div>
                           <div className="font-medium">{item.cliente}</div>
@@ -1611,15 +1827,15 @@ const CarteraClientes = () => {
                           {item.poliza_id && (
                             <>
                               <TableMenuItem className="text-green-600" onClick={() => {
-                                const p = polizas.find(p => p.id === String(item.poliza_id));
-                                if (p) abrirModalPagoOficina(p);
+                                const p = polizas.find(p => p.carteraItemId === item.id) || polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) abrirModalPagoOficina(p, item);
                               }}>
                                 <Icon icon="solar:cash-out-bold-duotone" height={18} />
                                 <span>Registrar Recaudo</span>
                               </TableMenuItem>
                               <TableMenuItem className="text-blue-600" onClick={() => {
-                                const p = polizas.find(p => p.id === String(item.poliza_id));
-                                if (p) abrirModalRecaudoAseguradoraDirecto(p);
+                                const p = polizas.find(p => p.carteraItemId === item.id) || polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) abrirModalRecaudoAseguradoraDirecto(p, item);
                               }}>
                                 <Icon icon="solar:buildings-bold-duotone" height={18} />
                                 <span>Recaudo Directo Aseg.</span>
@@ -1646,6 +1862,10 @@ const CarteraClientes = () => {
                               <span>Recibo #{item.recibo.numero_recibo}</span>
                             </TableMenuItem>
                           )}
+                          <TableMenuItem className="text-red-500" onClick={() => anularItem(item.id)}>
+                            <Icon icon="solar:close-circle-bold-duotone" height={18} />
+                            <span>Anular</span>
+                          </TableMenuItem>
                         </TableActionMenu>
                       </td>
                     </tr>
@@ -1714,10 +1934,26 @@ const CarteraClientes = () => {
               </div>
             </div>
 
+            {/* Barra de acciones masivas - Por Pagar */}
+            {selectedItems.size > 0 && (
+              <div className="mb-3 flex items-center gap-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 border border-purple-200 dark:border-purple-800/40">
+                <span className="text-sm font-medium text-purple-700 dark:text-purple-300">{selectedItems.size} seleccionados</span>
+                <Button size="xs" color="purple" onClick={() => ejecutarAccionMasiva('recaudar_aseguradora')} disabled={procesandoAccionMasiva}>
+                  <Icon icon="solar:shield-check-bold-duotone" className="w-3.5 h-3.5 mr-1" />
+                  Recaudar Aseguradora
+                </Button>
+                <Button size="xs" color="light" onClick={() => setSelectedItems(new Set())}>
+                  <Icon icon="solar:close-circle-bold-duotone" className="w-3.5 h-3.5 mr-1" />
+                  Limpiar
+                </Button>
+              </div>
+            )}
+
             <div className="guro-table-wrap">
               <table className="guro-table">
                 <thead>
                   <tr>
+                    <th className="w-10"><input type="checkbox" checked={selectedItems.size === carteraItems.length && carteraItems.length > 0} onChange={toggleSelectAll} className="rounded" /></th>
                     <th>Póliza</th>
                     <th>Cliente</th>
                     <th>Aseguradora</th>
@@ -1730,20 +1966,9 @@ const CarteraClientes = () => {
                 </thead>
                 <tbody>
                   {carteraItems.map((item) => (
-                    <tr key={item.id} className="group">
-                      <td>
-                        <div>
-                          <div className="font-medium flex items-center gap-1.5">
-                            {item.numero_poliza}
-                            {item.numero_renovacion > 0 && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-                                R{item.numero_renovacion}
-                              </span>
-                            )}
-                          </div>
-                          {item.numero_pago && <div className="text-xs text-gray-500">Pago #{item.numero_pago}</div>}
-                        </div>
-                      </td>
+                    <tr key={item.id} className={`group ${selectedItems.has(item.id) ? 'bg-purple-50 dark:bg-purple-900/10' : ''}`}>
+                      <td><input type="checkbox" checked={selectedItems.has(item.id)} onChange={() => toggleSelectItem(item.id)} className="rounded" /></td>
+                      <td>{renderPolizaCell(item)}</td>
                       <td>
                         <div>
                           <div className="font-medium">{item.cliente}</div>
@@ -1760,16 +1985,13 @@ const CarteraClientes = () => {
                           {item.poliza_id && (
                             <>
                               <TableMenuItem className="text-purple-600" onClick={() => {
-                                const p = polizas.find(p => p.id === String(item.poliza_id));
-                                if (p) abrirModalPagoAseguradora(p);
+                                const p = polizas.find(p => p.carteraItemId === item.id) || polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) abrirModalPagoAseguradora(p, item);
                               }}>
                                 <Icon icon="solar:card-send-bold-duotone" height={18} />
                                 <span>Registrar Pago Aseg.</span>
                               </TableMenuItem>
-                              <TableMenuItem className="text-red-600" onClick={() => {
-                                const p = polizas.find(p => p.id === String(item.poliza_id));
-                                if (p) revertirRecaudoOficina(p);
-                              }}>
+                              <TableMenuItem className="text-red-600" onClick={() => revertirItem(item, 'el recaudo de')}>
                                 <Icon icon="solar:undo-left-bold-duotone" height={18} />
                                 <span>Revertir Recaudo</span>
                               </TableMenuItem>
@@ -1855,10 +2077,26 @@ const CarteraClientes = () => {
               </div>
             </div>
 
+            {/* Barra de acciones masivas - Comisiones */}
+            {selectedItems.size > 0 && (
+              <div className="mb-3 flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3 border border-indigo-200 dark:border-indigo-800/40">
+                <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">{selectedItems.size} seleccionados</span>
+                <Button size="xs" color="indigo" onClick={() => ejecutarAccionMasiva('comisionar')} disabled={procesandoAccionMasiva}>
+                  <Icon icon="solar:hand-money-bold-duotone" className="w-3.5 h-3.5 mr-1" />
+                  Comisionar
+                </Button>
+                <Button size="xs" color="light" onClick={() => setSelectedItems(new Set())}>
+                  <Icon icon="solar:close-circle-bold-duotone" className="w-3.5 h-3.5 mr-1" />
+                  Limpiar
+                </Button>
+              </div>
+            )}
+
             <div className="guro-table-wrap">
               <table className="guro-table">
                 <thead>
                   <tr>
+                    <th className="w-10"><input type="checkbox" checked={selectedItems.size === carteraItems.length && carteraItems.length > 0} onChange={toggleSelectAll} className="rounded" /></th>
                     <th>Póliza</th>
                     <th>Cliente</th>
                     <th>Aseguradora</th>
@@ -1871,20 +2109,9 @@ const CarteraClientes = () => {
                 </thead>
                 <tbody>
                   {carteraItems.map((item) => (
-                    <tr key={item.id} className="group">
-                      <td>
-                        <div>
-                          <div className="font-medium flex items-center gap-1.5">
-                            {item.numero_poliza}
-                            {item.numero_renovacion > 0 && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-                                R{item.numero_renovacion}
-                              </span>
-                            )}
-                          </div>
-                          {item.numero_pago && <div className="text-xs text-gray-500">Pago #{item.numero_pago}</div>}
-                        </div>
-                      </td>
+                    <tr key={item.id} className={`group ${selectedItems.has(item.id) ? 'bg-indigo-50 dark:bg-indigo-900/10' : ''}`}>
+                      <td><input type="checkbox" checked={selectedItems.has(item.id)} onChange={() => toggleSelectItem(item.id)} className="rounded" /></td>
+                      <td>{renderPolizaCell(item)}</td>
                       <td>
                         <div>
                           <div className="font-medium">{item.cliente}</div>
@@ -1901,23 +2128,13 @@ const CarteraClientes = () => {
                           {item.poliza_id && (
                             <>
                               <TableMenuItem className="text-indigo-600" onClick={() => {
-                                const p = polizas.find(p => p.id === String(item.poliza_id));
-                                if (p) abrirModalCobroComision(p);
+                                const p = polizas.find(p => p.carteraItemId === item.id) || polizas.find(p => p.id === String(item.poliza_id));
+                                if (p) abrirModalCobroComision(p, item);
                               }}>
                                 <Icon icon="solar:hand-money-bold-duotone" height={18} />
                                 <span>Registrar Cobro Comisión</span>
                               </TableMenuItem>
-                              <TableMenuItem className="text-red-600" onClick={async () => {
-                                if (!confirm(`¿Revertir el pago de aseguradora de la póliza ${item.numero_poliza}? La póliza regresará a "Por Pagar".`)) return;
-                                try {
-                                  setLoading(true);
-                                  const res = await api.delete(`/saas/polizas/${item.poliza_id}/pagos/revertir-aseguradora`);
-                                  toast({ title: 'Pago revertido', description: res.data?.message || `Póliza ${item.numero_poliza} revertida` });
-                                  await cargarCartera();
-                                } catch (e: any) {
-                                  toast({ title: 'Error', description: e.response?.data?.message || 'No se pudo revertir', variant: 'destructive' });
-                                } finally { setLoading(false); }
-                              }}>
+                              <TableMenuItem className="text-red-600" onClick={() => revertirItem(item, 'el pago aseguradora de')}>
                                 <Icon icon="solar:undo-left-bold-duotone" height={18} />
                                 <span>Revertir Pago Aseguradora</span>
                               </TableMenuItem>
@@ -2020,19 +2237,7 @@ const CarteraClientes = () => {
                 <tbody>
                   {carteraItems.map((item) => (
                     <tr key={item.id} className="group">
-                      <td>
-                        <div>
-                          <div className="font-medium flex items-center gap-1.5">
-                            {item.numero_poliza}
-                            {item.numero_renovacion > 0 && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-                                R{item.numero_renovacion}
-                              </span>
-                            )}
-                          </div>
-                          {item.numero_pago && <div className="text-xs text-gray-500">Pago #{item.numero_pago}</div>}
-                        </div>
-                      </td>
+                      <td>{renderPolizaCell(item)}</td>
                       <td>
                         <div>
                           <div className="font-medium">{item.cliente}</div>
@@ -2048,7 +2253,7 @@ const CarteraClientes = () => {
                         <TableActionMenu>
                           {item.poliza_id && (
                             <>
-                              <TableMenuItem className="text-red-600" onClick={() => revertirCobroComision(item)}>
+                              <TableMenuItem className="text-red-600" onClick={() => revertirItem(item, 'el cobro de comisión de')}>
                                 <Icon icon="solar:undo-left-bold-duotone" height={18} />
                                 <span>Revertir Cobro</span>
                               </TableMenuItem>
@@ -2105,6 +2310,7 @@ const CarteraClientes = () => {
               </div>
             )}
           </Tabs.Item>
+
         </Tabs>
       </Card>
 
@@ -2236,23 +2442,43 @@ const CarteraClientes = () => {
       <Modal show={showPagoOficinaModal} onClose={() => setShowPagoOficinaModal(false)} size="md">
         <Modal.Header>
           Registrar Pago por Oficina - {polizaSeleccionada?.numeroPoliza}
+          {carteraItemActivo?.numero_pago && <span className="text-sm font-normal text-gray-500 ml-2">Cuota {carteraItemActivo.numero_pago}</span>}
         </Modal.Header>
         <Modal.Body>
           <div className="space-y-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Total de la póliza:</span>
-                <span className="font-semibold">{formatCurrency(polizaSeleccionada?.total || 0)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Ya recaudado:</span>
-                <span className="font-semibold text-green-600">{formatCurrency(polizaSeleccionada?.recaudo_oficina?.recaudado || 0)}</span>
-              </div>
-              <div className="flex justify-between text-sm border-t border-blue-200 dark:border-blue-700 pt-2 mt-2">
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Pendiente por cobrar:</span>
-                <span className="font-bold text-orange-600">{formatCurrency(polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0)}</span>
-              </div>
-            </div>
+            {(() => {
+              const totalRecaudadoPoliza = polizaSiblingItems.length > 0
+                ? polizaSiblingItems.reduce((s, ci) => s + (parseFloat(String(ci.valor_recaudado_oficina)) || 0), 0)
+                : (parseFloat(String(carteraItemActivo?.valor_recaudado_oficina)) || 0);
+              return (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg mb-4">
+                  {carteraItemActivo?.anexo_numero && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600 dark:text-gray-400">Anexo:</span>
+                      <span className="font-semibold text-blue-600">{carteraItemActivo.anexo_numero}</span>
+                    </div>
+                  )}
+                  {carteraItemActivo?.numero_pago && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600 dark:text-gray-400">Cuota:</span>
+                      <span className="font-semibold">{carteraItemActivo.numero_pago}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Total cuota:</span>
+                    <span className="font-semibold">{formatCurrency(polizaSeleccionada?.total || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Ya recaudado (póliza):</span>
+                    <span className="font-semibold text-green-600">{formatCurrency(totalRecaudadoPoliza)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm border-t border-blue-200 dark:border-blue-700 pt-2 mt-2">
+                    <span className="text-gray-700 dark:text-gray-300 font-medium">Pendiente por cobrar:</span>
+                    <span className="font-bold text-orange-600">{formatCurrency(polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0)}</span>
+                  </div>
+                </div>
+              );
+            })()}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Monto a Recaudar *
@@ -2475,20 +2701,33 @@ const CarteraClientes = () => {
                 La póliza irá directamente a "Recaudos Completados".
               </p>
             </div>
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Total de la póliza:</span>
-                <span className="font-semibold">{formatCurrency(polizaSeleccionada?.total || 0)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Ya recaudado:</span>
-                <span className="font-semibold text-green-600">{formatCurrency(polizaSeleccionada?.valorRecaudado || polizaSeleccionada?.recaudo_oficina?.recaudado || 0)}</span>
-              </div>
-              <div className="flex justify-between text-sm border-t border-blue-200 dark:border-blue-700 pt-2 mt-2">
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Pendiente:</span>
-                <span className="font-bold text-orange-600">{formatCurrency(polizaSeleccionada?.valorPendienteCliente || polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0)}</span>
-              </div>
-            </div>
+            {(() => {
+              const totalRecaudadoPoliza = polizaSiblingItems.length > 0
+                ? polizaSiblingItems.reduce((s, ci) => s + (parseFloat(String(ci.valor_recaudado_oficina)) || 0), 0)
+                : (parseFloat(String(carteraItemActivo?.valor_recaudado_oficina)) || 0);
+              return (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                  {carteraItemActivo?.numero_pago && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600 dark:text-gray-400">Cuota:</span>
+                      <span className="font-semibold">{carteraItemActivo.numero_pago}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Total cuota:</span>
+                    <span className="font-semibold">{formatCurrency(polizaSeleccionada?.total || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Ya recaudado (póliza):</span>
+                    <span className="font-semibold text-green-600">{formatCurrency(totalRecaudadoPoliza)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm border-t border-blue-200 dark:border-blue-700 pt-2 mt-2">
+                    <span className="text-gray-700 dark:text-gray-300 font-medium">Pendiente:</span>
+                    <span className="font-bold text-orange-600">{formatCurrency(polizaSeleccionada?.valorPendienteCliente || polizaSeleccionada?.recaudo_oficina?.pendiente || polizaSeleccionada?.total || 0)}</span>
+                  </div>
+                </div>
+              );
+            })()}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Monto Recaudado *

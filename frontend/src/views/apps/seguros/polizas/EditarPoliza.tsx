@@ -143,6 +143,7 @@ const EditarPoliza: React.FC = () => {
             clienteNombre={poliza.nombre_completo_cliente || poliza.nombres_cliente}
             aseguradoraNombre={poliza.aseguradora_nombre || poliza.aseguradora}
             ramoNombre={poliza.ramo_nombre || poliza.ramo_principal}
+            installmentsCount={poliza.installments_count}
           />
         </Tabs.Item>
         <Tabs.Item title="Comisiones">

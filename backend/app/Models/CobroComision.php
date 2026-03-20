@@ -49,6 +49,7 @@ class CobroComision extends Model
         'observaciones',
         'recibo_caja_id',
         'source',
+        'cartera_item_id',
     ];
 
     protected $casts = [

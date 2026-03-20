@@ -362,35 +362,6 @@ class SendClientNotifications extends Command
 
     private function chargeWallet(int $brokerId, int $logId, Cliente $client, string $type, string $phone): void
     {
-        $costPerWhatsApp = 50;
-        $wallet = Wallet::firstOrCreate(
-            ['broker_id' => $brokerId],
-            ['balance_cop' => 0, 'balance_usd' => 0, 'pending_balance' => 0, 'total_earnings' => 0, 'is_active' => true]
-        );
-
-        $balanceBefore = (float) $wallet->balance_cop;
-        $wallet->balance_cop = $balanceBefore - $costPerWhatsApp;
-        $wallet->save();
-
-        WalletTransaction::create([
-            'wallet_id' => $wallet->id,
-            'broker_id' => $brokerId,
-            'user_id' => null,
-            'type' => 'debit',
-            'amount_cop' => $costPerWhatsApp,
-            'amount_usd' => 0,
-            'currency' => 'COP',
-            'description' => "WhatsApp enviado - Notificación de cliente: {$type}",
-            'reference_type' => 'client_notification',
-            'reference_id' => $logId,
-            'balance_cop_after' => $wallet->balance_cop,
-            'metadata' => [
-                'client_id' => $client->id,
-                'notification_type' => $type,
-                'phone' => $phone,
-                'cost_per_whatsapp' => $costPerWhatsApp,
-                'balance_before' => $balanceBefore,
-            ],
-        ]);
+        // Cobro de wallet desactivado
     }
 }

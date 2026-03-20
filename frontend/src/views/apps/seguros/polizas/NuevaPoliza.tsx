@@ -1884,7 +1884,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           <SectionHeader title="Forma de Pago" icon="solar:card-bold" />
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <FormField id="formaPago" name="formaPago" label="Forma" value={formData.formaPago} onChange={handleInputChange} error={errors.formaPago} required type="select" options={[
-              { value: '', label: 'Seleccionar' }, { value: 'contado', label: 'Contado' }, { value: 'credito', label: 'Crédito' }, { value: 'financiado', label: 'Financiado' },
+              { value: '', label: 'Seleccionar' }, { value: 'contado', label: 'Contado' }, { value: 'credito', label: 'Crédito' }, { value: 'financiado', label: 'Financiado' }, { value: 'fraccionado', label: 'Fraccionado' },
             ]} />
             <FormField id="periodicidadPago" name="periodicidadPago" label="Periodicidad" value={formData.periodicidadPago} onChange={handleInputChange} type="select" options={[
               { value: '', label: 'Seleccionar' }, { value: 'anual', label: 'Anual' }, { value: 'semestral', label: 'Semestral' }, { value: 'trimestral', label: 'Trimestral' }, { value: 'mensual', label: 'Mensual' },
@@ -1906,11 +1906,14 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
             </div>
             <FormField id="banco" name="banco" label="Banco" value={formData.banco || ''} onChange={handleInputChange} type="select" options={[{ value: '', label: 'Seleccionar' }, ...colombianBanks.map(b => ({ value: b, label: b })), { value: 'otro', label: 'Otro' }]} />
 
+            {/* Cuotas: visible cuando forma de pago es fraccionado/financiado O medio es tarjeta */}
+            {(formData.formaPago === 'fraccionado' || formData.formaPago === 'financiado' || formData.medioPago === 'tarjeta_credito') && (
+              <div><Label htmlFor="cuotas" className="text-xs font-medium">Cuotas</Label><Input id="cuotas" name="cuotas" type="number" value={formData.cuotas || ''} onChange={handleCuotasChange} placeholder="Ej: 12" className="mt-1" /></div>
+            )}
             {/* Campos condicionales de medio de pago */}
-            {formData.medioPago === 'tarjeta_credito' && (<>
-              <div><Label htmlFor="cuotas" className="text-xs font-medium">Cuotas</Label><Input id="cuotas" name="cuotas" value={formData.cuotas || ''} onChange={handleCuotasChange} placeholder="0" className="mt-1" /></div>
+            {formData.medioPago === 'tarjeta_credito' && (
               <div><Label htmlFor="numeroTarjeta" className="text-xs font-medium">N° Tarjeta</Label><Input id="numeroTarjeta" name="numeroTarjeta" value={formData.numeroTarjeta || ''} onChange={handleCardNumberChange} placeholder="Últimos 4" className="mt-1" /></div>
-            </>)}
+            )}
             {formData.medioPago === 'convenio' && (
               <div><Label htmlFor="agreement_term" className="text-xs font-medium">Convenio</Label>
                 <select id="agreement_term" name="agreement_term" value={(formData as any).agreement_term || ''} onChange={handleInputChange} className="mt-1 block w-full border rounded-md p-2 text-sm bg-white dark:bg-gray-800">

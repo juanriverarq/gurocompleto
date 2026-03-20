@@ -7,8 +7,7 @@ use App\Models\PolicyNotificationConfig;
 use App\Models\PolicyNotificationLog;
 use App\Models\Poliza;
 use App\Models\Cliente;
-use App\Models\Wallet;
-use App\Models\WalletTransaction;
+
 use App\Services\WhatsAppCloudApiService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
@@ -479,6 +478,7 @@ class SendPolicyNotifications extends Command
                     'renewal_date' => $policy->renewal_date?->format('Y-m-d'),
                     'payment_due_date' => $policy->payment_due_date?->format('Y-m-d'),
                     'premium_amount' => $policy->premium_amount,
+                    'riesgo' => $policy->datos_objeto_asegurado,
                 ],
             ]);
 
@@ -507,6 +507,7 @@ class SendPolicyNotifications extends Command
                 $clientName = $client ? ($client->full_name ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: 'Cliente') : 'Cliente';
                 
                 $ramoName = $policy->ramo ? ($policy->ramo->nombre ?? '-') : ($policy->product_name ?? '-');
+                $riesgo = $policy->datos_objeto_asegurado ?? '-';
                 
                 $templateParams = match($type) {
                     'expiration' => [
@@ -515,6 +516,7 @@ class SendPolicyNotifications extends Command
                         $policy->insurance_company ?? '-',
                         $policy->end_date ? $policy->end_date->format('d/m/Y') : 'N/A',
                         $ramoName,
+                        $riesgo,
                     ],
                     'renewal' => [
                         $clientName,
@@ -522,6 +524,7 @@ class SendPolicyNotifications extends Command
                         $policy->insurance_company ?? '-',
                         ($policy->renewal_date ?? $policy->end_date)?->format('d/m/Y') ?? 'N/A',
                         $ramoName,
+                        $riesgo,
                     ],
                     'payment_due' => [
                         $clientName,
@@ -529,6 +532,7 @@ class SendPolicyNotifications extends Command
                         $policy->payment_due_date ? $policy->payment_due_date->format('d/m/Y') : 'N/A',
                         '$' . number_format($policy->premium_amount ?? 0, 0, ',', '.'),
                         $ramoName,
+                        $riesgo,
                     ],
                     default => [],
                 };
@@ -553,54 +557,6 @@ class SendPolicyNotifications extends Command
                 $messageId = $result['message_id'] ?? null;
                 $log->markAsSent($messageId);
                 $config->incrementSent();
-
-                 // Cobrar 50 pesos por WhatsApp enviado (permite balance negativo)
-                 $costPerWhatsApp = 50; // 50 pesos COP
-                 $wallet = Wallet::firstOrCreate(
-                     ['broker_id' => $config->broker_id],
-                     [
-                         'balance_cop' => 0,
-                         'balance_usd' => 0,
-                         'pending_balance' => 0,
-                         'total_earnings' => 0,
-                         'is_active' => true
-                     ]
-                 );
-                
-                 $balanceBefore = (float) $wallet->balance_cop;
-                 $wallet->balance_cop = $balanceBefore - $costPerWhatsApp;
-                 $wallet->save();
-                
-                 // Registrar transacción
-                 WalletTransaction::create([
-                     'wallet_id' => $wallet->id,
-                     'broker_id' => $config->broker_id,
-                     'user_id' => null,
-                     'type' => 'debit',
-                     'amount_cop' => $costPerWhatsApp,
-                     'amount_usd' => 0,
-                     'currency' => 'COP',
-                     'description' => "WhatsApp enviado - Notificación de póliza: {$policy->policy_number}",
-                     'reference_type' => 'policy_notification',
-                     'reference_id' => $log->id,
-                     'balance_cop_after' => $wallet->balance_cop,
-                     'metadata' => [
-                         'policy_id' => $policy->id,
-                         'policy_number' => $policy->policy_number,
-                         'notification_type' => $type,
-                         'phone' => $phone,
-                         'cost_per_whatsapp' => $costPerWhatsApp,
-                         'balance_before' => $balanceBefore
-                     ]
-                 ]);
-                
-                 Log::info('💰 [WALLET] Cobro por WhatsApp enviado (debito aplicado)', [
-                     'broker_id' => $config->broker_id,
-                     'policy_id' => $policy->id,
-                     'cost' => $costPerWhatsApp,
-                     'balance_before' => $balanceBefore,
-                     'balance_after' => $wallet->balance_cop
-                 ]);
 
                 return [
                     'success' => true,

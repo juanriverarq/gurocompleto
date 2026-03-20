@@ -322,7 +322,7 @@ export const polizaService = {
     page: number = 1,
     perPage: number = 25,
     search: string = '',
-    tab?: 'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida',
+    tab?: 'general' | 'porCobrar' | 'porPagar' | 'comisionPorCobrar' | 'comisionRecibida' | 'pagoDirecto' | 'anticipos' | 'anulados',
   ): Promise<{ 
     success: boolean; 
     data: any[]; 
@@ -345,6 +345,9 @@ export const polizaService = {
       porPagar: number;
       comisionPorCobrar: number;
       comisionRecibida: number;
+      pagoDirecto: number;
+      anticipos: number;
+      anulados: number;
     };
   }> {
     try {
@@ -373,6 +376,31 @@ export const polizaService = {
       });
       throw error;
     }
+  },
+
+  /**
+   * Acción masiva sobre cartera_items (estilo SoftSeguros)
+   */
+  async accionMasivaCartera(accion: 'recaudar_oficina' | 'recaudar_aseguradora' | 'comisionar', itemIds: number[], fecha?: string, observaciones?: string): Promise<ApiResponse<any>> {
+    const endpoint = `${API_PREFIX}/cartera/accion-masiva`;
+    return makeRequest<any>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({ accion, item_ids: itemIds, fecha, observaciones }),
+    });
+  },
+
+  /**
+   * Anular un cartera_item
+   */
+  async anularCarteraItem(itemId: number): Promise<ApiResponse<any>> {
+    return makeRequest<any>(`${API_PREFIX}/cartera/${itemId}/anular`, { method: 'POST' });
+  },
+
+  /**
+   * Reactivar un cartera_item anulado
+   */
+  async reactivarCarteraItem(itemId: number): Promise<ApiResponse<any>> {
+    return makeRequest<any>(`${API_PREFIX}/cartera/${itemId}/reactivar`, { method: 'POST' });
   },
 
   /**
@@ -512,17 +540,19 @@ export const polizaService = {
   /**
    * Registrar cobro de comisión
    */
-  async registrarCobroComision(polizaId: string, monto: number, referenciaCobro?: string, observaciones?: string, fechaCobro?: string): Promise<ApiResponse<any>> {
+  async registrarCobroComision(polizaId: string, monto: number, referenciaCobro?: string, observaciones?: string, fechaCobro?: string, carteraItemId?: number): Promise<ApiResponse<any>> {
     try {
       const endpoint = `${API_PREFIX}/${polizaId}/cobrar-comision`;
+      const body: Record<string, any> = {
+        monto: monto,
+        referencia_cobro: referenciaCobro,
+        fecha_cobro: fechaCobro,
+        observaciones: observaciones,
+      };
+      if (carteraItemId) body.cartera_item_id = carteraItemId;
       const response = await makeRequest<any>(endpoint, {
         method: 'POST',
-        body: JSON.stringify({
-          monto: monto,
-          referencia_cobro: referenciaCobro,
-          fecha_cobro: fechaCobro,
-          observaciones: observaciones,
-        }),
+        body: JSON.stringify(body),
       });
 
       return response;
@@ -577,6 +607,25 @@ export const polizaService = {
       toast({
         variant: "destructive",
         title: "Error al revertir recaudos",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Revertir un cartera_item individual a por_cobrar (cuota-específico)
+   */
+  async revertirCarteraItem(polizaId: number | string, carteraItemId: number): Promise<ApiResponse<void>> {
+    try {
+      const response = await makeRequest<void>(`${API_PREFIX}/${polizaId}/cartera-item/${carteraItemId}/revertir`, {
+        method: 'DELETE',
+      });
+      return response;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al revertir cuota",
         description: error instanceof Error ? error.message : "Error desconocido",
       });
       throw error;

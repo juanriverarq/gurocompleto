@@ -629,24 +629,35 @@ class SaasPolizasController extends Controller
         try {
             $brokerId = $this->getBrokerId($request);
 
-            // 1. TAB COUNTERS (always, for tab badges)
+            // 1. TAB COUNTERS (using 3 boolean flags like SoftSeguros)
             $tabCounters = DB::table('cartera_items')
                 ->where('broker_id', $brokerId)
+                ->where('recibo_anulado', false)
                 ->selectRaw("
                     COUNT(*) as total,
-                    SUM(CASE WHEN estado_cartera = 'por_cobrar' OR (saldo_pendiente_oficina > 0 AND estado_cartera IN ('por_pagar','comision_por_cobrar','comision_recibida')) THEN 1 ELSE 0 END) as count_por_cobrar,
-                    SUM(CASE WHEN estado_cartera = 'por_pagar' THEN 1 ELSE 0 END) as count_por_pagar,
-                    SUM(CASE WHEN estado_cartera = 'comision_por_cobrar' THEN 1 ELSE 0 END) as count_comision_por_cobrar,
-                    SUM(CASE WHEN estado_cartera = 'comision_recibida' THEN 1 ELSE 0 END) as count_comision_recibida
+                    SUM(CASE WHEN recaudado_en_oficina = 0 AND recaudado_aseguradora = 0 AND recibo_pago_directo = 0 AND es_anticipo = 0 THEN 1 ELSE 0 END) as count_por_cobrar,
+                    SUM(CASE WHEN recaudado_en_oficina = 1 AND recaudado_aseguradora = 0 AND recibo_pago_directo = 0 THEN 1 ELSE 0 END) as count_por_pagar,
+                    SUM(CASE WHEN recaudado_aseguradora = 1 AND comisionada = 0 THEN 1 ELSE 0 END) as count_comision_por_cobrar,
+                    SUM(CASE WHEN recaudado_aseguradora = 1 AND comisionada = 1 THEN 1 ELSE 0 END) as count_comision_recibida,
+                    SUM(CASE WHEN recibo_pago_directo = 1 THEN 1 ELSE 0 END) as count_pago_directo,
+                    SUM(CASE WHEN es_anticipo = 1 THEN 1 ELSE 0 END) as count_anticipos
                 ")
                 ->first();
 
+            $countAnulados = (int) DB::table('cartera_items')
+                ->where('broker_id', $brokerId)
+                ->where('recibo_anulado', true)
+                ->count();
+
             $contadoresTabs = [
-                'general' => (int) ($tabCounters->total ?? 0),
+                'general' => (int) ($tabCounters->total ?? 0) + $countAnulados,
                 'porCobrar' => (int) ($tabCounters->count_por_cobrar ?? 0),
                 'porPagar' => (int) ($tabCounters->count_por_pagar ?? 0),
                 'comisionPorCobrar' => (int) ($tabCounters->count_comision_por_cobrar ?? 0),
                 'comisionRecibida' => (int) ($tabCounters->count_comision_recibida ?? 0),
+                'pagoDirecto' => (int) ($tabCounters->count_pago_directo ?? 0),
+                'anticipos' => (int) ($tabCounters->count_anticipos ?? 0),
+                'anulados' => $countAnulados,
             ];
 
             // 2. GLOBAL STATISTICS from cartera_items
@@ -684,34 +695,67 @@ class SaasPolizasController extends Controller
             $query = DB::table('cartera_items')
                 ->where('cartera_items.broker_id', $brokerId);
 
-            // Tab filter
+            // Tab filter (using 3 boolean flags like SoftSeguros)
             if ($request->filled('tab')) {
-                $tabMap = [
-                    'porCobrar' => 'por_cobrar',
-                    'porPagar' => 'por_pagar',
-                    'comisionPorCobrar' => 'comision_por_cobrar',
-                    'comisionRecibida' => 'comision_recibida',
-                ];
                 $tab = trim((string) $request->tab);
-                if ($tab === 'porCobrar') {
-                    // Por Cobrar: items explicitly por_cobrar OR any item with saldo_pendiente_oficina > 0
-                    $query->where(function ($q) {
-                        $q->where('cartera_items.estado_cartera', 'por_cobrar')
-                          ->orWhere('cartera_items.saldo_pendiente_oficina', '>', 0);
-                    });
-                } elseif (isset($tabMap[$tab])) {
-                    $query->where('cartera_items.estado_cartera', $tabMap[$tab]);
+                switch ($tab) {
+                    case 'porCobrar':
+                        // Not collected at office, not direct payment, not advance, not voided, and not recaudado_aseguradora
+                        $query->where('cartera_items.recaudado_en_oficina', false)
+                              ->where('cartera_items.recaudado_aseguradora', false)
+                              ->where('cartera_items.recibo_pago_directo', false)
+                              ->where('cartera_items.es_anticipo', false)
+                              ->where('cartera_items.recibo_anulado', false);
+                        break;
+                    case 'porPagar':
+                        // Collected at office, not yet paid to insurer
+                        $query->where('cartera_items.recaudado_en_oficina', true)
+                              ->where('cartera_items.recaudado_aseguradora', false)
+                              ->where('cartera_items.recibo_pago_directo', false)
+                              ->where('cartera_items.recibo_anulado', false);
+                        break;
+                    case 'comisionPorCobrar':
+                        // Paid to insurer, commission not yet received
+                        $query->where('cartera_items.recaudado_aseguradora', true)
+                              ->where('cartera_items.comisionada', false)
+                              ->where('cartera_items.recibo_anulado', false);
+                        break;
+                    case 'comisionRecibida':
+                        // Fully completed: insurer paid + commission received
+                        $query->where('cartera_items.recaudado_aseguradora', true)
+                              ->where('cartera_items.comisionada', true)
+                              ->where('cartera_items.recibo_anulado', false);
+                        break;
+                    case 'pagoDirecto':
+                        // Direct payment (client paid insurer directly)
+                        $query->where('cartera_items.recibo_pago_directo', true)
+                              ->where('cartera_items.recibo_anulado', false);
+                        break;
+                    case 'anticipos':
+                        // Advances
+                        $query->where('cartera_items.es_anticipo', true)
+                              ->where('cartera_items.recibo_anulado', false);
+                        break;
+                    case 'anulados':
+                        // Voided receipts
+                        $query->where('cartera_items.recibo_anulado', true);
+                        break;
                 }
             }
 
             // Search filter
             if ($request->filled('search')) {
                 $search = $request->search;
+                $query->leftJoin('polizas', 'cartera_items.poliza_id', '=', 'polizas.id');
+                $query->select('cartera_items.*');
                 $query->where(function ($q) use ($search) {
                     $q->where('cartera_items.poliza_numero', 'like', "%{$search}%")
                       ->orWhere('cartera_items.cliente_nombre', 'like', "%{$search}%")
                       ->orWhere('cartera_items.cliente_documento', 'like', "%{$search}%")
-                      ->orWhere('cartera_items.aseguradora_nombre', 'like', "%{$search}%");
+                      ->orWhere('cartera_items.aseguradora_nombre', 'like', "%{$search}%")
+                      ->orWhere('cartera_items.riesgo', 'like', "%{$search}%")
+                      ->orWhere('polizas.vehicle_plates', 'like', "%{$search}%")
+                      ->orWhere('polizas.insured_name', 'like', "%{$search}%");
                 });
             }
 
@@ -780,6 +824,14 @@ class SaasPolizasController extends Controller
                     'forma_pago' => $item->forma_pago ?? '',
                     'numero_pago' => $item->numero_pago,
                     'estado_cartera' => $item->estado_cartera,
+
+                    // 3 flags SS-style
+                    'recaudado_en_oficina' => (bool) $item->recaudado_en_oficina,
+                    'recaudado_aseguradora' => (bool) $item->recaudado_aseguradora,
+                    'comisionada' => (bool) $item->comisionada,
+                    'recibo_pago_directo' => (bool) $item->recibo_pago_directo,
+                    'es_anticipo' => (bool) $item->es_anticipo,
+                    'recibo_anulado' => (bool) $item->recibo_anulado,
 
                     // Financial
                     'prima_neta' => (float) $item->prima_neta,
@@ -1121,8 +1173,9 @@ class SaasPolizasController extends Controller
             'numero_renovacion' => (int) ($poliza->numero_renovacion ?? 0),
             'porcentaje_comision' => (float) $poliza->commission_percentage,
             'comision' => (int) round((float) $poliza->commission_amount),
-            // Forma de pago (UI: contado/credito/financiado) derivada del método
-            'forma_pago' => ($this->mapPaymentMethodToFormaPagoCode($poliza->payment_method) ?: ($poliza->custom_fields['forma_pago'] ?? '')),
+            // Forma de pago: SS custom_fields.forma_pago takes priority (Fraccionado/Financiado/Contado)
+            // Fallback to payment_method mapping for Guro-native polizas
+            'forma_pago' => $this->resolveFormaPago($poliza),
             // Periodicidad (códigos UI: mensual/trimestral/semestral/anual)
             'periodicidad_pago' => $this->mapPaymentFrequencyToCode($poliza->payment_frequency),
             // Medio de pago (códigos UI: tarjeta_credito/transferencia/cheque/convenio/efectivo)
@@ -1220,6 +1273,31 @@ class SaasPolizasController extends Controller
             // Notificaciones
             
             
+            // Último recibo de caja asociado
+            'ultimo_recibo' => (function() use ($poliza) {
+                $recibo = DB::table('recibos_caja')
+                    ->where('poliza_id', $poliza->id)
+                    ->orderByDesc('id')
+                    ->first(['id', 'numero_recibo', 'fecha_realizo_pago_oficina', 'cliente_nombre', 'cliente_documento', 'poliza_numero', 'aseguradora_nombre', 'ramo_nombre', 'forma_pago', 'valor_recaudado_en_oficina', 'valor_a_pagar', 'es_anticipo', 'tipo_recaudo', 'observaciones']);
+                if (!$recibo) return null;
+                return [
+                    'id' => $recibo->id,
+                    'numero_recibo' => $recibo->numero_recibo,
+                    'fecha' => $recibo->fecha_realizo_pago_oficina,
+                    'cliente_nombre' => $recibo->cliente_nombre,
+                    'cliente_documento' => $recibo->cliente_documento,
+                    'poliza_numero' => $recibo->poliza_numero,
+                    'aseguradora_nombre' => $recibo->aseguradora_nombre,
+                    'ramo_nombre' => $recibo->ramo_nombre,
+                    'forma_pago' => $recibo->forma_pago,
+                    'valor_recaudado_en_oficina' => (float) $recibo->valor_recaudado_en_oficina,
+                    'valor_a_pagar' => (float) $recibo->valor_a_pagar,
+                    'es_anticipo' => (bool) $recibo->es_anticipo,
+                    'tipo_recaudo' => $recibo->tipo_recaudo,
+                    'observaciones' => $recibo->observaciones,
+                ];
+            })(),
+
             // Metadatos
             'created_at' => $poliza->created_at?->toISOString(),
             'updated_at' => $poliza->updated_at?->toISOString(),
@@ -1751,11 +1829,11 @@ class SaasPolizasController extends Controller
                 'aseguradora' => 'required|string|max:255',
                 'ramo_principal' => 'required|string|max:255',
                 'subramo' => 'nullable|string|max:255',
-                // Cliente: usar cliente_id o datos básicos
+                // Cliente: usar cliente_id o datos básicos (todos opcionales — se puede crear sin cliente)
                 'cliente_id' => 'nullable|integer|exists:clientes,id',
-                'nombres_cliente' => 'required_without:cliente_id|string|max:255',
+                'nombres_cliente' => 'nullable|string|max:255',
                 'apellidos_cliente' => 'nullable|string|max:255',
-                'dni_cliente' => 'required_without:cliente_id|string|max:50',
+                'dni_cliente' => 'nullable|string|max:50',
                 'telefono_cliente' => 'nullable|string|max:20',
                 'celular_cliente' => 'nullable|string|max:20',
                 'domicilio' => 'nullable|string',
@@ -1887,7 +1965,8 @@ class SaasPolizasController extends Controller
                 }
             }
 
-            // Resolver cliente por cliente_id o crear/buscar por documento
+            // Resolver cliente por cliente_id o crear/buscar por documento (puede ser null para pólizas sin cliente)
+            $cliente = null;
             if (!empty($validated['cliente_id'])) {
                 $cliente = Cliente::where('broker_id', $brokerId)->where('id', $validated['cliente_id'])->first();
                 if (!$cliente) {
@@ -1901,12 +1980,12 @@ class SaasPolizasController extends Controller
                     'document_type' => !empty($validated['tipo_documento']) ? strtoupper($validated['tipo_documento']) : ($cliente->document_type ?? 'CC'),
                     'birth_date' => $validated['fecha_nacimiento'] ?? $cliente->birth_date,
                 ]);
-            } else {
+            } elseif (!empty($validated['dni_cliente'])) {
                 $cliente = Cliente::firstOrCreate([
                     'document_number' => $validated['dni_cliente'],
                     'broker_id' => $brokerId,
                 ], [
-                    'first_name' => $validated['nombres_cliente'],
+                    'first_name' => $validated['nombres_cliente'] ?? 'Sin nombre',
                     'last_name' => $validated['apellidos_cliente'] ?? '',
                     'phone' => $validated['telefono_cliente'] ?? '',
                     'mobile_phone' => $validated['celular_cliente'] ?? '',
@@ -1917,6 +1996,7 @@ class SaasPolizasController extends Controller
                     'status' => 'active',
                 ]);
             }
+            // Si no hay cliente, la póliza se crea sin cliente asignado
 
             // Verificar duplicado de número de póliza por broker antes de crear
             $dup = Poliza::where('broker_id', $brokerId)
@@ -1978,8 +2058,17 @@ class SaasPolizasController extends Controller
                     $paymentMethod = 'cash';
                 } elseif ($fp === 'credito') {
                     $paymentMethod = 'card';
-                } elseif ($fp === 'financiado') {
+                } elseif ($fp === 'financiado' || $fp === 'fraccionado') {
                     $paymentMethod = 'financing';
+                }
+            }
+
+            // Si fraccionado/financiado y no se especificó periodicidad, forzar monthly
+            $paymentFrequency = $this->mapPaymentFrequencyFromFrontend($validated['periodicidad_pago'] ?? null);
+            if (isset($validated['forma_pago'])) {
+                $fp = strtolower((string)$validated['forma_pago']);
+                if (($fp === 'fraccionado' || $fp === 'financiado') && (!isset($validated['periodicidad_pago']) || empty($validated['periodicidad_pago']))) {
+                    $paymentFrequency = 'monthly';
                 }
             }
 
@@ -1994,12 +2083,12 @@ class SaasPolizasController extends Controller
                 // DB requiere NOT NULL
                 'product_name' => $validated['subramo'] ?? 'General',
                 'ramo_id' => $ramoId,
-                'client_name' => $cliente->first_name . (empty($cliente->last_name) ? '' : (' ' . $cliente->last_name)),
-                'client_document' => $cliente->document_number,
+                'client_name' => $cliente ? ($cliente->first_name . (empty($cliente->last_name) ? '' : (' ' . $cliente->last_name))) : ($validated['nombres_cliente'] ?? 'Sin cliente asignado'),
+                'client_document' => $cliente?->document_number ?? ($validated['dni_cliente'] ?? null),
                 'premium_amount' => $validated['prima_neta'],
                 'commission_percentage' => $validated['porcentaje_comision'] ?? 0,
                 'commission_amount' => $validated['comision'] ?? 0,
-                'payment_frequency' => $this->mapPaymentFrequencyFromFrontend($validated['periodicidad_pago'] ?? null),
+                'payment_frequency' => $paymentFrequency,
                 'payment_method' => $paymentMethod,
                 'half_payment' => $validated['medio_pago'] ?? null,
                 'bank_name' => $validated['banco'] ?? null,
@@ -2022,7 +2111,7 @@ class SaasPolizasController extends Controller
                 // Guardar placas solo si el tipo es autos
                 'vehicle_plates' => (isset($validated['placas']) && $mappedType === 'autos') ? array_values(array_filter($validated['placas'])) : null,
                 'broker_id' => $brokerId,
-                'client_id' => $cliente->id,
+                'client_id' => $cliente?->id,
                 'assigned_user_id' => !empty($validated['vendedor_user_id']) ? (int)$validated['vendedor_user_id'] : ($user ? $user->id : null),
                 // Guardar nombre del vendedor si fue enviado (o si se resolvió por vendedor_id)
                 'seller_name' => $validated['vendedor'] ?? ($user ? ($user->name ?? null) : null),
@@ -2098,24 +2187,33 @@ class SaasPolizasController extends Controller
             ]);
 
             // Sincronizar automóviles por placas si aplica (ramo autos)
-            if (!empty($validated['placas']) && $poliza->type === 'autos') {
+            if (!empty($validated['placas']) && $poliza->type === 'autos' && $cliente) {
                 $this->syncAutomovilesForPoliza($poliza, $validated['placas'], $cliente->id);
+            }
+
+            // If total_amount is 0/null but premium_amount has value, auto-calculate
+            if ((!$poliza->total_amount || (float)$poliza->total_amount <= 0) && (float)($poliza->premium_amount ?? 0) > 0) {
+                $calculatedTotal = (float)$poliza->premium_amount + (float)($poliza->vat_amount ?? 0) + (float)($poliza->gastos_adicionales ?? 0);
+                $poliza->update(['total_amount' => $calculatedTotal]);
+                $poliza->refresh();
             }
 
             // Auto-create cartera_item so the poliza appears in cartera immediately
             try {
-                $montoTotal = $poliza->total_amount ?? ($poliza->premium_amount + ($poliza->vat_amount ?? 0));
+                $montoTotal = ((float)($poliza->total_amount ?? 0) > 0)
+                    ? (float)$poliza->total_amount
+                    : ((float)($poliza->premium_amount ?? 0) + (float)($poliza->vat_amount ?? 0));
                 $primaNeta = $poliza->premium_amount ?? 0;
                 $comision = $poliza->commission_amount ?? 0;
-                $clienteNombre = trim(($cliente->first_name ?? '') . ' ' . ($cliente->last_name ?? ''));
+                $clienteNombre = $cliente ? trim(($cliente->first_name ?? '') . ' ' . ($cliente->last_name ?? '')) : 'Sin cliente asignado';
 
                 DB::table('cartera_items')->insert([
                     'broker_id' => $brokerId,
                     'poliza_id' => $poliza->id,
-                    'cliente_id' => $cliente->id,
+                    'cliente_id' => $cliente?->id,
                     'poliza_numero' => $poliza->policy_number,
                     'cliente_nombre' => $clienteNombre,
-                    'cliente_documento' => $cliente->document_number ?? null,
+                    'cliente_documento' => $cliente?->document_number,
                     'aseguradora_nombre' => $rowA->nombre ?? $validated['aseguradora'] ?? null,
                     'ramo_principal' => $rowR->nombre ?? $validated['ramo_principal'] ?? null,
                     'vendedor_nombre' => $validated['vendedor'] ?? null,
@@ -2424,8 +2522,12 @@ class SaasPolizasController extends Controller
                     $updateData['payment_method'] = 'cash';
                 } elseif ($fp === 'credito') {
                     $updateData['payment_method'] = 'card';
-                } elseif ($fp === 'financiado') {
+                } elseif ($fp === 'financiado' || $fp === 'fraccionado') {
                     $updateData['payment_method'] = 'financing';
+                }
+                // Fraccionado/financiado sin periodicidad → monthly
+                if (($fp === 'fraccionado' || $fp === 'financiado') && (!isset($validated['periodicidad_pago']) || empty($validated['periodicidad_pago']))) {
+                    $updateData['payment_frequency'] = 'monthly';
                 }
             }
             // Datos de pago adicionales
@@ -2643,17 +2745,36 @@ class SaasPolizasController extends Controller
             if (!empty(array_intersect($carteraFields, array_keys($updateData)))) {
                 try {
                     $poliza->refresh();
-                    $montoTotal = $poliza->total_amount ?? ($poliza->premium_amount + ($poliza->vat_amount ?? 0));
+
+                    // Auto-calculate total_amount if 0/null but premium exists
+                    if ((!$poliza->total_amount || (float)$poliza->total_amount <= 0) && (float)($poliza->premium_amount ?? 0) > 0) {
+                        $calculatedTotal = (float)$poliza->premium_amount + (float)($poliza->vat_amount ?? 0) + (float)($poliza->gastos_adicionales ?? 0);
+                        $poliza->update(['total_amount' => $calculatedTotal]);
+                        $poliza->refresh();
+                    }
+
+                    $montoTotal = ((float)($poliza->total_amount ?? 0) > 0)
+                        ? (float)$poliza->total_amount
+                        : ((float)($poliza->premium_amount ?? 0) + (float)($poliza->vat_amount ?? 0));
                     $comision = $poliza->commission_amount ?? 0;
 
-                    // Get current payment totals from pagos_polizas
+                    // Scope payment queries to the current renovation period
+                    $currentRenovacion = (int) ($poliza->numero_renovacion ?? 0);
+
+                    // Get current payment totals from pagos_polizas — scoped by numero_renovacion
                     $totalOficina = (float) DB::table('pagos_polizas')
-                        ->where('poliza_id', $poliza->id)->where('tipo_recaudo', 'oficina')->sum('monto_pagado');
+                        ->where('poliza_id', $poliza->id)
+                        ->where('numero_renovacion', $currentRenovacion)
+                        ->where('tipo_recaudo', 'oficina')->sum('monto_pagado');
                     $totalAseg = (float) DB::table('pagos_polizas')
-                        ->where('poliza_id', $poliza->id)->where('tipo_recaudo', 'aseguradora')
+                        ->where('poliza_id', $poliza->id)
+                        ->where('numero_renovacion', $currentRenovacion)
+                        ->where('tipo_recaudo', 'aseguradora')
                         ->where('estado', 'pagado')->sum('monto_pagado');
                     $totalComision = (float) DB::table('cobros_comisiones')
-                        ->where('poliza_id', $poliza->id)->sum('monto_cobrado');
+                        ->where('poliza_id', $poliza->id)
+                        ->where('numero_renovacion', $currentRenovacion)
+                        ->sum('monto_cobrado');
 
                     $recaudadoEnOficina = $totalOficina > 0;
                     $valorNeto = max(0, $montoTotal - $comision);
@@ -2689,44 +2810,95 @@ class SaasPolizasController extends Controller
                         if ($ramo) $ramoNombre = $ramo->nombre;
                     }
 
-                    $carteraUpdate = [
+                    // Metadata fields safe to update on ALL items (don't affect financial values)
+                    $metadataUpdate = [
                         'poliza_numero' => $poliza->policy_number,
                         'cliente_nombre' => $clienteNombre,
                         'cliente_documento' => $clienteDoc,
                         'aseguradora_nombre' => $asegNombre,
                         'ramo_principal' => $ramoNombre,
                         'vendedor_nombre' => $poliza->seller_name,
-                        'prima_neta' => $poliza->premium_amount ?? 0,
-                        'valor_neto_a_pagar' => $valorNeto,
-                        'prima_total_pago' => $montoTotal,
-                        'prima_total' => $montoTotal,
-                        'comision_a_recibir' => $comision,
-                        'estado_cartera' => $estadoCartera,
-                        'valor_recaudado_oficina' => $totalOficina,
-                        'valor_pagado_aseguradora' => $totalAseg,
-                        'saldo_pendiente_oficina' => max(0, $montoTotal - $totalOficina),
-                        'saldo_pendiente_aseguradora' => $recaudadoEnOficina ? max(0, $valorNeto - $totalAseg) : 0,
-                        'comision_recibida' => $totalComision,
                         'fecha_inicio_vigencia' => $poliza->start_date,
                         'fecha_fin_vigencia' => $poliza->end_date,
                         'updated_at' => now(),
                     ];
 
-                    $updated = DB::table('cartera_items')
+                    // Determine effective renovacion (R=0 fallback for SS imports)
+                    $effectiveRenovacion = $currentRenovacion;
+                    $countCurrent = DB::table('cartera_items')
                         ->where('poliza_id', $poliza->id)
                         ->where('broker_id', $brokerId)
-                        ->update($carteraUpdate);
+                        ->where('numero_renovacion', $currentRenovacion)
+                        ->count();
+                    if ($countCurrent === 0 && $currentRenovacion > 0) {
+                        $countR0 = DB::table('cartera_items')
+                            ->where('poliza_id', $poliza->id)
+                            ->where('broker_id', $brokerId)
+                            ->where('numero_renovacion', 0)
+                            ->count();
+                        if ($countR0 > 0) {
+                            $effectiveRenovacion = 0;
+                        }
+                    }
 
-                    // If no cartera_item exists yet, create one
-                    if ($updated === 0) {
-                        DB::table('cartera_items')->insert(array_merge($carteraUpdate, [
-                            'broker_id' => $brokerId,
-                            'poliza_id' => $poliza->id,
-                            'cliente_id' => $poliza->client_id,
-                            'comision_vendedor' => 0,
-                            'dias_vencidos' => 0,
-                            'created_at' => now(),
-                        ]));
+                    // Check if this poliza has multiple SS-imported items (cuotas/anexos)
+                    $ssItemCount = DB::table('cartera_items')
+                        ->where('poliza_id', $poliza->id)
+                        ->where('broker_id', $brokerId)
+                        ->where('numero_renovacion', $effectiveRenovacion)
+                        ->whereNotNull('softseguros_pago_id')
+                        ->count();
+
+                    if ($ssItemCount > 1) {
+                        // MULTI-ITEM: Only update metadata, preserve each item's own financial values
+                        $updated = DB::table('cartera_items')
+                            ->where('poliza_id', $poliza->id)
+                            ->where('broker_id', $brokerId)
+                            ->where('numero_renovacion', $effectiveRenovacion)
+                            ->update($metadataUpdate);
+                    } else {
+                        // SINGLE-ITEM or GURO-ONLY: Full update including financial recalculation
+                        $fullUpdate = array_merge($metadataUpdate, [
+                            'prima_neta' => $poliza->premium_amount ?? 0,
+                            'valor_neto_a_pagar' => $valorNeto,
+                            'prima_total_pago' => $montoTotal,
+                            'prima_total' => $montoTotal,
+                            'comision_a_recibir' => $comision,
+                            'estado_cartera' => $estadoCartera,
+                            'valor_recaudado_oficina' => $totalOficina,
+                            'valor_pagado_aseguradora' => $totalAseg,
+                            'saldo_pendiente_oficina' => max(0, $montoTotal - $totalOficina),
+                            'saldo_pendiente_aseguradora' => $recaudadoEnOficina ? max(0, $valorNeto - $totalAseg) : 0,
+                            'comision_recibida' => $totalComision,
+                        ]);
+
+                        $updated = DB::table('cartera_items')
+                            ->where('poliza_id', $poliza->id)
+                            ->where('broker_id', $brokerId)
+                            ->where('numero_renovacion', $currentRenovacion)
+                            ->update($fullUpdate);
+
+                        // If no cartera_item exists for this renovation, try R=0 fallback (SoftSeguros imports)
+                        if ($updated === 0 && $currentRenovacion > 0) {
+                            $updated = DB::table('cartera_items')
+                                ->where('poliza_id', $poliza->id)
+                                ->where('broker_id', $brokerId)
+                                ->where('numero_renovacion', 0)
+                                ->update(array_merge($fullUpdate, ['numero_renovacion' => $currentRenovacion]));
+                        }
+
+                        // If still no cartera_item exists, create one
+                        if ($updated === 0) {
+                            DB::table('cartera_items')->insert(array_merge($fullUpdate, [
+                                'broker_id' => $brokerId,
+                                'poliza_id' => $poliza->id,
+                                'numero_renovacion' => $currentRenovacion,
+                                'cliente_id' => $poliza->client_id,
+                                'comision_vendedor' => 0,
+                                'dias_vencidos' => 0,
+                                'created_at' => now(),
+                            ]));
+                        }
                     }
                 } catch (\Throwable $e) {
                     \Log::warning("Cartera sync on poliza update failed for poliza {$poliza->id}: " . $e->getMessage());
@@ -2926,6 +3098,26 @@ class SaasPolizasController extends Controller
             }
 
             $poliza->delete();
+
+            // Clean up cartera_items for deleted poliza
+            DB::table('cartera_items')->where('poliza_id', $poliza->id)->delete();
+
+            // Anular recibos de caja asociados
+            DB::table('recibos_caja')
+                ->where('poliza_id', $poliza->id)
+                ->where('recibo_anulado', false)
+                ->update([
+                    'recibo_anulado' => true,
+                    'fecha_recibo_anulado' => now(),
+                    'observaciones' => DB::raw("CONCAT(COALESCE(observaciones, ''), ' | Anulado por eliminación de póliza')"),
+                    'activo' => false,
+                ]);
+
+            // Eliminar pagos asociados
+            DB::table('pagos_polizas')
+                ->where('poliza_id', $poliza->id)
+                ->delete();
+
             $this->logPolizaAction($request, 'eliminar', $poliza, 200);
 
             return response()->json([
@@ -3300,6 +3492,31 @@ class SaasPolizasController extends Controller
         if ($m === 'card') return 'credito';
         if ($m === 'financing') return 'financiado';
         return '';
+    }
+
+    /**
+     * Resolve forma_pago for a poliza.
+     * SS-imported polizas store the real forma_pago in custom_fields (Fraccionado/Financiado/Contado).
+     * This takes priority over the generic payment_method mapping.
+     */
+    private function resolveFormaPago($poliza): string
+    {
+        $cf = is_array($poliza->custom_fields) ? $poliza->custom_fields : (is_string($poliza->custom_fields) ? json_decode($poliza->custom_fields, true) : []);
+        $ssFormaPago = $cf['forma_pago'] ?? null;
+
+        if ($ssFormaPago) {
+            $lower = strtolower(trim($ssFormaPago));
+            $map = [
+                'fraccionado' => 'fraccionado',
+                'financiado' => 'financiado',
+                'contado' => 'contado',
+                'credito' => 'credito',
+                'crédito' => 'credito',
+            ];
+            return $map[$lower] ?? $lower;
+        }
+
+        return $this->mapPaymentMethodToFormaPagoCode($poliza->payment_method);
     }
 
     /**

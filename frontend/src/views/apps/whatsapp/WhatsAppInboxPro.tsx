@@ -132,6 +132,8 @@ const WhatsAppInboxPro: React.FC = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const selectedConversationRef = useRef<WhatsAppConversation | null>(null);
+  const conversationRequestRef = useRef(0);
+  const initialLoadDoneRef = useRef(false);
 
   // Mantener ref actualizada de la conversación seleccionada para los callbacks de WebSocket
   useEffect(() => {
@@ -261,6 +263,8 @@ const WhatsAppInboxPro: React.FC = () => {
   }, [selectedConversation, filter, searchTerm, selectedTagFilter]);
 
   useEffect(() => {
+    // Skip on initial mount — loadInitialData already loads conversations
+    if (!initialLoadDoneRef.current) return;
     loadConversations();
   }, [filter, searchTerm, selectedTagFilter]);
 
@@ -321,6 +325,7 @@ const WhatsAppInboxPro: React.FC = () => {
       }
       
       await loadConversations();
+      initialLoadDoneRef.current = true;
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -329,11 +334,14 @@ const WhatsAppInboxPro: React.FC = () => {
   };
 
   const loadConversations = async (silent = false) => {
+    const requestId = ++conversationRequestRef.current;
     try {
       if (!silent) setLoading(true);
       let data;
       if (filter === 'mine') {
         data = await whatsappInboxService.getMyConversations();
+        // Discard stale response
+        if (requestId !== conversationRequestRef.current) return;
         // Detectar nuevas asignaciones para notificación
         if (silent && data.length > 0) {
           const newIds = new Set(data.map((c: any) => c.id));
@@ -372,12 +380,14 @@ const WhatsAppInboxPro: React.FC = () => {
         if (searchTerm) filters.search = searchTerm;
         if (selectedTagFilter) filters.tag = selectedTagFilter;
         const response = await whatsappInboxService.getConversations(filters);
+        // Discard stale response
+        if (requestId !== conversationRequestRef.current) return;
         setConversations(response.data);
       }
     } catch (err: any) {
       if (!silent) console.error('Error loading conversations:', err);
     } finally {
-      if (!silent) setLoading(false);
+      if (requestId === conversationRequestRef.current && !silent) setLoading(false);
     }
   };
 

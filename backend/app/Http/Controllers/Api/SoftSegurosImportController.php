@@ -950,15 +950,17 @@ class SoftSegurosImportController extends Controller
                     $isComisionada = true;
                 }
 
-                // Derive payment_frequency from forma_pago when periodicidad is empty
+                // Derive payment_frequency: forma_pago takes priority over periodicidad
+                // periodicidad = ciclo de vigencia (Anual, Semestral...)
+                // forma_pago = cómo se paga (Contado, Fraccionado, Financiado)
                 $periodicidad = $row['periodicidad'] ?? null;
                 $formaPago = $row['forma_pago'] ?? null;
-                $paymentFrequency = $this->mapPaymentFrequency($periodicidad);
-                if ($paymentFrequency === 'annual' && !$periodicidad && $formaPago) {
-                    // forma_pago: Contado→annual, Fraccionado→monthly, Financiado→monthly
-                    $fpLower = strtolower(trim($formaPago));
-                    $fpMap = ['contado' => 'annual', 'fraccionado' => 'monthly', 'financiado' => 'monthly'];
-                    $paymentFrequency = $fpMap[$fpLower] ?? 'annual';
+                $fpLower = $formaPago ? strtolower(trim($formaPago)) : '';
+                if (in_array($fpLower, ['fraccionado', 'financiado'])) {
+                    // Fraccionado/Financiado siempre es monthly, sin importar periodicidad
+                    $paymentFrequency = 'monthly';
+                } else {
+                    $paymentFrequency = $this->mapPaymentFrequency($periodicidad);
                 }
 
                 // Beneficiary: only set document if there's a name

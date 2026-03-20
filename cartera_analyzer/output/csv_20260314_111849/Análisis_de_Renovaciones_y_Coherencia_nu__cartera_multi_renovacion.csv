@@ -1,0 +1,5 @@
+poliza_id,policy_number,numero_renovacion,renovaciones,n_renovaciones,status
+204318.0,4308006576333000,1,"[0, 1]",2,active
+204320.0,4308006578031000,1,"[0, 1]",2,active
+204321.0,4308006579395000,1,"[0, 1]",2,active
+229781.0,101003969,1,"[0, 1]",2,expired

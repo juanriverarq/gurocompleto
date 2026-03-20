@@ -148,7 +148,9 @@ class RamosController extends Controller
         try {
             $brokerId = $this->getBrokerId($request);
             
-            $query = Ramo::forBroker($brokerId)->with('comisionesAseguradoras.aseguradora');
+            $query = Ramo::forBroker($brokerId)->with(['comisionesAseguradoras' => function ($q) {
+                $q->whereHas('aseguradora');
+            }, 'comisionesAseguradoras.aseguradora']);
 
             if ($request->has('search') && !empty($request->search)) {
                 $query->search($request->search);
@@ -211,6 +213,17 @@ class RamosController extends Controller
         try {
             $brokerId = $this->getBrokerId($request);
             
+            // Filter out comisiones referencing deleted aseguradoras
+            $validAsegIds = \App\Models\Aseguradora::where('broker_id', $brokerId)->pluck('id')->map(fn($id) => (int) $id)->toArray();
+            $requestData = $request->all();
+            if (!empty($requestData['comisiones_aseguradoras']) && is_array($requestData['comisiones_aseguradoras'])) {
+                $requestData['comisiones_aseguradoras'] = array_values(array_filter(
+                    $requestData['comisiones_aseguradoras'],
+                    fn($c) => in_array((int) ($c['aseguradora_id'] ?? 0), $validAsegIds)
+                ));
+            }
+            $request->merge(['comisiones_aseguradoras' => $requestData['comisiones_aseguradoras'] ?? []]);
+            
             $validator = Validator::make($request->all(), [
                 'nombre' => [
                     'required',
@@ -227,8 +240,8 @@ class RamosController extends Controller
                 'comisiones_aseguradoras' => 'nullable|array',
                 'comisiones_aseguradoras.*.aseguradora_id' => [
                     'required_with:comisiones_aseguradoras',
-                    'integer',
-                    'exists:aseguradoras,id',
+                    'numeric',
+                    Rule::exists('aseguradoras', 'id')->where('broker_id', $brokerId),
                 ],
                 'comisiones_aseguradoras.*.porcentaje_iva' => 'nullable|numeric|min:0|max:100',
                 'comisiones_aseguradoras.*.porcentaje_comision' => 'nullable|numeric|min:0|max:100',
@@ -240,7 +253,7 @@ class RamosController extends Controller
                 'nombre.unique' => 'Ya existe un ramo con este nombre',
                 'comisiones_aseguradoras.array' => 'Las comisiones deben ser un array',
                 'comisiones_aseguradoras.*.aseguradora_id.required_with' => 'La aseguradora es obligatoria',
-                'comisiones_aseguradoras.*.aseguradora_id.integer' => 'La aseguradora debe ser un número entero',
+                'comisiones_aseguradoras.*.aseguradora_id.numeric' => 'La aseguradora debe ser un número válido',
                 'comisiones_aseguradoras.*.aseguradora_id.exists' => 'La aseguradora seleccionada no existe',
             ]);
 
@@ -326,7 +339,9 @@ class RamosController extends Controller
             $brokerId = $this->getBrokerId($request);
             
             $ramo = Ramo::forBroker($brokerId)
-                ->with('comisionesAseguradoras.aseguradora')
+                ->with(['comisionesAseguradoras' => function ($q) {
+                    $q->whereHas('aseguradora');
+                }, 'comisionesAseguradoras.aseguradora'])
                 ->findOrFail($id);
 
             return response()->json([
@@ -358,6 +373,17 @@ class RamosController extends Controller
             
             $ramo = Ramo::forBroker($brokerId)->findOrFail($id);
             
+            // Filter out comisiones referencing deleted aseguradoras
+            $validAsegIds = \App\Models\Aseguradora::where('broker_id', $brokerId)->pluck('id')->map(fn($id) => (int) $id)->toArray();
+            $requestData = $request->all();
+            if (!empty($requestData['comisiones_aseguradoras']) && is_array($requestData['comisiones_aseguradoras'])) {
+                $requestData['comisiones_aseguradoras'] = array_values(array_filter(
+                    $requestData['comisiones_aseguradoras'],
+                    fn($c) => in_array((int) ($c['aseguradora_id'] ?? 0), $validAsegIds)
+                ));
+            }
+            $request->merge(['comisiones_aseguradoras' => $requestData['comisiones_aseguradoras'] ?? []]);
+            
             $validator = Validator::make($request->all(), [
                 'nombre' => [
                     'required',
@@ -374,8 +400,8 @@ class RamosController extends Controller
                 'comisiones_aseguradoras' => 'nullable|array',
                 'comisiones_aseguradoras.*.aseguradora_id' => [
                     'required_with:comisiones_aseguradoras',
-                    'integer',
-                    'exists:aseguradoras,id',
+                    'numeric',
+                    Rule::exists('aseguradoras', 'id')->where('broker_id', $brokerId),
                 ],
                 'comisiones_aseguradoras.*.porcentaje_iva' => 'nullable|numeric|min:0|max:100',
                 'comisiones_aseguradoras.*.porcentaje_comision' => 'nullable|numeric|min:0|max:100',
@@ -387,7 +413,7 @@ class RamosController extends Controller
                 'nombre.unique' => 'Ya existe un ramo con este nombre',
                 'comisiones_aseguradoras.array' => 'Las comisiones deben ser un array',
                 'comisiones_aseguradoras.*.aseguradora_id.required_with' => 'La aseguradora es obligatoria',
-                'comisiones_aseguradoras.*.aseguradora_id.integer' => 'La aseguradora debe ser un número entero',
+                'comisiones_aseguradoras.*.aseguradora_id.numeric' => 'La aseguradora debe ser un número válido',
                 'comisiones_aseguradoras.*.aseguradora_id.exists' => 'La aseguradora seleccionada no existe',
             ]);
 
@@ -474,17 +500,78 @@ class RamosController extends Controller
     /**
      * Remove the specified ramo
      */
+    /**
+     * Count polizas associated with a ramo (used before deletion)
+     */
+    public function polizasCount(Request $request, $id)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $ramo = Ramo::forBroker($brokerId)->findOrFail($id);
+            $count = \App\Models\Poliza::where('broker_id', $brokerId)->where('ramo_id', $ramo->id)->count();
+
+            return response()->json([
+                'success' => true,
+                'count' => $count,
+                'ramo_nombre' => $ramo->nombre,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
     public function destroy(Request $request, $id)
     {
         try {
             $brokerId = $this->getBrokerId($request);
             
             $ramo = Ramo::forBroker($brokerId)->findOrFail($id);
+
+            // Si hay pólizas con este ramo, se requiere un ramo de reemplazo
+            $polizasCount = \App\Models\Poliza::where('broker_id', $brokerId)->where('ramo_id', $ramo->id)->count();
+            $replacementId = $request->input('replacement_ramo_id');
+
+            if ($polizasCount > 0 && empty($replacementId)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Este ramo tiene {$polizasCount} póliza(s) asociada(s). Debes seleccionar un ramo de reemplazo.",
+                    'polizas_count' => $polizasCount,
+                    'requires_replacement' => true,
+                ], 422);
+            }
+
+            if ($replacementId) {
+                $replacement = Ramo::forBroker($brokerId)->find($replacementId);
+                if (!$replacement) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El ramo de reemplazo no existe.',
+                    ], 422);
+                }
+            }
             
             DB::beginTransaction();
 
             try {
-                // Eliminar las comisiones relacionadas (filtrar por ramo_id; la tabla no tiene broker_id)
+                // Reasignar pólizas al ramo de reemplazo si corresponde
+                if ($polizasCount > 0 && $replacementId) {
+                    \App\Models\Poliza::where('broker_id', $brokerId)
+                        ->where('ramo_id', $ramo->id)
+                        ->update(['ramo_id' => $replacementId]);
+
+                    // También reasignar en cartera_items
+                    $replacementNombre = $replacement->nombre ?? '';
+                    DB::table('cartera_items')
+                        ->where('broker_id', $brokerId)
+                        ->whereIn('poliza_id', function ($q) use ($brokerId, $replacementId) {
+                            $q->select('id')->from('polizas')
+                              ->where('broker_id', $brokerId)
+                              ->where('ramo_id', $replacementId);
+                        })
+                        ->update(['ramo_principal' => $replacementNombre]);
+                }
+
+                // Eliminar las comisiones relacionadas
                 ComisionAseguradora::where('ramo_id', $ramo->id)->delete();
 
                 // Eliminar el ramo
@@ -494,7 +581,10 @@ class RamosController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'message' => 'Ramo eliminado exitosamente',
+                    'message' => $polizasCount > 0
+                        ? "Ramo eliminado. {$polizasCount} póliza(s) reasignada(s) exitosamente."
+                        : 'Ramo eliminado exitosamente',
+                    'reassigned_count' => $polizasCount,
                 ]);
 
             } catch (\Exception $e) {

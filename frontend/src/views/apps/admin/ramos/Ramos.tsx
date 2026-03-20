@@ -33,7 +33,7 @@ import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 
 const Ramos = () => {
   useAutoTour(TOUR_RAMOS);
-  const { ramos, loading, error, createRamo, updateRamo, deleteRamo } = useRamos();
+  const { ramos, loading, error, createRamo, updateRamo, deleteRamo, getRamoPolizasCount } = useRamos();
   const { aseguradoras } = useAseguradoras();
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<RamoType | null>(null);
@@ -47,6 +47,7 @@ const Ramos = () => {
   });
   const [subramoInput, setSubramoInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Nuevo flujo: creación en blanco o por plantilla
   const [creationMode, setCreationMode] = useState<'blank' | 'template' | null>(null);
@@ -58,6 +59,14 @@ const Ramos = () => {
     failed: number;
     messages: string[];
   } | null>(null);
+
+  // Estado para eliminación individual con reemplazo
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [ramoToDelete, setRamoToDelete] = useState<RamoType | null>(null);
+  const [deletePolizasCount, setDeletePolizasCount] = useState(0);
+  const [replacementRamoId, setReplacementRamoId] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Estado para selección masiva de eliminación
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
@@ -175,6 +184,7 @@ const Ramos = () => {
     setBulkResult(null);
     setIsBulkCreating(false);
     setSubramoInput('');
+    setFormError(null);
     setFormData({
       nombre: '',
       subramo: [],
@@ -195,6 +205,7 @@ const Ramos = () => {
     setIsEditing(true);
     setCreationMode('blank');
     setSubramoInput('');
+    setFormError(null);
     const sub = Array.isArray(item.subramo) ? item.subramo : (item.subramo ? [item.subramo as any] : []);
     setFormData({
       nombre: item.nombre || '',
@@ -213,7 +224,11 @@ const Ramos = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!(formData.nombre || '').trim()) return;
+    setFormError(null);
+    if (!(formData.nombre || '').trim()) {
+      setFormError('El nombre del ramo es obligatorio.');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -223,17 +238,45 @@ const Ramos = () => {
         await createRamo(formData);
       }
       setShowModal(false);
-    } catch (error) {
+    } catch (error: any) {
+      const msg =
+        error?.errors
+          ? Object.values(error.errors).flat().join('. ')
+          : error?.message || 'Error al guardar el ramo.';
+      setFormError(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('¿Estás seguro de que deseas eliminar este ramo?')) {
-      try {
-        await deleteRamo(id);
-      } catch (error) {}
+  const handleDelete = async (item: RamoType) => {
+    setRamoToDelete(item);
+    setReplacementRamoId('');
+    setDeletePolizasCount(0);
+    setDeleteLoading(true);
+    setShowDeleteModal(true);
+    try {
+      const res = await getRamoPolizasCount(item.id);
+      setDeletePolizasCount(res.count || 0);
+    } catch {
+      setDeletePolizasCount(0);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!ramoToDelete) return;
+    if (deletePolizasCount > 0 && !replacementRamoId) return;
+    setIsDeleting(true);
+    try {
+      await deleteRamo(ramoToDelete.id, replacementRamoId || undefined);
+      setShowDeleteModal(false);
+      setRamoToDelete(null);
+    } catch (error: any) {
+      setFormError(error?.message || 'Error al eliminar el ramo.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -494,7 +537,7 @@ const Ramos = () => {
                           </Button>
                         </PermissionGate>
                         <PermissionGate route="/apps/admin/ramos" action="eliminar">
-                          <Button size="sm" color="failure" onClick={() => handleDelete(item.id)}>
+                          <Button size="sm" color="failure" onClick={() => handleDelete(item)}>
                             <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
                           </Button>
                         </PermissionGate>
@@ -643,6 +686,12 @@ const Ramos = () => {
             )}
 
             {/* Modo en blanco o edición: formulario existente */}
+            {formError && (
+              <Alert color="failure" className="mb-4">
+                <Icon icon="solar:danger-circle-bold" className="w-4 h-4 inline mr-2" />
+                {formError}
+              </Alert>
+            )}
             {(isEditing || creationMode === 'blank') && (
               <Tabs>
                 <Tabs.Item active title="Datos principales">
@@ -657,6 +706,14 @@ const Ramos = () => {
                         onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                         required
                       />
+                      {isEditing && selectedItem && formData.nombre.trim() !== selectedItem.nombre && formData.nombre.trim() !== '' && (
+                        <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <p className="text-amber-700 dark:text-amber-400 text-sm flex items-center gap-2">
+                            <Icon icon="solar:danger-triangle-bold" className="w-4 h-4 flex-shrink-0" />
+                            <span>Al cambiar el nombre del ramo, se actualizará en <strong>todo el sistema</strong>, incluyendo todas las pólizas que tienen este ramo asignado.</span>
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -801,12 +858,12 @@ const Ramos = () => {
                                           step="0.01"
                                           min="0"
                                           max="100"
-                                          value={comision.porcentaje_iva || ''}
+                                          value={comision.porcentaje_iva ?? ''}
                                           onChange={(e) =>
                                             updateComisionAseguradora(
                                               comision.aseguradora_id,
                                               'porcentaje_iva',
-                                              parseFloat(e.target.value) || 0,
+                                              e.target.value === '' ? 0 : parseFloat(e.target.value),
                                             )
                                           }
                                           className="w-24"
@@ -823,12 +880,12 @@ const Ramos = () => {
                                           step="0.01"
                                           min="0"
                                           max="100"
-                                          value={comision.porcentaje_comision || ''}
+                                          value={comision.porcentaje_comision ?? ''}
                                           onChange={(e) =>
                                             updateComisionAseguradora(
                                               comision.aseguradora_id,
                                               'porcentaje_comision',
-                                              parseFloat(e.target.value) || 0,
+                                              e.target.value === '' ? 0 : parseFloat(e.target.value),
                                             )
                                           }
                                           className="w-24"
@@ -845,12 +902,12 @@ const Ramos = () => {
                                           step="0.01"
                                           min="0"
                                           max="100"
-                                          value={comision.pri_a_pre_por_defecto || ''}
+                                          value={comision.pri_a_pre_por_defecto ?? ''}
                                           onChange={(e) =>
                                             updateComisionAseguradora(
                                               comision.aseguradora_id,
                                               'pri_a_pre_por_defecto',
-                                              parseFloat(e.target.value) || 0,
+                                              e.target.value === '' ? 0 : parseFloat(e.target.value),
                                             )
                                           }
                                           className="w-24"
@@ -1032,6 +1089,76 @@ const Ramos = () => {
           >
             Cancelar
           </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal de eliminación individual con reemplazo */}
+      <Modal show={showDeleteModal} onClose={() => setShowDeleteModal(false)} size="md">
+        <Modal.Header>
+          <div className="flex items-center gap-2 text-red-600">
+            <Icon icon="solar:danger-triangle-bold" className="w-6 h-6" />
+            Eliminar ramo
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            {deleteLoading ? (
+              <div className="flex justify-center py-4"><Spinner size="lg" /></div>
+            ) : (
+              <>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <p className="text-red-700 dark:text-red-400 text-sm flex items-center gap-2">
+                    <Icon icon="solar:danger-triangle-bold" className="w-4 h-4 flex-shrink-0" />
+                    <span>Eliminar el ramo <strong>{ramoToDelete?.nombre}</strong> lo removerá de <strong>todo el sistema</strong>. Esta acción no se puede deshacer.</span>
+                  </p>
+                </div>
+                {deletePolizasCount > 0 ? (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                    <p className="text-amber-700 dark:text-amber-400 font-medium flex items-center gap-2">
+                      <Icon icon="solar:danger-triangle-bold" className="w-5 h-5" />
+                      Este ramo tiene {deletePolizasCount} póliza(s) asociada(s).
+                    </p>
+                    <p className="text-amber-600 dark:text-amber-500 text-sm mt-2">
+                      Selecciona un ramo de reemplazo para reasignar las pólizas antes de eliminar.
+                    </p>
+                    <div className="mt-3">
+                      <Label value="Ramo de reemplazo *" className="mb-1" />
+                      <select
+                        value={replacementRamoId}
+                        onChange={(e) => setReplacementRamoId(e.target.value)}
+                        className="w-full border rounded-md p-2 text-sm dark:bg-gray-700 dark:border-gray-600"
+                      >
+                        <option value="">Seleccionar ramo de reemplazo...</option>
+                        {ramos.filter(r => r.id !== ramoToDelete?.id).map(r => (
+                          <option key={r.id} value={r.id}>{r.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                      Este ramo no tiene pólizas asociadas. Se puede eliminar directamente.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="failure"
+            onClick={confirmDelete}
+            disabled={isDeleting || deleteLoading || (deletePolizasCount > 0 && !replacementRamoId)}
+          >
+            {isDeleting ? (
+              <><Spinner size="sm" className="mr-2" /> Eliminando...</>
+            ) : (
+              <><Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-2" /> Eliminar</>
+            )}
+          </Button>
+          <Button color="gray" onClick={() => setShowDeleteModal(false)}>Cancelar</Button>
         </Modal.Footer>
       </Modal>
     </PermissionGate>

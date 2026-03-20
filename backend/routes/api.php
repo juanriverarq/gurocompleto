@@ -87,6 +87,11 @@ Route::post('/saas/whatsapp/webhook/bulk-send-complete', [\App\Http\Controllers\
 Route::post('/webhooks/whatsapp-status', [\App\Http\Controllers\Api\WhatsAppWebhookController::class, 'statusChange']);
 
 // =============================================================
+// Formulario de empleo — Trabaja con Nosotros (PÚBLICO)
+// =============================================================
+Route::post('/saas/aplicaciones-empleo', [\App\Http\Controllers\AplicacionEmpleoController::class, 'store']);
+
+// =============================================================
 // Webhook WhatsApp sync instances (PÚBLICO - llamado por microservicio al iniciar)
 // Permite al microservicio obtener lista de instancias para restaurar
 // =============================================================
@@ -1248,6 +1253,7 @@ Route::post('/', [App\Http\Controllers\SaaS\RamosController::class, 'store']);
 Route::post('/bulk-delete', [App\Http\Controllers\SaaS\RamosController::class, 'bulkDelete']);
 Route::get('/{id}', [App\Http\Controllers\SaaS\RamosController::class, 'show'])->whereNumber('id');
 Route::put('/{id}', [App\Http\Controllers\SaaS\RamosController::class, 'update'])->whereNumber('id');
+Route::get('/{id}/polizas-count', [App\Http\Controllers\SaaS\RamosController::class, 'polizasCount'])->whereNumber('id');
 Route::delete('/{id}', [App\Http\Controllers\SaaS\RamosController::class, 'destroy'])->whereNumber('id');
         });
 
@@ -1565,9 +1571,10 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::prefix('sura-scraper')->group(function () {
         Route::get('/status', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'status']);
         Route::post('/connect', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'connect']);
+        Route::post('/refresh-session', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'refreshSession']);
         Route::delete('/disconnect', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'disconnect']);
         Route::get('/polizas', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'fetchPolizas']);
-        Route::get('/polizas/{numeroPoliza}', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'fetchPolizaDetail']);
+        Route::get('/polizas/{numeroPoliza}/detail', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'fetchPolizaDetail']);
         Route::post('/export', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'exportExcel']);
         Route::post('/import-clients', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'importClients']);
         Route::get('/existing-documents', [\App\Http\Controllers\SaaS\SuraScraperController::class, 'existingDocuments']);
@@ -2277,6 +2284,9 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::put('/{id}/estado', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
         Route::post('/{id}/cambiar-estado', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
 
+        // Cartera items (cuotas reales de SS)
+        Route::get('/{id}/cartera-items', [\App\Http\Controllers\Api\PagoPolizaController::class, 'carteraItemsByPoliza'])->whereNumber('id');
+
         // Pagos y cobros
         Route::get('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'index'])->whereNumber('id');
         Route::post('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'store'])->whereNumber('id');
@@ -2284,6 +2294,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::delete('/{id}/pagos/revertir-oficina', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirRecaudosOficina'])->whereNumber('id');
         Route::delete('/{id}/pagos/revertir-aseguradora', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPagoAseguradoraDePoliza'])->whereNumber('id');
         Route::delete('/{id}/pagos/revertir-completo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirRecaudoCompleto'])->whereNumber('id');
+        Route::delete('/{id}/cartera-item/{ciId}/revertir', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirCarteraItem'])->whereNumber('id')->whereNumber('ciId');
         Route::post('/recaudo-masivo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoMasivo']);
         Route::post('/recaudo-masivo-csv', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoMasivoCsv']);
         Route::post('/recaudo-por-numero', [\App\Http\Controllers\Api\PagoPolizaController::class, 'recaudoPorNumeroPoliza']);
@@ -2297,6 +2308,11 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::post('/{id}/cobrar-comision', [\App\Http\Controllers\Api\PagoPolizaController::class, 'registrarCobroComision'])->whereNumber('id');
         Route::delete('/{id}/cobrar-comision/ultimo', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirUltimoCobroComision'])->whereNumber('id');
         Route::delete('/{id}/cobrar-comision/{cobroId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirCobroComision'])->whereNumber('id')->whereNumber('cobroId');
+
+        // Acciones masivas sobre cartera_items (estilo SoftSeguros)
+        Route::post('/cartera/accion-masiva', [\App\Http\Controllers\Api\PagoPolizaController::class, 'accionMasivaCartera']);
+        Route::post('/cartera/{itemId}/anular', [\App\Http\Controllers\Api\PagoPolizaController::class, 'anularCarteraItem'])->whereNumber('itemId');
+        Route::post('/cartera/{itemId}/reactivar', [\App\Http\Controllers\Api\PagoPolizaController::class, 'reactivarCarteraItem'])->whereNumber('itemId');
 
         // Documentos de póliza
         // Lista global de documentos de todas las pólizas del broker (debe ir antes de /{id})

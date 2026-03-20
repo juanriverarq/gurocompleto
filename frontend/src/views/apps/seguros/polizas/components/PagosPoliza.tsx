@@ -18,6 +18,7 @@ interface Pago {
   fecha_pago: string;
   estado: 'pagado' | 'parcial' | 'pendiente';
   observaciones?: string;
+  cartera_item_id?: number;
 }
 
 interface Recibo {
@@ -33,6 +34,27 @@ interface Recibo {
   activo: boolean;
   observaciones?: string;
   created_at: string;
+  pago_poliza_id?: number;
+}
+
+interface CarteraItemSS {
+  id: number;
+  poliza_id: number;
+  numero_pago?: string;
+  anexo_numero?: string;
+  prima_total_pago: number;
+  valor_recaudado_oficina: number;
+  saldo_pendiente_oficina: number;
+  saldo_pendiente_aseguradora: number;
+  valor_pagado_aseguradora: number;
+  comision_a_recibir: number;
+  estado_cartera: string;
+  recaudado_en_oficina: boolean;
+  recaudado_aseguradora: boolean;
+  comisionada: boolean;
+  recibo_pago_directo: boolean;
+  fecha_limite_pago?: string;
+  softseguros_pago_id?: number;
 }
 
 interface CuotaSimulada {
@@ -43,6 +65,8 @@ interface CuotaSimulada {
   pagos: Pago[];
   montoPagado: number;
   montoPendiente: number;
+  anexo_numero?: string;
+  carteraItemId?: number;
 }
 
 type Props = {
@@ -58,6 +82,7 @@ type Props = {
   clienteNombre?: string;
   aseguradoraNombre?: string;
   ramoNombre?: string;
+  installmentsCount?: number | null;
 };
 
 const PERIODICIDAD_MESES: Record<string, number> = {
@@ -68,7 +93,7 @@ const PERIODICIDAD_MESES: Record<string, number> = {
 };
 
 const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v);
+  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v || 0);
 
 const formatDate = (d: string) => {
   if (!d) return '-';
@@ -93,10 +118,12 @@ const PagosPoliza: React.FC<Props> = ({
   clienteNombre,
   aseguradoraNombre,
   ramoNombre,
+  installmentsCount,
 }) => {
   const { toast } = useToast();
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [recibos, setRecibos] = useState<Recibo[]>([]);
+  const [carteraItems, setCarteraItems] = useState<CarteraItemSS[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState<CuotaSimulada | null>(null);
@@ -117,15 +144,19 @@ const PagosPoliza: React.FC<Props> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [pagosRes, recibosRes] = await Promise.all([
+      const [pagosRes, recibosRes, carteraRes] = await Promise.all([
         api.get(`/saas/polizas/${polizaId}/pagos`),
         api.get(`/saas/cartera/recibos-caja`, { params: { poliza_id: polizaId, per_page: 100 } }).catch(() => null),
+        api.get(`/saas/polizas/${polizaId}/cartera-items`).catch(() => null),
       ]);
       if (pagosRes.data?.success) {
         setPagos(pagosRes.data.data || []);
       }
       if (recibosRes?.data?.success) {
         setRecibos(recibosRes.data.data || []);
+      }
+      if (carteraRes?.data?.success) {
+        setCarteraItems(carteraRes.data.data || []);
       }
     } catch (e) {
       console.error('Error cargando datos:', e);
@@ -153,8 +184,45 @@ const PagosPoliza: React.FC<Props> = ({
     }).catch(() => {});
   }, [polizaId]);
 
-  // Generar cuotas simuladas según periodicidad
+  // Build cuotas from cartera_items (real SS data) when available, otherwise simulate
   const cuotas = useMemo<CuotaSimulada[]>(() => {
+    // If we have cartera_items from SS, use them as real cuotas
+    if (carteraItems.length > 0) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      return carteraItems.map((ci, idx) => {
+        const monto = parseFloat(String(ci.prima_total_pago)) || 0;
+        const recaudado = parseFloat(String(ci.valor_recaudado_oficina)) || 0;
+        const pendiente = parseFloat(String(ci.saldo_pendiente_oficina)) || 0;
+        const fechaVenc = ci.fecha_limite_pago ? ci.fecha_limite_pago.split('T')[0] : fechaInicio;
+
+        let estado: CuotaSimulada['estado'] = 'pendiente';
+        if (ci.estado_cartera === 'comision_recibida' || ci.estado_cartera === 'comision_por_cobrar' || ci.estado_cartera === 'por_pagar') {
+          estado = 'pagado';
+        } else if (recaudado > 0 && pendiente > 0) {
+          estado = 'parcial';
+        } else if (pendiente > 0 && fechaVenc && new Date(fechaVenc + 'T00:00:00') < hoy) {
+          estado = 'vencido';
+        }
+
+        // Parse numero_pago "2/9" -> 2
+        const numPago = ci.numero_pago ? parseInt(ci.numero_pago.split('/')[0]) : idx + 1;
+
+        return {
+          numero: numPago,
+          fechaVencimiento: fechaVenc,
+          monto: Math.round(monto),
+          estado,
+          pagos: [], // Real pagos are in the historial below
+          montoPagado: Math.round(recaudado),
+          montoPendiente: Math.round(pendiente),
+          anexo_numero: ci.anexo_numero || undefined,
+          carteraItemId: ci.id,
+        };
+      });
+    }
+
+    // Fallback: simulate cuotas from periodicidad (for polizas without cartera_items)
     const periodo = periodicidad?.toLowerCase() || 'anual';
     const meses = PERIODICIDAD_MESES[periodo] || 12;
 
@@ -165,13 +233,12 @@ const PagosPoliza: React.FC<Props> = ({
 
     const diffMs = fin.getTime() - inicio.getTime();
     const diffMeses = Math.round(diffMs / (1000 * 60 * 60 * 24 * 30.44));
-    const numCuotas = Math.max(1, Math.round(diffMeses / meses));
+    const numCuotas = (installmentsCount && installmentsCount > 0) ? installmentsCount : Math.max(1, Math.round(diffMeses / meses));
     const montoCuota = primaTotal / numCuotas;
 
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
-    // All pagos ordered by date
     const todosLosPagos = [...pagos].sort(
       (a, b) => new Date(a.fecha_pago).getTime() - new Date(b.fecha_pago).getTime(),
     );
@@ -223,16 +290,24 @@ const PagosPoliza: React.FC<Props> = ({
     }
 
     return result;
-  }, [periodicidad, fechaInicio, fechaFin, primaTotal, pagos]);
+  }, [periodicidad, fechaInicio, fechaFin, primaTotal, pagos, installmentsCount, carteraItems]);
 
   // Estadísticas
   const stats = useMemo(() => {
-    const totalPagado = pagos.reduce((s, p) => s + (p.monto_pagado || 0), 0);
-    const totalPendiente = Math.max(0, primaTotal - totalPagado);
+    let totalPagado: number;
+    let totalPendiente: number;
+    if (carteraItems.length > 0) {
+      totalPagado = cuotas.reduce((s, c) => s + c.montoPagado, 0);
+      totalPendiente = cuotas.reduce((s, c) => s + c.montoPendiente, 0);
+    } else {
+      totalPagado = pagos.reduce((s, p) => s + (parseFloat(String(p.monto_pagado)) || 0), 0);
+      totalPendiente = Math.max(0, (primaTotal || 0) - totalPagado);
+    }
     const cuotasPagadas = cuotas.filter((c) => c.estado === 'pagado').length;
     const cuotasVencidas = cuotas.filter((c) => c.estado === 'vencido').length;
-    return { totalPagado, totalPendiente, cuotasPagadas, cuotasVencidas, totalCuotas: cuotas.length };
-  }, [cuotas, pagos, primaTotal]);
+    const totalPrima = carteraItems.length > 0 ? cuotas.reduce((s, c) => s + c.monto, 0) : (primaTotal || 0);
+    return { totalPagado, totalPendiente, cuotasPagadas, cuotasVencidas, totalCuotas: cuotas.length, totalPrima };
+  }, [cuotas, pagos, primaTotal, carteraItems]);
 
   // Registrar pago + generar recibo
   const handleRegistrarPago = async () => {
@@ -248,20 +323,26 @@ const PagosPoliza: React.FC<Props> = ({
       const obs = nuevoPago.observaciones || `Pago cuota #${cuotaSeleccionada?.numero} - ${numeroPoliza}`;
 
       // Registrar PagoPoliza (backend auto-generates ReciboCaja)
-      const pagoRes = await api.post(`/saas/polizas/${polizaId}/pagos`, {
+      const body: Record<string, any> = {
         tipo_recaudo: nuevoPago.tipo_recaudo === 'directo' ? 'aseguradora_directo' : nuevoPago.tipo_recaudo,
         monto,
         metodo_pago: nuevoPago.metodo_pago,
         referencia_pago: nuevoPago.referencia_pago || undefined,
         fecha_pago: fechaPago,
         observaciones: obs,
-      });
+      };
+      // Link payment to specific cartera_item (cuota) when available
+      if (cuotaSeleccionada?.carteraItemId) {
+        body.cartera_item_id = cuotaSeleccionada.carteraItemId;
+      }
+      const pagoRes = await api.post(`/saas/polizas/${polizaId}/pagos`, body);
 
       if (!pagoRes.data?.success) {
         throw new Error(pagoRes.data?.message || 'Error al registrar pago');
       }
 
       // Backend auto-generates recibo — read from response
+      const reciboData = pagoRes.data?.data?.recibo;
       const numeroRecibo = pagoRes.data?.data?.numero_recibo;
       const reciboMsg = numeroRecibo ? ` — Recibo #${numeroRecibo} generado` : '';
 
@@ -274,6 +355,24 @@ const PagosPoliza: React.FC<Props> = ({
       setNuevoPago({ monto: '', tipo_recaudo: 'oficina', metodo_pago: 'efectivo', referencia_pago: '', observaciones: '' });
       setCuotaSeleccionada(null);
       await loadData();
+
+      // Auto-open print modal if recibo was generated
+      if (reciboData) {
+        setPrintFormatRecibo({
+          id: reciboData.id,
+          numero_recibo: reciboData.numero_recibo,
+          tipo: 'recibo',
+          tipo_recaudo: reciboData.tipo_recaudo || 'oficina',
+          forma_pago: reciboData.forma_pago,
+          valor_recaudado_en_oficina: reciboData.valor_recaudado_en_oficina,
+          valor_a_pagar: reciboData.valor_a_pagar,
+          fecha_realizo_pago_oficina: reciboData.fecha,
+          recibo_anulado: false,
+          activo: true,
+          observaciones: reciboData.observaciones,
+          created_at: new Date().toISOString(),
+        });
+      }
     } catch (e: any) {
       toast({
         title: 'Error',
@@ -376,7 +475,7 @@ const PagosPoliza: React.FC<Props> = ({
         <Card className="!p-0">
           <div className="p-3 text-center">
             <p className="text-xs text-gray-500 dark:text-gray-400">Prima Total</p>
-            <p className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(primaTotal)}</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(stats.totalPrima || primaTotal)}</p>
           </div>
         </Card>
         <Card className="!p-0">
@@ -446,6 +545,7 @@ const PagosPoliza: React.FC<Props> = ({
           <Table striped>
             <Table.Head>
               <Table.HeadCell className="w-12">#</Table.HeadCell>
+              {carteraItems.length > 0 && <Table.HeadCell>Anexo</Table.HeadCell>}
               <Table.HeadCell>Vencimiento</Table.HeadCell>
               <Table.HeadCell className="text-right">Valor Cuota</Table.HeadCell>
               <Table.HeadCell className="text-right">Pagado</Table.HeadCell>
@@ -454,14 +554,19 @@ const PagosPoliza: React.FC<Props> = ({
               <Table.HeadCell className="w-28">Acciones</Table.HeadCell>
             </Table.Head>
             <Table.Body className="divide-y">
-              {cuotas.map((cuota) => (
+              {cuotas.map((cuota, idx) => (
                 <Table.Row
-                  key={cuota.numero}
+                  key={cuota.carteraItemId || `cuota-${idx}`}
                   className={`bg-white dark:border-gray-700 dark:bg-gray-800 ${cuota.estado === 'vencido' ? 'bg-red-50 dark:bg-red-950/20' : ''}`}
                 >
                   <Table.Cell className="font-medium text-gray-900 dark:text-white text-center">
                     {cuota.numero}
                   </Table.Cell>
+                  {carteraItems.length > 0 && (
+                    <Table.Cell className="text-xs text-gray-500 max-w-[150px] truncate">
+                      {cuota.anexo_numero || '—'}
+                    </Table.Cell>
+                  )}
                   <Table.Cell className="whitespace-nowrap">{formatDate(cuota.fechaVencimiento)}</Table.Cell>
                   <Table.Cell className="text-right font-medium">{formatCurrency(cuota.monto)}</Table.Cell>
                   <Table.Cell className="text-right text-green-600 font-medium">
@@ -512,18 +617,27 @@ const PagosPoliza: React.FC<Props> = ({
             <Table striped>
               <Table.Head>
                 <Table.HeadCell>Fecha</Table.HeadCell>
+                {carteraItems.length > 0 && <Table.HeadCell>Cuota</Table.HeadCell>}
                 <Table.HeadCell className="text-right">Monto</Table.HeadCell>
                 <Table.HeadCell>Tipo</Table.HeadCell>
                 <Table.HeadCell>Método</Table.HeadCell>
                 <Table.HeadCell>Referencia</Table.HeadCell>
                 <Table.HeadCell>Estado</Table.HeadCell>
-                <Table.HeadCell>Observaciones</Table.HeadCell>
+                <Table.HeadCell>Recibo</Table.HeadCell>
                 <Table.HeadCell className="w-16"></Table.HeadCell>
               </Table.Head>
               <Table.Body className="divide-y">
                 {pagos.map((pago) => (
                   <Table.Row key={pago.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
                     <Table.Cell className="whitespace-nowrap">{formatDate(pago.fecha_pago)}</Table.Cell>
+                    {carteraItems.length > 0 && (
+                      <Table.Cell className="text-xs">
+                        {(() => {
+                          const ci = carteraItems.find(c => c.id === pago.cartera_item_id);
+                          return ci?.numero_pago || '—';
+                        })()}
+                      </Table.Cell>
+                    )}
                     <Table.Cell className="text-right font-medium text-green-600">
                       {formatCurrency(pago.monto_pagado)}
                     </Table.Cell>
@@ -544,8 +658,24 @@ const PagosPoliza: React.FC<Props> = ({
                         {pago.estado}
                       </Badge>
                     </Table.Cell>
-                    <Table.Cell className="text-xs text-gray-500 max-w-[200px] truncate">
-                      {pago.observaciones || '-'}
+                    <Table.Cell>
+                      {(() => {
+                        const r = recibos.find(rc => rc.pago_poliza_id === pago.id);
+                        if (r && !r.recibo_anulado) {
+                          return (
+                            <Tooltip content={`Imprimir Recibo #${r.numero_recibo}`}>
+                              <Button size="xs" color="blue" outline onClick={() => setPrintFormatRecibo(r)}>
+                                <Icon icon="solar:printer-bold" width={12} className="mr-1" />
+                                #{r.numero_recibo}
+                              </Button>
+                            </Tooltip>
+                          );
+                        }
+                        if (r?.recibo_anulado) {
+                          return <Badge color="failure" size="sm">Anulado</Badge>;
+                        }
+                        return <span className="text-gray-400 text-xs">—</span>;
+                      })()}
                     </Table.Cell>
                     <Table.Cell>
                       <Tooltip content="Revertir pago">

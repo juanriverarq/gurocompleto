@@ -70,21 +70,29 @@ const TrabajaConNosotros: React.FC = () => {
     return false;
   };
 
+  const [submitError, setSubmitError] = useState('');
+
   const handleSubmit = async () => {
     setSubmitting(true);
+    setSubmitError('');
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
         if (v instanceof File) fd.append(k, v);
         else if (v) fd.append(k, v as string);
       });
-      await fetch('https://app.guro.co/api/saas/aplicaciones-empleo', {
+      const resp = await fetch('https://app.guro.co/api/saas/aplicaciones-empleo', {
         method: 'POST',
         body: fd,
-      }).catch(() => {});
-      setSubmitted(true);
+      });
+      if (resp.ok) {
+        setSubmitted(true);
+      } else {
+        const data = await resp.json().catch(() => null);
+        setSubmitError(data?.message || 'Error al enviar la aplicación. Intenta nuevamente.');
+      }
     } catch {
-      setSubmitted(true);
+      setSubmitError('Error de conexión. Verifica tu internet e intenta nuevamente.');
     }
     setSubmitting(false);
   };
@@ -408,6 +416,12 @@ const TrabajaConNosotros: React.FC = () => {
                 </button>
               )}
             </div>
+
+            {submitError && (
+              <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
+                <p className="text-red-400 text-sm">{submitError}</p>
+              </div>
+            )}
 
             <p className="text-[10px] text-center mt-4" style={{ color: '#0d0d0d' }}>
               Al enviar aceptas que tus datos serán tratados según nuestra <a href="/politica-privacidad" className="underline" style={{ color: '#0d0d0d' }}>política de privacidad</a>.

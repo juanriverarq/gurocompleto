@@ -47,6 +47,7 @@ async function makeRequest<T>(endpoint: string, options: RequestInit = {}): Prom
     return {
       success: false,
       message: json?.message || `Error ${res.status}`,
+      ...json,
     };
   }
 
@@ -60,6 +61,7 @@ export interface SuraConnectionStatus {
   session_valid: boolean;
   status: string;
   last_error?: string | null;
+  auth_method?: 'credentials' | 'cookies';
 }
 
 export interface SuraPoliza {
@@ -67,18 +69,26 @@ export interface SuraPoliza {
   ramo_nombre: string;
   producto: string;
   numero_poliza: string;
+  numero_poliza_principal: string;
   tipo_dni_tomador: string;
   dni_tomador: string;
   nombre_tomador: string;
   direccion_tomador: string;
   telefono_tomador: string;
   celular_tomador: string;
+  correo_tomador: string;
   ciudad: string;
   oficina: string;
+  codigo_oficina: string;
   fecha_inicio: string;
   fecha_fin: string;
   forma_pago: string;
   financiada: string;
+  estado: string;
+  codigo_asesor: string;
+  nombre_asesor: string;
+  numero_renovacion: string;
+  tipo_poliza: string;
 }
 
 export interface SuraCliente {
@@ -97,6 +107,64 @@ export interface SuraCliente {
   sarlaft_actualizado: boolean | null;
 }
 
+/**
+ * Detail response from SURA ramo-specific endpoints.
+ * Fields vary by ramo - all are optional since different ramos return different data.
+ */
+export interface SuraPolizaDetail {
+  // Common fields across ramos
+  poliza?: string;
+  tipoPoliza?: string;
+  plan?: string;
+  estado?: string;
+  dniTomador?: string;
+  nombreTomador?: string;
+  nombreAsegurado?: string;
+  nombreBeneficiario?: string;
+  oficina?: string;
+  ciudad?: string;
+  fechaExpedicion?: string;
+  fechaInicioVigenciaRiesgo?: string;
+  fechaFinVigenciaRiesgo?: string;
+  ptprimaformapago?: string | number;
+  formaPago?: string;
+
+  // Autos-specific
+  placa?: string;
+  marca?: string;
+  modelo?: string;
+  vehiculo?: string;
+  chasis?: string;
+  motor?: string;
+  zona?: string;
+  valorVehiculo?: string | number;
+  bonificacion?: string;
+
+  // Coverage and details
+  coberturas?: Array<{
+    cobertura?: string;
+    valorAsegurado?: string | number;
+    deducible?: string;
+    prima?: string | number;
+    [key: string]: any;
+  }>;
+  asesores?: Array<{
+    codigoAsesor?: string;
+    nombreAsesor?: string;
+    participacion?: string | number;
+    [key: string]: any;
+  }>;
+
+  // Enriched data from our backend
+  _recibos_pendientes?: any[];
+  _reclamaciones?: any[];
+  _ramo_code?: string;
+  _endpoint_used?: string;
+
+  // Allow any other fields from SURA
+  [key: string]: any;
+}
+
 export type SuraDataType = 'polizas' | 'clientes';
 
 export const suraScraperService = {
@@ -108,12 +176,38 @@ export const suraScraperService = {
   },
 
   /**
-   * Connect to SURA with browser cookies.
+   * Connect to SURA with browser cookies (legacy).
    */
   async connect(cookies: string): Promise<{ success: boolean; data?: SuraConnectionStatus; message?: string }> {
     return makeRequest<SuraConnectionStatus>(`${API_PREFIX}/connect`, {
       method: 'POST',
       body: JSON.stringify({ cookies }),
+    });
+  },
+
+  /**
+   * Connect to SURA with username/password credentials (preferred).
+   * Backend will programmatically login to SURA SSO and capture cookies.
+   */
+  async connectWithCredentials(suraUser: string, suraPassword: string, mfaCode?: string, docType?: string): Promise<{ success: boolean; data?: SuraConnectionStatus; message?: string; mfa_required?: boolean }> {
+    return makeRequest<SuraConnectionStatus>(`${API_PREFIX}/connect`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sura_user: suraUser,
+        sura_password: suraPassword,
+        ...(mfaCode ? { mfa_code: mfaCode } : {}),
+        ...(docType ? { doc_type: docType } : {}),
+      }),
+    });
+  },
+
+  /**
+   * Refresh an expired SURA session using stored credentials.
+   * Returns success if re-login worked, false if manual reconnect is needed.
+   */
+  async refreshSession(): Promise<{ success: boolean; data?: SuraConnectionStatus; message?: string }> {
+    return makeRequest<SuraConnectionStatus>(`${API_PREFIX}/refresh-session`, {
+      method: 'POST',
     });
   },
 
@@ -139,15 +233,27 @@ export const suraScraperService = {
   },
 
   /**
-   * Fetch detail for a specific policy.
+   * Fetch detail for a specific policy by ramo.
+   * @param numeroPoliza - Policy number
+   * @param ramoCode - Ramo code (e.g. '01' for autos, '06' for hogar)
+   * @param fechaFin - Optional end date for the policy
+   * @param codigoRol - Optional role code (default '100')
    */
-  async fetchPolizaDetail(numeroPoliza: string, params?: Record<string, string>): Promise<{
+  async fetchPolizaDetail(
+    numeroPoliza: string,
+    ramoCode: string,
+    fechaFin?: string,
+    codigoRol?: string,
+  ): Promise<{
     success: boolean;
-    data?: Record<string, any>;
+    data?: SuraPolizaDetail;
     message?: string;
+    session_expired?: boolean;
   }> {
-    const query = new URLSearchParams(params || {}).toString();
-    return makeRequest<Record<string, any>>(`${API_PREFIX}/polizas/${numeroPoliza}${query ? '?' + query : ''}`);
+    const params = new URLSearchParams({ ramo: ramoCode });
+    if (fechaFin) params.set('fecha_fin', fechaFin);
+    if (codigoRol) params.set('codigo_rol', codigoRol);
+    return makeRequest<SuraPolizaDetail>(`${API_PREFIX}/polizas/${numeroPoliza}/detail?${params.toString()}`);
   },
 
   /**

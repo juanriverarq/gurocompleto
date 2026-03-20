@@ -24,22 +24,29 @@ class WhatsAppTemplateController extends Controller
      */
     private function getActiveInstance(Request $request): ?WhatsAppInstance
     {
-        $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        // Soportar tanto usuarios Firebase como empleados
+        $brokerId = $request->get('broker_id');
+        if (!$brokerId) {
+            $user = $request->user();
+            if ($user) {
+                $broker = $user->getPrimaryBroker();
+                $brokerId = $broker?->id;
+            }
+        }
 
-        if (!$broker) return null;
+        if (!$brokerId) return null;
 
         // Si se especifica instance_id, usar esa
         $instanceId = $request->query('instance_id') ?? $request->input('instance_id');
         if ($instanceId) {
-            return WhatsAppInstance::where('broker_id', $broker->id)
+            return WhatsAppInstance::where('broker_id', $brokerId)
                 ->where('id', $instanceId)
                 ->whereIn('connection_type', ['cloud_api', 'ycloud'])
                 ->first();
         }
 
         // Buscar la primera instancia cloud_api o ycloud activa
-        return WhatsAppInstance::where('broker_id', $broker->id)
+        return WhatsAppInstance::where('broker_id', $brokerId)
             ->whereIn('connection_type', ['cloud_api', 'ycloud'])
             ->where('is_active', true)
             ->first();
@@ -269,11 +276,15 @@ class WhatsAppTemplateController extends Controller
 
         // Guardar el mensaje de plantilla en la conversación
         $user = $request->user();
-        $broker = $user->getPrimaryBroker();
+        $brokerId = $request->get('broker_id');
+        if (!$brokerId && $user) {
+            $broker = $user->getPrimaryBroker();
+            $brokerId = $broker?->id;
+        }
         $savedMessage = null;
 
-        if ($broker) {
-            $conversation = WhatsAppConversation::where('broker_id', $broker->id)
+        if ($brokerId) {
+            $conversation = WhatsAppConversation::where('broker_id', $brokerId)
                 ->where('phone', $validated['phone'])
                 ->first();
 
@@ -281,11 +292,12 @@ class WhatsAppTemplateController extends Controller
                 // Usar el body del template enviado desde el frontend, o un fallback
                 $templateBody = $validated['template_body'] ?? "[Plantilla: {$validated['template_name']}]";
 
+                $senderUserId = $user ? $user->id : ($request->get('authenticated_empleado')?->id ?? null);
                 $savedMessage = $conversation->addMessage([
                     'message_id' => $result['message_id'],
                     'direction' => 'outgoing',
                     'sender_type' => 'agent',
-                    'sender_user_id' => $user->id,
+                    'sender_user_id' => $senderUserId,
                     'message_type' => 'template',
                     'content' => $templateBody,
                     'status' => 'sent',

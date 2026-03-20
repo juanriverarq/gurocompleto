@@ -25,6 +25,7 @@ import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import OnboardingGuard from '../../../../components/auth/OnboardingGuard';
 import PermissionGate from 'src/components/PermissionGate';
+import { printRecibo, type ReciboPrintData, type BrokerPrintData } from '../../cartera/printRecibo';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface CumplimientoFormData {
@@ -59,7 +60,7 @@ const INITIAL_FORM: CumplimientoFormData = {
   porcentaje_comision: '',
   prima_neta: '0.00',
   gastos_expedicion: '0.00',
-  porcentaje_iva: '0.00',
+  porcentaje_iva: '19',
   total: '0.00',
   tipo_recaudo: '',
   fecha_recaudacion: '',
@@ -90,6 +91,11 @@ const Cumplimiento: React.FC = () => {
   const [formData, setFormData] = useState<CumplimientoFormData>(INITIAL_FORM);
 
   // PDF Reader state
+  // Recibo print state
+  const [reciboParaImprimir, setReciboParaImprimir] = useState<any>(null);
+  const [showPrintFormatModal, setShowPrintFormatModal] = useState(false);
+  const [brokerInfo, setBrokerInfo] = useState<BrokerPrintData | null>(null);
+
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfProcessing, setPdfProcessing] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0);
@@ -127,6 +133,47 @@ const Cumplimiento: React.FC = () => {
   useEffect(() => {
     if (!saasLoading && !user) navigate('/auth/auth1/login');
   }, [saasLoading, user, navigate]);
+
+  // Load broker info for recibo printing
+  useEffect(() => {
+    api.get('/saas/broker/profile').then(res => {
+      const b = res.data;
+      if (b?.success) {
+        const d = b.data || b;
+        setBrokerInfo({
+          nombre: d.nombre || d.name || 'Agencia de Seguros',
+          legal_name: d.legal_name || d.razon_social,
+          nit: d.nit || '',
+          direccion: d.direccion || d.address,
+          ciudad: d.ciudad || d.city,
+          telefono: d.telefono || d.phone,
+          email: d.email,
+          logo_url: d.logo_url || d.logo,
+        });
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Helper to print a recibo
+  const imprimirRecibo = (recibo: any, format: 'media_carta' | 'carta' = 'media_carta') => {
+    if (!recibo) return;
+    const data: ReciboPrintData = {
+      numero_recibo: recibo.numero_recibo,
+      fecha: recibo.fecha,
+      cliente_nombre: recibo.cliente_nombre,
+      cliente_documento: recibo.cliente_documento,
+      poliza_numero: recibo.poliza_numero,
+      aseguradora_nombre: recibo.aseguradora_nombre,
+      ramo_nombre: recibo.ramo_nombre,
+      forma_pago: recibo.forma_pago,
+      moneda: 'COP',
+      valor_recaudado_en_oficina: recibo.valor_recaudado_en_oficina || recibo.valor_a_pagar || 0,
+      es_anticipo: recibo.es_anticipo || false,
+      observaciones: recibo.observaciones,
+    };
+    const broker: BrokerPrintData = brokerInfo || { nombre: 'Agencia de Seguros', nit: '' };
+    printRecibo(data, broker, format);
+  };
 
   // Load catalogs
   useEffect(() => {
@@ -366,7 +413,7 @@ const Cumplimiento: React.FC = () => {
       porcentaje_comision: poliza.porcentaje_comision != null ? String(poliza.porcentaje_comision) : '',
       prima_neta: poliza.prima_neta != null ? String(poliza.prima_neta) : '0.00',
       gastos_expedicion: (poliza as any).gastos_adicionales != null ? String((poliza as any).gastos_adicionales) : '0.00',
-      porcentaje_iva: poliza.porcentaje_iva != null ? String(poliza.porcentaje_iva) : '0.00',
+      porcentaje_iva: poliza.porcentaje_iva != null && poliza.porcentaje_iva > 0 ? String(poliza.porcentaje_iva) : '19',
       total: poliza.total != null ? String(poliza.total) : '0.00',
       tipo_recaudo: tipoRecaudo,
       fecha_recaudacion: (poliza as any).fecha_recaudo || '',
@@ -396,6 +443,19 @@ const Cumplimiento: React.FC = () => {
     }
   };
 
+  // Auto-calculate IVA and Total when financial fields change
+  useEffect(() => {
+    const primaNeta = parseFloat(formData.prima_neta) || 0;
+    const gastosExp = parseFloat(formData.gastos_expedicion) || 0;
+    const pctIva = parseFloat(formData.porcentaje_iva) || 0;
+    const iva = primaNeta * (pctIva / 100);
+    const total = primaNeta + gastosExp + iva;
+    setFormData(prev => ({
+      ...prev,
+      total: total > 0 ? total.toFixed(2) : '0.00',
+    }));
+  }, [formData.prima_neta, formData.gastos_expedicion, formData.porcentaje_iva]);
+
   const handleSubmit = async () => {
     if (!formData.numero_poliza.trim()) {
       toast({ variant: 'destructive', title: 'Campo requerido', description: 'El número de póliza es obligatorio.' });
@@ -422,7 +482,7 @@ const Cumplimiento: React.FC = () => {
 
       const payload: any = {
         numero_poliza: formData.numero_poliza.toUpperCase().replace(/\s+/g, '-'),
-        cliente_id: clientId ? parseInt(clientId) : undefined,
+        cliente_id: clientId ? parseInt(clientId) : null,
         aseguradora: selectedAseg?.nombre || '',
         aseguradora_id: formData.aseguradora_id ? parseInt(formData.aseguradora_id) : undefined,
         ramo_principal: selectedRamo?.nombre || 'CUMPLIMIENTO',
@@ -433,9 +493,11 @@ const Cumplimiento: React.FC = () => {
         vendedor_id: formData.vendedor_id ? parseInt(formData.vendedor_id) : undefined,
         vendedor: vendedores.find((v: any) => String(v.id) === formData.vendedor_id)?.nombres || undefined,
         porcentaje_comision: formData.porcentaje_comision ? parseFloat(formData.porcentaje_comision) : undefined,
+        comision: formData.porcentaje_comision ? (parseFloat(formData.prima_neta) || 0) * (parseFloat(formData.porcentaje_comision) / 100) : undefined,
         prima_neta: parseFloat(formData.prima_neta) || 0,
         gastos_adicionales: parseFloat(formData.gastos_expedicion) || 0,
         porcentaje_iva: parseFloat(formData.porcentaje_iva) || 0,
+        iva: (parseFloat(formData.prima_neta) || 0) * ((parseFloat(formData.porcentaje_iva) || 0) / 100),
         total: parseFloat(formData.total) || 0,
         fecha_inicio: formData.fecha_inicio,
         fecha_expedicion: formData.fecha_inicio,
@@ -461,29 +523,35 @@ const Cumplimiento: React.FC = () => {
       }
 
       if (response.success) {
-        // If recaudo is marked, create a recibo de caja linked to the poliza
+        // If recaudo is marked, register a real PagoPoliza so cartera moves to the correct state
         const polizaId = editingPoliza?.id || (response as any).data?.id || (response as any).data?.data?.id;
         if (formData.tipo_recaudo && polizaId) {
           try {
-            await api.post('/v1/recibos-caja', {
-              poliza_id: polizaId,
-              cliente_id: clientId ? parseInt(clientId) : undefined,
-              tipo: 'recibo',
-              tipo_recaudo: formData.tipo_recaudo === 'oficina' ? 'oficina' : 'aseguradora',
-              forma_pago: formData.forma_pago || 'efectivo',
-              fecha_realizo_pago_oficina: formData.fecha_recaudacion,
-              valor_recaudado_en_oficina: parseFloat(formData.total) || 0,
-              valor_a_pagar: parseFloat(formData.total) || 0,
-              observaciones: `Recaudo ${formData.tipo_recaudo === 'oficina' ? 'en oficina' : 'en aseguradora'} - Póliza cumplimiento ${formData.numero_poliza}`,
+            const totalPago = parseFloat(formData.total) || parseFloat(formData.prima_neta) || 0;
+            const tipoRecaudoPago = formData.tipo_recaudo === 'oficina' ? 'oficina' : 'aseguradora_directo';
+            const pagoResponse = await api.post(`/saas/polizas/${polizaId}/pagos`, {
+              tipo_recaudo: tipoRecaudoPago,
+              monto: totalPago,
+              metodo_pago: formData.forma_pago || 'efectivo',
+              fecha_pago: formData.fecha_recaudacion || new Date().toISOString().split('T')[0],
+              observaciones: `Recaudo ${formData.tipo_recaudo === 'oficina' ? 'en oficina' : 'directo por aseguradora'} - Póliza cumplimiento ${formData.numero_poliza}`,
             });
+            const pagoData = pagoResponse?.data?.data || pagoResponse?.data;
+            const reciboData = pagoData?.recibo;
+            const numRecibo = pagoData?.numero_recibo;
+            const estadoMsg = formData.tipo_recaudo === 'oficina' ? 'por pagar a aseguradora' : 'comisión por cobrar';
             toast({
               title: editingPoliza ? 'Póliza actualizada' : 'Póliza creada',
-              description: `Operación exitosa. Recibo de caja generado (recaudo en ${formData.tipo_recaudo}).`,
+              description: `Operación exitosa. Recaudo registrado${numRecibo ? ` — Recibo #${numRecibo}` : ''} → cartera en "${estadoMsg}".`,
             });
-          } catch (reciboErr: any) {
+            if (reciboData) {
+              setReciboParaImprimir(reciboData);
+              setShowPrintFormatModal(true);
+            }
+          } catch (pagoErr: any) {
             toast({
               title: editingPoliza ? 'Póliza actualizada' : 'Póliza creada',
-              description: `Póliza guardada, pero hubo un error al crear el recibo de caja: ${reciboErr?.message || 'Error desconocido'}`,
+              description: `Póliza guardada, pero hubo un error al registrar el recaudo: ${pagoErr?.message || 'Error desconocido'}`,
             });
           }
         } else {
@@ -593,6 +661,7 @@ const Cumplimiento: React.FC = () => {
                           <th>Estado</th>
                           <th>Prima Neta</th>
                           <th>Vencimiento</th>
+                          <th>Recibo</th>
                           <th className="sticky-right">Acciones</th>
                         </tr>
                       </thead>
@@ -606,8 +675,14 @@ const Cumplimiento: React.FC = () => {
                               </div>
                             </td>
                             <td>
-                              <div className="font-medium uppercase">{p.nombres_cliente} {p.apellidos_cliente}</div>
-                              <div className="text-sm text-gray-500">{p.dni_cliente}</div>
+                              {p.nombres_cliente || p.apellidos_cliente ? (
+                                <>
+                                  <div className="font-medium uppercase">{p.nombres_cliente} {p.apellidos_cliente}</div>
+                                  <div className="text-sm text-gray-500">{p.dni_cliente}</div>
+                                </>
+                              ) : (
+                                <span className="text-gray-400 italic text-sm">Sin cliente asignado</span>
+                              )}
                             </td>
                             <td>{(p as any).aseguradora_nombre || p.aseguradora}</td>
                             <td>{p.subramo || '-'}</td>
@@ -618,6 +693,20 @@ const Cumplimiento: React.FC = () => {
                             </td>
                             <td className="font-medium">{polizaUtils.formatCurrency(p.prima_neta || 0)}</td>
                             <td>{formatDate(p.fecha_fin)}</td>
+                            <td>
+                              {(p as any).ultimo_recibo ? (
+                                <button
+                                  className="text-xs text-amber-600 hover:text-amber-800 font-medium flex items-center gap-1"
+                                  onClick={() => { setReciboParaImprimir((p as any).ultimo_recibo); setShowPrintFormatModal(true); }}
+                                  title="Imprimir recibo"
+                                >
+                                  <Icon icon="solar:printer-bold-duotone" className="w-3.5 h-3.5" />
+                                  #{(p as any).ultimo_recibo.numero_recibo}
+                                </button>
+                              ) : (
+                                <span className="text-gray-400 text-xs">—</span>
+                              )}
+                            </td>
                             <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
                               <TableActionMenu>
                                 <TableMenuItem onClick={() => { setSelectedPoliza(p); setShowModal(true); }}>
@@ -672,7 +761,11 @@ const Cumplimiento: React.FC = () => {
                       <div className="grid grid-cols-2 gap-4 mb-3">
                         <div>
                           <p className="text-xs text-gray-500">Cliente</p>
-                          <p className="text-sm font-medium uppercase">{p.nombres_cliente} {p.apellidos_cliente}</p>
+                          {p.nombres_cliente || p.apellidos_cliente ? (
+                            <p className="text-sm font-medium uppercase">{p.nombres_cliente} {p.apellidos_cliente}</p>
+                          ) : (
+                            <p className="text-sm text-gray-400 italic">Sin cliente asignado</p>
+                          )}
                         </div>
                         <div>
                           <p className="text-xs text-gray-500">Prima Neta</p>
@@ -764,10 +857,10 @@ const Cumplimiento: React.FC = () => {
                   </div>
                 )}
 
-                {/* Row 0: Cliente (required) */}
+                {/* Row 0: Cliente (opcional) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="relative" style={{ zIndex: 1000 }}>
-                    <label className="block text-sm font-medium mb-1">Cliente</label>
+                    <label className="block text-sm font-medium mb-1">Cliente <span className="text-gray-400 text-xs font-normal">(opcional)</span></label>
                     <Input
                       placeholder="Buscar por nombre, documento, teléfono..."
                       value={selectedClient ? `${selectedClient.nombre} (${selectedClient.documento || 'sin doc'})` : clientQuery}
@@ -880,12 +973,8 @@ const Cumplimiento: React.FC = () => {
 
                 <hr className="border-gray-200 dark:border-gray-700" />
 
-                {/* Row 3: Porcentaje comisión, Prima neta, Gastos expedición, % IVA prima */}
+                {/* Row 3: Prima neta, Gastos expedición, % IVA, IVA calculado */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Porcentaje comisión</label>
-                    <Input name="porcentaje_comision" type="number" step="0.01" value={formData.porcentaje_comision} onChange={handleFormChange} placeholder="Porcentaje comisión" />
-                  </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Prima neta</label>
                     <Input name="prima_neta" type="number" step="0.01" value={formData.prima_neta} onChange={handleFormChange} />
@@ -895,19 +984,49 @@ const Cumplimiento: React.FC = () => {
                     <Input name="gastos_expedicion" type="number" step="0.01" value={formData.gastos_expedicion} onChange={handleFormChange} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">
-                      <span className="text-red-500">*</span> % IVA Prima
-                    </label>
+                    <label className="block text-sm font-medium mb-1">% IVA Prima</label>
                     <Input name="porcentaje_iva" type="number" step="0.01" value={formData.porcentaje_iva} onChange={handleFormChange} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-500">IVA ($)</label>
+                    <Input
+                      type="text"
+                      readOnly
+                      value={new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format((parseFloat(formData.prima_neta) || 0) * ((parseFloat(formData.porcentaje_iva) || 0) / 100))}
+                      className="bg-gray-50 dark:bg-gray-800 cursor-default"
+                    />
                   </div>
                 </div>
 
-                {/* Row 4: Total, Recaudo, Fecha recaudación */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Row 3b: Porcentaje comisión, Comisión calculada, Total */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Total</label>
-                    <Input name="total" type="number" step="0.01" value={formData.total} onChange={handleFormChange} />
+                    <label className="block text-sm font-medium mb-1">% Comisión</label>
+                    <Input name="porcentaje_comision" type="number" step="0.01" value={formData.porcentaje_comision} onChange={handleFormChange} placeholder="%" />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-500">Comisión ($)</label>
+                    <Input
+                      type="text"
+                      readOnly
+                      value={new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format((parseFloat(formData.prima_neta) || 0) * ((parseFloat(formData.porcentaje_comision) || 0) / 100))}
+                      className="bg-gray-50 dark:bg-gray-800 cursor-default"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-1 text-blue-700 dark:text-blue-300 font-bold">Total (auto-calculado)</label>
+                    <Input
+                      name="total"
+                      type="text"
+                      readOnly
+                      value={new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(parseFloat(formData.total) || 0)}
+                      className="bg-blue-50 dark:bg-blue-900/20 font-bold text-blue-800 dark:text-blue-200 cursor-default text-lg"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 4: Recaudo, Fecha recaudación */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Recaudo (opcional)</label>
                     <div className="flex flex-col gap-1.5 mt-1">
@@ -1046,6 +1165,29 @@ const Cumplimiento: React.FC = () => {
               <Button color="failure" onClick={confirmDelete}>Sí, eliminar</Button>
               <Button color="gray" onClick={() => setShowDeleteModal(false)}>Cancelar</Button>
             </Modal.Footer>
+          </Modal>
+
+          {/* ─── Print Format Modal ─────────────────────────────────────────────── */}
+          <Modal show={showPrintFormatModal} onClose={() => { setShowPrintFormatModal(false); setReciboParaImprimir(null); }} size="sm">
+            <Modal.Header>
+              <div className="flex items-center gap-2">
+                <Icon icon="solar:printer-bold-duotone" className="w-5 h-5 text-amber-600" />
+                Imprimir Recibo {reciboParaImprimir?.numero_recibo ? `#${reciboParaImprimir.numero_recibo}` : ''}
+              </div>
+            </Modal.Header>
+            <Modal.Body>
+              <p className="text-sm text-gray-500 mb-4">Selecciona el formato de impresión:</p>
+              <div className="flex flex-col gap-3">
+                <Button color="blue" onClick={() => { imprimirRecibo(reciboParaImprimir, 'media_carta'); setShowPrintFormatModal(false); setReciboParaImprimir(null); }} className="w-full">
+                  <Icon icon="solar:document-bold-duotone" className="w-4 h-4 mr-2" />
+                  Media Carta
+                </Button>
+                <Button color="light" onClick={() => { imprimirRecibo(reciboParaImprimir, 'carta'); setShowPrintFormatModal(false); setReciboParaImprimir(null); }} className="w-full">
+                  <Icon icon="solar:documents-bold-duotone" className="w-4 h-4 mr-2" />
+                  Carta Completa (con copia)
+                </Button>
+              </div>
+            </Modal.Body>
           </Modal>
         </div>
       </PermissionGate>

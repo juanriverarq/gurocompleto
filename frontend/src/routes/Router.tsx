@@ -1,288 +1,288 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router';
 import Loadable from '../layouts/full/shared/loadable/Loadable';
+import { lazyRetry } from '../utils/lazyRetry';
 import TrialExpired from '../views/saas/billing/TrialExpired';
 import FrontendLayout from 'src/layouts/blank/FrontendLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import ForceLightMode from '../components/ForceLightMode';
 
 /* ***Layouts**** */
-const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
+const FullLayout = Loadable(lazyRetry(() => import('../layouts/full/FullLayout')));
 const UnifiedProtectedFullLayout = Loadable(
-  lazy(() => import('../layouts/full/UnifiedProtectedFullLayout')),
+  lazyRetry(() => import('../layouts/full/UnifiedProtectedFullLayout')),
 );
-const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
+const BlankLayout = Loadable(lazyRetry(() => import('../layouts/blank/BlankLayout')));
 
 /* ****Pages***** */
-const TerminosCondiciones = Loadable(lazy(() => import('../views/pages/TerminosCondiciones')));
-const PoliticaPrivacidad = Loadable(lazy(() => import('../views/pages/PoliticaPrivacidad')));
-const Regalo = Loadable(lazy(() => import('../views/pages/Regalo')));
-const TrabajaConNosotros = Loadable(lazy(() => import('../views/pages/TrabajaConNosotros')));
+const TerminosCondiciones = Loadable(lazyRetry(() => import('../views/pages/TerminosCondiciones')));
+const PoliticaPrivacidad = Loadable(lazyRetry(() => import('../views/pages/PoliticaPrivacidad')));
+const Regalo = Loadable(lazyRetry(() => import('../views/pages/Regalo')));
+const TrabajaConNosotros = Loadable(lazyRetry(() => import('../views/pages/TrabajaConNosotros')));
 
 /* ****Apps***** */
-const CombinedDashboard = Loadable(lazy(() => import('../views/combined/CombinedDashboard')));
-const Inicio = Loadable(lazy(() => import('../views/inicio/Inicio')));
+const CombinedDashboard = Loadable(lazyRetry(() => import('../views/combined/CombinedDashboard')));
+const Inicio = Loadable(lazyRetry(() => import('../views/inicio/Inicio')));
 
 // authentication
-const Login = Loadable(lazy(() => import('../views/authentication/auth1/Login')));
-const Register = Loadable(lazy(() => import('../views/authentication/auth1/Register')));
-const ForgotPassword = Loadable(lazy(() => import('../views/authentication/auth1/ForgotPassword')));
-const TwoSteps = Loadable(lazy(() => import('../views/authentication/auth1/TwoSteps')));
+const Login = Loadable(lazyRetry(() => import('../views/authentication/auth1/Login')));
+const Register = Loadable(lazyRetry(() => import('../views/authentication/auth1/Register')));
+const ForgotPassword = Loadable(lazyRetry(() => import('../views/authentication/auth1/ForgotPassword')));
+const TwoSteps = Loadable(lazyRetry(() => import('../views/authentication/auth1/TwoSteps')));
 const EmailVerification = Loadable(
-  lazy(() => import('../views/authentication/auth1/EmailVerification')),
+  lazyRetry(() => import('../views/authentication/auth1/EmailVerification')),
 );
-const Maintainance = Loadable(lazy(() => import('../views/authentication/Maintainance')));
+const Maintainance = Loadable(lazyRetry(() => import('../views/authentication/Maintainance')));
 
 // SaaS Authentication
-const SaasLogin = Loadable(lazy(() => import('../views/auth/Login')));
+const SaasLogin = Loadable(lazyRetry(() => import('../views/auth/Login')));
 
 // Email Verification
-const VerificationPrompt = Loadable(lazy(() => import('../pages/VerificationPrompt')));
+const VerificationPrompt = Loadable(lazyRetry(() => import('../pages/VerificationPrompt')));
 // Wallet Return
-const WalletReturn = Loadable(lazy(() => import('../pages/WalletReturn')));
+const WalletReturn = Loadable(lazyRetry(() => import('../pages/WalletReturn')));
 
 // SaaS Transitional/Building screen
-const DashboardBuilding = Loadable(lazy(() => import('../views/saas/dashboard/DashboardBuilding')));
+const DashboardBuilding = Loadable(lazyRetry(() => import('../views/saas/dashboard/DashboardBuilding')));
 
 // SaaS Apps
-const SaasDashboard = Loadable(lazy(() => import('../views/saas/dashboard/Dashboard')));
-const SaasNuevoCliente = Loadable(lazy(() => import('../views/saas/clientes/NuevoCliente')));
-const SaasDetalleCliente = Loadable(lazy(() => import('../views/saas/clientes/DetalleCliente')));
-const SaasEditarCliente = Loadable(lazy(() => import('../views/saas/clientes/EditarCliente')));
-const SaasListaEmpleados = Loadable(lazy(() => import('../views/saas/empleados/ListaEmpleados')));
-const SaasNuevoEmpleado = Loadable(lazy(() => import('../views/saas/empleados/NuevoEmpleado')));
-const SaasEditarEmpleado = Loadable(lazy(() => import('../views/saas/empleados/EditarEmpleado')));
-const SaasListaLeads = Loadable(lazy(() => import('../views/saas/sales-funnel/ListaLeads')));
+const SaasDashboard = Loadable(lazyRetry(() => import('../views/saas/dashboard/Dashboard')));
+const SaasNuevoCliente = Loadable(lazyRetry(() => import('../views/saas/clientes/NuevoCliente')));
+const SaasDetalleCliente = Loadable(lazyRetry(() => import('../views/saas/clientes/DetalleCliente')));
+const SaasEditarCliente = Loadable(lazyRetry(() => import('../views/saas/clientes/EditarCliente')));
+const SaasListaEmpleados = Loadable(lazyRetry(() => import('../views/saas/empleados/ListaEmpleados')));
+const SaasNuevoEmpleado = Loadable(lazyRetry(() => import('../views/saas/empleados/NuevoEmpleado')));
+const SaasEditarEmpleado = Loadable(lazyRetry(() => import('../views/saas/empleados/EditarEmpleado')));
+const SaasListaLeads = Loadable(lazyRetry(() => import('../views/saas/sales-funnel/ListaLeads')));
 const SaasKanbanLeads = Loadable(
-  lazy(() => import('../views/saas/sales-funnel/SalesFunnelKanban')),
+  lazyRetry(() => import('../views/saas/sales-funnel/SalesFunnelKanban')),
 );
-const SaasNuevoLead = Loadable(lazy(() => import('../views/saas/sales-funnel/NuevoLead')));
-const SaasDetalleLead = Loadable(lazy(() => import('../views/saas/sales-funnel/DetalleLead')));
-const SaasEditarLead = Loadable(lazy(() => import('../views/saas/sales-funnel/EditarLead')));
-const SaasListaTareas = Loadable(lazy(() => import('../views/saas/commercial-tasks/ListaTareas')));
-const SaasNuevaTarea = Loadable(lazy(() => import('../views/saas/commercial-tasks/NuevaTarea')));
+const SaasNuevoLead = Loadable(lazyRetry(() => import('../views/saas/sales-funnel/NuevoLead')));
+const SaasDetalleLead = Loadable(lazyRetry(() => import('../views/saas/sales-funnel/DetalleLead')));
+const SaasEditarLead = Loadable(lazyRetry(() => import('../views/saas/sales-funnel/EditarLead')));
+const SaasListaTareas = Loadable(lazyRetry(() => import('../views/saas/commercial-tasks/ListaTareas')));
+const SaasNuevaTarea = Loadable(lazyRetry(() => import('../views/saas/commercial-tasks/NuevaTarea')));
 const SaasDetalleTarea = Loadable(
-  lazy(() => import('../views/saas/commercial-tasks/DetalleTarea')),
+  lazyRetry(() => import('../views/saas/commercial-tasks/DetalleTarea')),
 );
-const SaasEditarTarea = Loadable(lazy(() => import('../views/saas/commercial-tasks/EditarTarea')));
+const SaasEditarTarea = Loadable(lazyRetry(() => import('../views/saas/commercial-tasks/EditarTarea')));
 const ConfiguracionMasiva = Loadable(
-  lazy(() => import('../views/saas/configuracion-masiva/ConfiguracionMasiva')),
+  lazyRetry(() => import('../views/saas/configuracion-masiva/ConfiguracionMasiva')),
 );
 
 // Calendar
-const CalendarPage = Loadable(lazy(() => import('../views/apps/calendar/CalendarPage')));
+const CalendarPage = Loadable(lazyRetry(() => import('../views/apps/calendar/CalendarPage')));
 
 // Pricing page
-const PricingCalculatorPage = Loadable(lazy(() => import('../views/pages/PricingCalculatorPage')));
+const PricingCalculatorPage = Loadable(lazyRetry(() => import('../views/pages/PricingCalculatorPage')));
 
 // Checkout (Frontend)
-const Checkout = Loadable(lazy(() => import('../views/pages/frontend-pages/Checkout')));
+const Checkout = Loadable(lazyRetry(() => import('../views/pages/frontend-pages/Checkout')));
 
 // Onboarding Flow (Nuevo flujo de compra simplificado)
-const SelectAppsFlow = Loadable(lazy(() => import('../views/pages/onboarding/SelectAppsFlow')));
-const SignupFlow = Loadable(lazy(() => import('../views/pages/onboarding/SignupFlow')));
+const SelectAppsFlow = Loadable(lazyRetry(() => import('../views/pages/onboarding/SelectAppsFlow')));
+const SignupFlow = Loadable(lazyRetry(() => import('../views/pages/onboarding/SignupFlow')));
 
 // Landing Page
-const LandingPages = Loadable(lazy(() => import('../views/pages/landingpages/LandingPages')));
-const FramerLandingPage = Loadable(lazy(() => import('../views/pages/landingpages/FramerLandingPage')));
+const LandingPages = Loadable(lazyRetry(() => import('../views/pages/landingpages/LandingPages')));
+const FramerLandingPage = Loadable(lazyRetry(() => import('../views/pages/landingpages/FramerLandingPage')));
 
-const Error = Loadable(lazy(() => import('../views/authentication/Error')));
+const Error = Loadable(lazyRetry(() => import('../views/authentication/Error')));
 const BlogSegurosSEO = Loadable(
-  lazy(() => import('../views/pages/frontend-pages/BlogSegurosSEO')),
+  lazyRetry(() => import('../views/pages/frontend-pages/BlogSegurosSEO')),
 );
-const BlogIndex = Loadable(lazy(() => import('../views/pages/frontend-pages/BlogIndex')));
-const BlogArticle = Loadable(lazy(() => import('../views/pages/frontend-pages/BlogArticle')));
+const BlogIndex = Loadable(lazyRetry(() => import('../views/pages/frontend-pages/BlogIndex')));
+const BlogArticle = Loadable(lazyRetry(() => import('../views/pages/frontend-pages/BlogArticle')));
 
 // Seguros Apps
-const Polizas = Loadable(lazy(() => import('../views/apps/seguros/polizas/Polizas')));
-const Automoviles = Loadable(lazy(() => import('../views/apps/seguros/automoviles/Automoviles')));
-const NuevaPoliza = Loadable(lazy(() => import('../views/apps/seguros/polizas/NuevaPoliza')));
+const Polizas = Loadable(lazyRetry(() => import('../views/apps/seguros/polizas/Polizas')));
+const Automoviles = Loadable(lazyRetry(() => import('../views/apps/seguros/automoviles/Automoviles')));
+const NuevaPoliza = Loadable(lazyRetry(() => import('../views/apps/seguros/polizas/NuevaPoliza')));
 const NuevaPolizaColectiva = Loadable(
-  lazy(() => import('../views/apps/seguros/polizas/NuevaPolizaColectiva')),
+  lazyRetry(() => import('../views/apps/seguros/polizas/NuevaPolizaColectiva')),
 );
-const EditarPoliza = Loadable(lazy(() => import('../views/apps/seguros/polizas/EditarPoliza')));
-const Clientes = Loadable(lazy(() => import('../views/apps/seguros/clientes/Clientes')));
-const NuevoCliente = Loadable(lazy(() => import('../views/apps/seguros/clientes/NuevoCliente')));
-const EditarCliente = Loadable(lazy(() => import('../views/apps/seguros/clientes/EditarCliente')));
-const Siniestros = Loadable(lazy(() => import('../views/apps/seguros/siniestros/Siniestros')));
+const EditarPoliza = Loadable(lazyRetry(() => import('../views/apps/seguros/polizas/EditarPoliza')));
+const Clientes = Loadable(lazyRetry(() => import('../views/apps/seguros/clientes/Clientes')));
+const NuevoCliente = Loadable(lazyRetry(() => import('../views/apps/seguros/clientes/NuevoCliente')));
+const EditarCliente = Loadable(lazyRetry(() => import('../views/apps/seguros/clientes/EditarCliente')));
+const Siniestros = Loadable(lazyRetry(() => import('../views/apps/seguros/siniestros/Siniestros')));
 const SiniestrosActivos = Loadable(
-  lazy(() => import('../views/apps/seguros/siniestros/SiniestrosActivos')),
+  lazyRetry(() => import('../views/apps/seguros/siniestros/SiniestrosActivos')),
 );
 const NuevoSiniestro = Loadable(
-  lazy(() => import('../views/apps/seguros/siniestros/NuevoSiniestroMejorado')),
+  lazyRetry(() => import('../views/apps/seguros/siniestros/NuevoSiniestroMejorado')),
 );
 const EditarSiniestro = Loadable(
-  lazy(() => import('../views/apps/seguros/siniestros/EditarSiniestro')),
+  lazyRetry(() => import('../views/apps/seguros/siniestros/EditarSiniestro')),
 );
 const Renovaciones = Loadable(
-  lazy(() => import('../views/apps/seguros/renovaciones/Renovaciones')),
+  lazyRetry(() => import('../views/apps/seguros/renovaciones/Renovaciones')),
 );
-const Seguimiento = Loadable(lazy(() => import('../views/apps/seguros/seguimiento/Seguimiento')));
-const Cumplimiento = Loadable(lazy(() => import('../views/apps/seguros/polizas/Cumplimiento')));
+const Seguimiento = Loadable(lazyRetry(() => import('../views/apps/seguros/seguimiento/Seguimiento')));
+const Cumplimiento = Loadable(lazyRetry(() => import('../views/apps/seguros/polizas/Cumplimiento')));
 
 // IA Apps
-const AsistenteIA = Loadable(lazy(() => import('../views/apps/ia/asistente/AsistenteIA')));
+const AsistenteIA = Loadable(lazyRetry(() => import('../views/apps/ia/asistente/AsistenteIA')));
 const VentasCruzadas = Loadable(
-  lazy(() => import('../views/apps/ia/ventas-cruzadas/VentasCruzadas')),
+  lazyRetry(() => import('../views/apps/ia/ventas-cruzadas/VentasCruzadas')),
 );
 const RecomendacionesProducto = Loadable(
-  lazy(() => import('../views/apps/ia/recomendaciones/RecomendacionesProducto')),
+  lazyRetry(() => import('../views/apps/ia/recomendaciones/RecomendacionesProducto')),
 );
 const Robots = Loadable(
-  lazy(() => import('../views/apps/ia/robots/Robots')),
+  lazyRetry(() => import('../views/apps/ia/robots/Robots')),
 );
 
 // Voice AI
-const VoiceAIDashboard = Loadable(lazy(() => import('../views/voice-ai/VoiceAIDashboard')));
-const Perfil = Loadable(lazy(() => import('../views/apps/account/Perfil')));
+const VoiceAIDashboard = Loadable(lazyRetry(() => import('../views/voice-ai/VoiceAIDashboard')));
+const Perfil = Loadable(lazyRetry(() => import('../views/apps/account/Perfil')));
 
 // RRHH Apps
-const RecursosHumanos = Loadable(lazy(() => import('../views/apps/rrhh/RecursosHumanos')));
-const NuevaVacante = Loadable(lazy(() => import('../views/apps/rrhh/NuevaVacante')));
-const EditarVacante = Loadable(lazy(() => import('../views/apps/rrhh/EditarVacante')));
-const Personas = Loadable(lazy(() => import('../views/apps/rrhh/Personas')));
-const Reclutamiento = Loadable(lazy(() => import('../views/apps/rrhh/Reclutamiento')));
-const Desempeno = Loadable(lazy(() => import('../views/apps/rrhh/Desempeno')));
-const Clima = Loadable(lazy(() => import('../views/apps/rrhh/Clima')));
+const RecursosHumanos = Loadable(lazyRetry(() => import('../views/apps/rrhh/RecursosHumanos')));
+const NuevaVacante = Loadable(lazyRetry(() => import('../views/apps/rrhh/NuevaVacante')));
+const EditarVacante = Loadable(lazyRetry(() => import('../views/apps/rrhh/EditarVacante')));
+const Personas = Loadable(lazyRetry(() => import('../views/apps/rrhh/Personas')));
+const Reclutamiento = Loadable(lazyRetry(() => import('../views/apps/rrhh/Reclutamiento')));
+const Desempeno = Loadable(lazyRetry(() => import('../views/apps/rrhh/Desempeno')));
+const Clima = Loadable(lazyRetry(() => import('../views/apps/rrhh/Clima')));
 
 // Marketing Apps
 const EnlacesCotizacion = Loadable(
-  lazy(() => import('../views/apps/marketing/enlaces-cotizacion/EnlacesCotizacion')),
+  lazyRetry(() => import('../views/apps/marketing/enlaces-cotizacion/EnlacesCotizacion')),
 );
-const Plantillas = Loadable(lazy(() => import('../views/apps/marketing/plantillas/Plantillas')));
-const MiniWeb = Loadable(lazy(() => import('../views/apps/marketing/mini-web/MiniWeb')));
-const MiPaginaWeb = Loadable(lazy(() => import('../views/apps/marketing/mi-web/MiPaginaWeb')));
+const Plantillas = Loadable(lazyRetry(() => import('../views/apps/marketing/plantillas/Plantillas')));
+const MiniWeb = Loadable(lazyRetry(() => import('../views/apps/marketing/mini-web/MiniWeb')));
+const MiPaginaWeb = Loadable(lazyRetry(() => import('../views/apps/marketing/mi-web/MiPaginaWeb')));
 const ComparadorSeguros = Loadable(
-  lazy(() => import('../views/apps/marketing/comparador-seguros/ComparadorSeguros')),
+  lazyRetry(() => import('../views/apps/marketing/comparador-seguros/ComparadorSeguros')),
 );
 const CreadorContenido = Loadable(
-  lazy(() => import('../views/apps/marketing/creador-contenido/CreadorContenido')),
+  lazyRetry(() => import('../views/apps/marketing/creador-contenido/CreadorContenido')),
 );
-const MiniWebPublic = Loadable(lazy(() => import('../views/public/MiniWebPublic')));
-const QuoteForm = Loadable(lazy(() => import('../views/public/QuoteForm')));
+const MiniWebPublic = Loadable(lazyRetry(() => import('../views/public/MiniWebPublic')));
+const QuoteForm = Loadable(lazyRetry(() => import('../views/public/QuoteForm')));
 
 // Admin Apps
-const Usuarios = Loadable(lazy(() => import('../views/apps/admin/usuarios/Usuarios')));
-const ReportesUsuarios = Loadable(lazy(() => import('../views/apps/admin/reportes-usuarios/ReportesUsuarios')));
-const Roles = Loadable(lazy(() => import('../views/apps/admin/roles/Roles')));
+const Usuarios = Loadable(lazyRetry(() => import('../views/apps/admin/usuarios/Usuarios')));
+const ReportesUsuarios = Loadable(lazyRetry(() => import('../views/apps/admin/reportes-usuarios/ReportesUsuarios')));
+const Roles = Loadable(lazyRetry(() => import('../views/apps/admin/roles/Roles')));
 const DemoPermisosLoadable = Loadable(
-  lazy(() => import('../views/apps/admin/demo-permisos/DemoPermisos')),
+  lazyRetry(() => import('../views/apps/admin/demo-permisos/DemoPermisos')),
 );
 const InformacionAgencia = Loadable(
-  lazy(() => import('../views/apps/admin/informacion-agencia/InformacionAgencia')),
+  lazyRetry(() => import('../views/apps/admin/informacion-agencia/InformacionAgencia')),
 );
-const Sedes = Loadable(lazy(() => import('../views/apps/admin/sedes/Sedes')));
-const Aseguradoras = Loadable(lazy(() => import('../views/apps/admin/aseguradoras/Aseguradoras')));
-const Ramos = Loadable(lazy(() => import('../views/apps/admin/ramos/Ramos')));
-const Vendedores = Loadable(lazy(() => import('../views/apps/admin/vendedores/Vendedores')));
+const Sedes = Loadable(lazyRetry(() => import('../views/apps/admin/sedes/Sedes')));
+const Aseguradoras = Loadable(lazyRetry(() => import('../views/apps/admin/aseguradoras/Aseguradoras')));
+const Ramos = Loadable(lazyRetry(() => import('../views/apps/admin/ramos/Ramos')));
+const Vendedores = Loadable(lazyRetry(() => import('../views/apps/admin/vendedores/Vendedores')));
 const EstadosSiniestros = Loadable(
-  lazy(() => import('../views/apps/admin/estados-siniestros/EstadosSiniestros')),
+  lazyRetry(() => import('../views/apps/admin/estados-siniestros/EstadosSiniestros')),
 );
-const EstadosARL = Loadable(lazy(() => import('../views/apps/admin/estados-arl/EstadosARL')));
+const EstadosARL = Loadable(lazyRetry(() => import('../views/apps/admin/estados-arl/EstadosARL')));
 const MotivosEstadosPoliza = Loadable(
-  lazy(() => import('../views/apps/admin/motivos-estados-poliza/MotivosEstadosPoliza')),
+  lazyRetry(() => import('../views/apps/admin/motivos-estados-poliza/MotivosEstadosPoliza')),
 );
 const TipoAfiliacion = Loadable(
-  lazy(() => import('../views/apps/admin/tipo-afiliacion/TipoAfiliacion')),
+  lazyRetry(() => import('../views/apps/admin/tipo-afiliacion/TipoAfiliacion')),
 );
-const Mensajeros = Loadable(lazy(() => import('../views/apps/admin/mensajeros/Mensajeros')));
-const Coberturas = Loadable(lazy(() => import('../views/apps/admin/coberturas/Coberturas')));
-const ImportacionMasiva = Loadable(lazy(() => import('../views/apps/admin/ImportacionMasiva')));
-const ImportacionMultiple = Loadable(lazy(() => import('../views/apps/admin/ImportacionMultiple')));
+const Mensajeros = Loadable(lazyRetry(() => import('../views/apps/admin/mensajeros/Mensajeros')));
+const Coberturas = Loadable(lazyRetry(() => import('../views/apps/admin/coberturas/Coberturas')));
+const ImportacionMasiva = Loadable(lazyRetry(() => import('../views/apps/admin/ImportacionMasiva')));
+const ImportacionMultiple = Loadable(lazyRetry(() => import('../views/apps/admin/ImportacionMultiple')));
 
 // Configuración del Sistema Apps
 const AuditoriaAccesos = Loadable(
-  lazy(() => import('../views/apps/admin/auditoria/AuditoriaAccesos')),
+  lazyRetry(() => import('../views/apps/admin/auditoria/AuditoriaAccesos')),
 );
-const FirmaElectronica = Loadable(lazy(() => import('../views/apps/admin/firma/FirmaElectronica')));
+const FirmaElectronica = Loadable(lazyRetry(() => import('../views/apps/admin/firma/FirmaElectronica')));
 const SeguridadDosFactores = Loadable(
-  lazy(() => import('../views/apps/admin/2fa/SeguridadDosFactores')),
+  lazyRetry(() => import('../views/apps/admin/2fa/SeguridadDosFactores')),
 );
-const CopiasSeguridad = Loadable(lazy(() => import('../views/apps/admin/backup/CopiasSeguridad')));
+const CopiasSeguridad = Loadable(lazyRetry(() => import('../views/apps/admin/backup/CopiasSeguridad')));
 
 // Comisiones y Cartera Apps
 const ComisionesPorPoliza = Loadable(
-  lazy(() => import('../views/apps/comisiones/ComisionesPorPoliza')),
+  lazyRetry(() => import('../views/apps/comisiones/ComisionesPorPoliza')),
 );
-const AnticiposAjustes = Loadable(lazy(() => import('../views/apps/comisiones/AnticiposAjustes')));
-const CarteraClientes = Loadable(lazy(() => import('../views/apps/cartera/CarteraClientes')));
-const ReciboCaja = Loadable(lazy(() => import('../views/apps/cartera/ReciboCaja')));
-const RecibosCuadreCaja = Loadable(lazy(() => import('../views/apps/cartera/RecibosCuadreCaja')));
+const AnticiposAjustes = Loadable(lazyRetry(() => import('../views/apps/comisiones/AnticiposAjustes')));
+const CarteraClientes = Loadable(lazyRetry(() => import('../views/apps/cartera/CarteraClientes')));
+const ReciboCaja = Loadable(lazyRetry(() => import('../views/apps/cartera/ReciboCaja')));
+const RecibosCuadreCaja = Loadable(lazyRetry(() => import('../views/apps/cartera/RecibosCuadreCaja')));
 const ReportesFinancieros = Loadable(
-  lazy(() => import('../views/apps/cartera/ReportesFinancieros')),
+  lazyRetry(() => import('../views/apps/cartera/ReportesFinancieros')),
 );
-const LiquidarVendedores = Loadable(lazy(() => import('../views/apps/cartera/LiquidarVendedores')));
+const LiquidarVendedores = Loadable(lazyRetry(() => import('../views/apps/cartera/LiquidarVendedores')));
 
 // Billing Apps
-const MisFacturas = Loadable(lazy(() => import('../views/apps/billing/MisFacturas')));
-const MiSuscripcion = Loadable(lazy(() => import('../views/apps/billing/MiSuscripcion')));
-const UpgradePlan = Loadable(lazy(() => import('../views/apps/billing/UpgradePlan')));
+const MisFacturas = Loadable(lazyRetry(() => import('../views/apps/billing/MisFacturas')));
+const MiSuscripcion = Loadable(lazyRetry(() => import('../views/apps/billing/MiSuscripcion')));
+const UpgradePlan = Loadable(lazyRetry(() => import('../views/apps/billing/UpgradePlan')));
 
 // Gestión Comercial Apps
-const MetasObjetivos = Loadable(lazy(() => import('../views/apps/comercial/MetasObjetivos')));
-const EquiposVentas = Loadable(lazy(() => import('../views/apps/comercial/EquiposVentas')));
-const Rendimiento = Loadable(lazy(() => import('../views/apps/comercial/rendimiento/Rendimiento')));
+const MetasObjetivos = Loadable(lazyRetry(() => import('../views/apps/comercial/MetasObjetivos')));
+const EquiposVentas = Loadable(lazyRetry(() => import('../views/apps/comercial/EquiposVentas')));
+const Rendimiento = Loadable(lazyRetry(() => import('../views/apps/comercial/rendimiento/Rendimiento')));
 
 // Gestión Legal Apps
-const Contratos = Loadable(lazy(() => import('../views/apps/legal/contratos/Contratos')));
+const Contratos = Loadable(lazyRetry(() => import('../views/apps/legal/contratos/Contratos')));
 const DocumentosCliente = Loadable(
-  lazy(() => import('../views/apps/legal/documentos-cliente/DocumentosCliente')),
+  lazyRetry(() => import('../views/apps/legal/documentos-cliente/DocumentosCliente')),
 );
 const DocumentosPoliza = Loadable(
-  lazy(() => import('../views/apps/seguros/documentos-poliza/DocumentosPoliza')),
+  lazyRetry(() => import('../views/apps/seguros/documentos-poliza/DocumentosPoliza')),
 );
 const DocumentosSiniestro = Loadable(
-  lazy(() => import('../views/apps/seguros/documentos-siniestro/DocumentosSiniestro')),
+  lazyRetry(() => import('../views/apps/seguros/documentos-siniestro/DocumentosSiniestro')),
 );
 const DocumentosInternos = Loadable(
-  lazy(() => import('../views/apps/legal/documentos-internos/DocumentosInternos')),
+  lazyRetry(() => import('../views/apps/legal/documentos-internos/DocumentosInternos')),
 );
 
 // Integraciones Apps
 const ApisAseguradoras = Loadable(
-  lazy(() => import('../views/apps/integraciones/apis-aseguradoras/ApisAseguradoras')),
+  lazyRetry(() => import('../views/apps/integraciones/apis-aseguradoras/ApisAseguradoras')),
 );
-const Webhooks = Loadable(lazy(() => import('../views/apps/integraciones/webhooks/Webhooks')));
+const Webhooks = Loadable(lazyRetry(() => import('../views/apps/integraciones/webhooks/Webhooks')));
 const BasesDatos = Loadable(
-  lazy(() => import('../views/apps/integraciones/bases-datos/BasesDatos')),
+  lazyRetry(() => import('../views/apps/integraciones/bases-datos/BasesDatos')),
 );
 const ServiciosTerceros = Loadable(
-  lazy(() => import('../views/apps/integraciones/servicios-terceros/ServiciosTerceros')),
+  lazyRetry(() => import('../views/apps/integraciones/servicios-terceros/ServiciosTerceros')),
 );
 
 // Mobile Auth
-const MobileAuthPage = Loadable(lazy(() => import('../pages/MobileAuth')));
-const EmpleadoLogin = Loadable(lazy(() => import('../views/auth/EmpleadoLogin')));
+const MobileAuthPage = Loadable(lazyRetry(() => import('../pages/MobileAuth')));
+const EmpleadoLogin = Loadable(lazyRetry(() => import('../views/auth/EmpleadoLogin')));
 
 // WhatsApp Apps
-const WhatsAppDashboard = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppDashboard')));
-const WhatsAppConexiones = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppConexiones')));
-const WhatsAppInbox = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppInboxPro')));
-const ChatbotsList = Loadable(lazy(() => import('../views/apps/whatsapp/ChatbotsList')));
-const ChatbotsAnalytics = Loadable(lazy(() => import('../views/apps/whatsapp/ChatbotsAnalytics')));
-const ChatbotFlowEditor = Loadable(lazy(() => import('../views/apps/whatsapp/chatbot-editor/FlowEditorSimple')));
-const WhatsAppContactos = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppContactos')));
-const WhatsAppPlantillas = Loadable(lazy(() => import('../views/apps/whatsapp/WhatsAppPlantillas')));
+const WhatsAppDashboard = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppDashboard')));
+const WhatsAppConexiones = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppConexiones')));
+const WhatsAppInbox = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppInboxPro')));
+const ChatbotsList = Loadable(lazyRetry(() => import('../views/apps/whatsapp/ChatbotsList')));
+const ChatbotsAnalytics = Loadable(lazyRetry(() => import('../views/apps/whatsapp/ChatbotsAnalytics')));
+const ChatbotFlowEditor = Loadable(lazyRetry(() => import('../views/apps/whatsapp/chatbot-editor/FlowEditorSimple')));
+const WhatsAppContactos = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppContactos')));
+const WhatsAppPlantillas = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppPlantillas')));
 
 // Test Components
-const TestWelcomeModal = Loadable(lazy(() => import('../components/TestWelcomeModal')));
+const TestWelcomeModal = Loadable(lazyRetry(() => import('../components/TestWelcomeModal')));
 
 // Master Panel (SUPERADMIN)
-const MasterPanelLogin = Loadable(lazy(() => import('../views/master-panel/MasterPanelLogin')));
-const MasterPanelLayout = Loadable(lazy(() => import('../views/master-panel/MasterPanelLayout')));
-const MasterDashboardContent = Loadable(lazy(() => import('../views/master-panel/MasterDashboardContent')));
-const MasterBrokersPage = Loadable(lazy(() => import('../views/master-panel/MasterBrokersPage')));
-const MasterBrokerEditPage = Loadable(lazy(() => import('../views/master-panel/MasterBrokerEditPage')));
-const MasterUsuariosPage = Loadable(lazy(() => import('../views/master-panel/MasterUsuariosPage')));
-const MasterFinanzasPage = Loadable(lazy(() => import('../views/master-panel/MasterFinanzasPage')));
-const MasterLlamadasPage = Loadable(lazy(() => import('../views/master-panel/MasterLlamadasPage')));
-const MasterCampanasPage = Loadable(lazy(() => import('../views/master-panel/MasterCampanasPage')));
-const MasterConfiguracionPage = Loadable(lazy(() => import('../views/master-panel/MasterConfiguracionPage')));
-const MasterFacturacionPage = Loadable(lazy(() => import('../views/master-panel/MasterFacturacionPage')));
-const MasterBrokerDetailPage = Loadable(lazy(() => import('../views/master-panel/MasterBrokerDetailPage')));
-const MasterLogsPage = Loadable(lazy(() => import('../views/master-panel/MasterLogsPage')));
+const MasterPanelLogin = Loadable(lazyRetry(() => import('../views/master-panel/MasterPanelLogin')));
+const MasterPanelLayout = Loadable(lazyRetry(() => import('../views/master-panel/MasterPanelLayout')));
+const MasterDashboardContent = Loadable(lazyRetry(() => import('../views/master-panel/MasterDashboardContent')));
+const MasterBrokersPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterBrokersPage')));
+const MasterBrokerEditPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterBrokerEditPage')));
+const MasterUsuariosPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterUsuariosPage')));
+const MasterFinanzasPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterFinanzasPage')));
+const MasterLlamadasPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterLlamadasPage')));
+const MasterCampanasPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterCampanasPage')));
+const MasterConfiguracionPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterConfiguracionPage')));
+const MasterFacturacionPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterFacturacionPage')));
+const MasterBrokerDetailPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterBrokerDetailPage')));
+const MasterLogsPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterLogsPage')));
 
 const Router = [
   // Landing Page como página principal
