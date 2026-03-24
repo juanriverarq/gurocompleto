@@ -827,11 +827,13 @@ class SaasPolizasController extends Controller
 
                     // 3 flags SS-style
                     'recaudado_en_oficina' => (bool) $item->recaudado_en_oficina,
+                    'recaudo_parcial_oficina' => (bool) ($item->recaudo_parcial_oficina ?? false),
                     'recaudado_aseguradora' => (bool) $item->recaudado_aseguradora,
                     'comisionada' => (bool) $item->comisionada,
                     'recibo_pago_directo' => (bool) $item->recibo_pago_directo,
                     'es_anticipo' => (bool) $item->es_anticipo,
                     'recibo_anulado' => (bool) $item->recibo_anulado,
+                    'split_from_id' => $item->split_from_id ?? null,
 
                     // Financial
                     'prima_neta' => (float) $item->prima_neta,
@@ -2198,7 +2200,8 @@ class SaasPolizasController extends Controller
                 $poliza->refresh();
             }
 
-            // Auto-create cartera_item so the poliza appears in cartera immediately
+            // Auto-create cartera_item(s) so the poliza appears in cartera immediately
+            // For fraccionado/financiado with installments_count > 1, create N cuotas
             try {
                 $montoTotal = ((float)($poliza->total_amount ?? 0) > 0)
                     ? (float)$poliza->total_amount
@@ -2207,35 +2210,99 @@ class SaasPolizasController extends Controller
                 $comision = $poliza->commission_amount ?? 0;
                 $clienteNombre = $cliente ? trim(($cliente->first_name ?? '') . ' ' . ($cliente->last_name ?? '')) : 'Sin cliente asignado';
 
-                DB::table('cartera_items')->insert([
-                    'broker_id' => $brokerId,
-                    'poliza_id' => $poliza->id,
-                    'cliente_id' => $cliente?->id,
-                    'poliza_numero' => $poliza->policy_number,
-                    'cliente_nombre' => $clienteNombre,
-                    'cliente_documento' => $cliente?->document_number,
-                    'aseguradora_nombre' => $rowA->nombre ?? $validated['aseguradora'] ?? null,
-                    'ramo_principal' => $rowR->nombre ?? $validated['ramo_principal'] ?? null,
-                    'vendedor_nombre' => $validated['vendedor'] ?? null,
-                    'forma_pago' => $validated['forma_pago'] ?? null,
-                    'prima_neta' => $primaNeta,
-                    'valor_neto_a_pagar' => max(0, $montoTotal - $comision),
-                    'prima_total_pago' => $montoTotal,
-                    'prima_total' => $montoTotal,
-                    'comision_a_recibir' => $comision,
-                    'comision_vendedor' => 0,
-                    'estado_cartera' => 'por_cobrar',
-                    'valor_recaudado_oficina' => 0,
-                    'valor_pagado_aseguradora' => 0,
-                    'saldo_pendiente_oficina' => $montoTotal,
-                    'saldo_pendiente_aseguradora' => 0,
-                    'comision_recibida' => 0,
-                    'dias_vencidos' => 0,
-                    'fecha_inicio_vigencia' => $poliza->start_date ?? null,
-                    'fecha_fin_vigencia' => $poliza->end_date ?? null,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                $fp = strtolower((string)($validated['forma_pago'] ?? ''));
+                $numCuotas = (int)($poliza->installments_count ?? 0);
+                $esFraccionado = in_array($fp, ['fraccionado', 'financiado']) && $numCuotas > 1;
+
+                if ($esFraccionado) {
+                    // Create N cartera_items (one per cuota) with staggered due dates
+                    $montoCuota = round($montoTotal / $numCuotas, 2);
+                    $primaNetaCuota = round($primaNeta / $numCuotas, 2);
+                    $comisionCuota = round($comision / $numCuotas, 2);
+                    $fechaInicio = $poliza->start_date ? \Carbon\Carbon::parse($poliza->start_date) : now();
+
+                    // Determine interval in months from payment_frequency
+                    $freqMeses = match($poliza->payment_frequency) {
+                        'monthly' => 1,
+                        'quarterly' => 3,
+                        'semi-annual', 'semiannual' => 6,
+                        'annual', 'yearly' => 12,
+                        default => 1,
+                    };
+
+                    for ($i = 0; $i < $numCuotas; $i++) {
+                        // Adjust last cuota to absorb rounding difference
+                        $esCuotaFinal = ($i === $numCuotas - 1);
+                        $montoCuotaActual = $esCuotaFinal ? ($montoTotal - $montoCuota * ($numCuotas - 1)) : $montoCuota;
+                        $primaNetaCuotaActual = $esCuotaFinal ? ($primaNeta - $primaNetaCuota * ($numCuotas - 1)) : $primaNetaCuota;
+                        $comisionCuotaActual = $esCuotaFinal ? ($comision - $comisionCuota * ($numCuotas - 1)) : $comisionCuota;
+
+                        $fechaLimite = (clone $fechaInicio)->addMonths($freqMeses * $i);
+
+                        DB::table('cartera_items')->insert([
+                            'broker_id' => $brokerId,
+                            'poliza_id' => $poliza->id,
+                            'cliente_id' => $cliente?->id,
+                            'poliza_numero' => $poliza->policy_number,
+                            'cliente_nombre' => $clienteNombre,
+                            'cliente_documento' => $cliente?->document_number,
+                            'aseguradora_nombre' => $rowA->nombre ?? $validated['aseguradora'] ?? null,
+                            'ramo_principal' => $rowR->nombre ?? $validated['ramo_principal'] ?? null,
+                            'vendedor_nombre' => $validated['vendedor'] ?? null,
+                            'forma_pago' => $validated['forma_pago'] ?? null,
+                            'numero_pago' => ($i + 1) . '/' . $numCuotas,
+                            'prima_neta' => $primaNetaCuotaActual,
+                            'valor_neto_a_pagar' => max(0, $montoCuotaActual - $comisionCuotaActual),
+                            'prima_total_pago' => $montoCuotaActual,
+                            'prima_total' => $montoTotal,
+                            'comision_a_recibir' => $comisionCuotaActual,
+                            'comision_vendedor' => 0,
+                            'estado_cartera' => 'por_cobrar',
+                            'valor_recaudado_oficina' => 0,
+                            'valor_pagado_aseguradora' => 0,
+                            'saldo_pendiente_oficina' => $montoCuotaActual,
+                            'saldo_pendiente_aseguradora' => 0,
+                            'comision_recibida' => 0,
+                            'dias_vencidos' => 0,
+                            'fecha_limite_pago' => $fechaLimite->toDateString(),
+                            'fecha_inicio_vigencia' => $poliza->start_date ?? null,
+                            'fecha_fin_vigencia' => $poliza->end_date ?? null,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
+                } else {
+                    // Single cartera_item for contado/credito or no installments
+                    DB::table('cartera_items')->insert([
+                        'broker_id' => $brokerId,
+                        'poliza_id' => $poliza->id,
+                        'cliente_id' => $cliente?->id,
+                        'poliza_numero' => $poliza->policy_number,
+                        'cliente_nombre' => $clienteNombre,
+                        'cliente_documento' => $cliente?->document_number,
+                        'aseguradora_nombre' => $rowA->nombre ?? $validated['aseguradora'] ?? null,
+                        'ramo_principal' => $rowR->nombre ?? $validated['ramo_principal'] ?? null,
+                        'vendedor_nombre' => $validated['vendedor'] ?? null,
+                        'forma_pago' => $validated['forma_pago'] ?? null,
+                        'prima_neta' => $primaNeta,
+                        'valor_neto_a_pagar' => max(0, $montoTotal - $comision),
+                        'prima_total_pago' => $montoTotal,
+                        'prima_total' => $montoTotal,
+                        'comision_a_recibir' => $comision,
+                        'comision_vendedor' => 0,
+                        'estado_cartera' => 'por_cobrar',
+                        'valor_recaudado_oficina' => 0,
+                        'valor_pagado_aseguradora' => 0,
+                        'saldo_pendiente_oficina' => $montoTotal,
+                        'saldo_pendiente_aseguradora' => 0,
+                        'comision_recibida' => 0,
+                        'dias_vencidos' => 0,
+                        'fecha_inicio_vigencia' => $poliza->start_date ?? null,
+                        'fecha_fin_vigencia' => $poliza->end_date ?? null,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
             } catch (\Throwable $e) {
                 \Log::warning("Auto-create cartera_item failed for poliza {$poliza->id}: " . $e->getMessage());
             }
@@ -2776,8 +2843,11 @@ class SaasPolizasController extends Controller
                         ->where('numero_renovacion', $currentRenovacion)
                         ->sum('monto_cobrado');
 
-                    $recaudadoEnOficina = $totalOficina > 0;
                     $valorNeto = max(0, $montoTotal - $comision);
+
+                    // Determine if office collection is complete or partial
+                    $saldoPendienteOf = max(0, $montoTotal - $totalOficina);
+                    $recaudadoEnOficina = $totalOficina > 0 && $saldoPendienteOf <= 0;
 
                     // Determine estado_cartera
                     $estadoCartera = 'por_cobrar';
