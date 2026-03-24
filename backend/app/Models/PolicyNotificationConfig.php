@@ -287,6 +287,7 @@ class PolicyNotificationConfig extends Model
             '{{payment_due_date}}' => $policy->payment_due_date ? $policy->payment_due_date->format('d/m/Y') : 'N/A',
             '{{premium_amount}}' => number_format($policy->premium_amount, 0, ',', '.'),
             '{{total_amount}}' => number_format($policy->total_amount, 0, ',', '.'),
+            '{{riesgo}}' => $policy->description ?? '-',
             '{{days_until_expiration}}' => $policy->getDaysUntilExpiration(),
             '{{days_until_renewal}}' => $policy->getDaysUntilRenewal(),
             '{{days_until_payment}}' => $policy->getDaysUntilPaymentDue(),

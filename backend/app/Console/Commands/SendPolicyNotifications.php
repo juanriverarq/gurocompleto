@@ -478,7 +478,7 @@ class SendPolicyNotifications extends Command
                     'renewal_date' => $policy->renewal_date?->format('Y-m-d'),
                     'payment_due_date' => $policy->payment_due_date?->format('Y-m-d'),
                     'premium_amount' => $policy->premium_amount,
-                    'riesgo' => $policy->datos_objeto_asegurado,
+                    'riesgo' => $policy->description,
                 ],
             ]);
 
@@ -507,7 +507,7 @@ class SendPolicyNotifications extends Command
                 $clientName = $client ? ($client->full_name ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: 'Cliente') : 'Cliente';
                 
                 $ramoName = $policy->ramo ? ($policy->ramo->nombre ?? '-') : ($policy->product_name ?? '-');
-                $riesgo = $policy->datos_objeto_asegurado ?? '-';
+                $riesgo = $policy->description ?? '-';
                 
                 $templateParams = match($type) {
                     'expiration' => [

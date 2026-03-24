@@ -1032,6 +1032,7 @@ class PolicyNotificationController extends Controller
                 $client = $poliza->client;
                 $clientName = $client ? ($client->full_name ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: 'Cliente') : 'Cliente';
                 $ramoName = $poliza->ramo ? ($poliza->ramo->nombre ?? '-') : ($poliza->product_name ?? '-');
+                $riesgo = $poliza->description ?? '-';
 
                 $templateParams = match($type) {
                     'expiration' => [
@@ -1040,6 +1041,7 @@ class PolicyNotificationController extends Controller
                         $poliza->insurance_company ?? '-',
                         $poliza->end_date ? $poliza->end_date->format('d/m/Y') : 'N/A',
                         $ramoName,
+                        $riesgo,
                     ],
                     'renewal' => [
                         $clientName,
@@ -1047,6 +1049,7 @@ class PolicyNotificationController extends Controller
                         $poliza->insurance_company ?? '-',
                         ($poliza->renewal_date ?? $poliza->end_date)?->format('d/m/Y') ?? 'N/A',
                         $ramoName,
+                        $riesgo,
                     ],
                     'payment_due' => [
                         $clientName,
@@ -1054,6 +1057,7 @@ class PolicyNotificationController extends Controller
                         $poliza->payment_due_date ? $poliza->payment_due_date->format('d/m/Y') : 'N/A',
                         '$' . number_format($poliza->premium_amount ?? 0, 0, ',', '.'),
                         $ramoName,
+                        $riesgo,
                     ],
                     default => [],
                 };
