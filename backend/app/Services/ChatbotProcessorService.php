@@ -601,6 +601,7 @@ class ChatbotProcessorService
 
         $sessionKey = "chatbot_session_{$instanceId}_{$phone}";
         
+        $stopped = false;
         while ($currentNode && $step < $maxSteps) {
             $step++;
 
@@ -616,6 +617,7 @@ class ChatbotProcessorService
 
             if ($result['stop']) {
                 // Guardar sesión cuando se detiene (esperando respuesta)
+                $stopped = true;
                 Log::info("💾 [CHATBOT] Guardando sesión (stop)", [
                     'current_node_id' => $session['current_node_id'] ?? null,
                     'waiting_for_response' => $session['waiting_for_response'] ?? false,
@@ -650,6 +652,12 @@ class ChatbotProcessorService
             } else {
                 $currentNode = null;
             }
+        }
+
+        // If the flow ended naturally (no stop = not waiting for response),
+        // delete the session so the user isn't stuck.
+        if (!$stopped) {
+            $this->deleteSession($instanceId, $phone);
         }
 
         return [
@@ -1660,6 +1668,7 @@ class ChatbotProcessorService
         $step = 0;
         $sessionKey = "chatbot_session_{$instanceId}_{$phone}";
         
+        $stopped = false;
         while ($currentNode && $step < $maxSteps) {
             $step++;
             
@@ -1674,6 +1683,7 @@ class ChatbotProcessorService
             
             if ($result['stop']) {
                 // Guardar sesión si estamos esperando respuesta
+                $stopped = true;
                 $this->saveSession($session, $instanceId, $phone);
                 break;
             }
@@ -1701,6 +1711,12 @@ class ChatbotProcessorService
             } else {
                 $currentNode = null;
             }
+        }
+        
+        // If the flow ended naturally (no stop = not waiting for response),
+        // delete the session so the user isn't stuck.
+        if (!$stopped) {
+            $this->deleteSession($instanceId, $phone);
         }
         
         return [
@@ -1741,14 +1757,42 @@ class ChatbotProcessorService
             'options_count' => count($options)
         ]);
         
-        // Buscar la opción seleccionada por número o texto
+        // Normalize message: strip emoji numbers (1️⃣→1), trim whitespace
+        $normalizedMsg = trim($message);
+        // Strip keycap emoji variants: "1️⃣" → "1", "🔟" → "10"
+        $emojiMap = ['1️⃣'=>'1','2️⃣'=>'2','3️⃣'=>'3','4️⃣'=>'4','5️⃣'=>'5','6️⃣'=>'6','7️⃣'=>'7','8️⃣'=>'8','9️⃣'=>'9','🔟'=>'10'];
+        foreach ($emojiMap as $emoji => $num) {
+            if (mb_strpos($normalizedMsg, $emoji) !== false) {
+                $normalizedMsg = trim(str_replace($emoji, $num, $normalizedMsg));
+            }
+        }
+        // Also strip standalone Unicode variation selectors / combining enclosing keycap
+        $normalizedMsg = preg_replace('/[\x{FE0F}\x{20E3}]/u', '', $normalizedMsg);
+        $normalizedMsg = trim($normalizedMsg);
+        $normalizedLower = strtolower($normalizedMsg);
+        
+        // Buscar la opción seleccionada por número, texto exacto, o texto parcial
         foreach ($options as $i => $opt) {
             $optionNumber = (string)($i + 1);
-            $optionText = strtolower($opt['text'] ?? $opt['label'] ?? '');
+            $optionText = strtolower(trim($opt['text'] ?? $opt['label'] ?? ''));
             
-            if ($message === $optionNumber || $messageLower === $optionText) {
+            // Match by number ("3") or exact text ("volver")
+            if ($normalizedMsg === $optionNumber || $normalizedLower === $optionText) {
                 $selectedOption = $opt;
                 break;
+            }
+        }
+        
+        // Fallback: partial/fuzzy text match (e.g., "volver" matches "Volver al menú")
+        if (!$selectedOption) {
+            foreach ($options as $i => $opt) {
+                $optionText = strtolower(trim($opt['text'] ?? $opt['label'] ?? ''));
+                if (!empty($normalizedLower) && strlen($normalizedLower) >= 3) {
+                    if (str_contains($optionText, $normalizedLower) || str_contains($normalizedLower, $optionText)) {
+                        $selectedOption = $opt;
+                        break;
+                    }
+                }
             }
         }
         
