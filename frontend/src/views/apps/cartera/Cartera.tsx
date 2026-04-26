@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import { Spinner, Modal, Button, TextInput, Select, Label, Badge } from 'flowbite-react';
+import { createPortal } from 'react-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useToast } from 'src/hooks/use-toast';
 import {
   carteraSimpleService,
@@ -13,23 +13,20 @@ import {
 } from 'src/services/carteraSimpleService';
 
 // ─── Helpers ────────────────────────────────────────────────────────
-const fmt = (v: number | null | undefined) =>
+const fmt = (n: number | null | undefined) =>
   new Intl.NumberFormat('es-CO', {
     style: 'currency',
     currency: 'COP',
     minimumFractionDigits: 0,
-  }).format(v || 0);
+    maximumFractionDigits: 0,
+  }).format(n || 0);
 
 const fmtDate = (d: string | null) => {
   if (!d) return '—';
-  try {
-    return new Date(d + 'T00:00:00').toLocaleDateString('es-CO', {
-      day: '2-digit',
-      month: 'short',
-    });
-  } catch {
-    return d;
-  }
+  const date = new Date(d + 'T00:00:00');
+  return isNaN(date.getTime())
+    ? '—'
+    : date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 const daysFromToday = (d: string | null, today: string): number | null => {
@@ -39,81 +36,37 @@ const daysFromToday = (d: string | null, today: string): number | null => {
   return Math.round((b - a) / (1000 * 60 * 60 * 24));
 };
 
-// ─── Group metadata ─────────────────────────────────────────────────
-const GROUP_META: Record<
-  GroupKey,
-  { title: string; icon: string; color: string; subtitle: string; defaultOpen: boolean }
-> = {
-  vencidas: {
-    title: 'Vencidas',
-    icon: 'solar:danger-triangle-bold-duotone',
-    color: 'text-red-600',
-    subtitle: 'Cobra YA — el cliente está en mora',
-    defaultOpen: true,
-  },
-  hoy: {
-    title: 'Vencen hoy',
-    icon: 'solar:bell-bing-bold-duotone',
-    color: 'text-orange-600',
-    subtitle: 'Avísale al cliente o regístra el pago',
-    defaultOpen: true,
-  },
-  proximos_7: {
-    title: 'Próximos 7 días',
-    icon: 'solar:calendar-bold-duotone',
-    color: 'text-amber-600',
-    subtitle: 'Anticipa con un recordatorio',
-    defaultOpen: true,
-  },
-  proximos_30: {
-    title: 'Próximos 30 días',
-    icon: 'solar:calendar-mark-bold-duotone',
-    color: 'text-blue-600',
-    subtitle: 'Programación normal',
-    defaultOpen: false,
-  },
-  sin_fecha: {
-    title: 'Sin fecha definida',
-    icon: 'solar:question-circle-bold-duotone',
-    color: 'text-gray-500',
-    subtitle: 'Pendientes sin vencimiento — revisa o asigna fecha',
-    defaultOpen: false,
-  },
-  por_pagar_aseguradora: {
-    title: 'Recaudadas — pagar a aseguradora',
-    icon: 'solar:transfer-horizontal-bold-duotone',
-    color: 'text-purple-600',
-    subtitle: 'Ya recibiste el dinero, transfiérelo a la aseguradora',
-    defaultOpen: false,
-  },
-  comision_por_cobrar: {
-    title: 'Comisiones por cobrar',
-    icon: 'solar:hand-money-bold-duotone',
-    color: 'text-emerald-600',
-    subtitle: 'La aseguradora ya cobró, ahora cobra tu comisión',
-    defaultOpen: false,
-  },
-  cerradas: {
-    title: 'Cerradas (últimos 30 días)',
-    icon: 'solar:check-circle-bold-duotone',
-    color: 'text-green-600',
-    subtitle: 'Histórico — todo cerrado',
-    defaultOpen: false,
-  },
+const moraBadge = (dias: number | null) => {
+  if (dias === null) return { bg: 'bg-gray-500/15', text: 'text-gray-500 dark:text-neutral-400', label: '—' };
+  if (dias > 0) return { bg: 'bg-blue-500/15', text: 'text-blue-600 dark:text-blue-400', label: `En ${dias}d` };
+  if (dias === 0) return { bg: 'bg-orange-500/15', text: 'text-orange-600 dark:text-orange-400', label: 'Hoy' };
+  if (dias >= -30) return { bg: 'bg-yellow-500/15', text: 'text-yellow-600 dark:text-yellow-400', label: `${Math.abs(dias)}d` };
+  if (dias >= -90) return { bg: 'bg-orange-500/15', text: 'text-orange-600 dark:text-orange-400', label: `${Math.abs(dias)}d` };
+  return { bg: 'bg-red-500/15', text: 'text-red-600 dark:text-red-400', label: `${Math.abs(dias)}d` };
 };
 
-const ORDER: GroupKey[] = [
-  'vencidas',
-  'hoy',
-  'proximos_7',
-  'proximos_30',
-  'sin_fecha',
-  'por_pagar_aseguradora',
-  'comision_por_cobrar',
-  'cerradas',
+const moraColor = (dias: number | null) => {
+  if (dias === null || dias > 7) return '#22c55e';
+  if (dias > 0) return '#3b82f6';
+  if (dias === 0) return '#f97316';
+  if (dias >= -30) return '#eab308';
+  if (dias >= -90) return '#f97316';
+  return '#ef4444';
+};
+
+// ─── Tabs ─────────────────────────────────────────────────────────────
+type TabKey = 'todos' | 'vencidas' | 'hoy' | 'proximos_7' | 'por_pagar' | 'comision' | 'cerradas';
+
+const TABS: { key: TabKey; label: string; icon: string; color?: string; groups: GroupKey[] }[] = [
+  { key: 'todos', label: 'Todos', icon: 'solar:list-bold-duotone', groups: ['vencidas', 'hoy', 'proximos_7', 'proximos_30', 'sin_fecha'] },
+  { key: 'vencidas', label: 'Vencidas', icon: 'solar:danger-triangle-bold-duotone', color: '#ef4444', groups: ['vencidas'] },
+  { key: 'hoy', label: 'Hoy', icon: 'solar:bell-bing-bold-duotone', color: '#f97316', groups: ['hoy'] },
+  { key: 'proximos_7', label: 'Próximos 7d', icon: 'solar:calendar-bold-duotone', color: '#eab308', groups: ['proximos_7'] },
+  { key: 'por_pagar', label: 'Por pagar aseg.', icon: 'solar:transfer-horizontal-bold-duotone', color: '#a855f7', groups: ['por_pagar_aseguradora'] },
+  { key: 'comision', label: 'Comisiones x cobrar', icon: 'solar:hand-money-bold-duotone', color: '#10b981', groups: ['comision_por_cobrar'] },
+  { key: 'cerradas', label: 'Cerradas', icon: 'solar:check-circle-bold-duotone', color: '#22c55e', groups: ['cerradas'] },
 ];
 
-// ─── Action mapping ─────────────────────────────────────────────────
 type ActionKey = 'cobrar' | 'pagar_aseguradora' | 'cobrar_comision';
 
 const getPrimaryAction = (cuota: Cuota): { action: ActionKey; label: string; icon: string } | null => {
@@ -122,176 +75,64 @@ const getPrimaryAction = (cuota: Cuota): { action: ActionKey; label: string; ico
     return { action: 'cobrar', label: 'Cobrar', icon: 'solar:wallet-money-bold' };
   }
   if (cuota.recaudado_en_oficina && !cuota.recaudado_aseguradora) {
-    return { action: 'pagar_aseguradora', label: 'Pagar a aseguradora', icon: 'solar:transfer-horizontal-bold' };
+    return { action: 'pagar_aseguradora', label: 'Pagar aseg.', icon: 'solar:transfer-horizontal-bold' };
   }
   if (cuota.recaudado_aseguradora && !cuota.comisionada) {
-    return { action: 'cobrar_comision', label: 'Cobrar comisión', icon: 'solar:hand-money-bold' };
+    return { action: 'cobrar_comision', label: 'Cobrar com.', icon: 'solar:hand-money-bold' };
   }
   return null;
 };
 
-// ─── Cuota Card ─────────────────────────────────────────────────────
-interface CuotaCardProps {
-  cuota: Cuota;
-  today: string;
-  onAction: (cuota: Cuota, action: ActionKey) => void;
-  onAvisar: (cuota: Cuota) => void;
-  onAnular: (cuota: Cuota) => void;
-}
-
-const CuotaCard: React.FC<CuotaCardProps> = ({ cuota, today, onAction, onAvisar, onAnular }) => {
-  const primary = getPrimaryAction(cuota);
-  const days = daysFromToday(cuota.fecha_limite_pago, today);
-  const saldo = cuota.recaudado_aseguradora
-    ? cuota.comisionada
-      ? 0
-      : cuota.comision_a_recibir - cuota.comision_recibida
-    : cuota.recaudado_en_oficina
-    ? cuota.saldo_pendiente_aseguradora
-    : cuota.saldo_pendiente_oficina;
-
-  const venceLabel = (() => {
-    if (!cuota.fecha_limite_pago) return null;
-    if (days === null) return null;
-    if (days < 0) return `Vencida hace ${Math.abs(days)} día${Math.abs(days) === 1 ? '' : 's'}`;
-    if (days === 0) return 'Vence hoy';
-    if (days === 1) return 'Vence mañana';
-    return `Vence en ${days} días`;
-  })();
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-4">
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              to={`/apps/seguros/polizas/editar/${cuota.poliza_id}`}
-              className="font-semibold text-gray-900 dark:text-white hover:text-primary truncate"
-            >
-              {cuota.poliza_numero || `Cuota #${cuota.id}`}
-            </Link>
-            {cuota.numero_pago && (
-              <Badge color="indigo" size="xs">
-                Cuota {cuota.numero_pago}
-              </Badge>
-            )}
-            {cuota.numero_renovacion > 0 && (
-              <Badge color="purple" size="xs">
-                R{cuota.numero_renovacion}
-              </Badge>
-            )}
-          </div>
-
-          <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
-            {cuota.cliente_nombre || 'Sin cliente'}
-            {cuota.cliente_documento && (
-              <span className="text-gray-400 text-xs ml-2">{cuota.cliente_documento}</span>
-            )}
-          </div>
-
-          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
-            {cuota.aseguradora_nombre && <span>{cuota.aseguradora_nombre}</span>}
-            {cuota.ramo_principal && (
-              <>
-                <span>·</span>
-                <span>{cuota.ramo_principal}</span>
-              </>
-            )}
-            {cuota.fecha_limite_pago && (
-              <>
-                <span>·</span>
-                <span>{fmtDate(cuota.fecha_limite_pago)}</span>
-              </>
-            )}
-          </div>
-
-          {venceLabel && (
-            <div
-              className={`text-xs mt-1.5 font-medium ${
-                days! < 0 ? 'text-red-600' : days === 0 ? 'text-orange-600' : 'text-gray-500'
-              }`}
-            >
-              {venceLabel}
-            </div>
-          )}
-        </div>
-
-        {/* Monto + acciones */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          <div className="text-right">
-            <div className="text-lg font-bold text-gray-900 dark:text-white">
-              {fmt(saldo)}
-            </div>
-            {cuota.prima_total_pago > 0 && saldo !== cuota.prima_total_pago && (
-              <div className="text-xs text-gray-400">de {fmt(cuota.prima_total_pago)}</div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1">
-            {primary && (
-              <Button
-                size="xs"
-                color="primary"
-                onClick={() => onAction(cuota, primary.action)}
-                className="!bg-primary hover:!bg-primaryemphasis"
-              >
-                <Icon icon={primary.icon} className="mr-1" width={14} />
-                {primary.label}
-              </Button>
-            )}
-
-            {!cuota.recaudado_en_oficina && !cuota.recibo_anulado && cuota.poliza_id && (
-              <Button
-                size="xs"
-                color="light"
-                outline
-                onClick={() => onAvisar(cuota)}
-                title="Enviar recordatorio por WhatsApp"
-              >
-                <Icon icon="solar:chat-round-call-bold" width={14} />
-              </Button>
-            )}
-
-            {!cuota.recibo_anulado && (
-              <Button
-                size="xs"
-                color="light"
-                outline
-                onClick={() => onAnular(cuota)}
-                title="Anular cuota"
-              >
-                <Icon icon="solar:close-circle-bold" width={14} className="text-red-500" />
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+const getSaldo = (c: Cuota): number => {
+  if (c.recaudado_aseguradora) {
+    return c.comisionada ? 0 : Math.max(0, c.comision_a_recibir - c.comision_recibida);
+  }
+  if (c.recaudado_en_oficina) return c.saldo_pendiente_aseguradora;
+  return c.saldo_pendiente_oficina;
 };
+
+// ─── Stat Card ───────────────────────────────────────────────────
+const StatCard: React.FC<{
+  icon: string;
+  iconColor: string;
+  label: string;
+  value: string;
+  sub: string;
+  onClick?: () => void;
+}> = ({ icon, iconColor, label, value, sub, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`text-left rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-950/70 p-4 shadow-sm dark:shadow-none transition-colors ${onClick ? 'hover:border-gray-300 dark:hover:border-neutral-700 cursor-pointer' : 'cursor-default'}`}
+  >
+    <div className="flex items-center gap-2 mb-2">
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${iconColor}20` }}>
+        <Icon icon={icon} width={18} style={{ color: iconColor }} />
+      </div>
+      <span className="text-xs text-gray-500 dark:text-neutral-500 font-medium">{label}</span>
+    </div>
+    <p className="text-xl font-bold text-gray-900 dark:text-white tracking-tight tabular-nums">{value}</p>
+    <p className="text-[11px] text-gray-400 dark:text-neutral-500 mt-0.5">{sub}</p>
+  </button>
+);
 
 // ─── Main Component ─────────────────────────────────────────────────
 const Cartera: React.FC = () => {
   const { toast } = useToast();
+  const nav = useNavigate();
   const [searchParams] = useSearchParams();
   const polizaFilter = searchParams.get('poliza') || '';
 
   const [loading, setLoading] = useState(true);
-  const [groups, setGroups] = useState<Partial<Record<GroupKey, Cuota[]>>>({});
+  const [items, setItems] = useState<Cuota[]>([]);
   const [stats, setStats] = useState<TimelineStats | null>(null);
   const [today, setToday] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<TabKey>('todos');
+  const [searchInput, setSearchInput] = useState(polizaFilter);
   const [search, setSearch] = useState(polizaFilter);
-  const [openGroups, setOpenGroups] = useState<Set<GroupKey>>(
-    new Set(ORDER.filter((k) => GROUP_META[k].defaultOpen)),
-  );
 
-  // Modal de pago
+  // Modals
+  const [detailRow, setDetailRow] = useState<Cuota | null>(null);
   const [payModal, setPayModal] = useState<{ cuota: Cuota; action: ActionKey } | null>(null);
-  // Settings
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settings, setSettings] = useState<CarteraSettings>({ auto_cobrar_comision: false });
-  const [savingSettings, setSavingSettings] = useState(false);
   const [paying, setPaying] = useState(false);
   const [payForm, setPayForm] = useState({
     monto: '',
@@ -301,14 +142,34 @@ const Cartera: React.FC = () => {
     observaciones: '',
   });
 
-  const cargar = useCallback(async (q: string) => {
+  // Settings
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<CarteraSettings>({ auto_cobrar_comision: false });
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Cargar items
+  const cargar = useCallback(async (q: string, tab: TabKey) => {
     setLoading(true);
     try {
-      const res = await carteraSimpleService.timeline({ search: q || undefined });
+      const tabConfig = TABS.find((t) => t.key === tab);
+      const groupParam = tabConfig && tabConfig.groups.length === 1 ? tabConfig.groups[0] : undefined;
+      const res = await carteraSimpleService.timeline({ search: q || undefined, group: groupParam, limit: 100 });
       if (res.success) {
-        setGroups(res.data);
         setStats(res.stats);
         setToday(res.today);
+        // Aplanar items según grupos del tab
+        const allItems: Cuota[] = [];
+        const seen = new Set<number>();
+        for (const groupKey of tabConfig?.groups || []) {
+          const list = res.data[groupKey] || [];
+          for (const c of list) {
+            if (!seen.has(c.id)) {
+              seen.add(c.id);
+              allItems.push(c);
+            }
+          }
+        }
+        setItems(allItems);
       }
     } catch (e: any) {
       toast({
@@ -322,12 +183,20 @@ const Cartera: React.FC = () => {
   }, [toast]);
 
   useEffect(() => {
-    cargar(search);
-    // Cargar settings al montar
+    cargar(search, activeTab);
     carteraSimpleService.getSettings().then((res) => {
       if (res.success) setSettings(res.data);
     }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounce de search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput);
+      cargar(searchInput, activeTab);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const guardarSettings = async (next: Partial<CarteraSettings>) => {
     setSavingSettings(true);
@@ -337,29 +206,15 @@ const Cartera: React.FC = () => {
         setSettings(res.data);
         toast({ title: 'Preferencia guardada' });
       }
-    } catch (e: any) {
+    } catch {
       toast({ title: 'Error', description: 'No se pudo guardar', variant: 'destructive' });
     } finally {
       setSavingSettings(false);
     }
   };
 
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => cargar(search), 300);
-    return () => clearTimeout(t);
-  }, [search, cargar]);
-
-  const toggleGroup = (k: GroupKey) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
-  };
-
-  const openPayModal = (cuota: Cuota, action: ActionKey) => {
+  const openPayModal = (cuota: Cuota, action: ActionKey, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const monto =
       action === 'cobrar'
         ? cuota.saldo_pendiente_oficina
@@ -374,6 +229,7 @@ const Cartera: React.FC = () => {
       observaciones: '',
     });
     setPayModal({ cuota, action });
+    setDetailRow(null);
   };
 
   const ejecutarPago = async (modo?: 'oficina' | 'directo') => {
@@ -386,13 +242,9 @@ const Cartera: React.FC = () => {
     }
 
     let accion: Accion = 'recaudar_oficina';
-    if (action === 'cobrar') {
-      accion = modo === 'directo' ? 'pagar_directo' : 'recaudar_oficina';
-    } else if (action === 'pagar_aseguradora') {
-      accion = 'pagar_aseguradora';
-    } else if (action === 'cobrar_comision') {
-      accion = 'cobrar_comision';
-    }
+    if (action === 'cobrar') accion = modo === 'directo' ? 'pagar_directo' : 'recaudar_oficina';
+    else if (action === 'pagar_aseguradora') accion = 'pagar_aseguradora';
+    else if (action === 'cobrar_comision') accion = 'cobrar_comision';
 
     setPaying(true);
     try {
@@ -411,7 +263,7 @@ const Cartera: React.FC = () => {
           description: numRecibo ? `Recibo #${numRecibo} generado` : 'Operación registrada',
         });
         setPayModal(null);
-        await cargar(search);
+        await cargar(search, activeTab);
       } else {
         throw new Error(res.message || 'Error');
       }
@@ -426,7 +278,8 @@ const Cartera: React.FC = () => {
     }
   };
 
-  const avisar = async (cuota: Cuota) => {
+  const avisar = async (cuota: Cuota, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     try {
       const res = await carteraSimpleService.avisar(cuota.id);
       toast({
@@ -436,268 +289,470 @@ const Cartera: React.FC = () => {
           : res.message || 'No se pudo enviar',
         variant: res.success ? 'default' : 'destructive',
       });
-    } catch (e: any) {
+    } catch (err: any) {
       toast({
         title: 'Error',
-        description: e?.response?.data?.message || 'No se pudo enviar el aviso',
+        description: err?.response?.data?.message || 'No se pudo enviar',
         variant: 'destructive',
       });
     }
   };
 
-  const anular = async (cuota: Cuota) => {
-    if (!confirm(`¿Anular cuota ${cuota.poliza_numero} (${fmt(cuota.saldo_pendiente_oficina)})?`)) return;
+  const anular = async (cuota: Cuota, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!confirm(`¿Anular cuota ${cuota.poliza_numero}?`)) return;
     try {
       const res = await carteraSimpleService.anular(cuota.id);
       if (res.success) {
         toast({ title: 'Anulada' });
-        await cargar(search);
+        await cargar(search, activeTab);
       }
-    } catch (e: any) {
+    } catch (err: any) {
       toast({
         title: 'Error',
-        description: e?.response?.data?.message || 'No se pudo anular',
+        description: err?.response?.data?.message || 'No se pudo anular',
         variant: 'destructive',
       });
     }
   };
 
-  // Stats hero
-  const heroStats = useMemo(
-    () => [
-      {
-        label: 'Vencidas',
-        count: stats?.vencidas_count || 0,
-        monto: stats?.vencidas_monto || 0,
-        color: 'text-red-600',
-        bg: 'bg-red-50 dark:bg-red-950/30',
-        icon: 'solar:danger-triangle-bold',
-        action: () => setOpenGroups(new Set(['vencidas'])),
-      },
-      {
-        label: 'Por pagar a aseguradora',
-        count: stats?.por_pagar_aseguradora_count || 0,
-        monto: stats?.por_pagar_aseguradora_monto || 0,
-        color: 'text-purple-600',
-        bg: 'bg-purple-50 dark:bg-purple-950/30',
-        icon: 'solar:transfer-horizontal-bold',
-        action: () => setOpenGroups(new Set(['por_pagar_aseguradora'])),
-      },
-      {
-        label: 'Comisiones x cobrar',
-        count: stats?.comision_por_cobrar_count || 0,
-        monto: stats?.comision_por_cobrar_monto || 0,
-        color: 'text-emerald-600',
-        bg: 'bg-emerald-50 dark:bg-emerald-950/30',
-        icon: 'solar:hand-money-bold',
-        action: () => setOpenGroups(new Set(['comision_por_cobrar'])),
-      },
-    ],
-    [stats],
-  );
+  // Stats por tab
+  const tabCounts = useMemo(() => {
+    if (!stats) return {} as Record<TabKey, number>;
+    return {
+      todos: stats.vencidas_count + stats.hoy_count + stats.proximos_7_count + stats.proximos_30_count,
+      vencidas: stats.vencidas_count,
+      hoy: stats.hoy_count,
+      proximos_7: stats.proximos_7_count,
+      por_pagar: stats.por_pagar_aseguradora_count,
+      comision: stats.comision_por_cobrar_count,
+      cerradas: 0,
+    } as Record<TabKey, number>;
+  }, [stats]);
+
+  // ─── Detail Modal ───────────────────────────────────────────
+  const renderDetailModal = () => {
+    if (!detailRow) return null;
+    const r = detailRow;
+    const days = daysFromToday(r.fecha_limite_pago, today);
+    const mora = moraBadge(days);
+    const mc = moraColor(days);
+    const saldo = getSaldo(r);
+    const primary = getPrimaryAction(r);
+
+    const Field = ({ label, value, mono }: { label: string; value: string | number | null | undefined; mono?: boolean }) => (
+      <div>
+        <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase tracking-wide mb-0.5">{label}</p>
+        <p className={`text-sm text-gray-900 dark:text-white ${mono ? 'font-mono' : ''}`}>{value || '—'}</p>
+      </div>
+    );
+
+    return createPortal(
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-sm" onClick={() => setDetailRow(null)}>
+        <div
+          className="relative w-full max-w-xl mx-4 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#111112] shadow-2xl overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="h-1" style={{ background: `linear-gradient(90deg, ${mc}, ${mc}66)` }} />
+
+          <div className="px-6 pt-5 pb-4 border-b border-gray-200 dark:border-neutral-800/60">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {r.cliente_nombre || 'Sin cliente'}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-neutral-500">
+                  {r.aseguradora_nombre || '—'} · {r.cliente_documento || '—'}
+                </p>
+              </div>
+              <button
+                onClick={() => setDetailRow(null)}
+                className="w-8 h-8 rounded-lg text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 flex items-center justify-center transition-colors"
+              >
+                <Icon icon="solar:close-circle-linear" width={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+            {/* Stats principales */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950/60 p-3 text-center">
+                <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">Prima cuota</p>
+                <p className="text-base font-bold text-gray-600 dark:text-neutral-300 tabular-nums">{fmt(r.prima_total_pago)}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-center">
+                <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">Recaudado</p>
+                <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(r.valor_recaudado_oficina)}</p>
+              </div>
+              <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-center">
+                <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">Saldo</p>
+                <p className="text-base font-bold text-red-600 dark:text-red-400 tabular-nums">{fmt(saldo)}</p>
+              </div>
+            </div>
+
+            {/* Estado actual */}
+            <div className="rounded-xl border p-3" style={{ borderColor: `${mc}40`, backgroundColor: `${mc}08` }}>
+              <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">Estado</p>
+              <div className="flex items-center justify-between">
+                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${mora.bg} ${mora.text}`}>
+                  {mora.label}
+                </span>
+                <span className="text-xs text-gray-600 dark:text-neutral-400">
+                  {r.recibo_anulado ? 'Anulada' :
+                   r.es_anticipo ? 'Anticipo' :
+                   r.recibo_pago_directo ? 'Pago directo' :
+                   r.comisionada ? 'Cerrada' :
+                   r.recaudado_aseguradora ? 'Comisión x cobrar' :
+                   r.recaudado_en_oficina ? 'Por pagar a aseguradora' :
+                   'Pendiente'}
+                </span>
+              </div>
+            </div>
+
+            {/* Info póliza */}
+            <div>
+              <p className="text-[11px] text-gray-400 dark:text-neutral-500 font-medium uppercase tracking-wider mb-3">Póliza</p>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                <Field label="Número" value={r.poliza_numero} mono />
+                <Field label="Ramo" value={r.ramo_principal} />
+                <Field label="Cuota" value={r.numero_pago || '—'} />
+                <Field label="Renovación" value={r.numero_renovacion ? `R${r.numero_renovacion}` : '—'} />
+                {r.vendedor_nombre && <Field label="Vendedor" value={r.vendedor_nombre} />}
+                {r.forma_pago && <Field label="Forma pago" value={r.forma_pago} />}
+              </div>
+            </div>
+
+            {/* Fechas */}
+            <div>
+              <p className="text-[11px] text-gray-400 dark:text-neutral-500 font-medium uppercase tracking-wider mb-3">Fechas</p>
+              <div className="grid grid-cols-3 gap-x-6 gap-y-3">
+                <Field label="Vencimiento" value={fmtDate(r.fecha_limite_pago)} />
+                <Field label="Recaudado" value={fmtDate(r.fecha_recaudado_oficina)} />
+                <Field label="Pago aseg." value={fmtDate(r.fecha_pago_aseguradora)} />
+              </div>
+            </div>
+
+            {/* Comisión info */}
+            {r.comision_a_recibir > 0 && (
+              <div>
+                <p className="text-[11px] text-gray-400 dark:text-neutral-500 font-medium uppercase tracking-wider mb-3">Comisión</p>
+                <div className="grid grid-cols-3 gap-x-6 gap-y-3">
+                  <Field label="A recibir" value={fmt(r.comision_a_recibir)} />
+                  <Field label="Recibida" value={fmt(r.comision_recibida)} />
+                  <Field label="Pendiente" value={fmt(Math.max(0, r.comision_a_recibir - r.comision_recibida))} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer actions */}
+          <div className="px-6 py-4 border-t border-gray-200 dark:border-neutral-800/60 flex items-center justify-end gap-2 flex-wrap">
+            {r.cliente_id && (
+              <button
+                onClick={() => { setDetailRow(null); nav(`/apps/seguros/clientes?search=${encodeURIComponent(r.cliente_documento || '')}`); }}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
+              >
+                <Icon icon="solar:user-linear" width={14} />
+                Ver cliente
+              </button>
+            )}
+            {r.poliza_id && (
+              <button
+                onClick={() => { setDetailRow(null); nav(`/apps/seguros/polizas/editar/${r.poliza_id}`); }}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
+              >
+                <Icon icon="solar:shield-check-linear" width={14} />
+                Ver póliza
+              </button>
+            )}
+            {!r.recaudado_en_oficina && !r.recibo_anulado && r.poliza_id && (
+              <button
+                onClick={(e) => avisar(r, e)}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium transition-colors"
+              >
+                <Icon icon="solar:chat-round-call-bold" width={14} />
+                WhatsApp
+              </button>
+            )}
+            {primary && (
+              <button
+                onClick={(e) => openPayModal(r, primary.action, e)}
+                className="flex items-center gap-1.5 rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] px-4 py-2 text-xs text-white font-medium transition-colors"
+              >
+                <Icon icon={primary.icon} width={14} />
+                {primary.label}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="w-full min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Icon icon="solar:wallet-bold-duotone" className="text-primary" width={28} />
-            Cartera
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Todas tus cuotas pendientes en un solo lugar
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Cartera</h1>
+          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-0.5">
+            Todas tus cuotas pendientes en un solo lugar.
+            {today && <span className="ml-2 text-gray-400 dark:text-neutral-500 text-xs">Hoy: {fmtDate(today)}</span>}
           </p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex items-center gap-2">
           <Link
             to="/apps/cartera/aseguradoras"
-            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
           >
-            <Icon icon="solar:buildings-bold" width={14} />
-            Cartera Aseguradoras
+            <Icon icon="solar:buildings-bold-duotone" width={14} />
+            Aseguradoras
           </Link>
-          <Button
-            color="light"
-            size="xs"
+          <button
             onClick={() => setSettingsOpen(true)}
-            title="Preferencias de cartera"
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
+            title="Preferencias"
           >
-            <Icon icon="solar:settings-bold-duotone" width={16} />
-          </Button>
+            <Icon icon="solar:settings-bold-duotone" width={14} />
+            Preferencias
+          </button>
+          <button
+            onClick={() => cargar(search, activeTab)}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-60 px-4 py-2 text-xs text-white font-medium transition-colors"
+          >
+            <Icon icon={loading ? 'svg-spinners:ring-resize' : 'solar:refresh-bold-duotone'} width={14} />
+            Refrescar
+          </button>
         </div>
       </div>
 
-      {/* Hero stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {heroStats.map((s) => (
-          <button
-            key={s.label}
-            onClick={s.action}
-            className={`${s.bg} rounded-xl p-4 text-left hover:shadow-md transition-shadow border border-transparent hover:border-current/20`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <Icon icon={s.icon} className={s.color} width={24} />
-              <span className={`text-2xl font-bold ${s.color}`}>{s.count}</span>
-            </div>
-            <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">{s.label}</div>
-            <div className={`text-sm font-semibold mt-1 ${s.color}`}>{fmt(s.monto)}</div>
-          </button>
-        ))}
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Icon
-          icon="solar:magnifer-linear"
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          width={18}
-        />
-        <TextInput
-          type="text"
-          placeholder="Buscar cliente, póliza, documento, aseguradora..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-          sizing="md"
-        />
-      </div>
-
-      {/* Loading */}
-      {loading && (
-        <div className="flex justify-center py-12">
-          <Spinner size="lg" />
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <StatCard
+            icon="solar:danger-triangle-bold-duotone"
+            iconColor="#ef4444"
+            label="Vencidas"
+            value={String(stats.vencidas_count)}
+            sub={fmt(stats.vencidas_monto)}
+            onClick={() => setActiveTab('vencidas')}
+          />
+          <StatCard
+            icon="solar:transfer-horizontal-bold-duotone"
+            iconColor="#a855f7"
+            label="Por pagar aseguradora"
+            value={String(stats.por_pagar_aseguradora_count)}
+            sub={fmt(stats.por_pagar_aseguradora_monto)}
+            onClick={() => setActiveTab('por_pagar')}
+          />
+          <StatCard
+            icon="solar:hand-money-bold-duotone"
+            iconColor="#10b981"
+            label="Comisiones x cobrar"
+            value={String(stats.comision_por_cobrar_count)}
+            sub={fmt(stats.comision_por_cobrar_monto)}
+            onClick={() => setActiveTab('comision')}
+          />
+          <StatCard
+            icon="solar:calendar-bold-duotone"
+            iconColor="#3b82f6"
+            label="Próximos 7 días"
+            value={String(stats.proximos_7_count)}
+            sub="cuotas por vencer"
+            onClick={() => setActiveTab('proximos_7')}
+          />
         </div>
       )}
 
-      {/* Groups */}
-      {!loading && (
-        <div className="space-y-3">
-          {ORDER.map((key) => {
-            const items = groups[key] || [];
-            if (items.length === 0) return null;
-            const meta = GROUP_META[key];
-            const isOpen = openGroups.has(key);
-            const totalMonto = items.reduce((s, c) => {
-              const v = c.recaudado_aseguradora
-                ? c.comisionada
-                  ? 0
-                  : c.comision_a_recibir - c.comision_recibida
-                : c.recaudado_en_oficina
-                ? c.saldo_pendiente_aseguradora
-                : c.saldo_pendiente_oficina;
-              return s + v;
-            }, 0);
-
+      {/* Container con tabs + tabla */}
+      <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-950/70 overflow-hidden shadow-sm dark:shadow-none">
+        {/* Tabs */}
+        <div className="flex items-center border-b border-gray-200 dark:border-neutral-800 overflow-x-auto">
+          {TABS.map((tab) => {
+            const count = tabCounts[tab.key] ?? 0;
+            const isActive = activeTab === tab.key;
             return (
-              <div
-                key={key}
-                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1.5 whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors ${isActive ? 'border-[#573CFF] text-gray-900 dark:text-white' : 'border-transparent text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300'}`}
               >
-                <button
-                  onClick={() => toggleGroup(key)}
-                  className="w-full p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon icon={meta.icon} className={meta.color} width={28} />
-                    <div className="text-left">
-                      <div className="font-semibold text-gray-900 dark:text-white">
-                        {meta.title}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {meta.subtitle}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <div className={`font-bold ${meta.color}`}>{items.length}</div>
-                      <div className="text-xs text-gray-500">{fmt(totalMonto)}</div>
-                    </div>
-                    <Icon
-                      icon={isOpen ? 'solar:alt-arrow-up-bold' : 'solar:alt-arrow-down-bold'}
-                      className="text-gray-400"
-                      width={20}
-                    />
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 p-3 space-y-2 bg-gray-50/50 dark:bg-gray-900/30">
-                    {items.map((cuota) => (
-                      <CuotaCard
-                        key={cuota.id}
-                        cuota={cuota}
-                        today={today}
-                        onAction={openPayModal}
-                        onAvisar={avisar}
-                        onAnular={anular}
-                      />
-                    ))}
-                  </div>
+                <Icon icon={tab.icon} width={16} style={tab.color && isActive ? { color: tab.color } : undefined} />
+                {tab.label}
+                {count > 0 && (
+                  <span className={`ml-1 text-[11px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-[#573CFF]/20 text-[#573CFF] dark:text-[#a78bfa]' : 'bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-neutral-500'}`}>
+                    {count}
+                  </span>
                 )}
-              </div>
+              </button>
             );
           })}
+        </div>
 
-          {Object.values(groups).every((g) => !g || g.length === 0) && (
-            <div className="text-center py-16 text-gray-500">
-              <Icon
-                icon="solar:check-circle-bold-duotone"
-                className="mx-auto mb-3 text-green-400"
-                width={64}
-              />
-              <p className="text-lg font-medium">¡Todo al día!</p>
-              <p className="text-sm">No hay cuotas pendientes con esos filtros.</p>
+        {/* Search */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-neutral-800/60">
+          <div className="relative flex-1 max-w-sm">
+            <Icon icon="solar:magnifer-linear" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-neutral-500" width={16} />
+            <input
+              type="text"
+              placeholder="Buscar por cliente, documento, póliza, aseguradora..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:border-[#573CFF] focus:outline-none transition-colors"
+            />
+          </div>
+          <span className="text-xs text-gray-400 dark:text-neutral-500 ml-auto tabular-nums">
+            {items.length} {items.length === 1 ? 'cuota' : 'cuotas'}
+          </span>
+        </div>
+
+        {/* Tabla */}
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Icon icon="svg-spinners:ring-resize" width={32} className="text-[#573CFF]" />
             </div>
+          ) : items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-neutral-500">
+              <Icon icon="solar:check-circle-bold-duotone" width={48} className="mb-3 text-emerald-400 opacity-60" />
+              <p className="text-sm font-medium">¡Todo al día!</p>
+              <p className="text-xs mt-1">No hay cuotas en este filtro.</p>
+            </div>
+          ) : (
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-neutral-800 text-[11px] uppercase tracking-wider text-gray-500 dark:text-neutral-500">
+                  <th className="px-4 py-3 font-medium">Cliente</th>
+                  <th className="px-4 py-3 font-medium">Documento</th>
+                  <th className="px-4 py-3 font-medium">Póliza</th>
+                  <th className="px-4 py-3 font-medium">Aseguradora / Ramo</th>
+                  <th className="px-4 py-3 font-medium">Vence</th>
+                  <th className="px-4 py-3 font-medium text-right">Saldo</th>
+                  <th className="px-4 py-3 font-medium text-center">Estado</th>
+                  <th className="px-4 py-3 font-medium text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-neutral-800/60">
+                {items.map((row) => {
+                  const days = daysFromToday(row.fecha_limite_pago, today);
+                  const mora = moraBadge(days);
+                  const saldo = getSaldo(row);
+                  const primary = getPrimaryAction(row);
+                  return (
+                    <tr
+                      key={row.id}
+                      onClick={() => setDetailRow(row)}
+                      className="hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors cursor-pointer"
+                    >
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium max-w-[180px] truncate">
+                        {row.cliente_nombre || '—'}
+                        {row.numero_renovacion > 0 && (
+                          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-semibold">
+                            R{row.numero_renovacion}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 font-mono">{row.cliente_documento || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300 font-mono">
+                        {row.poliza_numero || '—'}
+                        {row.numero_pago && (
+                          <span className="ml-1.5 text-[10px] text-gray-400 dark:text-neutral-600">·{row.numero_pago}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm max-w-[180px] truncate">
+                        <div className="text-gray-700 dark:text-neutral-300">{row.aseguradora_nombre || '—'}</div>
+                        <div className="text-[11px] text-gray-400 dark:text-neutral-500">{row.ramo_principal || '—'}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 whitespace-nowrap">
+                        {fmtDate(row.fecha_limite_pago)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-semibold text-right tabular-nums">
+                        {fmt(saldo)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${mora.bg} ${mora.text}`}>
+                          {mora.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {primary && (
+                            <button
+                              onClick={(e) => openPayModal(row, primary.action, e)}
+                              className="flex items-center gap-1 rounded-md bg-[#573CFF] hover:bg-[#4b31e6] px-2 py-1 text-[11px] text-white font-medium transition-colors"
+                              title={primary.label}
+                            >
+                              <Icon icon={primary.icon} width={12} />
+                              {primary.label}
+                            </button>
+                          )}
+                          {!row.recaudado_en_oficina && !row.recibo_anulado && row.poliza_id && (
+                            <button
+                              onClick={(e) => avisar(row, e)}
+                              className="w-7 h-7 rounded-md border border-gray-200 dark:border-neutral-800 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400 text-gray-400 dark:text-neutral-500 flex items-center justify-center transition-colors"
+                              title="WhatsApp"
+                            >
+                              <Icon icon="solar:chat-round-call-bold" width={12} />
+                            </button>
+                          )}
+                          {!row.recibo_anulado && (
+                            <button
+                              onClick={(e) => anular(row, e)}
+                              className="w-7 h-7 rounded-md border border-gray-200 dark:border-neutral-800 hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-600 dark:hover:text-red-400 text-gray-400 dark:text-neutral-500 flex items-center justify-center transition-colors"
+                              title="Anular"
+                            >
+                              <Icon icon="solar:close-circle-bold" width={12} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
-      )}
+      </div>
 
-      {/* Modal de pago */}
-      <Modal show={!!payModal} onClose={() => setPayModal(null)} size="md">
-        <Modal.Header>
-          {payModal?.action === 'cobrar' && 'Registrar pago'}
-          {payModal?.action === 'pagar_aseguradora' && 'Pagar a aseguradora'}
-          {payModal?.action === 'cobrar_comision' && 'Cobrar comisión'}
-        </Modal.Header>
-        <Modal.Body>
-          {payModal && (
-            <div className="space-y-4">
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-sm space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Cliente:</span>
-                  <span className="font-medium">{payModal.cuota.cliente_nombre}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Póliza:</span>
-                  <span className="font-medium">{payModal.cuota.poliza_numero}</span>
-                </div>
-                {payModal.cuota.numero_pago && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Cuota:</span>
-                    <span className="font-medium">{payModal.cuota.numero_pago}</span>
-                  </div>
-                )}
-              </div>
+      {/* Detail Modal */}
+      {renderDetailModal()}
 
+      {/* Payment Modal */}
+      {payModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-sm" onClick={() => !paying && setPayModal(null)}>
+          <div className="relative w-full max-w-md mx-4 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#111112] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="h-1 bg-gradient-to-r from-[#573CFF] to-[#4b31e6]" />
+            <div className="px-6 pt-5 pb-4 border-b border-gray-200 dark:border-neutral-800/60">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {payModal.action === 'cobrar' && 'Registrar pago'}
+                {payModal.action === 'pagar_aseguradora' && 'Pagar a aseguradora'}
+                {payModal.action === 'cobrar_comision' && 'Cobrar comisión'}
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-neutral-500 mt-0.5">
+                {payModal.cuota.cliente_nombre} · {payModal.cuota.poliza_numero}
+              </p>
+            </div>
+            <div className="px-6 py-5 space-y-4">
               <div>
-                <Label htmlFor="monto">Monto *</Label>
-                <TextInput
-                  id="monto"
+                <label className="text-[11px] text-gray-400 dark:text-neutral-500 uppercase tracking-wide font-medium">Monto</label>
+                <input
                   type="number"
                   value={payForm.monto}
                   onChange={(e) => setPayForm({ ...payForm, monto: e.target.value })}
+                  className="mt-1 w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-base font-semibold text-gray-900 dark:text-white tabular-nums focus:border-[#573CFF] focus:outline-none"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="metodo">Método</Label>
-                  <Select
-                    id="metodo"
+                  <label className="text-[11px] text-gray-400 dark:text-neutral-500 uppercase tracking-wide font-medium">Método</label>
+                  <select
                     value={payForm.metodo_pago}
                     onChange={(e) => setPayForm({ ...payForm, metodo_pago: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-sm text-gray-900 dark:text-white focus:border-[#573CFF] focus:outline-none"
                   >
                     <option value="efectivo">Efectivo</option>
                     <option value="transferencia">Transferencia</option>
@@ -705,114 +760,120 @@ const Cartera: React.FC = () => {
                     <option value="cheque">Cheque</option>
                     <option value="pse">PSE</option>
                     <option value="otro">Otro</option>
-                  </Select>
+                  </select>
                 </div>
                 <div>
-                  <Label htmlFor="fecha">Fecha</Label>
-                  <TextInput
-                    id="fecha"
+                  <label className="text-[11px] text-gray-400 dark:text-neutral-500 uppercase tracking-wide font-medium">Fecha</label>
+                  <input
                     type="date"
                     value={payForm.fecha}
                     onChange={(e) => setPayForm({ ...payForm, fecha: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-sm text-gray-900 dark:text-white focus:border-[#573CFF] focus:outline-none"
                   />
                 </div>
               </div>
-
               <div>
-                <Label htmlFor="ref">Referencia (opcional)</Label>
-                <TextInput
-                  id="ref"
+                <label className="text-[11px] text-gray-400 dark:text-neutral-500 uppercase tracking-wide font-medium">Referencia (opcional)</label>
+                <input
+                  type="text"
                   value={payForm.referencia}
                   onChange={(e) => setPayForm({ ...payForm, referencia: e.target.value })}
                   placeholder="Nro. comprobante o transacción"
+                  className="mt-1 w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 text-sm text-gray-900 dark:text-white focus:border-[#573CFF] focus:outline-none"
                 />
               </div>
             </div>
-          )}
-        </Modal.Body>
-        <Modal.Footer className="flex-col sm:flex-row gap-2">
-          {payModal?.action === 'cobrar' ? (
-            <>
-              <Button
-                color="primary"
-                onClick={() => ejecutarPago('oficina')}
-                disabled={paying}
-                className="!bg-primary hover:!bg-primaryemphasis flex-1"
-              >
-                {paying ? <Spinner size="sm" className="mr-2" /> : <Icon icon="solar:buildings-bold" className="mr-2" width={16} />}
-                Recibí en oficina
-              </Button>
-              <Button
-                color="light"
-                onClick={() => ejecutarPago('directo')}
-                disabled={paying}
-                className="flex-1"
-              >
-                <Icon icon="solar:card-send-bold" className="mr-2" width={16} />
-                Pagó directo a aseguradora
-              </Button>
-            </>
-          ) : (
-            <Button
-              color="primary"
-              onClick={() => ejecutarPago()}
-              disabled={paying}
-              className="!bg-primary hover:!bg-primaryemphasis"
-            >
-              {paying ? <Spinner size="sm" className="mr-2" /> : <Icon icon="solar:check-circle-bold" className="mr-2" width={16} />}
-              Confirmar
-            </Button>
-          )}
-          <Button color="gray" onClick={() => setPayModal(null)} disabled={paying}>
-            Cancelar
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Modal de Settings */}
-      <Modal show={settingsOpen} onClose={() => setSettingsOpen(false)} size="md">
-        <Modal.Header>
-          <div className="flex items-center gap-2">
-            <Icon icon="solar:settings-bold-duotone" className="text-primary" width={22} />
-            Preferencias de cartera
-          </div>
-        </Modal.Header>
-        <Modal.Body>
-          <div className="space-y-4">
-            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-              <input
-                type="checkbox"
-                checked={settings.auto_cobrar_comision}
-                disabled={savingSettings}
-                onChange={(e) => guardarSettings({ auto_cobrar_comision: e.target.checked })}
-                className="mt-1 w-5 h-5 rounded text-primary focus:ring-primary"
-              />
-              <div className="flex-1">
-                <div className="font-medium text-gray-900 dark:text-white">
-                  Cobrar comisión automáticamente
-                </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                  Cuando registres un pago a la aseguradora, la comisión se marca como cobrada
-                  inmediatamente. Te ahorra un click extra por cada póliza.
-                </div>
-              </div>
-            </label>
-
-            <div className="text-xs text-gray-500 bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg flex items-start gap-2">
-              <Icon icon="solar:info-circle-bold" className="text-blue-500 shrink-0 mt-0.5" width={16} />
-              <span>
-                Las preferencias se aplican a partir del próximo registro. Los pagos anteriores
-                no se modifican.
-              </span>
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-neutral-800/60 flex items-center justify-end gap-2 flex-wrap">
+              <button onClick={() => setPayModal(null)} disabled={paying} className="rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors">
+                Cancelar
+              </button>
+              {payModal.action === 'cobrar' ? (
+                <>
+                  <button
+                    onClick={() => ejecutarPago('directo')}
+                    disabled={paying}
+                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-700 dark:text-neutral-300 font-medium transition-colors"
+                  >
+                    <Icon icon="solar:card-send-bold" width={14} />
+                    Pagó directo a aseguradora
+                  </button>
+                  <button
+                    onClick={() => ejecutarPago('oficina')}
+                    disabled={paying}
+                    className="flex items-center gap-1.5 rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-60 px-4 py-2 text-xs text-white font-medium transition-colors"
+                  >
+                    <Icon icon={paying ? 'svg-spinners:ring-resize' : 'solar:buildings-bold'} width={14} />
+                    Recibí en oficina
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => ejecutarPago()}
+                  disabled={paying}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-60 px-4 py-2 text-xs text-white font-medium transition-colors"
+                >
+                  <Icon icon={paying ? 'svg-spinners:ring-resize' : 'solar:check-circle-bold'} width={14} />
+                  Confirmar
+                </button>
+              )}
             </div>
           </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button color="primary" onClick={() => setSettingsOpen(false)} className="!bg-primary hover:!bg-primaryemphasis">
-            Listo
-          </Button>
-        </Modal.Footer>
-      </Modal>
+        </div>,
+        document.body,
+      )}
+
+      {/* Settings Modal */}
+      {settingsOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-sm" onClick={() => setSettingsOpen(false)}>
+          <div className="relative w-full max-w-md mx-4 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#111112] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="h-1 bg-gradient-to-r from-[#573CFF] to-[#4b31e6]" />
+            <div className="px-6 pt-5 pb-4 border-b border-gray-200 dark:border-neutral-800/60 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Icon icon="solar:settings-bold-duotone" className="text-[#573CFF]" width={20} />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Preferencias</h3>
+              </div>
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="w-8 h-8 rounded-lg text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 flex items-center justify-center transition-colors"
+              >
+                <Icon icon="solar:close-circle-linear" width={20} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-gray-200 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={settings.auto_cobrar_comision}
+                  disabled={savingSettings}
+                  onChange={(e) => guardarSettings({ auto_cobrar_comision: e.target.checked })}
+                  className="mt-1 w-4 h-4 rounded text-[#573CFF] focus:ring-[#573CFF]"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                    Cobrar comisión automáticamente
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-neutral-500 mt-0.5">
+                    Al pagar a la aseguradora, la comisión se marca como cobrada de inmediato.
+                  </div>
+                </div>
+              </label>
+              <div className="text-[11px] text-gray-500 dark:text-neutral-500 bg-blue-500/10 border border-blue-500/30 p-3 rounded-xl flex items-start gap-2">
+                <Icon icon="solar:info-circle-bold" className="text-blue-500 shrink-0 mt-0.5" width={14} />
+                <span>Las preferencias se aplican a partir del próximo registro. No modifican pagos anteriores.</span>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-neutral-800/60 flex items-center justify-end">
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] px-4 py-2 text-xs text-white font-medium transition-colors"
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 };
