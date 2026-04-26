@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useRuntSync } from 'src/context/RuntSyncContext';
 import { Card, Button, Table, TextInput, Label, Spinner, Modal, Select } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import HeroButton from 'src/components/HeroButton';
@@ -6,6 +7,7 @@ import saasApi from 'src/services/saasApi';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PermissionGate from 'src/components/PermissionGate';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import AutomovilNotificationsModal from './components/AutomovilNotificationsModal';
 
 interface Automovil {
   id: number;
@@ -38,6 +40,29 @@ interface Automovil {
   brand_id?: number | null;
   model_id?: number | null;
   line_id?: number | null;
+  // SOAT
+  numero_soat?: string;
+  fecha_inicio_soat?: string;
+  fecha_vencimiento_soat?: string;
+  aseguradora_soat?: string;
+  estado_soat?: string;
+  // RTM
+  numero_certificado_rtm?: string;
+  fecha_expedicion_rtm?: string;
+  fecha_vencimiento_rtm?: string;
+  nombre_cda_rtm?: string;
+  estado_rtm?: string;
+  // Estado legal
+  estado_automotor?: string;
+  gravamenes?: string;
+  prendas?: string;
+  organismo_transito?: string;
+  fecha_registro_runt?: string;
+  // Propietario
+  propietario_nombre?: string;
+  propietario_documento?: string;
+  // Meta
+  runt_consulted_at?: string;
 }
 
 const formatMoney = (n?: number | null) => {
@@ -51,6 +76,17 @@ const formatMoney = (n?: number | null) => {
   } catch {
     return String(n);
   }
+};
+
+const getVencimientoBadge = (fecha?: string) => {
+  if (!fecha) return { text: 'Sin datos', color: 'bg-gray-100 text-gray-600' };
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const venc = new Date(fecha + 'T00:00:00');
+  const diffDays = Math.ceil((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { text: `Vencido (${fecha})`, color: 'bg-red-100 text-red-700' };
+  if (diffDays <= 30) return { text: `${fecha} (${diffDays}d)`, color: 'bg-yellow-100 text-yellow-700' };
+  return { text: fecha, color: 'bg-green-100 text-green-700' };
 };
 
 const Automoviles: React.FC = () => {
@@ -74,6 +110,11 @@ const Automoviles: React.FC = () => {
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Automovil>>({});
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [runtLoading, setRuntLoading] = useState(false);
+  const { loading: massRuntLoading, stopping: massRuntStopping, progress: massRuntProgress, done: massRuntDone, start: startRuntSync, stop: stopRuntSync, clearDone: clearMassRuntDone } = useRuntSync();
+  const [showRuntPopover, setShowRuntPopover] = useState(false);
+  const [showRuntResync, setShowRuntResync] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -453,13 +494,196 @@ const Automoviles: React.FC = () => {
                 />
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              {/* RUNT sync pill + popover */}
+              <div
+                className="relative"
+                onMouseEnter={() => setShowRuntPopover(true)}
+                onMouseLeave={() => setShowRuntPopover(false)}
+              >
+                {/* Pill button */}
+                <button
+                  type="button"
+                  disabled={massRuntLoading}
+                  onClick={() => {
+                    // Limit 15 para caber en el timeout de ~100s de Cloudflare
+                    // Cada consulta RUNT tarda ~4-7s → 15 * 7s = 105s max
+                    startRuntSync({ onlyPending: true, limit: 15 });
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 cursor-pointer hover:bg-neutral-800 transition-colors disabled:opacity-60"
+                >
+                  {massRuntLoading
+                    ? <Icon icon="svg-spinners:ring-resize" width={13} className="text-neutral-500 shrink-0" />
+                    : massRuntDone && (massRuntDone.failed ?? 0) > 0 && (massRuntDone.success ?? 0) === 0
+                    ? <Icon icon="solar:danger-triangle-linear" width={13} className="text-red-400 shrink-0" />
+                    : massRuntDone
+                    ? <Icon icon="solar:check-circle-linear" width={13} className="text-neutral-500 shrink-0" />
+                    : <Icon icon="solar:refresh-bold-duotone" width={13} className="text-neutral-500 shrink-0" />
+                  }
+                  <span className="text-[11px] whitespace-nowrap text-neutral-400">
+                    {massRuntLoading && massRuntProgress
+                      ? `RUNT ${massRuntProgress.index}/${massRuntProgress.total}`
+                      : massRuntLoading
+                      ? 'RUNT...'
+                      : massRuntDone
+                      ? `RUNT ${massRuntDone.success}✓ ${massRuntDone.failed > 0 ? massRuntDone.failed + '✗ ' : ''}/ ${massRuntDone.total}`
+                      : 'Sincronizar RUNT'
+                    }
+                  </span>
+                  {massRuntLoading && massRuntProgress && (
+                    <div className="w-14 h-0.5 rounded-full bg-neutral-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-neutral-500 transition-all duration-500"
+                        style={{ width: `${massRuntProgress.total > 0 ? (massRuntProgress.index / massRuntProgress.total) * 100 : 5}%` }}
+                      />
+                    </div>
+                  )}
+                </button>
+
+                {/* Popover */}
+                {showRuntPopover && (massRuntLoading || massRuntDone) && (
+                  <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-lg border border-neutral-800 bg-neutral-950 shadow-xl p-3.5 text-sm">
+                    <div className="absolute -top-1.5 right-5 w-3 h-3 rotate-45 border-l border-t border-neutral-800 bg-neutral-950" />
+
+                    {/* Header */}
+                    <p className="text-[12px] font-medium text-neutral-300 mb-0.5">
+                      {massRuntLoading
+                        ? (massRuntStopping ? 'Deteniendo…' : 'Consultando RUNT')
+                        : massRuntDone?.cancelled
+                        ? 'Sincronización detenida'
+                        : (massRuntDone?.failed ?? 0) > 0
+                        ? 'Sincronización con errores'
+                        : 'Sincronización completa'}
+                    </p>
+                    <p className="text-[11px] text-neutral-500 mb-3">
+                      {massRuntProgress
+                        ? `${massRuntProgress.index} de ${massRuntProgress.total} vehículos · ${massRuntProgress.placa}`
+                        : massRuntDone
+                        ? `${massRuntDone.total} procesados · ${massRuntDone.success} ok${massRuntDone.failed > 0 ? ` · ${massRuntDone.failed} fallidos` : ''}${massRuntDone.skipped > 0 ? ` · ${massRuntDone.skipped} omitidos` : ''}`
+                        : 'Iniciando...'}
+                    </p>
+
+                    {/* Progress bar */}
+                    <div className="w-full h-0.5 rounded-full bg-neutral-800 overflow-hidden mb-3">
+                      <div
+                        className="h-full rounded-full bg-neutral-500 transition-all duration-500"
+                        style={{ width: `${massRuntProgress && massRuntProgress.total > 0 ? (massRuntProgress.index / massRuntProgress.total) * 100 : massRuntDone ? 100 : 5}%` }}
+                      />
+                    </div>
+
+                    {/* Live placa being processed */}
+                    {massRuntLoading && massRuntProgress && (
+                      <div className="border-l-2 border-neutral-700 pl-2 mb-3">
+                        <p className="text-[11px] text-neutral-400">
+                          <span className="font-medium text-neutral-300">{massRuntProgress.placa}</span>
+                          {' — '}
+                          {massRuntProgress.status === 'success' ? 'Actualizado' : massRuntProgress.status === 'skipped' ? 'Omitido' : massRuntProgress.status === 'error' ? 'Error' : 'Consultando...'}
+                        </p>
+                        <p className="text-[10px] text-neutral-600 mt-0.5">
+                          {massRuntProgress.success} ok · {massRuntProgress.failed} fallidos · {massRuntProgress.skipped} omitidos
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Result stats after done */}
+                    {!massRuntLoading && massRuntDone && (
+                      <div className="grid grid-cols-3 gap-1.5 mb-3">
+                        <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-2 text-center">
+                          <p className="text-base font-bold text-emerald-400">{massRuntDone.success}</p>
+                          <p className="text-[9px] text-neutral-600">Exitosos</p>
+                        </div>
+                        <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-2 text-center">
+                          <p className="text-base font-bold text-red-400">{massRuntDone.failed}</p>
+                          <p className="text-[9px] text-neutral-600">Fallidos</p>
+                        </div>
+                        <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-2 text-center">
+                          <p className="text-base font-bold text-neutral-500">{massRuntDone.skipped}</p>
+                          <p className="text-[9px] text-neutral-600">Omitidos</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2 border-t border-neutral-800 pt-3">
+                      {massRuntLoading && (
+                        <button
+                          onClick={() => stopRuntSync()}
+                          disabled={massRuntStopping}
+                          className="flex-1 rounded border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1.5 text-[11px] text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                        >
+                          <Icon icon={massRuntStopping ? 'svg-spinners:ring-resize' : 'solar:stop-circle-linear'} width={12} />
+                          {massRuntStopping ? 'Deteniendo…' : 'Detener'}
+                        </button>
+                      )}
+                      {!massRuntLoading && (
+                        <button
+                          onClick={() => {
+                            setShowRuntPopover(false);
+                            setShowRuntResync(true);
+                          }}
+                          className="flex-1 rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-2.5 py-1.5 text-[11px] text-neutral-400 transition-colors"
+                        >
+                          Resincronizar
+                        </button>
+                      )}
+                      {massRuntDone && (
+                        <button
+                          onClick={() => { clearMassRuntDone(); setShowRuntPopover(false); }}
+                          className="flex-1 rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-2.5 py-1.5 text-[11px] text-neutral-400 transition-colors"
+                        >
+                          Limpiar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Resync dialog */}
+              {showRuntResync && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center" onClick={() => setShowRuntResync(false)}>
+                  <div className="absolute inset-0 bg-black/50" />
+                  <div className="relative w-80 rounded-lg border border-neutral-800 bg-neutral-950 p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-[13px] font-medium text-neutral-200 mb-1">¿Qué vehículos resincronizar?</p>
+                    <p className="text-[11px] text-neutral-500 mb-4">Solo los pendientes es más rápido. Todos fuerza la consulta de cada placa al RUNT.</p>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => { setShowRuntResync(false); startRuntSync({ onlyPending: true, limit: 50 }); }}
+                        className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors"
+                      >
+                        Solo pendientes
+                        <span className="block text-[10px] text-neutral-600 mt-0.5">Vehículos sin datos del RUNT</span>
+                      </button>
+                      <button
+                        onClick={() => { setShowRuntResync(false); startRuntSync({ onlyPending: false, limit: 200 }); }}
+                        className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors"
+                      >
+                        Todos los vehículos
+                        <span className="block text-[10px] text-neutral-600 mt-0.5">Proceso largo — puede tardar varios minutos</span>
+                      </button>
+                      <button
+                        onClick={() => setShowRuntResync(false)}
+                        className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-[12px] text-neutral-500 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <HeroButton 
+                icon="solar:bell-bing-bold-duotone" 
+                onClick={() => setShowNotificationsModal(true)}
+              >
+                Notificaciones
+              </HeroButton>
               {canCreate && (
                 <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreate(true)}>Nuevo Automóvil</HeroButton>
               )}
             </div>
           </div>
         </Card>
+
 
         <div className="overflow-hidden">
           {loading ? (
@@ -494,8 +718,8 @@ const Automoviles: React.FC = () => {
                     <Table.HeadCell>Placa</Table.HeadCell>
                     <Table.HeadCell>Marca</Table.HeadCell>
                     <Table.HeadCell>Modelo (Año)</Table.HeadCell>
-                    <Table.HeadCell>Valor asegurado</Table.HeadCell>
-                    <Table.HeadCell>Clase / Ref.</Table.HeadCell>
+                    <Table.HeadCell>SOAT</Table.HeadCell>
+                    <Table.HeadCell>Técnico-Mecánica</Table.HeadCell>
                     <Table.HeadCell>Cliente</Table.HeadCell>
                     <Table.HeadCell>Póliza</Table.HeadCell>
                     <Table.HeadCell>Acciones</Table.HeadCell>
@@ -506,17 +730,16 @@ const Automoviles: React.FC = () => {
                         <Table.Cell className="font-medium">{a.placa}</Table.Cell>
                         <Table.Cell>{a.marca || '-'}</Table.Cell>
                         <Table.Cell>{a.modelo || '-'}</Table.Cell>
-                        <Table.Cell>{formatMoney((a as any).insured_value)}</Table.Cell>
                         <Table.Cell>
                           {(() => {
-                            const m = (a as any).insured_meta || {};
-                            const parts = [
-                              m.clase,
-                              m.referencia1,
-                              m.referencia2,
-                              m.referencia3,
-                            ].filter(Boolean);
-                            return parts.length ? parts.join(' • ') : '-';
+                            const b = getVencimientoBadge(a.fecha_vencimiento_soat);
+                            return <span className={`text-xs px-2 py-0.5 rounded-full ${b.color}`}>{b.text}</span>;
+                          })()}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {(() => {
+                            const b = getVencimientoBadge(a.fecha_vencimiento_rtm);
+                            return <span className={`text-xs px-2 py-0.5 rounded-full ${b.color}`}>{b.text}</span>;
                           })()}
                         </Table.Cell>
                         <Table.Cell>{a.client_name || a.client_id || '-'}</Table.Cell>
@@ -555,6 +778,38 @@ const Automoviles: React.FC = () => {
                   </Table.Body>
                 </Table>
               </div>
+
+              {/* Paginación */}
+              {pagination && pagination.last_page > 1 && (
+                <div className="flex items-center justify-between gap-4 p-4 bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-b-[10px]">
+                  <div className="text-sm text-gray-500">
+                    Mostrando {pagination.from} a {pagination.to} de {pagination.total} resultados
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      color="light"
+                      disabled={pagination.current_page === 1}
+                      onClick={() => setFilters((prev) => ({ ...prev, page: pagination.current_page - 1 }))}
+                      className="rounded-[10px]"
+                    >
+                      Anterior
+                    </Button>
+                    <span className="flex items-center px-3 text-sm bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
+                      Página {pagination.current_page} de {pagination.last_page}
+                    </span>
+                    <Button
+                      size="sm"
+                      color="light"
+                      disabled={pagination.current_page === pagination.last_page}
+                      onClick={() => setFilters((prev) => ({ ...prev, page: pagination.current_page + 1 }))}
+                      className="rounded-[10px]"
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -954,10 +1209,10 @@ const Automoviles: React.FC = () => {
         </Modal>
 
         {/* Modal Editar */}
-        <Modal show={showEdit} onClose={handleCloseEditModal}>
+        <Modal show={showEdit} onClose={handleCloseEditModal} size="5xl">
           <Modal.Header>Editar Automóvil</Modal.Header>
           <Modal.Body>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="e_placa" className="mb-1 block">
                   Placa
@@ -1076,7 +1331,7 @@ const Automoviles: React.FC = () => {
                   ))}
                 </Select>
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <Label className="mb-1 block">Valor asegurado</Label>
                 <div className="h-10 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40">
                   {formatMoney(insuredValueEdit)}
@@ -1186,7 +1441,7 @@ const Automoviles: React.FC = () => {
                   ))}
                 </Select>
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <Label className="mb-1 block">Clase / Referencias</Label>
                 <div className="min-h-10 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40">
                   {(() => {
@@ -1374,6 +1629,178 @@ const Automoviles: React.FC = () => {
                 />
               </div>
             </div>
+
+            {/* Sección RUNT / SOAT / RTM */}
+            <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                    Información RUNT
+                  </h3>
+                  {editForm.runt_consulted_at && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Última consulta: {editForm.runt_consulted_at}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  color="info"
+                  size="sm"
+                  disabled={runtLoading || !editForm.client_id}
+                  onClick={async () => {
+                    if (!editingId) return;
+                    setRuntLoading(true);
+                    try {
+                      const resp = await saasApi.consultarRunt(editingId);
+                      const data = (resp as any)?.data ?? resp;
+                      if (data) {
+                        setEditForm(data);
+                      }
+                      loadData();
+                    } catch (e: any) {
+                      alert(e?.message || 'Error al consultar RUNT');
+                    } finally {
+                      setRuntLoading(false);
+                    }
+                  }}
+                >
+                  {runtLoading ? (
+                    <>
+                      <Spinner size="sm" className="mr-2" />
+                      Consultando...
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon="solar:document-medicine-bold-duotone" className="w-4 h-4 mr-1" />
+                      Consultar RUNT
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {!editForm.client_id && (
+                <p className="text-xs text-yellow-500 mb-3">
+                  Asocie un cliente al automóvil para poder consultar RUNT (se usa el documento del cliente).
+                </p>
+              )}
+
+              {/* SOAT */}
+              <h4 className="font-medium text-sm text-gray-700 dark:text-white mb-2 mt-2">SOAT</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div>
+                  <Label className="mb-1 block text-xs">Número SOAT</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.numero_soat || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Aseguradora</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.aseguradora_soat || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Estado</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.estado_soat || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Inicio póliza</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.fecha_inicio_soat || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Vencimiento</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {(() => {
+                      const b = getVencimientoBadge(editForm.fecha_vencimiento_soat);
+                      return <span className={`text-xs px-2 py-0.5 rounded-full ${b.color}`}>{b.text}</span>;
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* RTM */}
+              <h4 className="font-medium text-sm text-gray-700 dark:text-white mb-2">Revisión Técnico-Mecánica</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div>
+                  <Label className="mb-1 block text-xs">Certificado</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.numero_certificado_rtm || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">CDA</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.nombre_cda_rtm || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Estado</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.estado_rtm || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Expedición</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.fecha_expedicion_rtm || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Vencimiento</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {(() => {
+                      const b = getVencimientoBadge(editForm.fecha_vencimiento_rtm);
+                      return <span className={`text-xs px-2 py-0.5 rounded-full ${b.color}`}>{b.text}</span>;
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Estado Legal */}
+              <h4 className="font-medium text-sm text-gray-700 dark:text-white mb-2">Estado Legal</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label className="mb-1 block text-xs">Estado automotor</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.estado_automotor || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Organismo de tránsito</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.organismo_transito || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Propietario</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.propietario_nombre || '-'}{editForm.propietario_documento ? ` (${editForm.propietario_documento})` : ''}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Gravámenes</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.gravamenes || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Prendas</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.prendas || '-'}
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Fecha registro</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
+                    {editForm.fecha_registro_runt || '-'}
+                  </div>
+                </div>
+              </div>
+            </div>
           </Modal.Body>
           <Modal.Footer>
             <Button color="gray" onClick={() => setShowEdit(false)}>
@@ -1404,6 +1831,12 @@ const Automoviles: React.FC = () => {
             )}
           </Modal.Footer>
         </Modal>
+
+      {/* AutomovilNotificationsModal */}
+      <AutomovilNotificationsModal
+        isOpen={showNotificationsModal}
+        onClose={() => setShowNotificationsModal(false)}
+      />
       </div>
     </PermissionGate>
   );

@@ -1,5 +1,19 @@
-import Lottie from 'lottie-react';
-import loaderAnimation from '../assets/LOTTIE-LOADING-2.json';
+/**
+ * GuroLoader — DESACTIVADO TEMPORALMENTE
+ *
+ * El loader fullscreen (Lottie + background image) se apagó globalmente para mejorar
+ * la percepción de fluidez en navegación entre rutas, auth, y dashboard.
+ *
+ * Al retornar `null` quedan silenciados todos los usos:
+ *   - `App.tsx` (Suspense de providers Firebase)
+ *   - `Loadable.tsx` (fallback de todas las rutas lazy-loaded)
+ *   - `UnifiedProtectedFullLayout.tsx` (verificación auth)
+ *   - `CreateBroker.tsx` (onboarding auth)
+ *   - cualquier `<GuroLoader />` inline
+ *
+ * Para reactivar: restaurar el implementation original (ver git history) o reemplazar el
+ * `return null` por el JSX Lottie.
+ */
 
 interface GuroLoaderProps {
   size?: number;
@@ -7,40 +21,7 @@ interface GuroLoaderProps {
   fullScreen?: boolean;
 }
 
-const GuroLoader = ({ size = 120, message }: GuroLoaderProps) => {
-  return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
-      style={{
-        backgroundImage: 'url(https://framerusercontent.com/images/6vqDsl7xtgechRbMSo6yAkGE.png)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'bottom center',
-        backgroundRepeat: 'no-repeat',
-        transform: 'rotate(180deg)',
-      }}
-    >
-      <div style={{ transform: 'rotate(180deg)' }}>
-        <div className="bg-white rounded-full p-6 shadow-2xl">
-          <div className="flex flex-col items-center justify-center gap-2">
-            <Lottie
-              animationData={loaderAnimation}
-              loop
-              autoplay
-              style={{ width: size, height: size }}
-            />
-            {message && (
-              <p
-                className="text-sm font-medium text-gray-400 tracking-[-0.01em]"
-                style={{ fontFamily: "'General Sans', sans-serif" }}
-              >
-                {message}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const GuroLoader = (_props: GuroLoaderProps) => null;
 
 export default GuroLoader;

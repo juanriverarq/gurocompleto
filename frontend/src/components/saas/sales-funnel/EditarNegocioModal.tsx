@@ -39,6 +39,24 @@ const EditarNegocioModal: React.FC<EditarNegocioModalProps> = ({ show, onClose, 
   const [clientModalMode, setClientModalMode] = useState<'new' | 'edit'>('new');
   const [clienteToEdit, setClienteToEdit] = useState<any | null>(null);
 
+  // Catálogo de vendedores para el campo Referido
+  const [vendedores, setVendedores] = useState<Array<{ id: number | string; nombre: string }>>([]);
+  useEffect(() => {
+    if (!show) return;
+    (async () => {
+      try {
+        const r = await saasApi.getVendedores();
+        const arr = (r as any)?.data?.data || (r as any)?.data || [];
+        setVendedores(
+          (Array.isArray(arr) ? arr : []).map((v: any) => ({
+            id: v.id,
+            nombre: [v.nombres || v.first_name, v.apellidos || v.last_name].filter(Boolean).join(' ') || v.nombre || `Vendedor ${v.id}`,
+          })),
+        );
+      } catch { /* opcional */ }
+    })();
+  }, [show]);
+
   // Cargar datos del lead cuando se abre el modal
   useEffect(() => {
     if (show && leadId) {
@@ -59,6 +77,12 @@ const EditarNegocioModal: React.FC<EditarNegocioModalProps> = ({ show, onClose, 
             potential_value: data.potential_value,
             close_probability: data.close_probability,
             quality_rating: data.quality_rating,
+            referrer_type: (data as any).referrer_type || '',
+            referrer_vendedor_id: (data as any).referrer_vendedor_id || undefined,
+            referrer_name: (data as any).referrer_name || '',
+            next_follow_up_at: (data as any).next_follow_up_at
+              ? String((data as any).next_follow_up_at).slice(0, 16).replace(' ', 'T')
+              : undefined,
           });
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Error al cargar negocio');
@@ -144,10 +168,9 @@ const EditarNegocioModal: React.FC<EditarNegocioModalProps> = ({ show, onClose, 
 
     try {
       setSaving(true);
-      const res = await salesFunnelService.updateLead(leadId, form);
-      if (res?.data && onSuccess) {
-        onSuccess(res.data);
-      }
+      const res: any = await salesFunnelService.updateLead(leadId, form);
+      const updatedLead = res?.lead ?? res?.data ?? null;
+      if (onSuccess) onSuccess(updatedLead);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al actualizar negocio');
@@ -280,6 +303,64 @@ const EditarNegocioModal: React.FC<EditarNegocioModalProps> = ({ show, onClose, 
                         required
                         options={Object.entries(QUALITY_RATINGS).map(([k, v]) => ({ value: k, label: v }))}
                       />
+                    </div>
+                  </TitleCard>
+
+                  {/* Referido + próximo contacto (opcional) */}
+                  <TitleCard title="Referido & seguimiento (opcional)" description="Origen del referido y próxima fecha de contacto">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        id="referrer_type"
+                        name="referrer_type"
+                        label="¿Quién refirió?"
+                        type="select"
+                        value={(form as any).referrer_type || ''}
+                        onChange={onChange}
+                        options={[
+                          { value: '', label: '— sin referido —' },
+                          { value: 'vendedor', label: 'Vendedor interno' },
+                          { value: 'otro', label: 'Otro (persona externa)' },
+                        ]}
+                      />
+                      {(form as any).referrer_type === 'vendedor' && (
+                        <FormField
+                          id="referrer_vendedor_id"
+                          name="referrer_vendedor_id"
+                          label="Vendedor"
+                          type="select"
+                          value={String((form as any).referrer_vendedor_id || '')}
+                          onChange={onChange}
+                          options={[
+                            { value: '', label: '— seleccionar —' },
+                            ...vendedores.map((v) => ({ value: String(v.id), label: v.nombre })),
+                          ]}
+                        />
+                      )}
+                      {(form as any).referrer_type === 'otro' && (
+                        <div className="md:col-span-2">
+                          <Label htmlFor="referrer_name">Nombre del referido</Label>
+                          <Input
+                            id="referrer_name"
+                            name="referrer_name"
+                            value={(form as any).referrer_name || ''}
+                            onChange={(e) => setForm((p) => ({ ...p, referrer_name: e.target.value } as any))}
+                            placeholder="Nombre completo"
+                          />
+                        </div>
+                      )}
+                      <div className={(form as any).referrer_type === 'otro' ? 'md:col-span-3' : 'md:col-span-2'}>
+                        <Label htmlFor="next_follow_up_at">Próxima fecha de contacto</Label>
+                        <Input
+                          id="next_follow_up_at"
+                          name="next_follow_up_at"
+                          type="datetime-local"
+                          value={(form as any).next_follow_up_at || ''}
+                          onChange={(e) => setForm((p) => ({ ...p, next_follow_up_at: e.target.value } as any))}
+                        />
+                        <p className="text-[11px] text-gray-500 dark:text-neutral-500 mt-1">
+                          Si la defines, se crea/actualiza automáticamente una tarea en Seguimiento y Calendario.
+                        </p>
+                      </div>
                     </div>
                   </TitleCard>
                 </form>

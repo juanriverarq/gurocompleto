@@ -518,10 +518,15 @@ class SaasSiniestroController extends Controller
                 'siniestro' => $siniestro
             ], 201);
 
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
-                'error' => 'Error al crear siniestro',
-                'message' => $e->getMessage()
+                'error' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
+                'messages' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error al crear siniestro: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'error' => 'No se pudo crear el siniestro. Inténtalo de nuevo.'
             ], 500);
         }
     }
@@ -698,9 +703,9 @@ class SaasSiniestroController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error al actualizar siniestro: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
-                'error' => 'Error al actualizar siniestro',
-                'message' => $e->getMessage()
+                'error' => 'No se pudo actualizar el siniestro. Inténtalo de nuevo.'
             ], 500);
         }
     }

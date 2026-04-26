@@ -47,4 +47,10 @@ return [
         'service_url' => env('WHATSAPP_SERVICE_URL', 'http://localhost:3000/api/v1'),
     ],
 
+    'microservicio' => [
+        'base_url' => env('MICROSERVICIO_API_URL', 'http://127.0.0.1:8002'),
+        'timeout' => env('MICROSERVICIO_TIMEOUT', 120),
+        'connect_timeout' => env('MICROSERVICIO_CONNECT_TIMEOUT', 15),
+    ],
+
 ];

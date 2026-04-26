@@ -2182,40 +2182,46 @@ const ConfiguracionMasiva: React.FC = () => {
                         <tr className="text-left text-gray-600 dark:text-gray-300">
                           <th className="px-4 py-3">Campaña</th>
                           <th className="px-4 py-3">Estado</th>
-                          <th className="px-4 py-3">Tipo</th>
                           <th className="px-4 py-3">Contactos</th>
-                          <th className="px-4 py-3">Programada</th>
-                          <th className="px-4 py-3">Avance</th>
+                          <th className="px-4 py-3">Entrega</th>
+                          <th className="px-4 py-3">Leídos</th>
+                          <th className="px-4 py-3">Respuestas</th>
+                          <th className="px-4 py-3">Fecha</th>
                           <th className="px-4 py-3 text-right">Acciones</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                         {campaigns.map((campaign) => {
                           // Calcular progreso basado en estadísticas de la campaña
-                          const stats = campaign.stats || campaign.statistics || {};
-                          const totalContacts = Number(stats.total_contacts || stats.total_targets || campaign.total_contacts || 0);
-                          const sentMessages = Number(stats.sent_count || stats.messages_sent || campaign.sent_messages || 0);
-                          const deliveredMessages = Number(stats.delivered_count || stats.messages_delivered || 0);
-                          const failedMessages = Number(stats.failed_count || stats.messages_failed || 0);
-                          const processedMessages = sentMessages + deliveredMessages + failedMessages;
-                          const progress = totalContacts > 0 ? Math.round((processedMessages / totalContacts) * 100) : 0;
+                          const cStats = campaign.stats || campaign.statistics || {};
+                          const cTotalContacts = Number(cStats.total_contacts || cStats.total_targets || campaign.total_targets || campaign.total_contacts || 0);
+                          const cSent = Number(cStats.sent_count || campaign.sent_count || 0);
+                          const cDelivered = Number(cStats.delivered_count || campaign.delivered_count || 0);
+                          const cFailed = Number(cStats.failed_count || campaign.failed_count || 0);
+                          const cRead = Number(cStats.read_count || campaign.read_count || 0);
+                          const cReplied = Number(cStats.replied_count || campaign.replied_count || 0);
+                          const cDeliveryRate = Number(cStats.delivery_rate || (cSent > 0 ? ((cDelivered / cSent) * 100).toFixed(0) : 0));
+                          const cReadRate = Number(cStats.read_rate || (cDelivered > 0 ? ((cRead / cDelivered) * 100).toFixed(0) : 0));
+                          const cReplyRate = Number(cStats.reply_rate || (cDelivered > 0 ? ((cReplied / cDelivered) * 100).toFixed(0) : 0));
                           
                           return (
                             <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/40">
                               <td className="px-4 py-3">
                                 <div className="font-medium text-gray-900 dark:text-white">{campaign.name}</div>
-                                <div className="text-gray-500 dark:text-gray-400 truncate max-w-xs">{campaign.description || 'Sin descripción'}</div>
+                                <div className="text-gray-500 dark:text-gray-400 truncate max-w-xs text-xs">
+                                  {campaign.template_name ? <span className="font-mono text-blue-500">{campaign.template_name}</span> : (campaign.description || 'Sin descripción')}
+                                </div>
                               </td>
                               <td className="px-4 py-3">
                                 <Badge className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
-                                  campaign.status === 'running' || campaign.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' :
+                                  campaign.status === 'running' || campaign.status === 'active' || campaign.status === 'sending' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' :
                                   campaign.status === 'scheduled' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300' :
                                   campaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' :
                                   campaign.status === 'completed' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300' :
                                   campaign.status === 'cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300' :
                                   'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300'
                                 }`}>
-                                  {(campaign.status === 'running' || campaign.status === 'active') && <IconifyIcon icon="solar:play-bold" className="w-3.5 h-3.5" />}
+                                  {(campaign.status === 'running' || campaign.status === 'active' || campaign.status === 'sending') && <IconifyIcon icon="solar:play-bold" className="w-3.5 h-3.5" />}
                                   {campaign.status === 'scheduled' && <IconifyIcon icon="solar:calendar-bold" className="w-3.5 h-3.5" />}
                                   {campaign.status === 'paused' && <IconifyIcon icon="solar:pause-bold" className="w-3.5 h-3.5" />}
                                   {campaign.status === 'completed' && <IconifyIcon icon="solar:check-circle-bold" className="w-3.5 h-3.5" />}
@@ -2223,20 +2229,39 @@ const ConfiguracionMasiva: React.FC = () => {
                                   {getCampaignStatusText(campaign.status)}
                                 </Badge>
                               </td>
-                              <td className="px-4 py-3 text-gray-900 dark:text-white">{getCampaignTypeText((campaign as any).campaign_type || (campaign as any).type)}</td>
-                              <td className="px-4 py-3 text-gray-900 dark:text-white">{totalContacts}</td>
-                              <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                                {campaign.scheduled_at || campaign.scheduled_date
-                                  ? new Date(campaign.scheduled_at || campaign.scheduled_date).toLocaleString('es-ES')
-                                  : '-'}
+                              <td className="px-4 py-3">
+                                <div className="text-gray-900 dark:text-white font-medium">{cTotalContacts}</div>
+                                <div className="text-[10px] text-gray-500">{cSent} env · {cFailed} fall</div>
                               </td>
-                              <td className="px-4 py-3 w-56">
-                                <div className="flex items-center gap-2">
-                                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div className="h-full rounded-full" style={{ width: `${progress}%` }}></div>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(cDeliveryRate, 100)}%` }} />
                                   </div>
-                                  <span className="text-gray-700 dark:text-gray-300 tabular-nums w-10 text-right">{progress}%</span>
+                                  <span className="text-xs font-semibold text-green-600 tabular-nums">{cDeliveryRate}%</span>
                                 </div>
+                                <div className="text-[10px] text-gray-500">{cDelivered} de {cSent}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(cReadRate, 100)}%` }} />
+                                  </div>
+                                  <span className="text-xs font-semibold text-indigo-600 tabular-nums">{cReadRate}%</span>
+                                </div>
+                                <div className="text-[10px] text-gray-500">{cRead} leídos</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min(cReplyRate, 100)}%` }} />
+                                  </div>
+                                  <span className="text-xs font-semibold text-purple-600 tabular-nums">{cReplyRate}%</span>
+                                </div>
+                                <div className="text-[10px] text-gray-500">{cReplied} resp</div>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-gray-500">
+                                {campaign.created_at ? new Date(campaign.created_at).toLocaleDateString('es-CO') : '-'}
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex justify-end">
@@ -2336,111 +2361,169 @@ const ConfiguracionMasiva: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Header con información básica */}
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {selectedCampaign.total_contacts || 0}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Total Contactos</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {selectedCampaign.sent_messages || 0}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Enviados</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                      {selectedCampaign.failed_messages || 0}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Fallidos</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {selectedCampaign.total_contacts > 0
-                        ? Math.round((selectedCampaign.sent_messages / selectedCampaign.total_contacts) * 100)
-                        : 0}%
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Progreso</div>
-                  </div>
-                </div>
-              </div>
+              {/* Métricas principales - Funnel visual */}
+              {(() => {
+                const st = selectedCampaign.stats || {};
+                const totalTargets = Number(st.total_targets || selectedCampaign.total_targets || selectedCampaign.total_contacts || 0);
+                const sentCount = Number(st.sent_count || selectedCampaign.sent_count || selectedCampaign.sent_messages || 0);
+                const deliveredCount = Number(st.delivered_count || selectedCampaign.delivered_count || selectedCampaign.delivered_messages || 0);
+                const failedCount = Number(st.failed_count || selectedCampaign.failed_count || selectedCampaign.failed_messages || 0);
+                const readCount = Number(st.read_count || selectedCampaign.read_count || 0);
+                const repliedCount = Number(st.replied_count || selectedCampaign.replied_count || 0);
+                const buttonClickCount = Number(st.button_click_count || selectedCampaign.button_click_count || 0);
+                const deliveryRate = Number(st.delivery_rate || (sentCount > 0 ? ((deliveredCount / sentCount) * 100).toFixed(1) : 0));
+                const readRate = Number(st.read_rate || (deliveredCount > 0 ? ((readCount / deliveredCount) * 100).toFixed(1) : 0));
+                const replyRate = Number(st.reply_rate || (deliveredCount > 0 ? ((repliedCount / deliveredCount) * 100).toFixed(1) : 0));
+                const buttonRate = Number(st.button_click_rate || (deliveredCount > 0 ? ((buttonClickCount / deliveredCount) * 100).toFixed(1) : 0));
 
-              {/* Información de la campaña */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h4 className="font-medium mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
-                    <IconifyIcon icon="solar:document-text-bold" className="w-5 h-5 text-blue-600" />
-                    Información General
-                  </h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Estado:</span>
-                      <Badge className={`${
-                        selectedCampaign.status === 'running' || selectedCampaign.status === 'active' ? 'bg-green-100 text-green-800' :
-                        selectedCampaign.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                        selectedCampaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
-                        selectedCampaign.status === 'completed' ? 'bg-purple-100 text-purple-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {getCampaignStatusText(selectedCampaign.status)}
-                      </Badge>
+                return (
+                  <>
+                    {/* Funnel metrics row */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+                      {[
+                        { label: 'Destinatarios', value: totalTargets, icon: 'solar:users-group-rounded-bold-duotone', color: 'text-gray-700 dark:text-gray-200', bg: 'bg-gray-100 dark:bg-gray-800' },
+                        { label: 'Enviados', value: sentCount, icon: 'solar:plain-bold-duotone', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+                        { label: 'Entregados', value: deliveredCount, icon: 'solar:check-circle-bold-duotone', color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20', pct: deliveryRate },
+                        { label: 'Leídos', value: readCount, icon: 'solar:eye-bold-duotone', color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-900/20', pct: readRate },
+                        { label: 'Contestados', value: repliedCount, icon: 'solar:chat-round-dots-bold-duotone', color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20', pct: replyRate },
+                        { label: 'Clic en Botón', value: buttonClickCount, icon: 'solar:cursor-bold-duotone', color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', pct: buttonRate },
+                        { label: 'Fallidos', value: failedCount, icon: 'solar:danger-triangle-bold-duotone', color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+                      ].map((m, i) => (
+                        <div key={i} className={`${m.bg} rounded-xl p-3 text-center`}>
+                          <IconifyIcon icon={m.icon} className={`w-6 h-6 ${m.color} mx-auto mb-1`} />
+                          <div className={`text-xl font-bold ${m.color}`}>{m.value}</div>
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">{m.label}</div>
+                          {m.pct !== undefined && <div className={`text-xs font-semibold ${m.color} mt-0.5`}>{m.pct}%</div>}
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Tipo:</span>
-                      <span className="text-gray-900 dark:text-white">{selectedCampaign.type || 'Inmediata'}</span>
+
+                    {/* Progress bars */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
+                      <h4 className="font-semibold text-sm flex items-center gap-2 text-gray-900 dark:text-white">
+                        <IconifyIcon icon="solar:chart-square-bold" className="w-5 h-5 text-green-600" />
+                        Rendimiento de la Campaña
+                      </h4>
+                      {[
+                        { label: 'Tasa de Entrega', pct: deliveryRate, color: 'bg-green-500', detail: `${deliveredCount} de ${sentCount} enviados` },
+                        { label: 'Tasa de Lectura', pct: readRate, color: 'bg-indigo-500', detail: `${readCount} de ${deliveredCount} entregados` },
+                        { label: 'Tasa de Respuesta', pct: replyRate, color: 'bg-purple-500', detail: `${repliedCount} de ${deliveredCount} entregados` },
+                        { label: 'Tasa de Clic en Botón', pct: buttonRate, color: 'bg-amber-500', detail: `${buttonClickCount} de ${deliveredCount} entregados` },
+                      ].map((bar, i) => (
+                        <div key={i}>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{bar.label}</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-white">{bar.pct}%</span>
+                          </div>
+                          <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div className={`h-full ${bar.color} rounded-full transition-all duration-500`} style={{ width: `${Math.min(bar.pct, 100)}%` }} />
+                          </div>
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{bar.detail}</div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Descripción:</span>
-                      <span className="text-gray-900 dark:text-white text-right max-w-xs">{selectedCampaign.description || 'Sin descripción'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Creada:</span>
-                      <span className="text-gray-900 dark:text-white">{selectedCampaign.created_at ? new Date(selectedCampaign.created_at).toLocaleString('es-ES') : '-'}</span>
-                    </div>
-                    {(selectedCampaign.scheduled_at || selectedCampaign.scheduled_date) && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Programada:</span>
-                        <span className="text-gray-900 dark:text-white">{new Date(selectedCampaign.scheduled_at || selectedCampaign.scheduled_date).toLocaleString('es-ES')}</span>
+
+                    {/* Info general + acciones */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                        <h4 className="font-semibold text-sm mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
+                          <IconifyIcon icon="solar:document-text-bold" className="w-5 h-5 text-blue-600" />
+                          Información General
+                        </h4>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Estado:</span>
+                            <Badge className={`${
+                              selectedCampaign.status === 'running' || selectedCampaign.status === 'active' ? 'bg-green-100 text-green-800' :
+                              selectedCampaign.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                              selectedCampaign.status === 'paused' ? 'bg-yellow-100 text-yellow-800' :
+                              selectedCampaign.status === 'completed' ? 'bg-purple-100 text-purple-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {getCampaignStatusText(selectedCampaign.status)}
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Tipo:</span>
+                            <span className="text-gray-900 dark:text-white">{getCampaignTypeText(selectedCampaign.campaign_type || selectedCampaign.type || 'immediate')}</span>
+                          </div>
+                          {selectedCampaign.template_name && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">Plantilla:</span>
+                              <span className="font-mono text-xs text-blue-600 dark:text-blue-400">{selectedCampaign.template_name}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Creada:</span>
+                            <span className="text-gray-900 dark:text-white">{selectedCampaign.created_at ? new Date(selectedCampaign.created_at).toLocaleString('es-ES') : '-'}</span>
+                          </div>
+                          {(selectedCampaign.scheduled_at || selectedCampaign.scheduled_date) && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">Programada:</span>
+                              <span className="text-gray-900 dark:text-white">{new Date(selectedCampaign.scheduled_at || selectedCampaign.scheduled_date).toLocaleString('es-ES')}</span>
+                            </div>
+                          )}
+                          {selectedCampaign.description && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">Descripción:</span>
+                              <span className="text-gray-900 dark:text-white text-right max-w-xs">{selectedCampaign.description}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h4 className="font-medium mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
-                    <IconifyIcon icon="solar:chart-square-bold" className="w-5 h-5 text-green-600" />
-                    Estadísticas
-                  </h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Mensajes enviados:</span>
-                      <span className="text-gray-900 dark:text-white">{selectedCampaign.sent_messages || 0}</span>
+                      {/* Resumen rápido */}
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                        <h4 className="font-semibold text-sm mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
+                          <IconifyIcon icon="solar:graph-up-bold" className="w-5 h-5 text-purple-600" />
+                          Resumen de Interacciones
+                        </h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3 p-2.5 bg-green-50 dark:bg-green-900/10 rounded-lg">
+                            <IconifyIcon icon="solar:check-circle-bold" className="w-5 h-5 text-green-600" />
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">Entrega exitosa</div>
+                              <div className="text-xs text-gray-500">{deliveredCount} de {sentCount} mensajes</div>
+                            </div>
+                            <span className="text-lg font-bold text-green-600">{deliveryRate}%</span>
+                          </div>
+                          <div className="flex items-center gap-3 p-2.5 bg-indigo-50 dark:bg-indigo-900/10 rounded-lg">
+                            <IconifyIcon icon="solar:eye-bold" className="w-5 h-5 text-indigo-600" />
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">Leyeron el mensaje</div>
+                              <div className="text-xs text-gray-500">{readCount} personas</div>
+                            </div>
+                            <span className="text-lg font-bold text-indigo-600">{readRate}%</span>
+                          </div>
+                          <div className="flex items-center gap-3 p-2.5 bg-purple-50 dark:bg-purple-900/10 rounded-lg">
+                            <IconifyIcon icon="solar:chat-round-dots-bold" className="w-5 h-5 text-purple-600" />
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">Respondieron</div>
+                              <div className="text-xs text-gray-500">{repliedCount} personas</div>
+                            </div>
+                            <span className="text-lg font-bold text-purple-600">{replyRate}%</span>
+                          </div>
+                          {buttonClickCount > 0 && (
+                            <div className="flex items-center gap-3 p-2.5 bg-amber-50 dark:bg-amber-900/10 rounded-lg">
+                              <IconifyIcon icon="solar:cursor-bold" className="w-5 h-5 text-amber-600" />
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">Clics en botones</div>
+                                <div className="text-xs text-gray-500">{buttonClickCount} interacciones</div>
+                              </div>
+                              <span className="text-lg font-bold text-amber-600">{buttonRate}%</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Mensajes entregados:</span>
-                      <span className="text-gray-900 dark:text-white">{selectedCampaign.delivered_messages || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Mensajes fallidos:</span>
-                      <span className="text-gray-900 dark:text-white">{selectedCampaign.failed_messages || 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Mensajes pendientes:</span>
-                      <span className="text-gray-900 dark:text-white">
-                        {Math.max(0, (selectedCampaign.total_contacts || 0) - (selectedCampaign.sent_messages || 0))}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  </>
+                );
+              })()}
 
               {/* Plantilla del mensaje */}
               {selectedCampaign.message_template && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h4 className="font-medium mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                  <h4 className="font-semibold text-sm mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
                     <IconifyIcon icon="solar:document-text-bold-duotone" className="w-5 h-5 text-blue-500" />
                     Plantilla del Mensaje
                   </h4>

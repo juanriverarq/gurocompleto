@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SaaS;
 
 use App\Http\Controllers\Controller;
 use App\Models\Poliza;
+use App\Models\InsurerConnection;
 use App\Models\Automovil;
 use App\Models\Broker;
 use App\Models\Cliente;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 use App\Services\BrokerAuthService;
+use App\Jobs\SyncPolizaDetailJob;
 
 class SaasPolizasController extends Controller
 {
@@ -493,6 +495,11 @@ class SaasPolizasController extends Controller
                     $q->where('seller_id', $vendedorId)
                       ->orWhere('seller_id_2', $vendedorId);
                 });
+            }
+
+            // Filtro por motivo de cancelación (solo aplica a pólizas canceladas)
+            if ($request->filled('cancellation_reason')) {
+                $query->where('cancellation_reason', $request->cancellation_reason);
             }
 
             // Renovable (booleano)
@@ -1227,6 +1234,9 @@ class SaasPolizasController extends Controller
             'fecha_inicio' => $poliza->start_date?->format('Y-m-d'),
             'fecha_fin' => $poliza->end_date?->format('Y-m-d'),
             'estado' => $this->mapStatusToFrontend($poliza->status),
+            'cancellation_reason' => $poliza->cancellation_reason,
+            'cancelled_at' => $poliza->cancelled_at?->format('Y-m-d H:i:s'),
+            'cancelled_by' => $poliza->cancelled_by,
             'sede' => ($poliza->custom_fields['sede'] ?? 'Principal'), // Preferir sede guardada en custom_fields
             'renovable' => (bool) $poliza->auto_renewal,
             'motivo' => $poliza->reason,
@@ -1266,6 +1276,9 @@ class SaasPolizasController extends Controller
             'total_poliza_financiada' => $poliza->total_poliza_financiada,
             // Cartera
             'estado_cartera' => $poliza->estado_cartera,
+            // Origen: sync vs manual
+            'sync_source' => $poliza->custom_fields['_sync_source'] ?? null,
+            'sync_at' => $poliza->custom_fields['_sync_at'] ?? null,
             // Impuestos
             'porcentaje_impuesto_bomberos' => $poliza->porcentaje_impuesto_bomberos,
             'impuesto_bomberos' => $poliza->impuesto_bomberos,
@@ -1800,10 +1813,31 @@ class SaasPolizasController extends Controller
                 $historial = [];
             }
 
+            $payload = $this->transformPolizaToFrontend($poliza) + ['historial' => $historial];
+            if (Schema::hasColumn('polizas', 'detail_sync_status')) {
+                $payload['detail_sync_status'] = $poliza->detail_sync_status;
+                $payload['detail_sync_at'] = $poliza->detail_sync_at?->toIso8601String();
+                $payload['detail_sync_error'] = $poliza->detail_sync_error;
+            }
+            if (Schema::hasTable('poliza_coverages')) {
+                $poliza->loadMissing('coverages');
+                $payload['coverages'] = $poliza->coverages->map(fn ($c) => [
+                    'id' => $c->id,
+                    'coverage_type' => $c->coverage_type,
+                    'coverage_name' => $c->coverage_name,
+                    'coverage_code' => $c->coverage_code,
+                    'insured_value' => $c->insured_value,
+                    'deductible' => $c->deductible,
+                    'deductible_value' => $c->deductible_value,
+                    'deductible_percentage' => $c->deductible_percentage,
+                    'source_insurer' => $c->source_insurer,
+                ])->values()->all();
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Póliza obtenida exitosamente',
-                'data' => $this->transformPolizaToFrontend($poliza) + [ 'historial' => $historial ],
+                'data' => $payload,
             ]);
 
         } catch (\Exception $e) {
@@ -1812,6 +1846,410 @@ class SaasPolizasController extends Controller
                 'message' => 'Error al obtener la póliza: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Sincroniza detalle de póliza desde el microservicio (coberturas + campos enriquecidos).
+     */
+    public function syncPolizaDetail(Request $request, $id)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $request->validate([
+                'insurer_connection_id' => 'nullable|integer|exists:insurer_connections,id',
+                'async' => 'nullable|boolean',
+            ]);
+            $async = $request->boolean('async', false);
+
+            if (! Schema::hasColumn('polizas', 'detail_sync_status')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La base de datos no tiene columnas de sincronización de detalle. Ejecuta las migraciones.',
+                ], 503);
+            }
+
+            $poliza = Poliza::where('broker_id', $brokerId)->where('id', $id)->first();
+            if (! $poliza) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Póliza no encontrada',
+                ], 404);
+            }
+
+            $connId = $request->input('insurer_connection_id');
+            $conn = $this->resolveInsurerConnectionForPoliza($poliza, (int) $brokerId, $connId !== null && $connId !== '' ? (int) $connId : null);
+            if (! $conn) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay conexión activa con la aseguradora para esta póliza, o la conexión indicada no coincide con el origen de sincronización.',
+                ], 422);
+            }
+
+            if ($async) {
+                SyncPolizaDetailJob::dispatch($poliza->id, $conn->id);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Sincronización de detalle en cola',
+                    'data' => ['async' => true, 'poliza_id' => $poliza->id, 'insurer_connection_id' => $conn->id],
+                ], 202);
+            }
+
+            SyncPolizaDetailJob::dispatchSync($poliza->id, $conn->id);
+            $poliza->refresh();
+            $poliza->loadMissing('coverages');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Detalle sincronizado',
+                'data' => [
+                    'detail_sync_status' => $poliza->detail_sync_status,
+                    'detail_sync_at' => $poliza->detail_sync_at?->toIso8601String(),
+                    'detail_sync_error' => $poliza->detail_sync_error,
+                    'coverages_count' => $poliza->coverages->count(),
+                ],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al sincronizar detalle: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Descarga la carátula PDF de una póliza desde HDI.
+     */
+    public function downloadCaratulaPdf(Request $request, $id)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $poliza = Poliza::where('broker_id', $brokerId)->where('id', $id)->firstOrFail();
+
+            $cf = $poliza->custom_fields ?? [];
+            $detail = $cf['_detail'] ?? [];
+            $sseguro = $detail['sseguro'] ?? null;
+            $productCode = $detail['product_code'] ?? null;
+
+            if (! $sseguro || ! $productCode) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay datos de sincronización (sseguro/product_code). Resincroniza la póliza primero.',
+                ], 422);
+            }
+
+            $conn = $this->resolveInsurerConnectionForPoliza($poliza, (int) $brokerId, null);
+            if (! $conn || ! $conn->microservice_session_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay sesión activa con HDI. Reconecta la aseguradora.',
+                ], 422);
+            }
+
+            $url = rtrim((string) config('services.microservicio.base_url'), '/')
+                . '/hdi/polizas/' . urlencode($poliza->numero_poliza) . '/pdf'
+                . '?sseguro=' . $sseguro . '&product_code=' . $productCode;
+
+            $response = \Illuminate\Support\Facades\Http::withHeaders([
+                'X-Session-Id' => $conn->microservice_session_id,
+            ])->timeout(90)->get($url);
+
+            if (! $response->successful()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al obtener el PDF: ' . substr($response->body(), 0, 300),
+                ], 502);
+            }
+
+            $filename = 'caratula_' . $poliza->numero_poliza . '.pdf';
+            return response($response->body(), 200, [
+                'Content-Type'        => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Cache-Control'       => 'no-store',
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['success' => false, 'message' => 'Póliza no encontrada'], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al descargar carátula: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /** Scope: pólizas importadas desde aseguradoras (tienen _sync_source en custom_fields). */
+    private function polizasWithSyncSource(int $brokerId, ?string $syncSource = null)
+    {
+        $q = Poliza::where('broker_id', $brokerId)
+            ->whereRaw("JSON_EXTRACT(custom_fields, '\\$._sync_source') IS NOT NULL");
+        if ($syncSource) {
+            $q->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(custom_fields, '\\$._sync_source')) = ?", [$syncSource]);
+        }
+        return $q;
+    }
+
+    /**
+     * Encola sincronización de detalle para TODAS las pólizas importadas del broker.
+     * reset=true vuelve a sincronizar incluso las ya completadas.
+     */
+    public function syncAllPolizasDetail(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+
+            if (! Schema::hasColumn('polizas', 'detail_sync_status')) {
+                return response()->json(['success' => false, 'message' => 'Ejecuta las migraciones primero.'], 503);
+            }
+
+            $reset = $request->boolean('reset', false);
+            $query = $this->polizasWithSyncSource($brokerId, $request->input('sync_source'));
+
+            // Sin reset: solo las no completadas aún
+            if (! $reset) {
+                $query->whereNotIn('detail_sync_status', ['completed', 'partial']);
+            }
+
+            $syncSvc = app(\App\Services\InsurerSyncService::class);
+
+            // Bolívar prefetch: bulk-populate _detail.cod_ramo before queuing (1 API call per connection)
+            $bolivarConns = InsurerConnection::where('broker_id', $brokerId)
+                ->where('insurer_code', 'bolivar')
+                ->whereNotNull('microservice_session_id')
+                ->orderByDesc('connected_at')
+                ->get();
+            foreach ($bolivarConns as $bc) {
+                try {
+                    $syncSvc->bolivarPrefetchRamoCodes((int) $brokerId, $bc->microservice_session_id);
+                } catch (\Throwable) { /* non-fatal – jobs will record individual errors */ }
+            }
+
+            // SURA prefetch: derive ramo_codigo from product_name (no API call needed)
+            try {
+                $syncSvc->suraPrefetchRamoCodes((int) $brokerId);
+            } catch (\Throwable) { /* non-fatal */ }
+
+            // Re-fetch so fresh _detail (with ramo codes) is reflected
+            $polizas = $query->select('id', 'broker_id', 'custom_fields')->get();
+            $queued = 0;
+            $skipped = 0;
+
+            foreach ($polizas as $poliza) {
+                $conn = $this->resolveInsurerConnectionForPoliza($poliza, (int) $brokerId, null);
+                if (! $conn) { $skipped++; continue; }
+                DB::table('polizas')->where('id', $poliza->id)->update(['detail_sync_status' => 'pending']);
+                SyncPolizaDetailJob::dispatch($poliza->id, $conn->id);
+                $queued++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Se encolaron {$queued} pólizas para sincronización de detalle.",
+                'data' => ['queued' => $queued, 'skipped' => $skipped, 'total' => $polizas->count()],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Cancela la sincronización de detalle pendiente (marca las no procesadas).
+     */
+    public function cancelDetailSync(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $cancelled = DB::table('polizas')
+                ->where('broker_id', $brokerId)
+                ->whereRaw("JSON_EXTRACT(custom_fields, '\\$._sync_source') IS NOT NULL")
+                ->whereIn('detail_sync_status', ['pending', 'processing'])
+                ->update(['detail_sync_status' => 'cancelled']);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Se cancelaron {$cancelled} pólizas pendientes.",
+                'data' => ['cancelled' => $cancelled],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Progreso de sincronización de detalles con desglose por fuente y errores de muestra.
+     */
+    public function detailSyncProgress(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+
+            if (! Schema::hasColumn('polizas', 'detail_sync_status')) {
+                return response()->json(['success' => true, 'data' => ['total' => 0, 'synced' => 0, 'failed' => 0, 'cancelled' => 0, 'pending' => 0, 'by_source' => []]]);
+            }
+
+            $base      = $this->polizasWithSyncSource($brokerId);
+            $total     = (clone $base)->count();
+            $done      = (clone $base)->whereIn('detail_sync_status', ['completed', 'partial'])->count();
+            $failed    = (clone $base)->where('detail_sync_status', 'failed')->count();
+            $cancelled = (clone $base)->where('detail_sync_status', 'cancelled')->count();
+            $pending   = $total - $done - $failed - $cancelled;
+            $synced    = $done;
+
+            // Desglose por fuente (aseguradora)
+            $sources = DB::table('polizas')
+                ->where('broker_id', $brokerId)
+                ->whereNull('deleted_at')
+                ->whereRaw("JSON_EXTRACT(custom_fields, '\\$._sync_source') IS NOT NULL")
+                ->selectRaw("
+                    JSON_UNQUOTE(JSON_EXTRACT(custom_fields, '\\$._sync_source')) as src,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN detail_sync_status IN ('completed','partial') THEN 1 ELSE 0 END) as synced,
+                    SUM(CASE WHEN detail_sync_status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    SUM(CASE WHEN detail_sync_status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
+                    SUM(CASE WHEN detail_sync_status = 'pending' OR detail_sync_status = 'processing' THEN 1 ELSE 0 END) as pending
+                ")
+                ->groupBy('src')
+                ->get();
+
+            // Errores de muestra por fuente
+            $sampleErrors = DB::table('polizas')
+                ->where('broker_id', $brokerId)
+                ->whereNull('deleted_at')
+                ->where('detail_sync_status', 'failed')
+                ->whereNotNull('detail_sync_error')
+                ->whereRaw("JSON_EXTRACT(custom_fields, '\\$._sync_source') IS NOT NULL")
+                ->selectRaw("JSON_UNQUOTE(JSON_EXTRACT(custom_fields, '\\$._sync_source')) as src, detail_sync_error")
+                ->orderByDesc('detail_sync_at')
+                ->limit(20)
+                ->get()
+                ->groupBy('src')
+                ->map(fn($rows) => $rows->first()?->detail_sync_error);
+
+            $bySource = $sources->mapWithKeys(fn($row) => [
+                $row->src => [
+                    'total'       => (int) $row->total,
+                    'synced'      => (int) $row->synced,
+                    'failed'      => (int) $row->failed,
+                    'cancelled'   => (int) $row->cancelled,
+                    'pending'     => (int) $row->pending,
+                    'sample_error'=> $sampleErrors[$row->src] ?? null,
+                ],
+            ])->toArray();
+
+            return response()->json([
+                'success' => true,
+                'data' => compact('total', 'synced', 'failed', 'cancelled', 'pending', 'bySource'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Sincroniza detalle para varias pólizas (cola o en línea según async).
+     */
+    public function syncPolizasDetailBatch(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $request->validate([
+                'poliza_ids' => 'required|array|max:200',
+                'poliza_ids.*' => 'integer',
+                'insurer_connection_id' => 'nullable|integer|exists:insurer_connections,id',
+                'async' => 'nullable|boolean',
+            ]);
+            $async = $request->boolean('async', true);
+
+            if (! Schema::hasColumn('polizas', 'detail_sync_status')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La base de datos no tiene columnas de sincronización de detalle. Ejecuta las migraciones.',
+                ], 503);
+            }
+
+            $ids = array_values(array_unique(array_map('intval', $request->input('poliza_ids', []))));
+            $polizas = Poliza::where('broker_id', $brokerId)->whereIn('id', $ids)->get()->keyBy('id');
+            $connOverride = $request->input('insurer_connection_id');
+            $connOverride = $connOverride !== null && $connOverride !== '' ? (int) $connOverride : null;
+
+            $results = [];
+            foreach ($ids as $pid) {
+                $poliza = $polizas->get($pid);
+                if (! $poliza) {
+                    $results[] = ['poliza_id' => $pid, 'success' => false, 'error' => 'Póliza no encontrada'];
+                    continue;
+                }
+                $conn = $this->resolveInsurerConnectionForPoliza($poliza, (int) $brokerId, $connOverride);
+                if (! $conn) {
+                    $results[] = ['poliza_id' => $pid, 'success' => false, 'error' => 'Sin conexión aseguradora válida'];
+                    continue;
+                }
+                try {
+                    if ($async) {
+                        SyncPolizaDetailJob::dispatch($poliza->id, $conn->id);
+                        $results[] = ['poliza_id' => $pid, 'success' => true, 'queued' => true];
+                    } else {
+                        SyncPolizaDetailJob::dispatchSync($poliza->id, $conn->id);
+                        $poliza->refresh();
+                        $results[] = [
+                            'poliza_id' => $pid,
+                            'success' => true,
+                            'detail_sync_status' => $poliza->detail_sync_status,
+                            'detail_sync_error' => $poliza->detail_sync_error,
+                        ];
+                    }
+                } catch (\Throwable $e) {
+                    $results[] = ['poliza_id' => $pid, 'success' => false, 'error' => substr($e->getMessage(), 0, 300)];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $async ? 'Jobs encolados' : 'Sincronización completada',
+                'data' => ['async' => $async, 'results' => $results],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error en sincronización masiva de detalle: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function resolveInsurerConnectionForPoliza(Poliza $poliza, int $brokerId, ?int $insurerConnectionId): ?InsurerConnection
+    {
+        if ($insurerConnectionId) {
+            $conn = InsurerConnection::where('id', $insurerConnectionId)->where('broker_id', $brokerId)->first();
+            if (! $conn || ! $conn->microservice_session_id) {
+                return null;
+            }
+            $expected = "{$conn->insurer_code}_sync";
+            $src = $poliza->custom_fields['_sync_source'] ?? '';
+            if ($src !== $expected) {
+                return null;
+            }
+
+            return $conn;
+        }
+
+        $src = $poliza->custom_fields['_sync_source'] ?? '';
+        if ($src === '' || ! str_ends_with($src, '_sync')) {
+            return null;
+        }
+        $code = substr($src, 0, -strlen('_sync'));
+        if ($code === '') {
+            return null;
+        }
+
+        return InsurerConnection::query()
+            ->where('broker_id', $brokerId)
+            ->where('insurer_code', $code)
+            ->whereNotNull('microservice_session_id')
+            ->orderByDesc('connected_at')
+            ->first();
     }
 
     /**
@@ -1861,11 +2299,11 @@ class SaasPolizasController extends Controller
                 'renovable' => 'nullable|boolean',
                 // Datos de pago adicionales
                 'banco' => 'nullable|string|max:255',
-                'cuotas' => 'nullable|integer|min:1|required_if:medio_pago,tarjeta_credito',
-                'numero_tarjeta' => ['nullable','string','max:32','regex:/^[0-9]{4,19}$/','required_if:medio_pago,tarjeta_credito'],
-                'cheque_number' => 'nullable|string|max:64|required_if:medio_pago,cheque,cheque_al_dia,cheque_postfechado',
-                'agreement_term' => 'nullable|string|in:contado,30_45,30_60,60_90|required_if:medio_pago,convenio',
-                'debit_account_number' => 'nullable|string|max:64|required_if:medio_pago,debito',
+                'cuotas' => 'nullable|integer|min:1',
+                'numero_tarjeta' => ['nullable','string','max:32','regex:/^[0-9]{4,19}$/'],
+                'cheque_number' => 'nullable|string|max:64',
+                'agreement_term' => 'nullable|string|in:contado,30_45,30_60,60_90',
+                'debit_account_number' => 'nullable|string|max:64',
                 'vendedor' => 'nullable|string|max:255',
                 'observaciones' => 'nullable|string',
                 'observaciones_internas' => 'nullable|string',
@@ -2325,16 +2763,17 @@ class SaasPolizasController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Datos de validación incorrectos',
+                'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
+            \Log::error('Error al crear póliza: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al crear la póliza: ' . $e->getMessage(),
+                'message' => 'No se pudo crear la póliza. Inténtalo de nuevo.',
             ], 500);
         }
-    
+
     }
 
     /**
@@ -2389,11 +2828,11 @@ class SaasPolizasController extends Controller
                 'medio_pago' => 'nullable|string|max:100',
                 // Datos de pago adicionales (para edición también)
                 'banco' => 'nullable|string|max:255',
-                'cuotas' => 'nullable|integer|min:1|required_if:medio_pago,tarjeta_credito',
-                'numero_tarjeta' => ['nullable','string','max:32','regex:/^[0-9]{4,19}$/','required_if:medio_pago,tarjeta_credito'],
-                'cheque_number' => 'nullable|string|max:64|required_if:medio_pago,cheque,cheque_al_dia,cheque_postfechado',
-                'agreement_term' => 'nullable|string|in:contado,30_45,30_60,60_90|required_if:medio_pago,convenio',
-                'debit_account_number' => 'nullable|string|max:64|required_if:medio_pago,debito',
+                'cuotas' => 'nullable|integer|min:1',
+                'numero_tarjeta' => ['nullable','string','max:32','regex:/^[0-9]{4,19}$/'],
+                'cheque_number' => 'nullable|string|max:64',
+                'agreement_term' => 'nullable|string|in:contado,30_45,30_60,60_90',
+                'debit_account_number' => 'nullable|string|max:64',
                 // Tomador / Asegurado
                 'policy_holder_name' => 'nullable|string|max:255',
                 'policy_holder_document' => 'nullable|string|max:100',
@@ -2432,6 +2871,8 @@ class SaasPolizasController extends Controller
                 'valor_financiacion' => 'nullable|numeric|min:0',
                 'total_poliza_financiada' => 'nullable|numeric|min:0',
                 'estado_cartera' => 'nullable|string|max:50',
+                'cartera_pagado_oficina' => 'nullable|boolean',
+                'cartera_pagado_aseguradora' => 'nullable|boolean',
                 'porcentaje_impuesto_bomberos' => 'nullable|numeric|min:0|max:100',
                 'impuesto_bomberos' => 'nullable|numeric|min:0',
                 'tipo_moneda' => 'nullable|string|max:10',
@@ -2444,6 +2885,7 @@ class SaasPolizasController extends Controller
                 'fecha_inicio' => 'sometimes|required|date',
                 'fecha_fin' => 'sometimes|required|date',
                 'estado' => 'nullable|in:ACTIVA,VENCIDA,CANCELADA,SUSPENDIDA,COTIZACION,DEVENGADA,EXPEDICION,NO_RENOVADA,PENDIENTE,COTIZACIÓN,EXPEDICIÓN,VIGENTE',
+                'cancellation_reason' => 'nullable|string|max:100',
                 'sede' => 'nullable|string|max:255',
 
                 // Nuevos campos para edición coherentes con store
@@ -2754,7 +3196,18 @@ class SaasPolizasController extends Controller
                 $updateData['end_date'] = $validated['fecha_fin'];
             }
             if (isset($validated['estado'])) {
-                $updateData['status'] = $this->mapStatusFromFrontend($validated['estado']);
+                $nuevoStatus = $this->mapStatusFromFrontend($validated['estado']);
+                $updateData['status'] = $nuevoStatus;
+                
+                // Si cambia a CANCELADA, registrar auditoría de cancelación
+                if ($nuevoStatus === 'cancelled' && $poliza->status !== 'cancelled') {
+                    $updateData['cancelled_at'] = now();
+                    $updateData['cancelled_by'] = optional($request->user())->id;
+                    $updateData['cancellation_reason'] = $validated['cancellation_reason'] ?? null;
+                } elseif (isset($validated['cancellation_reason']) && $nuevoStatus === 'cancelled') {
+                    // Permitir actualizar el motivo aunque ya esté cancelada
+                    $updateData['cancellation_reason'] = $validated['cancellation_reason'];
+                }
             }
             // Fecha de recepción (administrativa)
             if (isset($validated['fecha_recepcion'])) {
@@ -2975,6 +3428,42 @@ class SaasPolizasController extends Controller
                 }
             }
 
+            // Si se marcó estado_cartera = "Pagado": generar el recaudo según el
+            // tipo elegido por el usuario (oficina XOR aseguradora). Son mutuamente excluyentes.
+            $marcarOficina = $request->boolean('cartera_pagado_oficina');
+            $marcarAseguradora = $request->boolean('cartera_pagado_aseguradora');
+            $esPagado = isset($updateData['estado_cartera'])
+                && is_string($updateData['estado_cartera'])
+                && strcasecmp(trim($updateData['estado_cartera']), 'Pagado') === 0;
+
+            if ($esPagado && ($marcarOficina || $marcarAseguradora)) {
+                // Si llegan ambos por error, priorizar aseguradora (pago directo = cuota fully paid)
+                if ($marcarOficina && $marcarAseguradora) {
+                    $marcarOficina = false;
+                }
+                try {
+                    $pagoCtrl = app(\App\Http\Controllers\Api\PagoPolizaController::class);
+                    $fakeReq = new Request([
+                        'fecha' => now()->toDateString(),
+                        'metodo_pago' => 'efectivo',
+                        'observaciones' => 'Recaudo automático (cartera marcada como Pagado)',
+                        'oficina' => $marcarOficina,
+                        'aseguradora' => $marcarAseguradora,
+                    ]);
+                    $pagoCtrl->marcarPolizaPagada($fakeReq, $poliza->id);
+                    \Log::info("Recaudo automático generado", [
+                        'poliza_id' => $poliza->id,
+                        'tipo' => $marcarOficina ? 'oficina' : 'aseguradora',
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::warning("Marcar póliza pagada falló para poliza {$poliza->id}: " . $e->getMessage());
+                }
+            } elseif ($esPagado) {
+                \Log::info("Cartera marcada Pagado sin tipo de recaudo (no se generan pagos)", [
+                    'poliza_id' => $poliza->id,
+                ]);
+            }
+
             $this->logPolizaAction($request, 'actualizar', $poliza, 200, ['update_fields' => array_keys($updateData)]);
 
             \Log::info('POLIZAS: update result', [
@@ -2992,13 +3481,14 @@ class SaasPolizasController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Datos de validación incorrectos',
+                'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
+            \Log::error('Error al actualizar póliza: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar la póliza: ' . $e->getMessage(),
+                'message' => 'No se pudo actualizar la póliza. Inténtalo de nuevo.',
             ], 500);
         }
     }
@@ -3148,6 +3638,87 @@ class SaasPolizasController extends Controller
     }
 
     /**
+     * Bulk delete polizas – supports delete_all or selective ids
+     */
+    public function bulkDelete(Request $request)
+    {
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $deleteAll = $request->input('delete_all', false);
+            $polizaIds = $request->input('ids', []);
+
+            \Log::info('🗑️ [POLIZAS BULK DELETE] Iniciando', [
+                'broker_id' => $brokerId,
+                'delete_all' => $deleteAll,
+                'ids_count' => count($polizaIds),
+            ]);
+
+            $deletedCount = 0;
+
+            DB::beginTransaction();
+
+            try {
+                $query = Poliza::where('broker_id', $brokerId);
+
+                if ($deleteAll) {
+                    // nothing extra
+                } elseif (!empty($polizaIds)) {
+                    $query->whereIn('id', $polizaIds);
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Debe especificar los IDs de pólizas a eliminar o activar delete_all',
+                    ], 400);
+                }
+
+                $ids = $query->pluck('id')->toArray();
+                $deletedCount = count($ids);
+
+                if ($deletedCount > 0) {
+                    // Clean up related data
+                    DB::table('cartera_items')->whereIn('poliza_id', $ids)->delete();
+                    DB::table('recibos_caja')
+                        ->whereIn('poliza_id', $ids)
+                        ->where('recibo_anulado', false)
+                        ->update([
+                            'recibo_anulado' => true,
+                            'fecha_recibo_anulado' => now(),
+                            'observaciones' => DB::raw("CONCAT(COALESCE(observaciones, ''), ' | Anulado por eliminación masiva de pólizas')"),
+                            'activo' => false,
+                        ]);
+                    DB::table('pagos_polizas')->whereIn('poliza_id', $ids)->delete();
+
+                    Poliza::whereIn('id', $ids)->delete();
+                }
+
+                DB::commit();
+
+                \Log::info('✅ [POLIZAS BULK DELETE] Completado', [
+                    'broker_id' => $brokerId,
+                    'deleted_count' => $deletedCount,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => "Se eliminaron {$deletedCount} pólizas exitosamente",
+                    'deleted_count' => $deletedCount,
+                ]);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+        } catch (\Exception $e) {
+            \Log::error('❌ [POLIZAS BULK DELETE] Error', [
+                'message' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudieron eliminar las pólizas. Inténtalo de nuevo.',
+            ], 500);
+        }
+    }
+
+    /**
      * Delete a poliza (Development version - works with or without auth)
      */
     public function destroy(Request $request, $id)
@@ -3196,9 +3767,10 @@ class SaasPolizasController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error al eliminar póliza: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar la póliza: ' . $e->getMessage(),
+                'message' => 'No se pudo eliminar la póliza. Inténtalo de nuevo.',
             ], 500);
         }
     }
@@ -3225,16 +3797,27 @@ class SaasPolizasController extends Controller
 
             $validated = $request->validate([
                 'estado' => 'required|in:ACTIVA,VENCIDA,CANCELADA,SUSPENDIDA,COTIZACION,DEVENGADA,EXPEDICION,NO_RENOVADA,PENDIENTE,COTIZACIÓN,EXPEDICIÓN,VIGENTE',
-                'motivo' => 'nullable|string|max:500'
+                'motivo' => 'nullable|string|max:500',
+                'cancellation_reason' => 'nullable|string|max:100',
             ]);
 
             $estadoAnterior = $this->mapStatusToFrontend($poliza->status);
             $nuevoEstado = $this->mapStatusFromFrontend($validated['estado']);
 
-            $poliza->update([
+            $updatePayload = [
                 'status' => $nuevoEstado,
-                'status_notes' => $validated['motivo'] ?? null
-            ]);
+                'status_notes' => $validated['motivo'] ?? null,
+            ];
+            // Si el nuevo estado es CANCELADA, registrar auditoría completa
+            if ($nuevoEstado === 'cancelled') {
+                $updatePayload['cancelled_at'] = now();
+                $updatePayload['cancelled_by'] = optional($request->user())->id;
+                $updatePayload['cancellation_reason'] = $validated['cancellation_reason']
+                    ?? $validated['motivo']
+                    ?? null;
+            }
+
+            $poliza->update($updatePayload);
 
             $this->logPolizaAction($request, 'cambiar_estado', $poliza, 200, [
                 'estado_anterior' => $estadoAnterior,
@@ -3254,13 +3837,14 @@ class SaasPolizasController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Datos de validación incorrectos',
+                'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
+            \Log::error('Error al cambiar estado de póliza: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al cambiar el estado de la póliza: ' . $e->getMessage(),
+                'message' => 'No se pudo cambiar el estado de la póliza. Inténtalo de nuevo.',
             ], 500);
         }
     }
@@ -3785,13 +4369,14 @@ class SaasPolizasController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Datos de validación incorrectos',
+                'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
+            \Log::error('Error al registrar contacto de póliza: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al registrar contacto: ' . $e->getMessage()
+                'message' => 'No se pudo registrar el contacto. Inténtalo de nuevo.'
             ], 500);
         }
     }
@@ -4166,13 +4751,14 @@ class SaasPolizasController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Datos de validación incorrectos',
+                'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
+            \Log::error('Error al procesar renovación de póliza: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error al procesar renovación: ' . $e->getMessage()
+                'message' => 'No se pudo procesar la renovación. Inténtalo de nuevo.'
             ], 500);
         }
     }
@@ -4961,7 +5547,8 @@ class SaasPolizasController extends Controller
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['success' => false, 'message' => 'Póliza no encontrada'], 404);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            \Log::error('Error en operación de vinculados de póliza: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['success' => false, 'message' => 'Ocurrió un error al procesar la solicitud. Inténtalo de nuevo.'], 500);
         }
     }
 
@@ -5001,11 +5588,12 @@ class SaasPolizasController extends Controller
                 'data' => $vinculado,
             ], 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json(['success' => false, 'message' => 'Validación fallida', 'errors' => $e->errors()], 422);
+            return response()->json(['success' => false, 'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.', 'errors' => $e->errors()], 422);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['success' => false, 'message' => 'Póliza no encontrada'], 404);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            \Log::error('Error en operación de vinculados de póliza: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['success' => false, 'message' => 'Ocurrió un error al procesar la solicitud. Inténtalo de nuevo.'], 500);
         }
     }
 
@@ -5048,9 +5636,10 @@ class SaasPolizasController extends Controller
                 'data' => $created,
             ], 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json(['success' => false, 'message' => 'Validación fallida', 'errors' => $e->errors()], 422);
+            return response()->json(['success' => false, 'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            \Log::error('Error en operación de vinculados de póliza: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['success' => false, 'message' => 'Ocurrió un error al procesar la solicitud. Inténtalo de nuevo.'], 500);
         }
     }
 
@@ -5091,7 +5680,8 @@ class SaasPolizasController extends Controller
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['success' => false, 'message' => 'No encontrado'], 404);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            \Log::error('Error en operación de vinculados de póliza: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['success' => false, 'message' => 'Ocurrió un error al procesar la solicitud. Inténtalo de nuevo.'], 500);
         }
     }
 
@@ -5113,7 +5703,8 @@ class SaasPolizasController extends Controller
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['success' => false, 'message' => 'No encontrado'], 404);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            \Log::error('Error en operación de vinculados de póliza: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['success' => false, 'message' => 'Ocurrió un error al procesar la solicitud. Inténtalo de nuevo.'], 500);
         }
     }
 
@@ -5141,9 +5732,25 @@ class SaasPolizasController extends Controller
                 'deleted_count' => $deleted,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json(['success' => false, 'message' => 'Validación fallida', 'errors' => $e->errors()], 422);
+            return response()->json(['success' => false, 'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            \Log::error('Error en operación de vinculados de póliza: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json(['success' => false, 'message' => 'Ocurrió un error al procesar la solicitud. Inténtalo de nuevo.'], 500);
         }
+    }
+
+    /**
+     * Catálogo estático de motivos de cancelación para el filtro del listado
+     * y el modal "Cancelar póliza" en el frontend.
+     */
+    public function cancellationReasons()
+    {
+        $reasons = \App\Models\Poliza::CANCELLATION_REASONS;
+        return response()->json([
+            'success' => true,
+            'data' => collect($reasons)
+                ->map(fn($label, $key) => ['key' => $key, 'label' => $label])
+                ->values(),
+        ]);
     }
 }

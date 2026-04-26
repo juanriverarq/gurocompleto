@@ -36,6 +36,7 @@ class PolicyNotificationConfig extends Model
         'excluded_client_ids',
         'excluded_policy_types',
         'excluded_policy_statuses',
+        'excluded_ramo_ids',
         'send_to_client_phone',
         'send_to_client_mobile',
         'send_to_assigned_user',
@@ -62,6 +63,7 @@ class PolicyNotificationConfig extends Model
         'excluded_client_ids' => 'array',
         'excluded_policy_types' => 'array',
         'excluded_policy_statuses' => 'array',
+        'excluded_ramo_ids' => 'array',
         'send_to_client_phone' => 'boolean',
         'send_to_client_mobile' => 'boolean',
         'send_to_assigned_user' => 'boolean',
@@ -380,6 +382,7 @@ class PolicyNotificationConfig extends Model
         $excludedClientIds = $this->excluded_client_ids ?? [];
         $excludedPolicyTypes = $this->excluded_policy_types ?? [];
         $excludedPolicyStatuses = $this->excluded_policy_statuses ?? [];
+        $excludedRamoIds = $this->excluded_ramo_ids ?? [];
 
         // Para cada tipo de notificación habilitado
         $types = [];
@@ -417,6 +420,14 @@ class PolicyNotificationConfig extends Model
             // Excluir estados de póliza
             if (!empty($excludedPolicyStatuses)) {
                 $query->whereNotIn('status', array_map('strtolower', $excludedPolicyStatuses));
+            }
+
+            // Excluir ramos por ID
+            if (!empty($excludedRamoIds)) {
+                $query->where(function($q) use ($excludedRamoIds) {
+                    $q->whereNull('ramo_id')
+                      ->orWhereNotIn('ramo_id', $excludedRamoIds);
+                });
             }
 
             // Calcular rango de fechas (desde hoy a las 00:00 hasta maxDays+1 días)

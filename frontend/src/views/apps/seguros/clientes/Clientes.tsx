@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Card,
   Button,
   Badge,
-  Table,
   Modal,
   Tabs,
   Avatar,
   Spinner,
   Label,
 } from 'flowbite-react';
-import { IconDots } from '@tabler/icons-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import TableActionMenu, { TableMenuItem } from 'src/components/TableActionMenu';
@@ -34,6 +31,40 @@ import { TOUR_CLIENTES } from 'src/components/GuroTour/tourConfigs';
 import { ClienteSaaS } from 'src/types/saas';
 import { clienteService } from 'src/services/clienteService';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import suraLogo from 'src/assets/images/logoscompanias/sura.png';
+import bolivarLogo from 'src/assets/images/logoscompanias/bolivar.png';
+import hdiLogo from 'src/assets/images/logoscompanias/hdi.png';
+import estadoLogo from 'src/assets/images/logoscompanias/estado.png';
+import equidadLogo from 'src/assets/images/logoscompanias/equidad.png';
+import axaLogo from 'src/assets/images/logoscompanias/axa.png';
+import mapfreLogo from 'src/assets/images/logoscompanias/mapfre.png';
+import allianzLogo from 'src/assets/images/logoscompanias/allianz.png';
+
+const INSURER_LOGOS: Record<string, string> = {
+  sura: suraLogo,
+  bolivar: bolivarLogo,
+  bolívar: bolivarLogo,
+  hdi: hdiLogo,
+  estado: estadoLogo,
+  'seguros del estado': estadoLogo,
+  'la-equidad': equidadLogo,
+  'la equidad': equidadLogo,
+  equidad: equidadLogo,
+  axa: axaLogo,
+  'axa-colpatria': axaLogo,
+  mapfre: mapfreLogo,
+  allianz: allianzLogo,
+};
+
+const getInsurerLogo = (nombre: string): string | null => {
+  if (!nombre) return null;
+  const key = nombre.toLowerCase().trim();
+  if (INSURER_LOGOS[key]) return INSURER_LOGOS[key];
+  for (const [k, v] of Object.entries(INSURER_LOGOS)) {
+    if (key.includes(k)) return v;
+  }
+  return null;
+};
 
 // Interfaz para adaptar los datos de la API
 interface Cliente {
@@ -58,6 +89,9 @@ interface Cliente {
   valorCartera: number;
   ultimaActividad: string;
   observaciones?: string;
+  source?: string;
+  syncSource?: string;
+  syncAt?: string;
 }
 
 // Función para convertir datos de la API al formato local
@@ -207,6 +241,9 @@ const convertirClienteAPI = (clienteAPI: any): Cliente => {
       clienteAPI.created_at?.split('T')[0] ||
       new Date().toISOString().split('T')[0],
     observaciones: clienteAPI.observaciones || clienteAPI.notes || '',
+    source: clienteAPI.source || null,
+    syncSource: clienteAPI.sync_source || null,
+    syncAt: clienteAPI.sync_at || null,
   };
 };
 
@@ -306,6 +343,7 @@ const Clientes: React.FC = () => {
     'contacto',
     'ubicacion',
     'estado',
+    'origen',
   ]);
 
   const { toast } = useToast();
@@ -941,6 +979,7 @@ const Clientes: React.FC = () => {
       contacto: 'Contacto',
       ubicacion: 'Ubicación',
       estado: 'Estado',
+      origen: 'Origen',
       polizas: 'Pólizas',
       valorCartera: 'Valor Cartera',
       agente: 'Agente',
@@ -1049,6 +1088,28 @@ const Clientes: React.FC = () => {
             {cliente.estado}
           </Badge>
         );
+      case 'origen': {
+        const src = cliente.syncSource || cliente.source || '';
+        if (src && src.includes('_sync')) {
+          const insurerName = src.replace('_sync', '').replace('-', ' ');
+          const displayMap: Record<string, string> = { sura: 'Sura', bolivar: 'Bolívar', hdi: 'HDI', 'axa colpatria': 'AXA', 'seguros del estado': 'Estado' };
+          const display = displayMap[insurerName] || insurerName.charAt(0).toUpperCase() + insurerName.slice(1);
+          return (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#573CFF]/10 text-[#573CFF] dark:bg-[#573CFF]/20 dark:text-[#a78bfa]">
+                <Icon icon="solar:refresh-bold-duotone" className="w-3 h-3" />
+                {display}
+              </span>
+            </div>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-neutral-400">
+            <Icon icon="solar:pen-bold-duotone" className="w-3 h-3" />
+            Manual
+          </span>
+        );
+      }
       case 'polizas':
         return (
           <div className="text-center">
@@ -1257,333 +1318,220 @@ const Clientes: React.FC = () => {
 
       {/* Estadísticas */}
       {estadisticasTotales && estadisticasTotales.total !== undefined && (
-        <div data-tour="clientes-stats" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p data-tour="clientes-page-title" className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Total Clientes</p>
-                <p className="text-lg md:text-2xl font-bold text-[#573CFF]">
-                  {estadisticasTotales.total}
-                </p>
+        <div data-tour="clientes-stats" className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#573CFF20' }}>
+                <Icon icon="solar:users-group-two-rounded-bold-duotone" width={18} style={{ color: '#573CFF' }} />
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-[#573CFF]/10 dark:bg-[#573CFF]/20 rounded-xl flex items-center justify-center">
-                <Icon icon="solar:users-group-two-rounded-bold-duotone" className="w-5 h-5 text-[#573CFF]" />
-              </div>
+              <span data-tour="clientes-page-title" className="text-xs text-neutral-500 font-medium">Total Clientes</span>
             </div>
-          </Card>
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Activos</p>
-                <p className="text-lg md:text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {estadisticasTotales.activos}
-                </p>
+            <p className="text-xl font-bold text-white tracking-tight">{estadisticasTotales.total}</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#22c55e20' }}>
+                <Icon icon="solar:check-circle-bold-duotone" width={18} style={{ color: '#22c55e' }} />
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
-              </div>
+              <span className="text-xs text-neutral-500 font-medium">Activos</span>
             </div>
-          </Card>
-          <Card className="p-3 md:p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Prospectos</p>
-                <p className="text-lg md:text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  {estadisticasTotales.prospectos}
-                </p>
+            <p className="text-xl font-bold text-white tracking-tight">{estadisticasTotales.activos}</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#f9731620' }}>
+                <Icon icon="solar:clock-circle-bold-duotone" width={18} style={{ color: '#f97316' }} />
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-amber-100 dark:bg-amber-500/20 rounded-xl flex items-center justify-center">
-                <div className="w-2.5 h-2.5 bg-amber-500 rounded-full"></div>
-              </div>
+              <span className="text-xs text-neutral-500 font-medium">Prospectos</span>
             </div>
-          </Card>
-          <Card className="p-3 md:p-4 col-span-2 sm:col-span-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Valor Cartera</p>
-                <p className="text-sm md:text-lg font-bold text-[#573CFF]">
-                  {formatCurrency(estadisticasTotales.valorTotal)}
-                </p>
+            <p className="text-xl font-bold text-white tracking-tight">{estadisticasTotales.prospectos}</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#573CFF20' }}>
+                <Icon icon="solar:wallet-bold-duotone" width={18} style={{ color: '#573CFF' }} />
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-[#573CFF]/10 dark:bg-[#573CFF]/20 rounded-xl flex items-center justify-center">
-                <span className="text-[#573CFF] font-bold text-xs md:text-sm">$</span>
-              </div>
+              <span className="text-xs text-neutral-500 font-medium">Valor Cartera</span>
             </div>
-          </Card>
-          <Card className="p-3 md:p-4 col-span-2 sm:col-span-3 md:col-span-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Pólizas Activas</p>
-                <p className="text-lg md:text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {estadisticasTotales.polizasTotal}
-                </p>
+            <p className="text-xl font-bold text-white tracking-tight">{formatCurrency(estadisticasTotales.valorTotal)}</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#3b82f620' }}>
+                <Icon icon="solar:shield-check-bold-duotone" width={18} style={{ color: '#3b82f6' }} />
               </div>
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-100 dark:bg-blue-500/20 rounded-xl flex items-center justify-center">
-                <Icon icon="solar:shield-check-bold-duotone" className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
+              <span className="text-xs text-neutral-500 font-medium">Pólizas Activas</span>
             </div>
-          </Card>
+            <p className="text-xl font-bold text-white tracking-tight">{estadisticasTotales.polizasTotal}</p>
+          </div>
         </div>
       )}
 
-      {/* Header de Controles */}
-      <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Icon
-                  icon="solar:magnifer-bold-duotone"
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
-                />
-                <Input
-                  placeholder="Buscar por nombre, documento o email..."
-                  value={filters.search || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    handleFilterChange('search', e.target.value)
-                  }
-                  className="pl-10 h-10 text-sm rounded-[10px]"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                color="light"
-                onClick={() => cargarClientes()}
-                disabled={loading}
-                className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                title="Actualizar"
-              >
-                <Icon
-                  icon="solar:refresh-bold-duotone"
-                  className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
-                />
-              </Button>
-
-              <Button
-                color="light"
-                onClick={handleOpenFilterModal}
-                className="relative h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                title="Filtros"
-              >
-                <Icon icon="solar:filter-bold-duotone" className="w-4 h-4" />
-                {getActiveFiltersCount() > 0 && (
-                  <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">
-                    {getActiveFiltersCount()}
-                  </div>
-                )}
-              </Button>
-
-              <Button
-                color="light"
-                onClick={() => setShowNotificationsModal(true)}
-                className={`relative h-10 w-10 p-0 rounded-[10px] flex items-center justify-center transition-all border-2 ${
-                  notificationStatus?.is_active &&
-                  notificationStatus?.whatsapp_status?.connected
-                    ? 'border-green-500 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-500 shadow-green-200 shadow-md'
-                    : notificationStatus?.is_active &&
-                      !notificationStatus?.whatsapp_status?.connected
-                    ? 'border-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-500 animate-pulse shadow-red-200 shadow-md'
-                    : 'border-gray-300 bg-white hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:bg-gray-800'
-                }`}
-                title={
-                  notificationStatus?.is_active &&
-                  notificationStatus?.whatsapp_status?.connected
-                    ? '✅ Notificaciones Activas - WhatsApp Conectado'
-                    : notificationStatus?.is_active &&
-                      !notificationStatus?.whatsapp_status?.connected
-                    ? '⚠️ Notificaciones Activas - WhatsApp Desconectado'
-                    : 'Notificaciones Inactivas - Click para configurar'
-                }
-                data-feature="client-notifications-v2"
-              >
-                {notificationStatus?.is_active &&
-                  notificationStatus?.whatsapp_status?.connected && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
-                  )}
-                {notificationStatus?.is_active &&
-                  !notificationStatus?.whatsapp_status?.connected && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
-                  )}
-                <Icon
-                  icon="solar:bell-bold-duotone"
-                  className={`w-5 h-5 transition-colors ${
-                    notificationStatus?.is_active &&
-                    notificationStatus?.whatsapp_status?.connected
-                      ? 'text-green-600 dark:text-green-400'
-                      : notificationStatus?.is_active &&
-                        !notificationStatus?.whatsapp_status?.connected
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-500 dark:text-gray-400'
-                  }`}
-                />
-              </Button>
-
-              <Button
-                color="light"
-                onClick={() => setShowExportModal(true)}
-                className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                title="Exportar clientes"
-              >
-                <Icon icon="solar:download-bold-duotone" className="w-4 h-4" />
-              </Button>
-
-{/* Botón de eliminar todos - solo visible cuando hay selección masiva */}
-
-              <Button
-                color="light"
-                onClick={() => {
-                  if (visibleColumns.includes('polizas')) {
-                    setVisibleColumns([
-                      'nombre',
-                      'tipo',
-                      'documento',
-                      'genero',
-                      'edad',
-                      'contacto',
-                      'ubicacion',
-                      'estado',
-                    ]);
-                  } else {
-                    setVisibleColumns([
-                      'nombre',
-                      'tipo',
-                      'documento',
-                      'genero',
-                      'edad',
-                      'contacto',
-                      'ubicacion',
-                      'estado',
-                      'polizas',
-                      'valorCartera',
-                    ]);
-                  }
-                }}
-                className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                title="Mostrar/Ocultar más columnas"
-              >
-                <Icon icon="solar:eye-bold-duotone" className="w-4 h-4" />
-              </Button>
-
-              {canCreateClient && (
-                <Link to="/apps/seguros/clientes/nuevo" data-tour="clientes-create-btn">
-                  <span className="group relative inline-flex items-center bg-[#0d0d0d] rounded-2xl h-10 shadow-lg shadow-black/10 overflow-hidden cursor-pointer">
-                    <span className="absolute inset-y-0 left-0 w-10 group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
-                    <span className="relative z-10 flex items-center justify-center w-10 h-full flex-shrink-0">
-                      <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 text-white" />
-                    </span>
-                    <span className="relative z-10 pr-4 text-[11px] font-bold text-white uppercase tracking-[0.12em] whitespace-nowrap hidden sm:inline">Nuevo Cliente</span>
-                    <span className="relative z-10 pr-4 text-[11px] font-bold text-white uppercase tracking-[0.12em] whitespace-nowrap sm:hidden">Nuevo</span>
-                  </span>
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Tabla de clientes */}
-      <Card data-tour="clientes-table">
-        {loading ? (
-          <div className="flex justify-center items-center py-8">
-            <Spinner size="lg" />
-            <span className="ml-2">Cargando clientes...</span>
+      <div data-tour="clientes-table" className="rounded-2xl border border-neutral-800 bg-neutral-950/70 overflow-hidden">
+        {/* Search bar + actions */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800/60">
+          <div className="relative flex-1 max-w-sm">
+            <Icon icon="solar:magnifer-linear" className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" width={16} />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, documento o email..."
+              value={filters.search || ''}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-sm text-white placeholder-neutral-500 focus:border-[#573CFF] focus:outline-none transition-colors"
+            />
           </div>
-        ) : currentClientes.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <Icon icon="solar:user-hands-bold-duotone" className="w-16 h-16 text-gray-300" />
-              <p className="text-gray-500 text-lg font-medium">
-                No tienes clientes registrados aún
-              </p>
-              <p className="text-gray-400 text-sm">Comienza creando tu primer cliente</p>
+          <button onClick={() => cargarClientes()} disabled={loading} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors" title="Refrescar">
+            <Icon icon={loading ? 'svg-spinners:ring-resize' : 'solar:refresh-linear'} width={18} />
+          </button>
+          <button onClick={handleOpenFilterModal} className="relative rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors" title="Filtros">
+            <Icon icon="solar:filter-bold-duotone" width={18} />
+            {getActiveFiltersCount() > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{getActiveFiltersCount()}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setShowNotificationsModal(true)}
+            className={`relative rounded-lg border px-2.5 py-2 transition-colors ${
+              notificationStatus?.is_active && notificationStatus?.whatsapp_status?.connected
+                ? 'border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                : notificationStatus?.is_active && !notificationStatus?.whatsapp_status?.connected
+                ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20 animate-pulse'
+                : 'border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+            }`}
+            title={
+              notificationStatus?.is_active && notificationStatus?.whatsapp_status?.connected
+                ? '✅ Notificaciones Activas - WhatsApp Conectado'
+                : notificationStatus?.is_active && !notificationStatus?.whatsapp_status?.connected
+                ? '⚠️ Notificaciones Activas - WhatsApp Desconectado'
+                : 'Notificaciones Inactivas'
+            }
+            data-feature="client-notifications-v2"
+          >
+            {notificationStatus?.is_active && (
+              <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ${notificationStatus?.whatsapp_status?.connected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></span>
+            )}
+            <Icon icon="solar:bell-bold-duotone" width={18} />
+          </button>
+          <button onClick={() => setShowExportModal(true)} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors" title="Exportar">
+            <Icon icon="solar:download-bold-duotone" width={18} />
+          </button>
+          <button
+            onClick={() => {
+              if (visibleColumns.includes('polizas')) {
+                setVisibleColumns(['nombre', 'tipo', 'documento', 'genero', 'edad', 'contacto', 'ubicacion', 'estado']);
+              } else {
+                setVisibleColumns(['nombre', 'tipo', 'documento', 'genero', 'edad', 'contacto', 'ubicacion', 'estado', 'polizas', 'valorCartera']);
+              }
+            }}
+            className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors"
+            title="Mostrar/Ocultar más columnas"
+          >
+            <Icon icon="solar:eye-bold-duotone" width={18} />
+          </button>
+          {canCreateClient && (
+            <Link to="/apps/seguros/clientes/nuevo" data-tour="clientes-create-btn">
+              <button className="flex items-center gap-2 rounded-lg border border-[#573CFF]/40 bg-[#573CFF] hover:bg-[#4b31e6] px-4 py-2 text-sm font-medium text-white transition-colors">
+                <Icon icon="solar:add-circle-bold-duotone" width={18} />
+                <span className="hidden sm:inline">Nuevo Cliente</span>
+                <span className="sm:hidden">Nuevo</span>
+              </button>
+            </Link>
+          )}
+        </div>
+        {/* Table content */}
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Icon icon="svg-spinners:ring-resize" width={32} className="text-[#573CFF]" />
+            </div>
+          ) : currentClientes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
+              <Icon icon="solar:user-hands-bold-duotone" width={48} className="mb-3 opacity-40" />
+              <p className="text-sm font-medium">No tienes clientes registrados aún</p>
+              <p className="text-xs mt-1">Comienza creando tu primer cliente</p>
               {canCreateClient && (
-                <Link to="/apps/seguros/clientes/nuevo" className="mt-2">
-                  <span className="group relative inline-flex items-center bg-[#0d0d0d] rounded-2xl h-[48px] shadow-lg shadow-black/10 overflow-hidden cursor-pointer">
-                    <span className="absolute inset-y-0 left-0 w-[48px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
-                    <span className="relative z-10 flex items-center justify-center w-[48px] h-full flex-shrink-0">
-                      <Icon icon="solar:user-plus-bold" className="w-5 h-5 text-white" />
-                    </span>
-                    <span className="relative z-10 pr-5 text-[11px] font-bold text-white uppercase tracking-[0.15em] whitespace-nowrap">Crear primer cliente</span>
-                  </span>
+                <Link to="/apps/seguros/clientes/nuevo" className="mt-3">
+                  <button className="flex items-center gap-2 rounded-lg border border-[#573CFF]/40 bg-[#573CFF] hover:bg-[#4b31e6] px-4 py-2 text-sm font-medium text-white transition-colors">
+                    <Icon icon="solar:user-plus-bold" width={16} />
+                    Crear primer cliente
+                  </button>
                 </Link>
               )}
             </div>
-          </div>
-        ) : (
-          <>
-            {/* ── Selection toolbar ── */}
-            <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-white/[0.06]">
-              <button
-                onClick={() => toggleSelectAll()}
-                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                  currentClientes.length > 0 && currentClientes.every((c) => selectedIds.has(String(c.id)))
-                    ? 'bg-[#573CFF] text-white'
-                    : 'bg-gray-100 dark:bg-white/[0.06] text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/[0.1]'
-                }`}
-              >
-                {currentClientes.length > 0 && currentClientes.every((c) => selectedIds.has(String(c.id)))
-                  ? 'Deseleccionar todo'
-                  : 'Seleccionar todo'}
-              </button>
-              {selectedIds.size > 0 && (
-                <>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    <strong className="text-[#573CFF]">{selectedIds.size}</strong> seleccionados
-                  </span>
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <button
-                      onClick={handleOpenBulkClientStateModal}
-                      className="text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
-                    >
-                      <Icon icon="solar:settings-bold-duotone" className="w-3.5 h-3.5 inline mr-1" />
-                      Cambiar estado
-                    </button>
-                    {canDeleteClient && (
-                      <>
-                        <button
-                          onClick={handleBulkDeleteClientes}
-                          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                        >
-                          <Icon icon="solar:trash-bin-minimalistic-bold-duotone" className="w-3.5 h-3.5 inline mr-1" />
-                          Eliminar ({selectedIds.size})
-                        </button>
-                        {estadisticasTotales && estadisticasTotales.total > 0 && (
+          ) : (
+            <>
+              {/* Selection toolbar */}
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-neutral-800/60">
+                <button
+                  onClick={() => toggleSelectAll()}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                    currentClientes.length > 0 && currentClientes.every((c) => selectedIds.has(String(c.id)))
+                      ? 'bg-[#573CFF] text-white'
+                      : 'bg-neutral-800 text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  {currentClientes.length > 0 && currentClientes.every((c) => selectedIds.has(String(c.id)))
+                    ? 'Deseleccionar todo'
+                    : 'Seleccionar todo'}
+                </button>
+                {selectedIds.size > 0 && (
+                  <>
+                    <span className="text-xs text-gray-700 dark:text-neutral-400">
+                      <strong className="text-[#573CFF] dark:text-[#a78bfa]">{selectedIds.size}</strong> seleccionados
+                    </span>
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <button
+                        onClick={handleOpenBulkClientStateModal}
+                        className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-[#573CFF]/40 bg-[#573CFF]/10 text-[#573CFF] dark:text-[#a78bfa] hover:bg-[#573CFF]/20 transition-colors"
+                      >
+                        <Icon icon="solar:settings-bold-duotone" width={14} />
+                        Cambiar estado
+                      </button>
+                      {canDeleteClient && (
+                        <>
                           <button
-                            onClick={() => setShowBulkDeleteAllModal(true)}
-                            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-500/30 transition-colors"
+                            onClick={handleBulkDeleteClientes}
+                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
                           >
-                            <Icon icon="solar:trash-bin-trash-bold-duotone" className="w-3.5 h-3.5 inline mr-1" />
-                            Eliminar TODOS ({estadisticasTotales.total})
+                            <Icon icon="solar:trash-bin-minimalistic-bold-duotone" width={14} />
+                            Eliminar ({selectedIds.size})
                           </button>
-                        )}
-                      </>
-                    )}
-                    <button
-                      onClick={clearSelection}
-                      className="text-xs font-medium px-3 py-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
-                    >
-                      Limpiar
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-            {/* ── Modern Table ── */}
-            <div className="guro-table-wrap">
-              <table className="guro-table">
+                          {estadisticasTotales && estadisticasTotales.total > 0 && (
+                            <button
+                              onClick={() => setShowBulkDeleteAllModal(true)}
+                              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors"
+                            >
+                              <Icon icon="solar:trash-bin-trash-bold-duotone" width={14} />
+                              Eliminar TODOS ({estadisticasTotales.total})
+                            </button>
+                          )}
+                        </>
+                      )}
+                      <button
+                        onClick={clearSelection}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700 transition-colors"
+                      >
+                        Limpiar
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Table */}
+              <table className="w-full text-left">
                 <thead>
-                  <tr>
+                  <tr className="border-b border-neutral-800 text-[11px] uppercase tracking-wider text-neutral-500">
                     {visibleColumns.map((columnKey) => {
                       const apiField = columnToApiField[columnKey];
                       const isSortable = !!apiField;
                       const isActive = isSortable && filters.sort_by === apiField;
                       const dir = isActive ? filters.sort_dir || 'asc' : undefined;
                       return (
-                        <th key={columnKey} className="whitespace-nowrap">
+                        <th key={columnKey} className="px-4 py-3 font-medium whitespace-nowrap">
                           <div
-                            className={isSortable ? 'flex items-center gap-1.5 cursor-pointer select-none hover:text-gray-900 dark:hover:text-white transition-colors' : ''}
+                            className={isSortable ? 'flex items-center gap-1.5 cursor-pointer select-none hover:text-neutral-300 transition-colors' : ''}
                             onClick={() => isSortable && toggleSort(columnKey)}
                           >
                             <span>{getColumnName(columnKey)}</span>
@@ -1596,29 +1544,29 @@ const Clientes: React.FC = () => {
                                       : 'solar:arrow-down-bold-duotone'
                                     : 'solar:sort-vertical-bold-duotone'
                                 }
-                                className={`w-3.5 h-3.5 ${isActive ? 'text-[#573CFF]' : 'text-gray-400'}`}
+                                className={`w-3.5 h-3.5 ${isActive ? 'text-[#573CFF]' : 'text-neutral-600'}`}
                               />
                             )}
                           </div>
                         </th>
                       );
                     })}
-                    <th className="sticky-right">Acciones</th>
+                    <th className="px-4 py-3 font-medium text-right">Acciones</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-neutral-800/60">
                   {currentClientes.map((cliente) => (
                     <tr
                       key={cliente.id}
-                      className={`group${selectedIds.has(String(cliente.id)) ? ' row-selected' : ''}`}
+                      className={`hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors cursor-pointer ${selectedIds.has(String(cliente.id)) ? 'bg-[#573CFF]/10 dark:bg-[#573CFF]/5' : ''}`}
                       onClick={() => toggleSelectOne(cliente.id)}
                     >
                       {visibleColumns.map((columnKey) => (
-                        <td key={columnKey} className="whitespace-nowrap">
+                        <td key={columnKey} className="px-4 py-3 text-sm text-neutral-300 whitespace-nowrap">
                           {renderTableCell(cliente, columnKey)}
                         </td>
                       ))}
-                      <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <TableActionMenu>
                           <TableMenuItem onClick={() => handleViewCliente(cliente)}>
                             <Icon icon="solar:eye-bold-duotone" height={18} />
@@ -1673,65 +1621,59 @@ const Clientes: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </>
+          )}
+        </div>
 
-            {/* Paginación (backend) */}
-            <div className="flex items-center justify-between p-4">
-              <div className="text-sm text-gray-600">
-                Mostrando {startIndex || 0} a {endIndex || 0} de {pagination.total || 0} clientes
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <span>Por página:</span>
-                  <select
-                    className="border rounded-md px-2 py-1 text-sm dark:bg-darkgray"
-                    value={elementsPerPage}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setElementsPerPage(val);
-                      setFilters((prev) => ({ ...prev, per_page: val, page: 1 }));
-                    }}
+        {/* Pagination */}
+        {(pagination.last_page || 1) > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-800">
+            <span className="text-xs text-neutral-500">
+              Mostrando {startIndex || 0}-{endIndex || 0} de {pagination.total || 0}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  const newPage = Math.max(1, (pagination.current_page || 1) - 1);
+                  setFilters((prev) => ({ ...prev, page: newPage }));
+                }}
+                disabled={(pagination.current_page || 1) <= 1}
+                className="rounded-lg px-2.5 py-1.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors"
+              >
+                <Icon icon="solar:alt-arrow-left-linear" width={16} />
+              </button>
+              {Array.from({ length: Math.min(pagination.last_page || 1, 7) }, (_, i) => {
+                let pageNum: number;
+                const lastPage = pagination.last_page || 1;
+                const currentPage = pagination.current_page || 1;
+                if (lastPage <= 7) pageNum = i + 1;
+                else if (currentPage <= 4) pageNum = i + 1;
+                else if (currentPage >= lastPage - 3) pageNum = lastPage - 6 + i;
+                else pageNum = currentPage - 3 + i;
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setFilters((prev) => ({ ...prev, page: pageNum }))}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${currentPage === pageNum ? 'bg-[#573CFF] text-white' : 'text-neutral-500 hover:text-white hover:bg-neutral-800'}`}
                   >
-                    <option value={15}>15</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                </div>
-                <Button
-                  size="sm"
-                  color="gray"
-                  disabled={pagination.current_page <= 1}
-                  onClick={() => {
-                    const newPage = Math.max(1, (pagination.current_page || 1) - 1);
-                    setFilters((prev) => ({ ...prev, page: newPage }));
-                  }}
-                  className="rounded-[10px]"
-                >
-                  <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
-                </Button>
-                <span className="text-sm text-gray-600">
-                  Página {pagination.current_page || 1} de {pagination.last_page || 1}
-                </span>
-                <Button
-                  size="sm"
-                  color="gray"
-                  disabled={(pagination.current_page || 1) >= (pagination.last_page || 1)}
-                  onClick={() => {
-                    const newPage = Math.min(
-                      pagination.last_page || 1,
-                      (pagination.current_page || 1) + 1,
-                    );
-                    setFilters((prev) => ({ ...prev, page: newPage }));
-                  }}
-                  className="rounded-[10px]"
-                >
-                  <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
-                </Button>
-              </div>
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => {
+                  const newPage = Math.min(pagination.last_page || 1, (pagination.current_page || 1) + 1);
+                  setFilters((prev) => ({ ...prev, page: newPage }));
+                }}
+                disabled={(pagination.current_page || 1) >= (pagination.last_page || 1)}
+                className="rounded-lg px-2.5 py-1.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors"
+              >
+                <Icon icon="solar:alt-arrow-right-linear" width={16} />
+              </button>
             </div>
-          </>
+          </div>
         )}
-      </Card>
+      </div>
 
       {/* Modal de Filtros */}
       <Modal show={showFilterModal} onClose={() => setShowFilterModal(false)} size="2xl">
@@ -2310,9 +2252,22 @@ const Clientes: React.FC = () => {
                           >
                             <td>{p.numero_poliza || p.policy_number}</td>
                             <td>
-                              {(p as any).aseguradora_nombre ||
-                                p.aseguradora ||
-                                p.insurance_company}
+                              {(() => {
+                                const asegName = (p as any).aseguradora_nombre || p.aseguradora || p.insurance_company || '';
+                                const logo = getInsurerLogo(asegName);
+                                return (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center overflow-hidden border border-gray-200 dark:border-neutral-700 shrink-0">
+                                      {logo ? (
+                                        <img src={logo} alt="" className="w-5 h-5 object-contain" />
+                                      ) : (
+                                        <span className="text-[9px] font-bold text-[#111]">{asegName.charAt(0)}</span>
+                                      )}
+                                    </div>
+                                    <span>{asegName}</span>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td>
                               {(p as any).ramo_nombre || p.ramo_principal || p.type}

@@ -179,6 +179,12 @@ class Poliza extends Model
         // Eliminación SoftSeguros
         'motivo_eliminacion',
         'fecha_eliminacion',
+
+        // Sincronización detalle (microservicio aseguradoras)
+        'detail_sync_status',
+        'detail_sync_at',
+        'detail_sync_error',
+        'detail_sync_insurer_connection_id',
     ];
 
     /**
@@ -251,9 +257,16 @@ class Poliza extends Model
         'notification_preferences' => 'array',
         'forma_pago_detalle' => 'array',
         'fecha_eliminacion' => 'datetime',
+
+        'detail_sync_at' => 'datetime',
     ];
 
     // ===== RELACIONES =====
+
+    public function coverages(): HasMany
+    {
+        return $this->hasMany(PolizaCoverage::class);
+    }
 
     /**
      * Relación con el broker
@@ -702,6 +715,23 @@ class Poliza extends Model
             'status_notes' => 'Póliza activada el ' . now()->format('Y-m-d H:i:s'),
         ]);
     }
+
+    /**
+     * Motivos estándar de cancelación. Otros motivos libres se permiten
+     * como texto en `cancellation_reason` (no hay constraint enum en BD).
+     */
+    const CANCELLATION_REASONS = [
+        'no_pago' => 'Falta de pago',
+        'cambio_aseguradora' => 'Cambió de aseguradora',
+        'venta_vehiculo' => 'Venta del vehículo / activo',
+        'falta_documentacion' => 'Falta de documentación',
+        'cliente_inactivo' => 'Cliente inactivo',
+        'siniestro' => 'Siniestro',
+        'duplicada' => 'Póliza duplicada',
+        'solicitud_cliente' => 'Solicitud del cliente',
+        'fraude' => 'Sospecha de fraude',
+        'otro' => 'Otro',
+    ];
 
     /**
      * Cancelar la póliza

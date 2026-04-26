@@ -4,6 +4,7 @@ import { Button, Spinner, Alert, Tabs } from 'flowbite-react';
 import { HiArrowLeft } from 'react-icons/hi';
 import NuevoCliente from './NuevoCliente';
 import ArchivosCliente from 'src/views/apps/seguros/clientes/components/ArchivosCliente';
+import TareasAsociadas from '../components/TareasAsociadas';
 import { clienteService, type Cliente } from 'src/services/clienteService';
 
 const EditarCliente: React.FC = () => {
@@ -69,6 +70,12 @@ const EditarCliente: React.FC = () => {
       <Tabs>
         <Tabs.Item active title="Cliente">
           <NuevoCliente clienteToEdit={cliente} isEditMode={true} onSaveSuccess={() => navigate('/apps/seguros/clientes')} />
+        </Tabs.Item>
+        <Tabs.Item title="Tareas">
+          <TareasAsociadas
+            clientId={id}
+            clientName={cliente.nombre + (cliente.apellidos ? ' ' + cliente.apellidos : '')}
+          />
         </Tabs.Item>
         <Tabs.Item title="Archivos">
           <ArchivosCliente clienteId={id!} />

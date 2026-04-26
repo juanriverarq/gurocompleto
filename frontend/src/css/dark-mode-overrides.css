@@ -1,0 +1,573 @@
+/*
+ * Dark mode overrides — ALCANCE GLOBAL DENTRO DEL DASHBOARD
+ * -----------------------------------------------------------
+ * Estos overrides convierten clases de modo claro (bg-white, bg-gray-50,
+ * text-gray-900, border-gray-200, etc.) a equivalentes oscuros coherentes
+ * con la paleta dark del sistema.
+ *
+ * Paleta dark estandarizada:
+ *   Page bg:        #0f0f0f  (= gray-900 custom / --color-dark)
+ *   Surface card:   #1c1c1c  (= gray-800 custom / --color-darkgray)
+ *   Elevated:       #222222
+ *   Hover:          #2a2a2a  (= --color-darkborder area)
+ *   Border subtle:  #2a2a2a  (= --color-darkborder)
+ *   Text primary:   #f4f4f5
+ *   Text secondary: #a1a1aa
+ *   Text muted:     #71717a
+ *
+ * Scope: `html.dark .page-wrapper` (layout autenticado) para NO afectar:
+ *   - Landing pública
+ *   - Auth pages
+ *   - Onboarding
+ * Scope adicional: `html.dark [data-radix-popper-content-wrapper]` para
+ *   dropdowns/popovers de Radix que se renderizan fuera del DOM principal.
+ */
+
+/* =====================================================================
+   1. FONDOS — superficies claras → oscuras
+   ===================================================================== */
+
+/* bg-white es el más frecuente: lo convertimos a superficie de card */
+html.dark .page-wrapper .bg-white {
+  background-color: #1c1c1c;
+}
+
+/* bg-gray-50 → fondo de página ligeramente más oscuro que card */
+html.dark .page-wrapper .bg-gray-50 {
+  background-color: #181818;
+}
+
+/* bg-gray-100 → surface elevada (table headers, badges, hover areas) */
+html.dark .page-wrapper .bg-gray-100 {
+  background-color: #222222;
+}
+
+/* bg-gray-200 → surface aún más elevada o hover */
+html.dark .page-wrapper .bg-gray-200 {
+  background-color: #2a2a2a;
+}
+
+/* bg-gray-300 → separadores, bordes gruesos */
+html.dark .page-wrapper .bg-gray-300 {
+  background-color: #333333;
+}
+
+/* Preservar blanco en elementos decorativos/logos (pequeños circles, avatars) */
+/* Excepción: círculos que contienen logos de aseguradoras deben mantenerse blancos */
+html.dark .page-wrapper .bg-white.rounded-full:not([class*="p-"]):not([class*="shadow"]):not(:has(> img)) {
+  background-color: #1c1c1c;
+}
+
+/* =====================================================================
+   2. HOVER STATES — fondos claros en hover
+   ===================================================================== */
+
+html.dark .page-wrapper .hover\:bg-white:hover {
+  background-color: #222222;
+}
+
+html.dark .page-wrapper .hover\:bg-gray-50:hover {
+  background-color: #202020;
+}
+
+html.dark .page-wrapper .hover\:bg-gray-100:hover {
+  background-color: #252525;
+}
+
+html.dark .page-wrapper .hover\:bg-gray-200:hover {
+  background-color: #2e2e2e;
+}
+
+/* =====================================================================
+   3. TEXTO — grises oscuros → claros
+   ===================================================================== */
+
+/* text-gray-900 y text-gray-800 están remapeados en tailwind.config a
+   rgb(15,15,15) y rgb(28,28,28) respectivamente — son casi negros.
+   En modo oscuro se vuelven invisibles sobre fondo oscuro. */
+html.dark .page-wrapper .text-gray-900 {
+  color: #f4f4f5;
+}
+
+html.dark .page-wrapper .text-gray-800 {
+  color: #e4e4e7;
+}
+
+/* text-gray-700 = #374151 standard Tailwind — muy oscuro sobre fondo oscuro */
+html.dark .page-wrapper .text-gray-700 {
+  color: #d1d5db;
+}
+
+/* text-gray-600 = #4b5563 — oscuro, necesita aclararse */
+html.dark .page-wrapper .text-gray-600 {
+  color: #a1a1aa;
+}
+
+/* text-gray-500 = #6b7280 — borderline; lo claramos un poco para mejorar contraste */
+html.dark .page-wrapper .text-gray-500 {
+  color: #a1a1aa;
+}
+
+/* text-gray-400 = #9ca3af — ya es claro, dejamos casi igual */
+html.dark .page-wrapper .text-gray-400 {
+  color: #a1a1aa;
+}
+
+/* Hover texto */
+html.dark .page-wrapper .hover\:text-gray-900:hover {
+  color: #f4f4f5;
+}
+
+html.dark .page-wrapper .hover\:text-gray-800:hover {
+  color: #e4e4e7;
+}
+
+html.dark .page-wrapper .hover\:text-gray-700:hover {
+  color: #d1d5db;
+}
+
+html.dark .page-wrapper .hover\:text-gray-600:hover {
+  color: #a1a1aa;
+}
+
+/* =====================================================================
+   4. BORDES — claros → sutiles oscuros
+   ===================================================================== */
+
+html.dark .page-wrapper .border-gray-100 {
+  border-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .border-gray-200 {
+  border-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .border-gray-300 {
+  border-color: #333333;
+}
+
+html.dark .page-wrapper .border-gray-400 {
+  border-color: #3f3f3f;
+}
+
+/* Bordes específicos en white */
+html.dark .page-wrapper .border-white {
+  border-color: #3f3f3f;
+}
+
+/* =====================================================================
+   5. DIVIDE — separadores de tabla/lista
+   ===================================================================== */
+
+html.dark .page-wrapper .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .divide-gray-300 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #333333;
+}
+
+/* =====================================================================
+   6. RING — focus rings
+   ===================================================================== */
+
+html.dark .page-wrapper .ring-gray-200 {
+  --tw-ring-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .ring-gray-300 {
+  --tw-ring-color: #333333;
+}
+
+/* =====================================================================
+   7. INPUTS / FORMS
+   ===================================================================== */
+
+/* Inputs y textareas con bg-white y sin dark: par */
+html.dark .page-wrapper input.bg-white,
+html.dark .page-wrapper textarea.bg-white,
+html.dark .page-wrapper select.bg-white {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+}
+
+html.dark .page-wrapper input.bg-gray-50,
+html.dark .page-wrapper textarea.bg-gray-50,
+html.dark .page-wrapper select.bg-gray-50 {
+  background-color: #181818;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+}
+
+html.dark .page-wrapper input.bg-gray-100,
+html.dark .page-wrapper textarea.bg-gray-100,
+html.dark .page-wrapper select.bg-gray-100 {
+  background-color: #222222;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+}
+
+/* Placeholders */
+html.dark .page-wrapper .placeholder-gray-400::placeholder,
+html.dark .page-wrapper .placeholder-gray-500::placeholder {
+  color: #52525b;
+}
+
+/* =====================================================================
+   8. TABLAS — thead y filas
+   ===================================================================== */
+
+html.dark .page-wrapper table.bg-white,
+html.dark .page-wrapper table > tbody > tr.bg-white {
+  background-color: #1c1c1c;
+}
+
+html.dark .page-wrapper thead.bg-gray-50,
+html.dark .page-wrapper tfoot.bg-gray-50 {
+  background-color: #181818;
+}
+
+html.dark .page-wrapper thead.bg-gray-100 {
+  background-color: #222222;
+}
+
+html.dark .page-wrapper tbody > tr.bg-white {
+  background-color: #1c1c1c;
+}
+
+html.dark .page-wrapper tbody > tr:hover.hover\:bg-gray-50,
+html.dark .page-wrapper tbody > tr.hover\:bg-gray-50:hover {
+  background-color: #202020;
+}
+
+html.dark .page-wrapper tbody > tr.border-b {
+  border-color: #2a2a2a;
+}
+
+/* Filas con border-b sin dark: par */
+html.dark .page-wrapper .border-b {
+  border-bottom-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .border-t {
+  border-top-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .border-l {
+  border-left-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .border-r {
+  border-right-color: #2a2a2a;
+}
+
+/* =====================================================================
+   9. BADGES / PILLS sin dark: pair
+   ===================================================================== */
+
+html.dark .page-wrapper .bg-gray-100.text-gray-800,
+html.dark .page-wrapper .bg-gray-200.text-gray-700,
+html.dark .page-wrapper .bg-gray-200.text-gray-800 {
+  background-color: #2a2a2a;
+  color: #d1d5db;
+}
+
+/* =====================================================================
+   10. SOMBRAS — ajuste para modo oscuro
+   ===================================================================== */
+
+html.dark .page-wrapper .shadow,
+html.dark .page-wrapper .shadow-sm,
+html.dark .page-wrapper .shadow-md {
+  --tw-shadow-color: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+html.dark .page-wrapper .shadow-lg {
+  --tw-shadow-color: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* =====================================================================
+   11. GRADIENTES — degradados de blanco/gris claro
+   ===================================================================== */
+
+html.dark .page-wrapper .from-white {
+  --tw-gradient-from: #1c1c1c;
+}
+
+html.dark .page-wrapper .to-white {
+  --tw-gradient-to: #1c1c1c;
+}
+
+html.dark .page-wrapper .from-gray-50 {
+  --tw-gradient-from: #181818;
+}
+
+html.dark .page-wrapper .to-gray-50 {
+  --tw-gradient-to: #181818;
+}
+
+html.dark .page-wrapper .from-gray-100 {
+  --tw-gradient-from: #222222;
+}
+
+html.dark .page-wrapper .via-white {
+  --tw-gradient-via: #1c1c1c;
+}
+
+/* =====================================================================
+   12. SCROLLBAR — estilo oscuro coherente
+   ===================================================================== */
+
+html.dark .page-wrapper ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html.dark .page-wrapper ::-webkit-scrollbar-track {
+  background: #1c1c1c;
+}
+
+html.dark .page-wrapper ::-webkit-scrollbar-thumb {
+  background: #3f3f3f;
+  border-radius: 3px;
+}
+
+html.dark .page-wrapper ::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* =====================================================================
+   13. RADIX POPOVER / DROPDOWN — fuera del .page-wrapper
+   ===================================================================== */
+
+html.dark [data-radix-popper-content-wrapper] .bg-white {
+  background-color: #1c1c1c;
+}
+
+html.dark [data-radix-popper-content-wrapper] .bg-gray-50 {
+  background-color: #181818;
+}
+
+html.dark [data-radix-popper-content-wrapper] .bg-gray-100 {
+  background-color: #222222;
+}
+
+html.dark [data-radix-popper-content-wrapper] .border-gray-200,
+html.dark [data-radix-popper-content-wrapper] .border-gray-100 {
+  border-color: #2a2a2a;
+}
+
+html.dark [data-radix-popper-content-wrapper] .text-gray-900 {
+  color: #f4f4f5;
+}
+
+html.dark [data-radix-popper-content-wrapper] .text-gray-800 {
+  color: #e4e4e7;
+}
+
+html.dark [data-radix-popper-content-wrapper] .text-gray-700 {
+  color: #d1d5db;
+}
+
+html.dark [data-radix-popper-content-wrapper] .text-gray-600 {
+  color: #a1a1aa;
+}
+
+html.dark [data-radix-popper-content-wrapper] .text-gray-500 {
+  color: #a1a1aa;
+}
+
+html.dark [data-radix-popper-content-wrapper] .hover\:bg-gray-100:hover {
+  background-color: #252525;
+}
+
+html.dark [data-radix-popper-content-wrapper] .hover\:bg-gray-50:hover {
+  background-color: #202020;
+}
+
+/* =====================================================================
+   14. EXCEPCIONES — preservar blanco donde es intencional
+   ===================================================================== */
+
+/* Spans de 2px decorativos (indicadores de estado) */
+html.dark .page-wrapper .w-2.h-2.bg-white,
+html.dark .page-wrapper .w-1\.5.h-1\.5.bg-white {
+  background-color: #ffffff !important;
+}
+
+/* Logos / avatars con bg-white que contienen img */
+html.dark .page-wrapper .bg-white:has(> img),
+html.dark .page-wrapper .bg-white:has(> svg.logo) {
+  background-color: #ffffff;
+}
+
+/* Botones con fondo de color sólido — preservar el texto blanco
+   (el fondo ya tiene color, solo nos preocupa no tocar el bg) */
+html.dark .page-wrapper .bg-primary.bg-white,
+html.dark .page-wrapper [class*="bg-blue-"].bg-white,
+html.dark .page-wrapper [class*="bg-red-"].bg-white,
+html.dark .page-wrapper [class*="bg-green-"].bg-white {
+  background-color: unset;
+}
+
+/* =====================================================================
+   15. FLOWBITE MODAL — bg-white en modal drawer de Flowbite
+   ===================================================================== */
+
+html.dark [role="dialog"].bg-white,
+html.dark [role="dialog"] > .bg-white {
+  background-color: #1c1c1c;
+}
+
+html.dark .fixed.bg-white {
+  background-color: #1c1c1c;
+}
+
+/* =====================================================================
+   16. TYPOGRAPHY — prose y elementos tipográficos
+   ===================================================================== */
+
+html.dark .page-wrapper h1,
+html.dark .page-wrapper h2,
+html.dark .page-wrapper h3,
+html.dark .page-wrapper h4,
+html.dark .page-wrapper h5,
+html.dark .page-wrapper h6 {
+  /* Solo si NO tienen una clase de color explícita */
+  color: inherit;
+}
+
+/* Labels de formularios en gris oscuro */
+html.dark .page-wrapper label.text-gray-700,
+html.dark .page-wrapper label.text-gray-800,
+html.dark .page-wrapper label.text-gray-900 {
+  color: #d1d5db;
+}
+
+/* =====================================================================
+   17. PRINT — excluir overrides en impresión
+   ===================================================================== */
+
+/* =====================================================================
+   18. FORM ELEMENTS SIN BG CLASS — browser default blanco
+   ===================================================================== */
+
+/* Usar :where() para especificidad cero: cualquier clase de Tailwind
+   (bg-neutral-900, bg-gray-800, etc.) lo sobreescribirá automáticamente */
+:where(html.dark .page-wrapper) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+  color-scheme: dark;
+}
+
+:where(html.dark .page-wrapper) textarea {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+  color-scheme: dark;
+}
+
+:where(html.dark .page-wrapper) select {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+  color-scheme: dark;
+}
+
+/* Radix popper dropdowns también */
+:where(html.dark [data-radix-popper-content-wrapper]) input:not([type="checkbox"]):not([type="radio"]) {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+}
+
+/* =====================================================================
+   19. FLOWBITE MODAL — texto y fondos dentro de role="dialog"
+   ===================================================================== */
+
+/* Flowbite renderiza modales fuera de .page-wrapper.
+   Estos overrides cubren labels y texto sin dark: pair dentro de modales. */
+html.dark [role="dialog"] .text-gray-900 { color: #f4f4f5; }
+html.dark [role="dialog"] .text-gray-800 { color: #e4e4e7; }
+html.dark [role="dialog"] .text-gray-700 { color: #d1d5db; }
+html.dark [role="dialog"] .text-gray-600 { color: #a1a1aa; }
+html.dark [role="dialog"] .text-gray-500 { color: #a1a1aa; }
+html.dark [role="dialog"] .text-gray-400 { color: #a1a1aa; }
+
+html.dark [role="dialog"] label.text-gray-700,
+html.dark [role="dialog"] label.text-gray-800,
+html.dark [role="dialog"] label.text-gray-900 { color: #d1d5db; }
+
+html.dark [role="dialog"] .bg-gray-50  { background-color: #181818; }
+html.dark [role="dialog"] .bg-gray-100 { background-color: #222222; }
+html.dark [role="dialog"] .border-gray-200 { border-color: #2a2a2a; }
+html.dark [role="dialog"] .border-gray-100 { border-color: #2a2a2a; }
+
+/* Form elements dentro de modales (sin dark: pair) */
+:where(html.dark [role="dialog"]) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+  color-scheme: dark;
+}
+:where(html.dark [role="dialog"]) textarea {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+  color-scheme: dark;
+}
+:where(html.dark [role="dialog"]) select {
+  background-color: #1c1c1c;
+  color: #f4f4f5;
+  border-color: #2a2a2a;
+  color-scheme: dark;
+}
+
+/* =====================================================================
+   20. TEXTOS HEX NEGROS — colores custom near-black sin dark: pair
+   ===================================================================== */
+
+/* Páginas que usan text-[#0d0d0d], text-[#111], etc. directamente */
+html.dark .page-wrapper .text-\[\#0d0d0d\],
+html.dark .page-wrapper .text-\[\#0d0d0e\],
+html.dark .page-wrapper .text-\[\#111\],
+html.dark .page-wrapper .text-\[\#111111\],
+html.dark .page-wrapper .text-\[\#0A0A0A\] {
+  color: #f4f4f5;
+}
+
+/* bg near-black sin dark: pair (e.g. CombinedDashboard empty state botón) */
+html.dark .page-wrapper .bg-\[\#0d0d0d\],
+html.dark .page-wrapper .bg-\[\#0d0d0e\] {
+  background-color: #1c1c1c;
+}
+
+@media print {
+  html.dark .page-wrapper .bg-white {
+    background-color: #ffffff !important;
+  }
+
+  html.dark .page-wrapper .text-gray-900 {
+    color: #111827 !important;
+  }
+
+  html.dark .page-wrapper .text-gray-800 {
+    color: #1f2937 !important;
+  }
+
+  html.dark .page-wrapper .text-gray-700 {
+    color: #374151 !important;
+  }
+
+  html.dark .page-wrapper .border-gray-200 {
+    border-color: #e5e7eb !important;
+  }
+}

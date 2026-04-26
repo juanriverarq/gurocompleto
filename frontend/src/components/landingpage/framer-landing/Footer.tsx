@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import Lottie from 'lottie-react';
 import guroLogoAnimation from 'src/assets/LOTTIE.json';
+import SyncButton from './SyncButton';
 
 const Footer = () => {
 
@@ -29,7 +30,7 @@ const Footer = () => {
       links: [
         { name: 'Centro de ayuda', href: 'mailto:soporte@guro.co' },
         { name: 'Blog', href: '/blog' },
-        { name: 'Comenzar gratis', href: '/comenzar' },
+        { name: 'Comenzar', href: '/comenzar' },
         { name: 'Iniciar sesión', href: '/auth/login' },
       ],
     },
@@ -73,18 +74,7 @@ const Footer = () => {
               El software de seguros más inteligente de Latinoamérica.
             </p>
           </div>
-          <a
-            href="/comenzar"
-            className="group relative inline-flex items-center bg-white rounded-2xl h-[48px] overflow-hidden"
-          >
-            <span className="absolute inset-y-0 left-0 w-[48px] group-hover:w-full bg-[#573CFF] rounded-2xl transition-all duration-300 ease-out" />
-            <span className="relative z-10 flex items-center justify-center w-[48px] h-full flex-shrink-0">
-              <Icon icon="solar:arrow-right-linear" className="w-4 h-4 text-[#0d0d0d] group-hover:text-white transition-colors" />
-            </span>
-            <span className="relative z-10 pl-2 pr-5 text-[10px] sm:text-[11px] font-bold text-[#0d0d0d] group-hover:text-white uppercase tracking-[0.15em] whitespace-nowrap transition-colors">
-              Comienza gratis
-            </span>
-          </a>
+          <SyncButton href="/comenzar" size="sm">Comenzar</SyncButton>
         </div>
 
         {/* Link columns */}

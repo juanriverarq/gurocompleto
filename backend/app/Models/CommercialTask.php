@@ -41,10 +41,14 @@ class CommercialTask extends Model
         'has_reminder',
         'reminder_at',
         'reminder_sent',
+        'notifications_sent',
+        'last_notification_at',
         'attachments',
         'external_reference',
         'estimated_duration_minutes',
-        'actual_duration_minutes'
+        'actual_duration_minutes',
+        'assigned_company',
+        'assigned_financial_entity',
     ];
 
     protected $casts = [
@@ -54,11 +58,13 @@ class CommercialTask extends Model
         'scheduled_for' => 'datetime',
         'next_follow_up' => 'datetime',
         'reminder_at' => 'datetime',
+        'last_notification_at' => 'datetime',
         'has_reminder' => 'boolean',
         'reminder_sent' => 'boolean',
         'progress_percentage' => 'integer',
         'estimated_duration_minutes' => 'integer',
         'actual_duration_minutes' => 'integer',
+        'notifications_sent' => 'integer',
         'activity_log' => 'array',
         'attachments' => 'array'
     ];
@@ -406,18 +412,20 @@ class CommercialTask extends Model
         $base = self::forBroker($brokerId);
         
         return [
-            'total' => $base->count(),
-            'pending' => $base->pending()->count(),
-            'in_progress' => $base->inProgress()->count(),
-            'completed' => $base->completed()->count(),
-            'overdue' => $base->overdue()->count(),
-            'due_today' => $base->dueToday()->count(),
-            'due_this_week' => $base->dueThisWeek()->count(),
-            'needing_follow_up' => $base->needingFollowUp()->count(),
-            'by_type' => $base->selectRaw('type, count(*) as count')
+            'total' => (clone $base)->count(),
+            'pending' => (clone $base)->pending()->count(),
+            'in_progress' => (clone $base)->inProgress()->count(),
+            'completed' => (clone $base)->completed()->count(),
+            'overdue' => (clone $base)->overdue()->count(),
+            'cancelada' => (clone $base)->where('status', 'cancelada')->count(),
+            'pausada' => (clone $base)->where('status', 'pausada')->count(),
+            'due_today' => (clone $base)->dueToday()->count(),
+            'due_this_week' => (clone $base)->dueThisWeek()->count(),
+            'needing_follow_up' => (clone $base)->needingFollowUp()->count(),
+            'by_type' => (clone $base)->selectRaw('type, count(*) as count')
                               ->groupBy('type')
                               ->pluck('count', 'type'),
-            'by_priority' => $base->selectRaw('priority, count(*) as count')
+            'by_priority' => (clone $base)->selectRaw('priority, count(*) as count')
                                   ->groupBy('priority')
                                   ->pluck('count', 'priority')
         ];

@@ -29,6 +29,11 @@
     --color-warning-rgb: 248, 194, 10;
     --color-error-rgb: 255, 102, 146;
     --color-success-rgb: 46, 169, 92;
+    /* Primario Guro: mismo morado que sync/wallet (fallback antes de data-color-theme) */
+    --color-primary: #573CFF;
+    --color-primary-emphasis: #4530d4;
+    --color-lightprimary: #573CFF15;
+    --color-primary-rgb: 87, 60, 255;
 }
 
 [data-color-theme="BLUE_THEME"] {
@@ -43,26 +48,26 @@
 }
 
 [data-color-theme="AQUA_THEME"] {
-    --color-primary: #0074BA;
-    --color-bghover: #00639e;
-    --color-primary-emphasis: #00639e;
+    --color-primary: #573CFF;
+    --color-bghover: #4530d4;
+    --color-primary-emphasis: #4530d4;
     --color-secondary-emphasis: #3cb7a0;
     --color-secondary: #47D7BC;
-    --color-lightprimary: #0074BA20;
+    --color-lightprimary: #573CFF15;
     --color-lightsecondary: #00639e20;
-    --color-primary-rgb: 0, 116, 186;
+    --color-primary-rgb: 87, 60, 255;
     --color-secondary-rgb: 71, 215, 188;
 
 }
 
 [data-color-theme="PURPLE_THEME"] {
-    --color-primary: #763EBD;
-    --color-primary-emphasis: #6435a1;
+    --color-primary: #573CFF;
+    --color-primary-emphasis: #4530d4;
     --color-secondary-emphasis: #7fb0b5;
     --color-secondary: #49BEFF;
-    --color-lightprimary: #763EBD20;
+    --color-lightprimary: #573CFF15;
     --color-lightsecondary: #49BEFF20;
-    --color-primary-rgb: 118, 62, 189;
+    --color-primary-rgb: 87, 60, 255;
     --color-secondary-rgb: 149, 207, 213;
 }
 
@@ -79,23 +84,23 @@
 }
 
 [data-color-theme="CYAN_THEME"] {
-    --color-primary: #01C0C8;
-    --color-primary-emphasis: #01a3aa;
+    --color-primary: #573CFF;
+    --color-primary-emphasis: #4530d4;
     --color-secondary-emphasis: #d58066;
     --color-secondary: #FB9678;
-    --color-lightprimary: #01C0C820;
+    --color-lightprimary: #573CFF15;
     --color-lightsecondary: #FB967820;
-    --color-primary-rgb: 1, 192, 200;
+    --color-primary-rgb: 87, 60, 255;
     --color-secondary-rgb: 251, 150, 120;
 }
 
 [data-color-theme="ORANGE_THEME"] {
-    --color-primary: #FA896B;
-    --color-primary-emphasis: #d5745b;
+    --color-primary: #573CFF;
+    --color-primary-emphasis: #4530d4;
     --color-secondary-emphasis: #00639e;
     --color-secondary: #0074BA;
-    --color-lightprimary: #FA896B20;
+    --color-lightprimary: #573CFF15;
     --color-lightsecondary: #0074BA20;
-    --color-primary-rgb: 250, 137, 107;
+    --color-primary-rgb: 87, 60, 255;
     --color-secondary-rgb: 0, 116, 186;
 }

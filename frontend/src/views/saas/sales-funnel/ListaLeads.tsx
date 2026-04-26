@@ -15,9 +15,9 @@ const STAGE_CONFIG = {
   'lead': { label: 'Lead', color: 'bg-gray-100 text-gray-800', icon: 'solar:user-bold-duotone' },
   'contacted': { label: 'Contactado', color: 'bg-blue-100 text-blue-800', icon: 'solar:phone-bold-duotone' },
   'qualified': { label: 'Calificado', color: 'bg-indigo-100 text-indigo-800', icon: 'solar:check-circle-bold-duotone' },
-  'presentation': { label: 'Presentación', color: 'bg-purple-100 text-purple-800', icon: 'solar:presentation-graph-bold-duotone' },
-  'proposal': { label: 'Propuesta', color: 'bg-yellow-100 text-yellow-800', icon: 'solar:document-text-bold-duotone' },
-  'negotiation': { label: 'Negociación', color: 'bg-orange-100 text-orange-800', icon: 'solar:handshake-bold-duotone' },
+  'presentation': { label: 'Cotización', color: 'bg-purple-100 text-purple-800', icon: 'solar:presentation-graph-bold-duotone' },
+  'proposal': { label: 'Asesoría', color: 'bg-yellow-100 text-yellow-800', icon: 'solar:document-text-bold-duotone' },
+  'negotiation': { label: 'Seguimiento', color: 'bg-orange-100 text-orange-800', icon: 'solar:handshake-bold-duotone' },
   'closed_won': { label: 'Ganado', color: 'bg-green-100 text-green-800', icon: 'solar:star-bold-duotone' },
   'closed_lost': { label: 'Perdido', color: 'bg-red-100 text-red-800', icon: 'solar:close-circle-bold-duotone' }
 };

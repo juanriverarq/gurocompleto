@@ -46,12 +46,14 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
   // Estados de datos
   const [whatsappInstances, setWhatsappInstances] = useState<any[]>([]);
   const [clientes, setClientes] = useState<any[]>([]);
+  const [ramos, setRamos] = useState<Array<{ id: number; nombre: string }>>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [scheduledNotifications, setScheduledNotifications] = useState<any[]>([]);
   
   // Estados de UI
   const [loadingInstances, setLoadingInstances] = useState(false);
   const [loadingClientes, setLoadingClientes] = useState(false);
+  const [loadingRamos, setLoadingRamos] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [loadingScheduled, setLoadingScheduled] = useState(false);
   const [clienteSearch, setClienteSearch] = useState('');
@@ -62,6 +64,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateBody, setNewTemplateBody] = useState('');
   const [submittingTemplate, setSubmittingTemplate] = useState(false);
+  const [ramoSearch, setRamoSearch] = useState('');
   
   // Ref para acceder al config actual sin causar re-renders
   const configRef = useRef(config);
@@ -212,6 +215,20 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   }, []);
 
+  const loadRamos = useCallback(async () => {
+    try {
+      setLoadingRamos(true);
+      const response = await api.get('/saas/catalogos/ramos?per_page=999999');
+      if (response.data?.data) {
+        setRamos(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error cargando ramos:', error);
+    } finally {
+      setLoadingRamos(false);
+    }
+  }, []);
+
   const loadLogs = useCallback(async () => {
     try {
       setLoadingLogs(true);
@@ -268,7 +285,10 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
       } else if (activeTab === 'history') {
         loadLogs();
       } else if (activeTab === 'config') {
-        if (openSections.exclusions) loadClientes();
+        if (openSections.exclusions) {
+          loadClientes();
+          loadRamos();
+        }
         if (openSections.templates) loadWhatsAppTemplates();
       }
     }
@@ -968,7 +988,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                           <Icon icon="solar:shield-cross-bold-duotone" className="w-6 h-6 text-red-500" />
                           <div className="text-left">
                             <h4 className="font-medium">Exclusiones</h4>
-                            <p className="text-xs text-gray-500">{config.excluded_client_ids?.length || 0} clientes excluidos</p>
+                            <p className="text-xs text-gray-500">{config.excluded_client_ids?.length || 0} clientes, {config.excluded_ramo_ids?.length || 0} ramos excluidos</p>
                           </div>
                         </div>
                         <Icon icon={openSections.exclusions ? 'solar:alt-arrow-up-bold' : 'solar:alt-arrow-down-bold'} className="w-5 h-5 text-gray-400" />
@@ -999,6 +1019,63 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                               );
                             })}
                           </div>
+                        </div>
+
+                        {/* Ramos excluidos */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <Label className="text-xs">Ramos excluidos</Label>
+                            <div className="flex gap-2">
+                              <Button size="xs" color="failure" onClick={() => updateConfig({ excluded_ramo_ids: ramos.map(r => r.id) })}>
+                                Excluir todos
+                              </Button>
+                              <Button size="xs" color="light" onClick={() => updateConfig({ excluded_ramo_ids: [] })}>
+                                Limpiar
+                              </Button>
+                            </div>
+                          </div>
+                          <TextInput
+                            placeholder="Buscar ramo..."
+                            value={ramoSearch}
+                            onChange={(e) => setRamoSearch(e.target.value)}
+                            className="mb-2"
+                          />
+                          {loadingRamos ? (
+                            <div className="flex items-center justify-center py-4">
+                              <Spinner size="sm" />
+                            </div>
+                          ) : (
+                            <div className="max-h-48 overflow-y-auto border rounded-lg">
+                              {ramos
+                                .filter(r => {
+                                  if (!ramoSearch) return true;
+                                  const s = ramoSearch.toLowerCase();
+                                  return r.nombre.toLowerCase().includes(s) || (r.subramo && r.subramo.toLowerCase().includes(s));
+                                })
+                                .slice(0, 30)
+                                .map((r) => {
+                                  const isEx = config.excluded_ramo_ids?.includes(r.id);
+                                  return (
+                                    <div
+                                      key={r.id}
+                                      onClick={() => {
+                                        const curr = config.excluded_ramo_ids || [];
+                                        updateConfig({ excluded_ramo_ids: isEx ? curr.filter(id => id !== r.id) : [...curr, r.id] });
+                                      }}
+                                      className={`flex items-center gap-3 px-3 py-2 cursor-pointer border-b last:border-b-0 ${
+                                        isEx ? 'bg-red-50 dark:bg-red-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                                      }`}
+                                    >
+                                      <input type="checkbox" checked={isEx} readOnly className="w-4 h-4 text-red-600 rounded pointer-events-none" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{r.nombre}</p>
+                                        {r.subramo && <p className="text-xs text-gray-500">{r.subramo}</p>}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          )}
                         </div>
 
                         {/* Clientes excluidos */}

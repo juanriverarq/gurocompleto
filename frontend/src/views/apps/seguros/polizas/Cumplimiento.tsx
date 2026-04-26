@@ -187,7 +187,31 @@ const Cumplimiento: React.FC = () => {
         const aData = Array.isArray((aRes as any)?.data) ? (aRes as any).data : ((aRes as any)?.data?.data || []);
         const vData = Array.isArray((vRes as any)?.data) ? (vRes as any).data : ((vRes as any)?.data?.data || []);
         const rData = Array.isArray((rRes as any)?.data) ? (rRes as any).data : ((rRes as any)?.data?.data || []);
-        setAseguradoras(aData);
+        
+        // Agregar aseguradoras solicitadas si no existen
+        const aseguradorasAdicionales = ['Finesa', 'Crediseguros', 'Sura', 'Crediestado', 'Previseguro'];
+        const existentes = new Set(aData.map((a: any) => a.nombre.toLowerCase()));
+        
+        // Verificar si existen variaciones similares
+        const adicionales = aseguradorasAdicionales
+          .filter(nombre => {
+            const nombreLower = nombre.toLowerCase();
+            const existeExacto = existentes.has(nombreLower);
+            
+            // Verificar si existe una variación que contenga el nombre
+            const existeVariacion = aData.some((a: any) => 
+              a.nombre.toLowerCase().includes(nombreLower) || 
+              nombreLower.includes(a.nombre.toLowerCase())
+            );
+            
+            return !existeExacto && !existeVariacion;
+          })
+          .map((nombre, index) => ({
+            id: `custom-${index + 1}`,
+            nombre
+          }));
+        
+        setAseguradoras([...aData, ...adicionales]);
         setVendedores(vData);
         setRamos(rData);
         // Find CUMPLIMIENTO ramo

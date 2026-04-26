@@ -545,7 +545,7 @@ class WhatsAppChatbotController extends Controller
     public function createNode(Request $request, int $flowId): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'node_type' => 'required|in:start,message,question,input,condition,action,ai_response,transfer,delay,end',
+            'node_type' => 'required|in:start,message,question,options,input,user_input,collect_data,condition,action,ai_response,transfer,delay,end,media,image,document,audio,video,interactive,buttons,list,set_variable,add_tag,remove_tag,webhook,policy_lookup',
             'name' => 'nullable|string|max:100',
             'position_x' => 'nullable|integer',
             'position_y' => 'nullable|integer',

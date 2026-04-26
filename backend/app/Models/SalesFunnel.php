@@ -67,7 +67,10 @@ class SalesFunnel extends Model
         'description',
         'ramo_id',
         'poliza_id',
-        'external_reference'
+        'external_reference',
+        'referrer_type',
+        'referrer_vendedor_id',
+        'referrer_name',
     ];
 
     protected $casts = [
@@ -94,9 +97,9 @@ class SalesFunnel extends Model
         'lead' => 'Lead',
         'contacted' => 'Contactado',
         'qualified' => 'Calificado',
-        'presentation' => 'Presentación',
-        'proposal' => 'Propuesta',
-        'negotiation' => 'Negociación',
+        'presentation' => 'Cotización',
+        'proposal' => 'Asesoría',
+        'negotiation' => 'Seguimiento',
         'closed_won' => 'Cerrado Ganado',
         'closed_lost' => 'Cerrado Perdido'
     ];

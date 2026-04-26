@@ -22,10 +22,10 @@ const Testimonials = () => {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <h2 className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold text-[#0d0d0d] leading-[1.1] tracking-[-0.02em] mb-4">
-            Confían en nosotros
+          <h2 className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold text-white leading-[1.1] tracking-[-0.02em] mb-4">
+            <span className="landing-grad-text">Confían</span> en nosotros
           </h2>
-          <p className="text-gray-500 text-lg max-w-xl mx-auto">
+          <p className="text-white/70 text-lg max-w-xl mx-auto">
             Más de 500 agencias de seguros gestionan su operación diaria con Guro.
           </p>
         </motion.div>
@@ -38,7 +38,8 @@ const Testimonials = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: 0.1 + index * 0.1 }}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl p-7 border border-gray-200"
+              whileHover={{ y: -6, transition: { duration: 0.3 } }}
+              className="bg-white/10 backdrop-blur-md rounded-2xl p-7 border border-white/15 hover:border-[#573CFF]/40 transition-colors duration-300"
             >
               {/* Stars */}
               <div className="flex gap-0.5 mb-4">
@@ -48,7 +49,7 @@ const Testimonials = () => {
               </div>
 
               {/* Quote */}
-              <p className="text-[#1a1a2e] text-[15px] leading-relaxed mb-6">
+              <p className="text-white text-[15px] leading-relaxed mb-6">
                 "{t.quote}"
               </p>
 
@@ -58,8 +59,8 @@ const Testimonials = () => {
                   {t.name.charAt(0)}
                 </div>
                 <div>
-                  <div className="font-semibold text-[#0d0d0d] text-sm">{t.name}</div>
-                  <div className="text-gray-400 text-xs">{t.role} · {t.company}</div>
+                  <div className="font-semibold text-white text-sm">{t.name}</div>
+                  <div className="text-white/50 text-xs">{t.role} · {t.company}</div>
                 </div>
               </div>
             </motion.div>

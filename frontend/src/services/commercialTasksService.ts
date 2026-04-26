@@ -286,6 +286,66 @@ class CommercialTasksService {
     return response.json();
   }
 
+  // Reasignar tarea a otro usuario/empleado
+  async reassignTask(id: number, assignedTo: number, reason?: string): Promise<CommercialTask> {
+    const response = await fetch(`${this.baseUrl}/${id}/assign`, {
+      method: 'POST',
+      headers: await this.getHeaders(),
+      body: JSON.stringify({ assigned_to: assignedTo, reason: reason || null }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Error al reasignar la tarea');
+    }
+    const result = await response.json();
+    return result.data;
+  }
+
+  // Agregar una nota a la bitácora
+  async addNote(id: number, note: string, isPrivate = false): Promise<any[]> {
+    const response = await fetch(`${this.baseUrl}/${id}/add-note`, {
+      method: 'POST',
+      headers: await this.getHeaders(),
+      body: JSON.stringify({ note, is_private: isPrivate }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Error al agregar la nota');
+    }
+    const result = await response.json();
+    return result.data; // activity_log array
+  }
+
+  // Pausar tarea
+  async pauseTask(id: number, reason?: string): Promise<CommercialTask> {
+    const response = await fetch(`${this.baseUrl}/${id}/pause`, {
+      method: 'POST',
+      headers: await this.getHeaders(),
+      body: JSON.stringify({ reason: reason || null }),
+    });
+    if (!response.ok) throw new Error('Error al pausar la tarea');
+    const result = await response.json();
+    return result.data;
+  }
+
+  // Cancelar tarea
+  async cancelTask(id: number, reason?: string): Promise<CommercialTask> {
+    const response = await fetch(`${this.baseUrl}/${id}/cancel`, {
+      method: 'POST',
+      headers: await this.getHeaders(),
+      body: JSON.stringify({ reason: reason || null }),
+    });
+    if (!response.ok) throw new Error('Error al cancelar la tarea');
+    const result = await response.json();
+    return result.data;
+  }
+
+  // Obtener bitácora (activity_log) — usa getTask y extrae el campo
+  async getActivityLog(id: number): Promise<any[]> {
+    const task = await this.getTask(id);
+    return (task as any).activity_log || [];
+  }
+
   // Obtener una tarea por ID
   async getTask(id: number): Promise<CommercialTask> {
     const response = await fetch(`${this.baseUrl}/${id}`, {

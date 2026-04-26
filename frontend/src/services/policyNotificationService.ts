@@ -36,6 +36,7 @@ export interface PolicyNotificationConfig {
   excluded_client_ids: number[];
   excluded_policy_types: string[];
   excluded_policy_statuses: string[];
+  excluded_ramo_ids?: number[];
   
   // Configuración avanzada
   send_to_client_phone: boolean;

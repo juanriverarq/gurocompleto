@@ -46,6 +46,11 @@ const Miniicons: MiniiconsType[] = [
     icon: 'solar:settings-bold-duotone',
     tooltip: 'Configuración',
   },
+  {
+    id: 9,
+    icon: 'solar:calculator-minimalistic-bold-duotone',
+    tooltip: 'Cotizadores',
+  },
 ];
 
 export default Miniicons;

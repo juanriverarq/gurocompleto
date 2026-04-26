@@ -168,7 +168,7 @@ const CombinedDashboard = () => {
           <Icon icon="solar:settings-outline" height={28} className="text-[#573CFF]" />
         </div>
         <div className="text-center">
-          <h3 className="text-lg font-bold text-[#0d0d0d] mb-1">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
             No hay dashboards configurados
           </h3>
           <p className="text-gray-400 text-sm mb-5">
@@ -176,7 +176,7 @@ const CombinedDashboard = () => {
           </p>
           <button
             onClick={handleConfigClick}
-            className="px-5 py-2.5 bg-[#0d0d0d] hover:bg-[#573CFF] text-white text-sm font-semibold rounded-xl transition-colors"
+            className="px-5 py-2.5 bg-gray-900 dark:bg-neutral-800 hover:bg-[#573CFF] dark:hover:bg-[#573CFF] text-white text-sm font-semibold rounded-xl transition-colors"
           >
             Configurar Dashboards
           </button>

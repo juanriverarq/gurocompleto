@@ -71,9 +71,9 @@ export const pageMetadata: Record<string, PageMetadata> = {
   },
   
   'seguros-seguimiento': {
-    title: 'Seguimiento',
-    description: 'Monitorea el estado de pólizas, pagos pendientes y actividades de seguimiento de clientes.',
-    keywords: 'seguimiento, monitoreo, pagos, actividades, clientes'
+    title: 'Tareas',
+    description: 'Monitorea el estado de pólizas, pagos pendientes y actividades de tareas de clientes.',
+    keywords: 'tareas, monitoreo, pagos, actividades, clientes'
   },
   
   'seguros-historial': {

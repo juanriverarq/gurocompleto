@@ -216,6 +216,10 @@ class CampaignController extends Controller
                 'template_name' => 'nullable|string|max:255',
                 'template_language' => 'nullable|string|max:10',
                 'variable_mapping' => 'nullable|array',
+                // Header media for templates with IMAGE/VIDEO/DOCUMENT headers
+                'header_media' => 'nullable|array',
+                'header_media.type' => 'nullable|string|in:image,video,document',
+                'header_media.url' => 'nullable|url',
                 // Media opcional (si ya se subió por /media-upload)
                 'media_url' => 'nullable|url',
                 'media_type' => 'nullable|in:image'
@@ -393,7 +397,13 @@ class CampaignController extends Controller
 
             // Guardar media (si viene) para soportar envíos con imagen
             try {
-                if ($request->filled('media_url')) {
+                // header_media from template-based campaigns (IMAGE/VIDEO/DOCUMENT headers)
+                $headerMedia = $request->input('header_media');
+                if ($headerMedia && !empty($headerMedia['url'])) {
+                    $campaign->media_url = $headerMedia['url'];
+                    $campaign->media_type = $headerMedia['type'] ?? 'image';
+                    $campaign->save();
+                } elseif ($request->filled('media_url')) {
                     $campaign->media_url = $request->input('media_url');
                     $campaign->media_type = $request->input('media_type', 'image');
                     $campaign->save();
@@ -491,6 +501,10 @@ class CampaignController extends Controller
                 'scheduled_date' => 'required|date|after:5 minutes',
                 'select_all_clients' => 'nullable|boolean',
                 'whatsapp_instance_id' => 'nullable|integer|exists:whatsapp_instances,id',
+                // Header media for templates with IMAGE/VIDEO/DOCUMENT headers
+                'header_media' => 'nullable|array',
+                'header_media.type' => 'nullable|string|in:image,video,document',
+                'header_media.url' => 'nullable|url',
                 // Media opcional (para ejecución futura)
                 'media_url' => 'nullable|url',
                 'media_type' => 'nullable|in:image'
@@ -621,7 +635,12 @@ class CampaignController extends Controller
 
             // Guardar media (si viene) para que el scheduler la use
             try {
-                if ($request->filled('media_url')) {
+                $headerMedia = $request->input('header_media');
+                if ($headerMedia && !empty($headerMedia['url'])) {
+                    $campaign->media_url = $headerMedia['url'];
+                    $campaign->media_type = $headerMedia['type'] ?? 'image';
+                    $campaign->save();
+                } elseif ($request->filled('media_url')) {
                     $campaign->media_url = $request->input('media_url');
                     $campaign->media_type = $request->input('media_type', 'image');
                     $campaign->save();
@@ -1461,6 +1480,20 @@ class CampaignController extends Controller
             $templateName = $campaign->template_name ?? null;
             $templateLanguage = $campaign->template_language ?? 'es';
 
+            // Pre-upload media to Meta once (before the contacts loop) to get a reusable media ID
+            $headerMediaId = null;
+            if ($isTemplateSend && !empty($campaign->media_url) && !empty($campaign->media_type)) {
+                $mimeMap = ['image' => 'image/jpeg', 'video' => 'video/mp4', 'document' => 'application/pdf'];
+                $mime = $mimeMap[strtolower($campaign->media_type)] ?? 'image/jpeg';
+                $headerMediaId = $cloudApi->uploadMediaFromUrl($whatsappInstance, $campaign->media_url, $mime);
+                Log::info('📤 [CAMPAIGN] Pre-uploaded media to Meta', [
+                    'campaign_id' => $campaignId,
+                    'media_id' => $headerMediaId,
+                    'media_type' => $campaign->media_type,
+                    'url_preview' => substr($campaign->media_url, 0, 80),
+                ]);
+            }
+
             Log::info('🚀 [CLOUD API BULK SEND] Iniciando envío masivo', [
                 'campaign_id' => $campaignId,
                 'execution_id' => $executionId,
@@ -1468,6 +1501,7 @@ class CampaignController extends Controller
                 'is_template' => $isTemplateSend,
                 'template_name' => $templateName,
                 'instance_id' => $whatsappInstance->id,
+                'header_media_id' => $headerMediaId,
             ]);
 
             foreach ($contacts as $index => $contact) {
@@ -1478,6 +1512,21 @@ class CampaignController extends Controller
                     if ($isTemplateSend && $templateName) {
                         // Enviar plantilla aprobada por Meta
                         $components = [];
+
+                        // Build header component using Meta media ID (uploaded once before loop)
+                        if ($headerMediaId && !empty($campaign->media_type)) {
+                            $mediaType = strtolower($campaign->media_type);
+                            $components[] = [
+                                'type' => 'header',
+                                'parameters' => [
+                                    [
+                                        'type' => $mediaType,
+                                        $mediaType => ['id' => $headerMediaId],
+                                    ]
+                                ]
+                            ];
+                        }
+
                         // Build body parameters from custom_data (variable mapping from frontend)
                         // Only add body parameters if the template actually has variables
                         $customData = $contact['custom_data'] ?? [];
@@ -3487,6 +3536,94 @@ class CampaignController extends Controller
                 'success' => false,
                 'message' => 'Error al cancelar campaña',
                 'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload media for campaign header (IMAGE/VIDEO/DOCUMENT).
+     * Saves to Firebase Storage and returns a public URL for use in template sending.
+     */
+    public function uploadCampaignMedia(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|max:16384',
+            'type' => 'required|string|in:image,video,document',
+        ]);
+
+        $file = $request->file('file');
+        $type = $request->input('type');
+
+        $allowedMimes = [
+            'image' => ['image/jpeg', 'image/png', 'image/webp'],
+            'video' => ['video/mp4', 'video/3gpp'],
+            'document' => ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        ];
+
+        $mime = $file->getMimeType();
+        if (!in_array($mime, $allowedMimes[$type] ?? [])) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Tipo de archivo no permitido. Válidos: ' . implode(', ', $allowedMimes[$type] ?? []),
+            ], 422);
+        }
+
+        try {
+            $brokerId = $this->getBrokerId($request);
+            $ext = $file->getClientOriginalExtension() ?: 'bin';
+            $filename = 'campaign-media/' . ($brokerId ?? 'unknown') . '/' . uniqid() . '.' . $ext;
+
+            $firebaseStorage = app(\Kreait\Firebase\Contract\Storage::class);
+            $bucketName = env('FIREBASE_STORAGE_BUCKET') ?: config('firebase.storage_bucket');
+            $projectId = config('firebase.project_id') ?: env('FIREBASE_PROJECT_ID');
+            $candidates = array_filter([
+                $bucketName,
+                $projectId ? ($projectId . '.appspot.com') : null,
+                $projectId ? ($projectId . '.firebasestorage.app') : null,
+            ]);
+            $bucket = null;
+            foreach ($candidates as $name) {
+                try {
+                    $b = $firebaseStorage->getBucket($name);
+                    if (method_exists($b, 'exists') && $b->exists()) { $bucket = $b; break; }
+                } catch (\Throwable $e) {}
+            }
+            if (!$bucket) $bucket = $firebaseStorage->getBucket();
+
+            $bucket->upload(
+                file_get_contents($file->getRealPath()),
+                [
+                    'name' => $filename,
+                    'metadata' => ['contentType' => $mime],
+                    'predefinedAcl' => 'publicRead',
+                ]
+            );
+
+            // Generate public URL (use Firebase REST API format which is always publicly accessible)
+            $enc = rawurlencode($filename);
+            $bn = $bucket->name();
+            $publicUrl = "https://firebasestorage.googleapis.com/v0/b/{$bn}/o/{$enc}?alt=media";
+
+            Log::info('📤 [CAMPAIGN MEDIA] Uploaded', [
+                'filename' => $filename,
+                'mime' => $mime,
+                'size' => $file->getSize(),
+                'url_preview' => substr($publicUrl, 0, 120),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'url' => $publicUrl,
+                'filename' => $file->getClientOriginalName(),
+                'mime' => $mime,
+                'size' => $file->getSize(),
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('📤 [CAMPAIGN MEDIA] Upload failed', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al subir archivo: ' . $e->getMessage(),
             ], 500);
         }
     }

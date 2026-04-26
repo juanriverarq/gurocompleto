@@ -154,8 +154,14 @@ export interface NodeConfig {
   http_url?: string;
   
   // Nodo IA
-  ai_prompt?: string;
+  system_prompt?: string;           // Clave estándar (preferida)
+  ai_prompt?: string;               // Legacy, mantener por retrocompatibilidad
   ai_context?: string;
+  custom_instructions?: string;     // Alias legacy de ai_context
+  company_name?: string;            // Nombre de la empresa inyectado en contexto IA
+  model?: string;                   // Modelo LLM específico del nodo (override)
+  conversational?: boolean;         // Modo loop conversacional
+  loop?: boolean;                   // Alias legacy de conversational
   
   // Nodo Transferir
   transfer_to?: string;

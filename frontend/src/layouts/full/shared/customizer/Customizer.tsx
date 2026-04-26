@@ -39,32 +39,38 @@ export const Customizer = () => {
   const themeColors = [
     {
       id: 1,
-      bgColor: "#635BFF",
+      bgColor: "#573CFF",
+      ringColor: "#16CDC7",
       disp: "BLUE_THEME",
     },
     {
       id: 2,
-      bgColor: "#0074BA",
+      bgColor: "#573CFF",
+      ringColor: "#47D7BC",
       disp: "AQUA_THEME",
     },
     {
       id: 3,
-      bgColor: "#763EBD",
+      bgColor: "#573CFF",
+      ringColor: "#49BEFF",
       disp: "PURPLE_THEME",
     },
     {
       id: 4,
-      bgColor: "#0A7EA4",
+      bgColor: "#573CFF",
+      ringColor: "#CCDA4E",
       disp: "GREEN_THEME",
     },
     {
       id: 5,
-      bgColor: "#01C0C8",
+      bgColor: "#573CFF",
+      ringColor: "#FB9678",
       disp: "CYAN_THEME",
     },
     {
       id: 6,
-      bgColor: "#FA896B",
+      bgColor: "#573CFF",
+      ringColor: "#0074BA",
       disp: "ORANGE_THEME",
     },
   ];
@@ -210,8 +216,12 @@ export const Customizer = () => {
                   >
                     <label
                       className=" h-6 w-6 rounded-full  cursor-pointer flex items-center justify-center"
-                      style={{ backgroundColor: theme.bgColor }}
-                     
+                      style={{
+                        backgroundColor: theme.bgColor,
+                        boxShadow: theme.ringColor
+                          ? `0 0 0 2px ${theme.ringColor}`
+                          : undefined,
+                      }}
                     >
                       {activeTheme === theme.disp && (
                         <IconCheck className="text-white" size={18} />

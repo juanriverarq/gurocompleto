@@ -22,13 +22,12 @@ const WalletWidget: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const lastCloseAtRef = useRef<number>(0);
 
-  // Función para cargar datos del wallet
   const loadWalletData = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await walletApi.getBalance();
-      
+
       if (response.success && response.data) {
         setWalletData(response.data);
       } else {
@@ -42,12 +41,10 @@ const WalletWidget: React.FC = () => {
     }
   };
 
-  // Cargar datos al montar el componente
   useEffect(() => {
     loadWalletData();
   }, []);
 
-  // Función para formatear el saldo
   const formatBalance = (amount: number, currency: 'COP' | 'USD' = 'COP'): string => {
     const locale = currency === 'USD' ? 'en-US' : 'es-CO';
     return new Intl.NumberFormat(locale, {
@@ -58,28 +55,27 @@ const WalletWidget: React.FC = () => {
     }).format(amount);
   };
 
-  // Función para manejar click en el widget
-  const handleWalletClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Evitar rebote: si se cerró hace <200ms, no reabrir
+  const openWalletModal = () => {
     const now = Date.now();
     if (now - lastCloseAtRef.current < 200) return;
     setIsModalOpen(true);
   };
 
-  // Función para manejar actualización del wallet
+  const handleWalletClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openWalletModal();
+  };
+
   const handleWalletUpdate = () => {
     loadWalletData();
   };
 
-  // Función para manejar el cierre del modal
   const handleModalClose = () => {
     lastCloseAtRef.current = Date.now();
     setIsModalOpen(false);
   };
 
-  // Función para manejar cambios en el estado del modal
   const handleModalOpenChange = (open: boolean) => {
     if (!open) {
       lastCloseAtRef.current = Date.now();
@@ -87,96 +83,113 @@ const WalletWidget: React.FC = () => {
     setIsModalOpen(open);
   };
 
-  if (loading) {
-    return (
-      <div
-        className="relative text-white px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-md"
-        style={{
-          backgroundImage: 'linear-gradient(135deg, #222283, #573CFF, #a25dae, #fa8e5b, #a25dae, #222283)',
-          backgroundSize: '200% 200%',
-          animation: 'hero-shimmer 16s ease-in-out infinite',
-        }}
-      >
-        <Icon icon="solar:wallet-bold-duotone" width="20" />
-        <div className="flex flex-col text-left">
-          <span className="font-medium text-xs opacity-70">Cargando...</span>
-          <span className="font-bold text-sm">---</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div 
-        className="relative text-white px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-md"
-        style={{
-          backgroundImage: 'linear-gradient(135deg, #222283, #573CFF, #a25dae, #fa8e5b, #a25dae, #222283)',
-          backgroundSize: '200% 200%',
-          animation: 'hero-shimmer 16s ease-in-out infinite',
-        }}
-        onClick={loadWalletData}
-        title="Click para reintentar"
-      >
-        <Icon icon="solar:wallet-bold-duotone" width="20" />
-        <div className="flex flex-col text-left">
-          <span className="font-medium text-xs opacity-70">Error</span>
-          <span className="font-bold text-sm">Reintentar</span>
-        </div>
-      </div>
-    );
-  }
+  const surfaceClass =
+    'wallet-gradient-surface relative rounded-[12px] px-3.5 py-2 flex items-center gap-2 text-white overflow-hidden shadow-[0_0_20px_rgba(87,60,255,0.35),0_0_40px_rgba(251,146,60,0.12)] hover:shadow-[0_0_26px_rgba(87,60,255,0.45),0_0_48px_rgba(251,146,60,0.18)] transition-shadow';
 
   return (
     <>
       <style>{`
-        @keyframes hero-shimmer {
-          0% { background-position: 0% 50%; }
+        @keyframes wallet-bg-flow {
+          0%, 100% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        }
+        .wallet-gradient-surface {
+          background-image: linear-gradient(
+            125deg,
+            #573CFF 0%,
+            #7B61FF 22%,
+            #A78BFA 42%,
+            #fb923c 68%,
+            #f97316 82%,
+            #573CFF 100%
+          );
+          background-size: 220% 220%;
+          animation: wallet-bg-flow 14s ease-in-out infinite;
+        }
+        .wallet-gradient-surface::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(
+            180deg,
+            rgba(255,255,255,0.12) 0%,
+            transparent 45%,
+            rgba(0,0,0,0.15) 100%
+          );
+          pointer-events: none;
         }
       `}</style>
-      <div
-        className="relative text-white px-4 py-2 rounded-[10px] flex items-center gap-2 cursor-pointer shadow-sm hover:shadow-lg dark:shadow-purple-900/30 group animate-glow-pulse"
-        style={{
-          backgroundImage: 'linear-gradient(135deg, #222283, #573CFF, #a25dae, #fa8e5b, #a25dae, #222283)',
-          backgroundSize: '200% 200%',
-          animation: 'hero-shimmer 16s ease-in-out infinite',
-        }}
-        onClick={handleWalletClick}
-        title="Ver detalles del wallet"
-      >
-      <Icon icon="solar:wallet-bold-duotone" width="20" className="group-hover:text-white text-white" />
-      <div className="flex flex-col text-left">
-        <span className="font-medium text-xs opacity-70 group-hover:opacity-100 group-hover:text-white dark:text-white dark:opacity-90">
-          Mi Wallet
-        </span>
-        <span className="font-bold text-sm whitespace-nowrap group-hover:text-white dark:text-white">
-          {walletData
-            ? `${formatBalance(
-                walletData.display_balance ?? walletData.balance_cop,
-                walletData.display_currency ?? 'COP'
-              )} ${walletData.display_currency ?? 'COP'}`
-            : '$0 COP'}
-        </span>
-      </div>
-      
-      {/* Indicador de saldo pendiente */}
-      {walletData && walletData.pending_balance > 0 && (
-        <div className="bg-yellow-100 text-yellow-600 text-xs px-2 py-1 rounded-full">
-          +{formatBalance(walletData.pending_balance)}
+
+      {loading && (
+        <div className={`${surfaceClass} cursor-default`}>
+          <div className="relative z-[1] flex items-center gap-2">
+            <Icon icon="solar:wallet-bold-duotone" width={20} className="drop-shadow-md shrink-0" />
+            <div className="flex flex-col text-left min-w-0">
+              <span className="font-medium text-[11px] text-white/80 drop-shadow-sm">Cargando...</span>
+              <span className="font-bold text-sm drop-shadow-sm">---</span>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Modal del Wallet */}
-      <WalletModal
-        isOpen={isModalOpen}
-        onClose={handleModalClose}
-        onOpenChange={handleModalOpenChange}
-        walletData={walletData}
-        onWalletUpdate={handleWalletUpdate}
-      />
-      </div>
+      {!loading && error && (
+        <div className={`${surfaceClass} cursor-pointer`} onClick={loadWalletData} title="Click para reintentar" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); loadWalletData(); } }}>
+          <div className="relative z-[1] flex items-center gap-2">
+            <Icon icon="solar:wallet-bold-duotone" width={20} className="drop-shadow-md shrink-0" />
+            <div className="flex flex-col text-left min-w-0">
+              <span className="font-medium text-[11px] text-white/85 drop-shadow-sm">Error</span>
+              <span className="font-bold text-sm drop-shadow-sm">Reintentar</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <>
+          <div
+            className={`${surfaceClass} cursor-pointer group`}
+            onClick={handleWalletClick}
+            title="Ver detalles del wallet"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openWalletModal();
+              }
+            }}
+          >
+            <div className="relative z-[1] flex items-center gap-2">
+              <Icon icon="solar:wallet-bold-duotone" width={20} className="drop-shadow-md shrink-0 group-hover:scale-105 transition-transform" />
+              <div className="flex flex-col text-left min-w-0">
+                <span className="font-medium text-[11px] text-white/90 drop-shadow-sm">Mi Wallet</span>
+                <span className="font-bold text-sm whitespace-nowrap drop-shadow-sm">
+                  {walletData
+                    ? `${formatBalance(
+                        walletData.display_balance ?? walletData.balance_cop,
+                        walletData.display_currency ?? 'COP'
+                      )} ${walletData.display_currency ?? 'COP'}`
+                    : '$0 COP'}
+                </span>
+              </div>
+              {walletData && walletData.pending_balance > 0 && (
+                <div className="relative z-[1] bg-black/25 text-white border border-white/25 text-[10px] px-2 py-0.5 rounded-full shrink-0 backdrop-blur-sm">
+                  +{formatBalance(walletData.pending_balance)}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <WalletModal
+            isOpen={isModalOpen}
+            onClose={handleModalClose}
+            onOpenChange={handleModalOpenChange}
+            walletData={walletData}
+            onWalletUpdate={handleWalletUpdate}
+          />
+        </>
+      )}
     </>
   );
 };

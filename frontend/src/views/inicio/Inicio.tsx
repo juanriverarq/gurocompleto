@@ -1,13 +1,42 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router';
+import { createPortal } from 'react-dom';
+import confetti from 'canvas-confetti';
 import { useUnifiedAuth } from '../../context/UnifiedAuthContext';
 import { usePageMeta } from '../../hooks/usePageMeta';
 import { getPageMetadata } from '../../config/pageMetadata';
 import EmailVerificationBanner from '../../components/EmailVerificationBanner';
-import personajeGuro from '../../assets/images/personajeguro.png';
-import personajeGuroWa from '../../assets/images/personajegurowhatsapp.png';
-import personajeGuroPolizas from '../../assets/images/pesonajeguropolizas.png';
+import saasApi from '../../services/saasApi';
+import { polizaService } from '../../services/polizaService';
+
+import suraLogo from '../../assets/images/logoscompanias/sura.png';
+import bolivarLogo from '../../assets/images/logoscompanias/bolivar.png';
+import hdiLogo from '../../assets/images/logoscompanias/hdi.png';
+import estadoLogo from '../../assets/images/logoscompanias/estado.png';
+import equidadLogo from '../../assets/images/logoscompanias/equidad.png';
+import axaLogo from '../../assets/images/logoscompanias/axa.png';
+import mapfreLogo from '../../assets/images/logoscompanias/mapfre.png';
+import allianzLogo from '../../assets/images/logoscompanias/allianz.png';
+
+const INSURER_META: Record<string, { name: string; logo?: string }> = {
+  sura: { name: 'Sura', logo: suraLogo },
+  bolivar: { name: 'Bolívar', logo: bolivarLogo },
+  hdi: { name: 'HDI', logo: hdiLogo },
+  'seguros-del-estado': { name: 'Seguros del Estado', logo: estadoLogo },
+  'la-equidad': { name: 'La Equidad', logo: equidadLogo },
+  'axa-colpatria': { name: 'Axa Colpatria', logo: axaLogo },
+  mapfre: { name: 'Mapfre', logo: mapfreLogo },
+  allianz: { name: 'Allianz', logo: allianzLogo },
+};
+
+const DATA_TYPES = [
+  { id: 'clientes', label: 'Clientes', description: 'Nombres, documentos, contactos y datos de tus asegurados.', icon: 'solar:users-group-rounded-linear' },
+  { id: 'polizas', label: 'Pólizas', description: 'Números de póliza, ramos, vigencias y estados.', icon: 'solar:shield-check-linear' },
+  { id: 'cartera', label: 'Cartera', description: 'Recibos pendientes, mora y estados de pago.', icon: 'solar:wallet-money-linear' },
+] as const;
+
+type SyncStage = 'select-insurers' | 'select-types' | 'syncing' | 'success';
 
 const getGreeting = () => {
   const h = new Date().getHours();
@@ -22,173 +51,1022 @@ const Inicio = () => {
   const metadata = getPageMetadata('dashboard3');
   usePageMeta(metadata);
 
-  const name = useMemo(() => {
-    if (usuarioSaas?.nombre) return usuarioSaas.nombre.split(' ').slice(0, 2).join(' ');
+  const [hasConnectedInsurer, setHasConnectedInsurer] = useState(false);
+  const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [connectedInsurers, setConnectedInsurers] = useState<string[]>([]);
+
+  // Sync modal state
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncStage, setSyncStage] = useState<SyncStage>('select-insurers');
+  const [selectedInsurers, setSelectedInsurers] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(['clientes', 'polizas']);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncError, setSyncError] = useState('');
+  const [currentSyncInsurer, setCurrentSyncInsurer] = useState('');
+  const [syncBatchId, setSyncBatchId] = useState<string | null>(null);
+  const [cancellingSync, setCancellingSync] = useState(false);
+  const [insurerStatuses, setInsurerStatuses] = useState<Record<string, { status: string; progress?: any; error?: string }>>({});
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const firstName = useMemo(() => {
+    if (usuarioSaas?.nombre) return usuarioSaas.nombre.split(' ')[0] || usuarioSaas.nombre;
     if (tenant?.nombre) return tenant.nombre;
     return '';
   }, [usuarioSaas, tenant]);
 
-  const agencyName = tenant?.branding?.nombre_comercial || tenant?.nombre || '';
+  const loadConnections = useCallback(async () => {
+    try {
+      const res = await saasApi.getInsurerConnections();
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      const connected = rows
+        .filter((r: any) => r?.connected === true || r?.status === 'connected')
+        .map((r: any) => r.insurer_code as string);
+      setHasConnectedInsurer(connected.length > 0);
+      setConnectedInsurers(connected);
+    } catch {
+      setHasConnectedInsurer(false);
+      setConnectedInsurers([]);
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConnections();
+  }, [loadConnections]);
+
+  const openSyncModal = () => {
+    setSelectedInsurers([...connectedInsurers]);
+    setSelectedTypes(['clientes', 'polizas']);
+    setSyncStage('select-insurers');
+    setSyncResult(null);
+    setSyncError('');
+    setCurrentSyncInsurer('');
+    setSyncOpen(true);
+  };
+
+  const closeSyncModal = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    setSyncOpen(false);
+    setSyncBatchId(null);
+    setCancellingSync(false);
+    setInsurerStatuses({});
+  };
+
+  const cancelCurrentSync = async () => {
+    if (!syncBatchId || cancellingSync) return;
+    try {
+      setCancellingSync(true);
+      await saasApi.cancelSync(syncBatchId);
+    } catch {
+      // keep polling; backend status will reflect real state
+    } finally {
+      setCancellingSync(false);
+    }
+  };
+
+  const toggleInsurer = (code: string) => {
+    setSelectedInsurers((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
+  };
+
+  const toggleType = (id: string) => {
+    setSelectedTypes((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+    );
+  };
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  const startSync = async () => {
+    setSyncStage('syncing');
+    setSyncError('');
+    setCurrentSyncInsurer(selectedInsurers[0] || '');
+    setInsurerStatuses(Object.fromEntries(selectedInsurers.map((c) => [c, { status: 'pending' }])));
+
+    try {
+      const res = await saasApi.syncInsurers(selectedInsurers, selectedTypes);
+      const batchId = res.data?.batch_id;
+      if (!batchId) {
+        setSyncError('No se recibió identificador de sincronización.');
+        setSyncStage('select-types');
+        return;
+      }
+      setSyncBatchId(batchId);
+      startPolling(batchId);
+    } catch (e: any) {
+      const msg = e?.message || '';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')) {
+        setSyncError('No se pudo conectar con el servidor. Verifica que el backend esté ejecutándose e intenta de nuevo.');
+      } else if (msg.includes('timed out') || msg.includes('timeout') || msg.includes('504')) {
+        setSyncError('La sincronización tardó demasiado. Intenta de nuevo.');
+      } else {
+        setSyncError(msg || 'Error desconocido en la sincronización');
+      }
+      setSyncStage('select-types');
+    }
+  };
+
+  const startPolling = (batchId: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+
+    const poll = async () => {
+      try {
+        const res = await saasApi.getSyncStatus(batchId);
+        if (!res.success || !res.data) return;
+
+        const { overall_status, details, totals } = res.data;
+
+        const newStatuses: Record<string, { status: string; progress?: any; error?: string }> = {};
+        for (const [code, d] of Object.entries(details) as [string, any][]) {
+          newStatuses[code] = { status: d.status, progress: d.progress, error: d.error };
+        }
+        setInsurerStatuses(newStatuses);
+
+        const processing = Object.values(newStatuses).find((s) => s.status === 'processing');
+        if (processing) {
+          const code = Object.entries(newStatuses).find(([, s]) => s.status === 'processing')?.[0] || '';
+          setCurrentSyncInsurer(code);
+        }
+
+        if (overall_status === 'completed' || overall_status === 'failed' || overall_status === 'partial' || overall_status === 'cancelled') {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+
+          setSyncResult({ totals, details, overall_status });
+          setSyncStage('success');
+
+          if (overall_status === 'completed') {
+            const duration = 1300;
+            const end = Date.now() + duration;
+            const colors = ['#573CFF', '#7B61FF', '#A78BFA', '#ffffff'];
+            (function frame() {
+              confetti({ particleCount: 5, angle: 60, spread: 60, origin: { x: 0 }, colors });
+              confetti({ particleCount: 5, angle: 120, spread: 60, origin: { x: 1 }, colors });
+              if (Date.now() < end) requestAnimationFrame(frame);
+            })();
+          }
+
+          // Auto-trigger detail sync in background when polizas were included
+          if (overall_status !== 'cancelled') {
+            const polizasSynced = Object.values(details as Record<string, any>)
+              .some((d: any) => (d?.progress?.polizas?.created ?? 0) + (d?.progress?.polizas?.updated ?? 0) > 0);
+            if (polizasSynced) {
+              // Small delay to let DB writes settle before queuing jobs
+              setTimeout(() => {
+                polizaService.syncAllPolizasDetail().catch(() => {});
+                // Signal to polizas page (works across tabs and same tab)
+                const ts = Date.now().toString();
+                localStorage.setItem('guro_detail_sync_triggered', ts);
+                window.dispatchEvent(new StorageEvent('storage', { key: 'guro_detail_sync_triggered', newValue: ts }));
+              }, 2000);
+            }
+          }
+        }
+      } catch { /* network blip, keep polling */ }
+    };
+
+    poll();
+    pollRef.current = setInterval(poll, 3000);
+  };
+
+  // ---------- Render helpers for the modal ----------
+
+  const renderStageIndicator = () => {
+    const stages = [
+      { key: 'select-insurers', label: 'Aseguradoras' },
+      { key: 'select-types', label: 'Datos' },
+      { key: 'syncing', label: 'Sincronizando' },
+      { key: 'success', label: 'Listo' },
+    ];
+    const idx = stages.findIndex((s) => s.key === syncStage);
+
+  return (
+      <div className="flex items-center gap-2 mb-8">
+        {stages.map((s, i) => (
+          <div key={s.key} className="flex items-center gap-2">
+            <div
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold transition-colors ${
+                i <= idx ? 'bg-[#573CFF] text-white' : 'bg-neutral-800 text-neutral-500'
+              }`}
+            >
+              {i < idx ? (
+                <Icon icon="solar:check-read-linear" width={14} />
+              ) : (
+                i + 1
+              )}
+            </div>
+            <span className={`text-xs font-medium hidden sm:inline ${i <= idx ? 'text-white' : 'text-neutral-600'}`}>
+              {s.label}
+            </span>
+            {i < stages.length - 1 && (
+              <div className={`w-8 h-px ${i < idx ? 'bg-[#573CFF]' : 'bg-neutral-800'}`} />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderSelectInsurers = () => (
+    <>
+      <h3 className="text-[32px] leading-tight font-semibold tracking-[-0.02em] mb-2">
+        ¿Qué aseguradoras deseas sincronizar?
+      </h3>
+      <p className="text-neutral-400 text-[15px] mb-6">
+        Selecciona las compañías de las que deseas importar información a GURO.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+        {connectedInsurers.map((code) => {
+          const meta = INSURER_META[code];
+          const checked = selectedInsurers.includes(code);
+          return (
+            <button
+              key={code}
+              type="button"
+              onClick={() => toggleInsurer(code)}
+              className={`rounded-2xl border p-4 flex items-center gap-3 text-left transition-all ${
+                checked
+                  ? 'border-[#573CFF]/50 bg-[#573CFF]/8'
+                  : 'border-neutral-800 bg-neutral-950/70 hover:border-neutral-700'
+              }`}
+            >
+              <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0">
+                {meta?.logo ? (
+                  <img src={meta.logo} alt={meta?.name} className="w-8 h-8 object-contain" />
+                ) : (
+                  <span className="text-[10px] font-bold text-[#111]">{(meta?.name || code).slice(0, 3).toUpperCase()}</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{meta?.name || code}</p>
+                <p className="text-xs text-emerald-400">Conectada</p>
+          </div>
+              <div
+                className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                  checked ? 'bg-[#573CFF] border-[#573CFF]' : 'border-neutral-600'
+                }`}
+              >
+                {checked && <Icon icon="solar:check-read-linear" width={12} className="text-white" />}
+        </div>
+      </button>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={closeSyncModal}
+          className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-900"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={() => setSyncStage('select-types')}
+          disabled={selectedInsurers.length === 0}
+          className="rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-40 px-5 py-2 text-sm text-white font-medium"
+        >
+          Continuar
+        </button>
+      </div>
+    </>
+  );
+
+  const renderSelectTypes = () => (
+    <>
+      <h3 className="text-[32px] leading-tight font-semibold tracking-[-0.02em] mb-2">
+        ¿Qué información deseas importar?
+      </h3>
+      <p className="text-neutral-400 text-[15px] mb-6">
+        Elige los tipos de datos que se sincronizarán desde {selectedInsurers.length === 1 ? INSURER_META[selectedInsurers[0]]?.name : `${selectedInsurers.length} aseguradoras`}.
+      </p>
+
+      <div className="flex flex-col gap-3 mb-8">
+        {DATA_TYPES.map((dt) => {
+          const checked = selectedTypes.includes(dt.id);
+          return (
+            <button
+              key={dt.id}
+              type="button"
+              onClick={() => toggleType(dt.id)}
+              className={`rounded-2xl border p-4 flex items-center gap-4 text-left transition-all ${
+                checked
+                  ? 'border-[#573CFF]/50 bg-[#573CFF]/8'
+                  : 'border-neutral-800 bg-neutral-950/70 hover:border-neutral-700'
+              }`}
+            >
+              <div
+                className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                  checked ? 'bg-[#573CFF]/20' : 'bg-neutral-800'
+                }`}
+              >
+                <Icon icon={dt.icon} width={22} className={checked ? 'text-[#573CFF]' : 'text-neutral-400'} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{dt.label}</p>
+                <p className="text-xs text-neutral-400 leading-relaxed">{dt.description}</p>
+              </div>
+              <div
+                className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                  checked ? 'bg-[#573CFF] border-[#573CFF]' : 'border-neutral-600'
+                }`}
+              >
+                {checked && <Icon icon="solar:check-read-linear" width={12} className="text-white" />}
+              </div>
+            </button>
+          );
+        })}
+          </div>
+
+      {syncError && <p className="text-sm text-red-400 mb-4">{syncError}</p>}
+
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => { setSyncStage('select-insurers'); setSyncError(''); }}
+          className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-900"
+        >
+          Atrás
+        </button>
+        <button
+          type="button"
+          onClick={startSync}
+          disabled={selectedTypes.length === 0}
+          className="rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-40 px-5 py-2 text-sm text-white font-medium"
+        >
+          Sincronizar ahora
+        </button>
+      </div>
+    </>
+  );
+
+  const renderSyncing = () => {
+    const doneCount = Object.values(insurerStatuses).filter((s) => s.status === 'completed' || s.status === 'failed' || s.status === 'cancelled').length;
+    const totalCount = selectedInsurers.length;
+
+    return (
+      <div className="text-center">
+        <h3 className="text-[24px] leading-tight font-semibold tracking-[-0.02em] mb-2">
+          Sincronizando información...
+        </h3>
+        <p className="text-neutral-400 text-[13px] mb-3">
+          Estamos importando datos de tus aseguradoras. Esto puede tomar unos minutos.
+        </p>
+        <p className="text-neutral-500 text-xs mb-8">
+          {doneCount} de {totalCount} aseguradoras completadas
+        </p>
+        {syncBatchId && (
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={cancelCurrentSync}
+              disabled={cancellingSync}
+              className="rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 text-xs text-amber-300 font-medium disabled:opacity-50"
+            >
+              {cancellingSync ? 'Deteniendo...' : 'Detener sincronización'}
+            </button>
+          </div>
+        )}
+
+        {/* Global progress bar */}
+        <div className="max-w-md mx-auto mb-10">
+          <div className="h-1.5 rounded-full bg-neutral-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#573CFF] to-[#8b6dff] transition-all duration-700 ease-out"
+              style={{ width: `${totalCount > 0 ? Math.max(5, (doneCount / totalCount) * 100) : 5}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Per-insurer status rows */}
+        <div className="max-w-md mx-auto space-y-2.5">
+          {selectedInsurers.map((code) => {
+            const meta = INSURER_META[code];
+            const st = insurerStatuses[code] || { status: 'pending' };
+            const isPending = st.status === 'pending';
+            const isProcessing = st.status === 'processing';
+            const isDone = st.status === 'completed';
+            const isFailed = st.status === 'failed';
+            const isCancelled = st.status === 'cancelled';
+
+            const progressSummary: string[] = [];
+            if (st.progress) {
+              for (const [type, data] of Object.entries(st.progress) as [string, any][]) {
+                const c = data?.created ?? 0;
+                const u = data?.updated ?? 0;
+                if (c + u > 0) progressSummary.push(`${c + u} ${type}`);
+              }
+            }
+
+            return (
+              <div
+                key={code}
+                className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                  isDone ? 'border-emerald-500/30 bg-emerald-500/5'
+                    : isFailed ? 'border-red-500/30 bg-red-500/5'
+                    : isProcessing ? 'border-[#573CFF]/40 bg-[#573CFF]/5'
+                    : 'border-neutral-800 bg-neutral-950/60'
+                }`}
+              >
+                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
+                  {meta?.logo ? (
+                    <img src={meta.logo} alt={meta.name} className="w-6 h-6 object-contain" />
+                  ) : (
+                    <span className="text-[8px] font-bold text-[#111]">{(meta?.name || '').slice(0, 3)}</span>
+                  )}
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm text-white font-medium">{meta?.name || code}</p>
+                  {isProcessing && (
+                    <p className="text-[11px] text-[#a78bfa]">
+                      {progressSummary.length > 0 ? progressSummary.join(', ') + '...' : 'Procesando...'}
+                    </p>
+                  )}
+                  {isDone && progressSummary.length > 0 && (
+                    <p className="text-[11px] text-emerald-400">{progressSummary.join(' · ')}</p>
+                  )}
+                  {isDone && progressSummary.length === 0 && (
+                    <p className="text-[11px] text-neutral-500">Sin cambios</p>
+                  )}
+                  {isFailed && (
+                    <p className="text-[11px] text-red-400 truncate">{st.error || 'Error'}</p>
+                  )}
+                  {isCancelled && (
+                    <p className="text-[11px] text-amber-300 truncate">Sincronización detenida</p>
+                  )}
+                  {isPending && <p className="text-[11px] text-neutral-500">En espera</p>}
+                </div>
+                {isPending && <div className="w-4 h-4 rounded-full border-2 border-neutral-700 shrink-0" />}
+                {isProcessing && <Icon icon="svg-spinners:ring-resize" width={18} className="text-[#573CFF] shrink-0" />}
+                {isDone && <Icon icon="solar:check-circle-bold" width={18} className="text-emerald-400 shrink-0" />}
+                {isFailed && <Icon icon="solar:danger-triangle-bold" width={18} className="text-red-400 shrink-0" />}
+                {isCancelled && <Icon icon="solar:stop-circle-bold" width={18} className="text-amber-300 shrink-0" />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSuccess = () => {
+    const t = syncResult?.totals || {};
+    const cc = t.clientes_created ?? 0;
+    const cu = t.clientes_updated ?? 0;
+    const cs = t.clientes_unchanged ?? 0;
+    const pc = t.polizas_created ?? 0;
+    const pu = t.polizas_updated ?? 0;
+    const ps = t.polizas_unchanged ?? 0;
+    const kc = t.cartera_created ?? 0;
+    const ku = t.cartera_updated ?? 0;
+    const ks = t.cartera_unchanged ?? 0;
+    const hasCartera = selectedTypes.includes('cartera');
+
+    const overallStatus = syncResult?.overall_status;
+    const isCancelled = overallStatus === 'cancelled';
+    const hasAnyError = syncResult?.details
+      ? Object.values(syncResult.details).some((d: any) => d?.status === 'failed' || !!d?.error)
+      : false;
+    const allFailed = syncResult?.details
+      ? Object.values(syncResult.details).every((d: any) => d?.status === 'failed')
+      : false;
+
+    return (
+      <div className="text-center">
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${isCancelled ? 'bg-amber-500/15 border border-amber-500/30' : allFailed ? 'bg-red-500/15 border border-red-500/30' : hasAnyError ? 'bg-amber-500/15 border border-amber-500/30' : 'bg-emerald-500/15 border border-emerald-500/30'}`}>
+          <Icon
+            icon={isCancelled ? 'solar:stop-circle-bold' : allFailed ? 'solar:danger-triangle-bold' : hasAnyError ? 'solar:danger-triangle-bold' : 'solar:check-circle-bold'}
+            width={36}
+            className={isCancelled ? 'text-amber-300' : allFailed ? 'text-red-400' : hasAnyError ? 'text-amber-400' : 'text-emerald-400'}
+          />
+        </div>
+
+        <h3 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] mb-2">
+          {isCancelled ? 'Sincronización detenida' : allFailed ? 'Sincronización fallida' : hasAnyError ? 'Sincronización parcial' : 'Sincronización completada'}
+        </h3>
+        <p className="text-neutral-400 text-[14px] mb-8">
+          {isCancelled
+            ? 'La sincronización fue detenida por el usuario. Puedes reanudarla cuando quieras.'
+            : allFailed
+            ? 'No se pudo sincronizar la información. Revisa los detalles abajo.'
+            : hasAnyError
+              ? 'Algunos datos se importaron correctamente, pero hubo errores con algunas aseguradoras.'
+              : 'La información fue importada exitosamente a tu cuenta de GURO.'}
+        </p>
+
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-w-2xl mx-auto mb-8">
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <p className="text-2xl font-bold text-white">{cc}</p>
+            <p className="text-[10px] text-neutral-500 leading-tight">Clientes nuevos</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <p className="text-2xl font-bold text-[#573CFF]">{cu}</p>
+            <p className="text-[10px] text-neutral-500 leading-tight">Clientes actualizados</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <p className="text-2xl font-bold text-neutral-500">{cs}</p>
+            <p className="text-[10px] text-neutral-500 leading-tight">Sin cambios</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <p className="text-2xl font-bold text-white">{pc}</p>
+            <p className="text-[10px] text-neutral-500 leading-tight">Pólizas nuevas</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <p className="text-2xl font-bold text-[#573CFF]">{pu}</p>
+            <p className="text-[10px] text-neutral-500 leading-tight">Pólizas actualizadas</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <p className="text-2xl font-bold text-neutral-500">{ps}</p>
+            <p className="text-[10px] text-neutral-500 leading-tight">Sin cambios</p>
+          </div>
+          {hasCartera && (
+            <>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+                <p className="text-2xl font-bold text-white">{kc}</p>
+                <p className="text-[10px] text-neutral-500 leading-tight">Cartera nueva</p>
+              </div>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+                <p className="text-2xl font-bold text-[#573CFF]">{ku}</p>
+                <p className="text-[10px] text-neutral-500 leading-tight">Cartera actualizada</p>
+              </div>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+                <p className="text-2xl font-bold text-neutral-500">{ks}</p>
+                <p className="text-[10px] text-neutral-500 leading-tight">Sin cambios</p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Per-insurer detail */}
+        {syncResult?.details && (
+          <div className="max-w-lg mx-auto mb-8 space-y-2">
+            {Object.entries(syncResult.details).map(([code, detail]: [string, any]) => {
+              const meta = INSURER_META[code];
+              const p = detail?.progress || {};
+              const isRowCancelled = detail?.status === 'cancelled';
+              const cliProgErr = typeof p?.clientes?.error === 'string' ? p.clientes.error : '';
+              const hasError =
+                detail?.status === 'failed' || !!detail?.error || !!cliProgErr;
+              const hasProgress = Object.keys(p).length > 0;
+              const partialError = hasError && hasProgress;
+
+              const cliCreated = p?.clientes?.created ?? 0;
+              const cliUpdated = p?.clientes?.updated ?? 0;
+              const cliUnchanged = p?.clientes?.unchanged ?? 0;
+              const cliFetched = p?.clientes?.total_fetched ?? 0;
+              const polCreated = p?.polizas?.created ?? 0;
+              const polUpdated = p?.polizas?.updated ?? 0;
+              const polUnchanged = p?.polizas?.unchanged ?? 0;
+              const polFetched = p?.polizas?.total_fetched ?? 0;
+              const carCreated = p?.cartera?.created ?? 0;
+              const carUpdated = p?.cartera?.updated ?? 0;
+              const anyData = cliCreated + cliUpdated + polCreated + polUpdated + carCreated + carUpdated > 0;
+              const insurerCliMsg =
+                cliFetched > 0
+                  ? `${cliFetched} clientes recibidos${cliUnchanged > 0 ? ` · ${cliUnchanged} sin cambios` : ''}${cliCreated || cliUpdated ? ` · ${cliCreated} nuevos, ${cliUpdated} actualizados` : ''}`
+                  : cliUnchanged > 0
+                    ? `${cliUnchanged} clientes sin cambios`
+                    : '';
+              const insurerPolMsg =
+                polFetched > 0
+                  ? `${polFetched} pólizas recibidas${polUnchanged > 0 ? ` · ${polUnchanged} sin cambios` : ''}${polCreated || polUpdated ? ` · ${polCreated} nuevas, ${polUpdated} actualizadas` : ''}`
+                  : polUnchanged > 0
+                    ? `${polUnchanged} pólizas sin cambios`
+                    : '';
+
+              return (
+                <div key={code} className={`rounded-xl border px-4 py-3 ${isRowCancelled ? 'border-amber-500/30 bg-amber-500/5' : hasError && !partialError ? 'border-red-500/30 bg-red-500/5' : partialError ? 'border-amber-500/30 bg-amber-500/5' : 'border-neutral-800 bg-neutral-950/60'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
+                      {meta?.logo ? (
+                        <img src={meta.logo} alt={meta?.name} className="w-6 h-6 object-contain" />
+                      ) : (
+                        <span className="text-[8px] font-bold text-[#111]">{(meta?.name || '').slice(0, 3)}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm text-white font-medium">{meta?.name || code}</p>
+                      {anyData && (
+                        <p className="text-[11px] text-neutral-500">
+                          {cliCreated + cliUpdated > 0 && <span>{cliCreated} clientes nuevos, {cliUpdated} actualizados</span>}
+                          {cliCreated + cliUpdated > 0 && (polCreated + polUpdated > 0 || carCreated + carUpdated > 0) && <span> · </span>}
+                          {polCreated + polUpdated > 0 && <span>{polCreated} pólizas nuevas, {polUpdated} actualizadas</span>}
+                          {polCreated + polUpdated > 0 && carCreated + carUpdated > 0 && <span> · </span>}
+                          {carCreated + carUpdated > 0 && <span>{carCreated} cartera nueva, {carUpdated} actualizada</span>}
+                        </p>
+                      )}
+                      {!anyData && !hasError && (insurerCliMsg || insurerPolMsg) && (
+                        <p className="text-[11px] text-neutral-500">
+                          {[insurerCliMsg, insurerPolMsg].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                      {!anyData && !hasError && !insurerCliMsg && !insurerPolMsg && (
+                        <p className="text-[11px] text-neutral-500">Todo al día, sin cambios</p>
+                      )}
+                    </div>
+                    {isRowCancelled ? (
+                      <Icon icon="solar:stop-circle-bold" width={18} className="text-amber-300 shrink-0" />
+                    ) : hasError && !partialError ? (
+                      <Icon icon="solar:danger-triangle-bold" width={18} className="text-red-400 shrink-0" />
+                    ) : partialError ? (
+                      <Icon icon="solar:danger-triangle-bold" width={18} className="text-amber-400 shrink-0" />
+                    ) : (
+                      <Icon icon="solar:check-circle-bold" width={18} className="text-emerald-400 shrink-0" />
+                    )}
+                  </div>
+
+                  {(hasError || isRowCancelled) && (
+                    <div className={`mt-2 rounded-lg px-3 py-2 text-left ${isRowCancelled ? 'bg-amber-500/10' : partialError ? 'bg-amber-500/10' : 'bg-red-500/10'}`}>
+                      <p className={`text-[12px] font-medium ${isRowCancelled ? 'text-amber-300' : partialError ? 'text-amber-300' : 'text-red-300'}`}>
+                        {isRowCancelled ? 'Sincronización detenida' : partialError ? 'Sincronización parcial' : 'Error de sincronización'}
+                      </p>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                        {isRowCancelled
+                          ? 'Este proceso fue detenido manualmente.'
+                          : (() => {
+                              const raw = cliProgErr || (typeof detail.error === 'string' ? detail.error : '');
+                              if (!raw) return 'Error desconocido';
+                              return raw.replace(
+                                /cURL error \d+:.*?for\s+\S+/i,
+                                'Tiempo de espera agotado al conectar con el servidor de la aseguradora.',
+                              );
+                            })()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!isCancelled && !allFailed && (
+          <div className="max-w-md mx-auto mb-6 rounded-xl border border-[#573CFF]/30 bg-[#573CFF]/8 px-4 py-3 flex items-start gap-3">
+            <Icon icon="solar:layers-minimalistic-bold" width={18} className="text-[#a78bfa] mt-0.5 shrink-0" />
+            <div className="text-left">
+              <p className="text-sm text-[#a78bfa] font-medium">Sincronización de detalles en segundo plano</p>
+              <p className="text-[12px] text-neutral-400 mt-0.5">
+                Las coberturas, primas y datos completos de cada póliza se están cargando automáticamente. Puedes ver el progreso en la lista de pólizas.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => nav('/apps/seguros/clientes')}
+            className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-900"
+          >
+            Ver clientes
+          </button>
+          <button
+            type="button"
+            onClick={() => nav('/apps/seguros/polizas')}
+            className="rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] px-5 py-2 text-sm text-white font-medium"
+          >
+            Ver pólizas
+          </button>
+          {hasCartera && (
+            <button
+              type="button"
+              onClick={() => nav('/apps/cartera/aseguradoras')}
+              className="rounded-lg border border-[#573CFF]/40 bg-[#573CFF]/10 hover:bg-[#573CFF]/20 px-4 py-2 text-sm text-[#a78bfa] font-medium"
+            >
+              Ver cartera
+        </button>
+          )}
+          <button
+            type="button"
+            onClick={closeSyncModal}
+            className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-900"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ---------- Main render ----------
 
   return (
     <div>
+      <style>{`
+        @keyframes inicio-sync-spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes inicio-sync-core-pulse {
+          0%, 100% { opacity: 0.75; filter: brightness(1); }
+          50% { opacity: 1; filter: brightness(1.12); }
+        }
+        .inicio-sync-shell {
+          position: relative;
+          display: inline-flex;
+          border-radius: 9999px;
+          padding: 2px;
+          overflow: hidden;
+          flex-shrink: 0;
+          filter: drop-shadow(0 0 10px rgba(87, 60, 255, 0.3));
+          transition: filter 0.35s ease;
+        }
+        .inicio-sync-shell:hover {
+          filter: drop-shadow(0 0 18px rgba(87, 60, 255, 0.55)) drop-shadow(0 0 28px rgba(251, 146, 60, 0.22));
+        }
+        .inicio-sync-spin-track {
+          position: absolute;
+          inset: -60%;
+          background: conic-gradient(
+            from 0deg,
+            #573CFF,
+            #7B61FF,
+            #A78BFA,
+            #fb923c,
+            #f97316,
+            #573CFF
+          );
+          animation: inicio-sync-spin 3.8s linear infinite;
+        }
+        .inicio-sync-shell:hover .inicio-sync-spin-track {
+          animation-duration: 2.2s;
+        }
+        .inicio-sync-halo {
+          position: absolute;
+          inset: -45%;
+          border-radius: 9999px;
+          opacity: 0;
+          transition: opacity 0.4s ease;
+          background: conic-gradient(
+            from 120deg,
+            rgba(87, 60, 255, 0.95),
+            rgba(251, 146, 60, 0.45),
+            rgba(167, 139, 250, 0.85),
+            rgba(87, 60, 255, 0.95)
+          );
+          animation: inicio-sync-spin 2.2s linear infinite reverse;
+          filter: blur(16px);
+          pointer-events: none;
+        }
+        .inicio-sync-shell:hover .inicio-sync-halo {
+          opacity: 0.72;
+        }
+        .inicio-sync-spark {
+          position: absolute;
+          inset: 0;
+          border-radius: 9999px;
+          opacity: 0;
+          transition: opacity 0.35s ease;
+          background: radial-gradient(circle at 50% 35%, rgba(255,255,255,0.35) 0%, transparent 42%);
+          pointer-events: none;
+          z-index: 2;
+          animation: inicio-sync-core-pulse 2s ease-in-out infinite;
+        }
+        .inicio-sync-shell:hover .inicio-sync-spark {
+          opacity: 0.55;
+        }
+        .inicio-sync-inner {
+          position: relative;
+          z-index: 3;
+          border-radius: 9999px;
+          border: none;
+          padding: 0.5rem 1.35rem;
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #fff;
+          cursor: pointer;
+          background: linear-gradient(180deg, #141414 0%, #000000 100%);
+          transition: box-shadow 0.35s ease, background 0.35s ease;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+        }
+        .inicio-sync-inner:hover {
+          background:
+            radial-gradient(ellipse 100% 80% at 50% 0%, rgba(87, 60, 255, 0.22) 0%, transparent 52%),
+            linear-gradient(180deg, #1a1528 0%, #050508 100%);
+          box-shadow:
+            inset 0 0 28px rgba(123, 97, 255, 0.18),
+            inset 0 -12px 32px rgba(251, 146, 60, 0.08),
+            0 0 0 1px rgba(167, 139, 250, 0.12);
+        }
+      `}</style>
       <EmailVerificationBanner />
 
-      {/* ── Greeting ── */}
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-[-0.02em]">
-          {getGreeting()}, {name}
-        </h1>
-        {agencyName && (
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{agencyName}</p>
-        )}
-      </div>
-
-      {/* ── Hero — Guro Studio ── */}
-      <button
-        onClick={() => nav('/apps/marketing/creador-contenido')}
-        className="group w-full relative overflow-hidden rounded-2xl text-left transition-all hover:shadow-xl active:scale-[0.998] mb-6"
-        style={{ background: 'linear-gradient(135deg, #222283 0%, #573CFF 40%, #a25dae 70%, #fa8e5b 100%)' }}
+      <div
+        className="-mx-4 md:-mx-6 xl:-mx-8 2xl:-mx-10 -mt-8 md:-mt-10 min-h-[calc(100vh-8rem)] px-4 md:px-6 xl:px-8 2xl:px-10 py-10 md:py-12 pb-16 text-white"
+        style={{ fontFamily: "'General Sans', system-ui, sans-serif" }}
       >
-        <div className="absolute inset-0 opacity-[0.12] pointer-events-none" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%270 0 256 256%27 xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27noise%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.85%27 numOctaves=%274%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23noise)%27/%3E%3C/svg%3E")' }} />
-        <div className="flex items-center min-h-[200px] relative z-[1]">
-          <div className="flex-1 p-7 lg:py-8 lg:pl-9">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-white/15 text-white/90 backdrop-blur-sm mb-4">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-              Guro Studio
-            </span>
-            <h2 className="text-[21px] lg:text-2xl font-bold text-white mb-1.5 leading-snug">
-              Crea, planifica y publica<br className="hidden sm:block" /> contenido para tu marca
-            </h2>
-            <div className="flex flex-wrap gap-2 mb-5">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/15 text-white/80">
-                <Icon icon="solar:pallete-2-bold" width={12} /> Diseño IA
-              </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/15 text-white/80">
-                <Icon icon="solar:calendar-bold" width={12} /> Planificador
-              </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/15 text-white/80">
-                <Icon icon="solar:share-circle-bold" width={12} /> Redes sociales
-              </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/15 text-white/80">
-                <Icon icon="solar:gallery-bold" width={12} /> Plantillas
-              </span>
-            </div>
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#222283] text-[13px] font-bold group-hover:bg-white/90 transition-colors">
-              Empezar a crear
-              <Icon icon="solar:arrow-right-linear" width={14} />
-            </span>
-          </div>
-          <div className="hidden lg:block relative w-[280px] h-[200px] mr-4 flex-shrink-0">
-            <img
-              src="https://img.freepik.com/free-photo/young-woman-working-laptop-computer-sitting-desk_1303-30069.jpg?semt=ais_hybrid&w=740"
-              alt=""
-              className="w-full h-full object-cover object-top rounded-xl opacity-80 group-hover:opacity-90 transition-opacity duration-300"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#573CFF]/60 to-transparent rounded-xl" />
-          </div>
-        </div>
-      </button>
+        <div className="max-w-3xl mx-auto w-full">
+          <p className="text-sm text-neutral-500 mb-1">
+            ¡{getGreeting()}
+            {firstName ? `, ${firstName}` : ''}!
+          </p>
+          <h1 className="text-2xl md:text-[1.75rem] font-bold text-white tracking-[-0.02em] mb-2">
+            Configura tu cuenta de seguros
+          </h1>
+          <p className="text-neutral-400 text-[15px] leading-snug mb-8">
+            Sigue estos pasos para sincronizar tu operación en un solo lugar.
+          </p>
 
-      {/* ── Bento grid — main workspace ── */}
-      <div className="grid grid-cols-4 lg:grid-cols-12 gap-3 mb-6">
-
-        {/* Pólizas — card with character */}
-        <button
-          onClick={() => nav('/apps/seguros/polizas')}
-          className="group col-span-4 lg:col-span-4 rounded-xl bg-gradient-to-br from-indigo-50 to-sky-50 dark:from-indigo-950/40 dark:to-sky-950/30 border border-indigo-200/60 dark:border-indigo-500/15 p-5 text-left hover:border-indigo-300 dark:hover:border-indigo-400/25 hover:shadow-lg hover:shadow-indigo-100/50 dark:hover:shadow-indigo-900/20 transition-all active:scale-[0.99] relative overflow-visible"
-        >
-          <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center mb-3.5">
-            <Icon icon="solar:shield-check-bold-duotone" width={20} className="text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <h3 className="text-[14px] font-semibold text-gray-900 dark:text-white mb-0.5">Pólizas</h3>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed max-w-[60%]">Gestiona, renueva y emite pólizas de todos los ramos</p>
-          <img
-            src={personajeGuroPolizas}
-            alt=""
-            className="absolute bottom-0 -right-2 w-[150px] h-[207px] object-contain object-bottom opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300 pointer-events-none drop-shadow-lg"
-          />
-        </button>
-
-        {/* WhatsApp — card with character */}
-        <button
-          onClick={() => nav('/apps/whatsapp/inbox')}
-          className="group col-span-4 lg:col-span-4 rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/40 dark:to-emerald-950/30 border border-teal-200/60 dark:border-teal-500/15 p-5 text-left hover:border-teal-300 dark:hover:border-teal-400/25 hover:shadow-lg hover:shadow-teal-100/50 dark:hover:shadow-teal-900/20 transition-all active:scale-[0.99] relative overflow-visible"
-        >
-          <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-500/15 flex items-center justify-center mb-3.5">
-            <Icon icon="solar:chat-round-dots-bold-duotone" width={20} className="text-teal-600 dark:text-teal-400" />
-          </div>
-          <h3 className="text-[14px] font-semibold text-gray-900 dark:text-white mb-0.5">WhatsApp & Bot IA</h3>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed max-w-[60%]">Inbox, campañas, chatbot inteligente y automatizaciones</p>
-          <img
-            src={personajeGuroWa}
-            alt=""
-            className="absolute bottom-0 -right-2 w-[130px] h-[180px] object-contain object-bottom opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300 pointer-events-none drop-shadow-lg"
-          />
-        </button>
-
-        {/* Asistente IA — card with character */}
-        <button
-          onClick={() => nav('/apps/ia/asistente')}
-          className="group col-span-4 lg:col-span-4 rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/30 border border-indigo-200/60 dark:border-indigo-500/15 p-5 text-left hover:border-indigo-300 dark:hover:border-indigo-400/25 hover:shadow-lg hover:shadow-indigo-100/50 dark:hover:shadow-indigo-900/20 transition-all active:scale-[0.99] relative overflow-visible"
-        >
-          <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center mb-3.5">
-            <Icon icon="solar:stars-minimalistic-bold-duotone" width={20} className="text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <h3 className="text-[14px] font-semibold text-gray-900 dark:text-white mb-0.5">Asistente IA</h3>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed max-w-[65%]">Pregúntale sobre pólizas, clientes o cualquier dato de tu agencia</p>
-          <img
-            src={personajeGuro}
-            alt=""
-            className="absolute bottom-0 -right-2 w-[130px] h-[180px] object-contain object-bottom opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300 pointer-events-none drop-shadow-lg"
-          />
-        </button>
-
-        {/* Quick access — 4 compact pills */}
-        {[
-          { title: 'Clientes', icon: 'solar:users-group-two-rounded-bold-duotone', href: '/apps/seguros/clientes', ic: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-500/10' },
-          { title: 'Embudo', icon: 'solar:chart-2-bold-duotone', href: '/apps/saas/sales-funnel', ic: 'text-cyan-600', bg: 'bg-cyan-50 dark:bg-cyan-500/10' },
-          { title: 'Cartera', icon: 'solar:wallet-bold-duotone', href: '/apps/cartera/clientes', ic: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
-          { title: 'Dashboard', icon: 'solar:graph-up-bold-duotone', href: '/apps/dashboard', ic: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10' },
-        ].map((item) => (
-          <button
-            key={item.title}
-            onClick={() => nav(item.href)}
-            className="group col-span-2 lg:col-span-3 flex items-center gap-3 rounded-xl bg-white dark:bg-white/[0.03] border border-gray-200/60 dark:border-white/[0.06] px-4 py-3 text-left hover:border-gray-300 dark:hover:border-white/10 transition-all active:scale-[0.98]"
-          >
-            <div className={`w-8 h-8 rounded-lg ${item.bg} flex items-center justify-center flex-shrink-0`}>
-              <Icon icon={item.icon} width={16} className={item.ic} />
-            </div>
-            <span className="text-[13px] font-medium text-gray-700 dark:text-gray-300">{item.title}</span>
-          </button>
-        ))}
+          <div className="flex flex-col gap-3">
+            {/* Paso 1 — Conectar aseguradoras */}
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center">
+              {hasConnectedInsurer ? (
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                  <Icon icon="solar:check-read-linear" width={18} className="text-emerald-400" />
+                </div>
+              ) : (
+                <div
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{ background: '#573CFF' }}
+                >
+                  <span className="w-2 h-2 rounded-full bg-white" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[15px] font-semibold text-white">
+                  Conecta tus compañías de seguros
+                </h2>
+                <p className="text-sm text-neutral-500 leading-relaxed">
+                  {hasConnectedInsurer
+                    ? `${connectedInsurers.length} aseguradora${connectedInsurers.length > 1 ? 's' : ''} conectada${connectedInsurers.length > 1 ? 's' : ''}`
+                    : 'Vincula tus credenciales de aseguradoras para empezar a importar datos.'}
+                </p>
       </div>
 
-      {/* ── More tools ── */}
-      <div className="mb-6">
-        <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Más herramientas</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { title: 'Call Center IA', sub: 'Automatiza llamadas', icon: 'solar:phone-calling-rounded-bold-duotone', href: '/apps/voice-ai/dashboard', ic: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-500/10' },
-            { title: 'Email Marketing', sub: 'Campañas de correo', icon: 'solar:letter-bold-duotone', href: '/apps/marketing/plantillas', ic: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10' },
-            { title: 'Mini Web', sub: 'Página de captura', icon: 'solar:smartphone-2-bold-duotone', href: '/apps/marketing/mini-web', ic: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-500/10' },
-          ].map((item) => (
+              {hasConnectedInsurer ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {connectedInsurers.slice(0, 4).map((code) => {
+                    const meta = INSURER_META[code];
+                    return (
+                      <div key={code} className="w-8 h-8 rounded-full bg-white flex items-center justify-center overflow-hidden border border-gray-200 dark:border-neutral-700 shrink-0">
+                        {meta?.logo ? (
+                          <img src={meta.logo} alt={meta.name} className="w-5 h-5 object-contain" />
+                        ) : (
+                          <span className="text-[7px] font-bold text-[#111]">{(meta?.name || code).slice(0, 3).toUpperCase()}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center ml-1">
+                    <Icon icon="solar:check-read-bold" width={14} className="text-emerald-400" />
+                  </div>
+                </div>
+              ) : (
+                <span className="inicio-sync-shell">
+                  <span className="inicio-sync-spin-track" aria-hidden />
+                  <span className="inicio-sync-halo" aria-hidden />
+                  <span className="inicio-sync-spark" aria-hidden />
             <button
-              key={item.title}
-              onClick={() => nav(item.href)}
-              className="group flex items-center gap-3.5 rounded-xl bg-white dark:bg-white/[0.03] border border-gray-200/60 dark:border-white/[0.06] p-4 text-left hover:border-gray-300 dark:hover:border-white/10 transition-all active:scale-[0.98]"
+                    type="button"
+                    onClick={() => nav('/apps/integraciones/apis-aseguradoras')}
+                    className="inicio-sync-inner"
+                  >
+                    Conectar
+                  </button>
+                </span>
+              )}
+            </div>
+
+            {/* Paso 2 — Sincronizar información */}
+            <div
+              className={`rounded-2xl border px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center transition-colors ${
+                hasConnectedInsurer
+                  ? 'border-neutral-800 bg-neutral-950/80'
+                  : 'border-neutral-800/90 opacity-80'
+              }`}
             >
-              <div className={`w-9 h-9 rounded-lg ${item.bg} flex items-center justify-center flex-shrink-0`}>
-                <Icon icon={item.icon} width={18} className={item.ic} />
+              <div
+                className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${
+                  hasConnectedInsurer ? 'bg-[#573CFF]' : 'bg-neutral-800 text-neutral-500'
+                }`}
+              >
+                {hasConnectedInsurer ? (
+                  <span className="w-2 h-2 rounded-full bg-white" />
+                ) : (
+                  2
+                )}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-[13px] font-semibold text-gray-900 dark:text-white">{item.title}</h3>
-                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{item.sub}</p>
+                <div className="flex flex-wrap items-center gap-2 gap-y-1 mb-1">
+                  <h2 className={`text-[15px] font-semibold ${hasConnectedInsurer ? 'text-white' : 'text-neutral-500'}`}>
+                    Sincroniza tu información
+                  </h2>
+                  {hasConnectedInsurer && (
+                    <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
+                      <Icon icon="solar:clock-circle-linear" width={14} className="text-neutral-500" />
+                      ~5 min
+                    </span>
+                  )}
+                </div>
+                <p className={`text-sm leading-relaxed ${hasConnectedInsurer ? 'text-neutral-500' : 'text-neutral-600'}`}>
+                  Importa clientes, pólizas y cartera de tus aseguradoras conectadas.
+                </p>
               </div>
+              {hasConnectedInsurer ? (
+                <span className="inicio-sync-shell">
+                  <span className="inicio-sync-spin-track" aria-hidden />
+                  <span className="inicio-sync-halo" aria-hidden />
+                  <span className="inicio-sync-spark" aria-hidden />
+                  <button type="button" onClick={openSyncModal} className="inicio-sync-inner">
+                    Sincronizar
             </button>
-          ))}
+                </span>
+              ) : (
+                <Icon
+                  icon={connectionsLoading ? 'solar:refresh-linear' : 'solar:lock-keyhole-minimalistic-linear'}
+                  width={22}
+                  className={`flex-shrink-0 ${connectionsLoading ? 'text-neutral-500 animate-spin' : 'text-neutral-500'}`}
+                />
+              )}
+            </div>
+
+            {/* Paso 3 — bloqueado */}
+            <div className="rounded-2xl border border-neutral-800/90 px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center opacity-80">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-sm font-medium text-neutral-500">
+                3
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[15px] font-semibold text-neutral-500 mb-1">Sincroniza cartera</h2>
+                <p className="text-sm text-neutral-600 leading-relaxed">
+                  Organiza tus renovaciones y estados de cuenta actuales.
+                </p>
+              </div>
+              <Icon
+                icon="solar:lock-keyhole-minimalistic-linear"
+                width={22}
+                className="text-neutral-500 flex-shrink-0"
+              />
+            </div>
+
+            {/* Paso 4 — bloqueado */}
+            <div className="rounded-2xl border border-neutral-800/90 px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center opacity-80">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-sm font-medium text-neutral-500">
+                4
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[15px] font-semibold text-neutral-500 mb-1">
+                  Comisiones y reportes financieros
+                </h2>
+                <p className="text-sm text-neutral-600 leading-relaxed">
+                  Concilia comisiones con tu cartera y visualiza rentabilidad por ramo y compañía.
+                </p>
+              </div>
+              <Icon
+                icon="solar:lock-keyhole-minimalistic-linear"
+                width={22}
+                className="text-neutral-500 flex-shrink-0"
+              />
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ── Full-screen sync modal ── */}
+      {syncOpen && typeof document !== 'undefined' && createPortal(
+        <div className="inicio-sync-modal fixed inset-0 z-[9999] bg-white dark:bg-[#0d0d0e] text-gray-900 dark:text-white">
+          {/* Close button */}
+          {syncStage !== 'syncing' && (
+            <button
+              type="button"
+              onClick={closeSyncModal}
+              className="absolute top-5 right-5 z-10 w-8 h-8 rounded-lg text-neutral-500 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center"
+              aria-label="Cerrar"
+            >
+              <Icon icon="solar:close-circle-linear" width={18} />
+            </button>
+          )}
+
+          <div className="h-full flex">
+            {/* Sidebar */}
+            <aside className="hidden lg:flex w-[4d00px] border-r border-neutral-800/80 p-8 items-end">
+              <div>
+                <p className="text-[44px] leading-[0.95] font-semibold tracking-[-0.02em] text-white">
+                  Sincroniza<br />tu información
+                </p>
+                <p className="text-neutral-500 text-[15px] mt-2 leading-tight">
+                  Importa clientes, pólizas y cartera desde tus aseguradoras conectadas.
+                </p>
+              </div>
+            </aside>
+
+            {/* Main content */}
+            <main className="flex-1 flex items-center justify-center px-5 md:px-8 overflow-y-auto">
+              <div className="w-full max-w-2xl py-10">
+                {(syncStage === 'select-insurers' || syncStage === 'select-types') && renderStageIndicator()}
+
+                {syncStage === 'select-insurers' && renderSelectInsurers()}
+                {syncStage === 'select-types' && renderSelectTypes()}
+                {syncStage === 'syncing' && renderSyncing()}
+                {syncStage === 'success' && renderSuccess()}
+              </div>
+            </main>
+          </div>
+        </div>
+      , document.body)}
     </div>
   );
 };

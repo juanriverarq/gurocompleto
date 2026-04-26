@@ -381,6 +381,88 @@ class WhatsAppCloudApiService
     }
 
     /**
+     * Upload media to Meta's Graph API from a URL.
+     * Downloads the file first, then uploads to Meta to get a media ID.
+     * This is required for sending template messages with media headers.
+     */
+    public function uploadMediaFromUrl(WhatsAppInstance $instance, string $mediaUrl, string $mimeType = 'image/jpeg'): ?string
+    {
+        try {
+            if (!$instance->cloud_api_token || !$instance->cloud_api_phone_id) {
+                Log::error('📤 [META UPLOAD] Missing Cloud API credentials');
+                return null;
+            }
+
+            // Download the file from URL
+            $response = Http::withoutVerifying()->timeout(30)->get($mediaUrl);
+            if (!$response->successful()) {
+                // If direct download fails (e.g. signed URL), try with token for WhatsApp CDN
+                $response = Http::withToken($instance->cloud_api_token)->timeout(30)->get($mediaUrl);
+                if (!$response->successful()) {
+                    Log::error('📤 [META UPLOAD] Failed to download media from URL', [
+                        'url_preview' => substr($mediaUrl, 0, 100),
+                        'status' => $response->status(),
+                    ]);
+                    return null;
+                }
+            }
+
+            $fileContent = $response->body();
+            $tempFile = tempnam(sys_get_temp_dir(), 'wa_media_');
+            file_put_contents($tempFile, $fileContent);
+
+            // Upload to Meta Graph API
+            $uploadUrl = "{$this->baseUrl}/{$this->apiVersion}/{$instance->cloud_api_phone_id}/media";
+
+            $uploadResponse = Http::withToken($instance->cloud_api_token)
+                ->attach('file', file_get_contents($tempFile), 'media.' . $this->mimeToExtension($mimeType), ['Content-Type' => $mimeType])
+                ->post($uploadUrl, [
+                    'messaging_product' => 'whatsapp',
+                    'type' => $mimeType,
+                ]);
+
+            @unlink($tempFile);
+
+            if ($uploadResponse->successful()) {
+                $mediaId = $uploadResponse->json('id');
+                Log::info('📤 [META UPLOAD] Media uploaded to Meta', [
+                    'media_id' => $mediaId,
+                    'mime' => $mimeType,
+                ]);
+                return $mediaId;
+            }
+
+            Log::error('📤 [META UPLOAD] Failed to upload to Meta', [
+                'status' => $uploadResponse->status(),
+                'error' => $uploadResponse->json(),
+            ]);
+            return null;
+
+        } catch (\Throwable $e) {
+            Log::error('📤 [META UPLOAD] Exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Map MIME type to file extension
+     */
+    private function mimeToExtension(string $mimeType): string
+    {
+        return match ($mimeType) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'video/mp4' => 'mp4',
+            'video/3gpp' => '3gp',
+            'application/pdf' => 'pdf',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            default => 'bin',
+        };
+    }
+
+    /**
      * Get Firebase Storage bucket
      */
     private function getFirebaseBucket($firebaseStorage)

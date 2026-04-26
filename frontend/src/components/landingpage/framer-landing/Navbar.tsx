@@ -3,6 +3,7 @@ import { useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Icon } from '@iconify/react';
 import Lottie from 'lottie-react';
+import SyncButton from './SyncButton';
 import guroLogoAnimation from 'src/assets/LOTTIE.json';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from 'src/config/firebase';
@@ -113,18 +114,7 @@ const Navbar = () => {
                       Ingresar
                     </span>
                   </a>
-                  <a
-                    href="/comenzar"
-                    className="group relative inline-flex items-center bg-[#0d0d0d] rounded-xl h-[44px] overflow-hidden"
-                  >
-                    <span className="absolute inset-y-0 left-0 w-[44px] group-hover:w-full bg-[#573CFF] rounded-xl transition-all duration-300 ease-out" />
-                    <span className="relative z-10 flex items-center justify-center w-[44px] h-full flex-shrink-0">
-                      <Icon icon="solar:arrow-right-linear" className="w-5 h-5 text-white" />
-                    </span>
-                    <span className="relative z-10 pl-2 pr-4 text-[11px] font-bold text-white uppercase tracking-[0.15em] whitespace-nowrap">
-                      Crear cuenta
-                    </span>
-                  </a>
+                  <SyncButton href="/comenzar" size="sm">Crear cuenta</SyncButton>
                 </>
               )}
             </div>

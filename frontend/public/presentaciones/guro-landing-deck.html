@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Guro — Presentación</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #000000;
+      --purple: #573cff;
+      --lavender: #a78bfa;
+      --orange: #f97316;
+      --orange-soft: #fb923c;
+      --white: #ffffff;
+      --border: rgba(255, 255, 255, 0.1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page { size: 297mm 167mm; margin: 0; }
+    html, body {
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--white);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .slide {
+      width: 297mm;
+      height: 167mm;
+      page-break-after: always;
+      break-after: page;
+      position: relative;
+      overflow: hidden;
+      padding: 8mm 11mm 10mm;
+      background: var(--bg);
+    }
+    .slide:last-child { page-break-after: auto; }
+
+    .aurora { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+    .aurora .b1 {
+      position: absolute; top: -20%; left: -15%;
+      width: 75%; height: 85%;
+      background: radial-gradient(closest-side, rgba(87,60,255,0.85), rgba(87,60,255,0.35) 45%, transparent 70%);
+      filter: blur(48px);
+    }
+    .aurora .b2 {
+      position: absolute; top: 5%; right: -20%;
+      width: 80%; height: 90%;
+      background: radial-gradient(closest-side, rgba(249,115,22,0.65), rgba(251,146,60,0.28) 45%, transparent 70%);
+      filter: blur(52px);
+    }
+    .aurora .b3 {
+      position: absolute; bottom: -25%; left: 15%;
+      width: 70%; height: 75%;
+      background: radial-gradient(closest-side, rgba(167,139,250,0.65), rgba(167,139,250,0.28) 45%, transparent 70%);
+      filter: blur(56px);
+    }
+    .aurora .b4 {
+      position: absolute; top: 30%; right: 5%;
+      width: 45%; height: 50%;
+      background: radial-gradient(closest-side, rgba(123,97,255,0.45), transparent 70%);
+      filter: blur(40px);
+    }
+
+    .vignette {
+      position: absolute; inset: 0; z-index: 1;
+      background: radial-gradient(ellipse at 50% 42%, transparent 18%, rgba(0,0,0,0.5) 72%, rgba(0,0,0,0.92) 100%);
+      pointer-events: none;
+    }
+
+    .grid-lines {
+      position: absolute; inset: 0; z-index: 2;
+      opacity: 0.1;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(167,139,250,0.4) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(167,139,250,0.4) 1px, transparent 1px);
+      background-size: 14mm 14mm;
+      mask-image: radial-gradient(ellipse 70% 55% at 50% 45%, black 0%, transparent 75%);
+      -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 45%, black 0%, transparent 75%);
+    }
+
+    .noise {
+      position: absolute; inset: 0; z-index: 2;
+      opacity: 0.12;
+      mix-blend-mode: overlay;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+    }
+
+    .corners {
+      position: absolute; inset: 5mm; z-index: 3; pointer-events: none;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 4mm;
+    }
+    .corners::before,
+    .corners::after {
+      content: '';
+      position: absolute;
+      width: 12mm; height: 12mm;
+      border-color: rgba(87, 60, 255, 0.55);
+      border-style: solid;
+    }
+    .corners::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-radius: 4mm 0 0 0; }
+    .corners::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 4mm 0; }
+
+    .content { position: relative; z-index: 4; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+    .content.top { justify-content: flex-start; padding-top: 1mm; }
+    .content.split {
+      flex-direction: row;
+      align-items: stretch;
+      gap: 7mm;
+    }
+    .content.split .col-text { flex: 1.05; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+    .content.split .col-visual { flex: 0.95; position: relative; min-height: 0; }
+
+    .grad {
+      background: linear-gradient(90deg, #573cff 0%, #7b61ff 22%, #a78bfa 45%, #fb923c 70%, #f97316 88%, #573cff 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+
+    .bar-accent {
+      width: 14mm; height: 3px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--purple), var(--orange-soft));
+      margin-bottom: 3mm;
+    }
+
+    h1 {
+      font-size: 27pt;
+      font-weight: 800;
+      line-height: 1.06;
+      letter-spacing: -0.035em;
+      margin-bottom: 3mm;
+    }
+    h2 {
+      font-size: 20pt;
+      font-weight: 800;
+      line-height: 1.12;
+      letter-spacing: -0.025em;
+      margin-bottom: 2.5mm;
+    }
+    h3 {
+      font-size: 12.5pt;
+      font-weight: 700;
+      margin-bottom: 1.5mm;
+      color: rgba(255,255,255,0.96);
+    }
+    h4 {
+      font-size: 10.5pt;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--lavender);
+      margin-bottom: 1.5mm;
+    }
+    .sub {
+      font-size: 13pt;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.48);
+      line-height: 1.38;
+      max-width: 100%;
+    }
+    .note {
+      font-size: 10.5pt;
+      font-style: italic;
+      color: rgba(255, 255, 255, 0.36);
+      margin-top: 2mm;
+    }
+    .body-text {
+      font-size: 10.25pt;
+      line-height: 1.42;
+      color: rgba(255, 255, 255, 0.58);
+      margin-bottom: 2mm;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 2mm;
+      font-size: 8.25pt;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--lavender);
+      margin-bottom: 2mm;
+    }
+    .badge-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple), var(--orange-soft));
+      box-shadow: 0 0 12px rgba(87, 60, 255, 0.6);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9.5pt;
+      color: rgba(255,255,255,0.48);
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .cta-strip {
+      margin-top: 4mm;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 20px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #161616 0%, #050505 100%);
+      border: 1px solid rgba(167, 139, 250, 0.25);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 12px 40px rgba(87, 60, 255, 0.15);
+      font-size: 10.5pt;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fff;
+    }
+    .cta-strip .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, #573cff, #a78bfa, #fb923c, #573cff);
+    }
+
+    .seal-row { display: flex; flex-wrap: wrap; gap: 4mm; margin-top: 5mm; }
+    .seal {
+      display: flex;
+      align-items: center;
+      gap: 3mm;
+      padding: 2.5mm 3.5mm;
+      border-radius: 3mm;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    .seal::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(87,60,255,0.5), rgba(251,146,60,0.25), transparent);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .seal .ring {
+      width: 11mm; height: 11mm;
+      border-radius: 2.5mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 6.5pt;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(145deg, rgba(87,60,255,0.35), rgba(10,10,15,0.9));
+      border: 1px solid rgba(167,139,250,0.35);
+      flex-shrink: 0;
+    }
+    .seal .ring.ring-logo {
+      width: 14mm;
+      height: 14mm;
+      padding: 2mm;
+      background: rgba(6, 6, 10, 0.96);
+      font-size: 0;
+      line-height: 0;
+    }
+    .seal-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+      display: block;
+    }
+    .seal-img--invert {
+      filter: brightness(0) invert(1);
+      opacity: 0.9;
+    }
+    .seal .lbl { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.38); }
+    .seal .name { font-size: 11.5pt; font-weight: 700; color: rgba(255,255,255,0.92); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3mm;
+      margin-top: 2mm;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3mm;
+      margin-top: 2mm;
+    }
+
+    .card {
+      background: linear-gradient(165deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 3mm;
+      padding: 3.5mm;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(87,60,255,0.8), rgba(251,146,60,0.5), transparent);
+      opacity: 0.85;
+    }
+    .card .tag {
+      font-size: 8.5pt;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--purple);
+      margin-bottom: 1.5mm;
+    }
+    ul { list-style: none; margin-top: 1mm; }
+    li {
+      font-size: 9.75pt;
+      color: rgba(255,255,255,0.58);
+      line-height: 1.4;
+      padding-left: 3.5mm;
+      position: relative;
+      margin-bottom: 1.2mm;
+    }
+    li::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0.48em;
+      width: 1.1mm; height: 1.1mm;
+      border-radius: 50%;
+      background: var(--purple);
+      box-shadow: 0 0 5px rgba(87, 60, 255, 0.7);
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2mm;
+      margin-top: 2mm;
+    }
+    .stat {
+      text-align: center;
+      padding: 3mm 1.5mm;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 3mm;
+      position: relative;
+    }
+    .stat::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(145deg, rgba(87,60,255,0.4), transparent 55%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      opacity: 0.5;
+    }
+    .stat .num {
+      font-size: 19pt;
+      font-weight: 800;
+      background: linear-gradient(180deg, #c4b5fd 0%, #573cff 45%, #fb923c 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.03em;
+    }
+    .stat .lab { font-size: 8.25pt; color: rgba(255,255,255,0.52); margin-top: 0.5mm; font-weight: 600; line-height: 1.25; }
+
+    .func-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2.5mm;
+      margin-top: 2mm;
+    }
+    .func-card {
+      padding: 3.2mm;
+      border-radius: 2.5mm;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+    }
+    .func-row {
+      display: flex;
+      gap: 3mm;
+      align-items: flex-start;
+    }
+    .func-ico {
+      width: 8mm;
+      height: 8mm;
+      flex-shrink: 0;
+      border-radius: 1.5mm;
+      background: rgba(87, 60, 255, 0.14);
+      border: 1px solid rgba(167, 139, 250, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #c4b5fd;
+    }
+    .func-ico svg {
+      width: 5mm;
+      height: 5mm;
+    }
+    .func-body { flex: 1; min-width: 0; }
+    .func-card h4 { margin-bottom: 1.2mm; color: rgba(255,255,255,0.92); font-size: 11pt; letter-spacing: 0; text-transform: none; font-weight: 700; }
+    .func-card p {
+      font-size: 9.5pt;
+      line-height: 1.38;
+      color: rgba(255,255,255,0.55);
+    }
+
+    .impact-card {
+      padding: 3.5mm;
+      border-radius: 3mm;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      position: relative;
+    }
+    .impact-card .ic {
+      width: 10mm; height: 10mm;
+      border-radius: 2mm;
+      margin-bottom: 2mm;
+      background: linear-gradient(145deg, rgba(87,60,255,0.35), rgba(10,10,15,0.95));
+      border: 1px solid rgba(167,139,250,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #c4b5fd;
+    }
+    .impact-card .ic svg {
+      width: 5.5mm;
+      height: 5.5mm;
+    }
+    .impact-card p {
+      font-size: 9.75pt;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.4;
+    }
+
+    .footer-mini {
+      position: absolute;
+      bottom: 4.5mm;
+      left: 11mm;
+      right: 11mm;
+      z-index: 5;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 7.5pt;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.32);
+    }
+    .footer-mini .pg {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.03);
+    }
+
+    @media print {
+      .noise { display: none !important; }
+      .aurora .b1, .aurora .b2, .aurora .b3, .aurora .b4 {
+        filter: none !important;
+        opacity: 0.62;
+      }
+    }
+
+    .logo-text {
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      font-size: 13pt;
+      background: linear-gradient(90deg, #fff, rgba(255,255,255,0.72));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .mock-stack {
+      position: relative;
+      height: 100%;
+      min-height: 112mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mock-card {
+      position: absolute;
+      width: 78%;
+      aspect-ratio: 4/3;
+      border-radius: 3mm;
+      background: linear-gradient(165deg, rgba(20,20,28,0.95), rgba(5,5,8,0.98));
+      border: 1px solid rgba(167,139,250,0.25);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(87,60,255,0.12);
+    }
+    .mock-card.c2 { transform: rotate(-6deg) translate(-8mm, 4mm); opacity: 0.55; z-index: 1; }
+    .mock-card.c1 { transform: rotate(4deg) translate(6mm, -3mm); opacity: 0.45; z-index: 0; }
+    .mock-card.main { z-index: 2; padding: 4mm; }
+    .mock-card.main .row {
+      height: 3.5mm;
+      border-radius: 1mm;
+      background: rgba(255,255,255,0.08);
+      margin-bottom: 2mm;
+    }
+    .mock-card.main .row.short { width: 55%; }
+    .mock-card.main .grid-mini {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2mm;
+      margin-top: 2.5mm;
+    }
+    .mock-card.main .cell {
+      height: 12mm;
+      border-radius: 2mm;
+      background: linear-gradient(135deg, rgba(87,60,255,0.2), rgba(249,115,22,0.08));
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+  </style>
+</head>
+<body>
+  <!-- Iconos reutilizables (presentación / PDF) -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="ico-doc" viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></symbol>
+    <symbol id="ico-users" viewBox="0 0 24 24"><path fill="currentColor" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.67V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></symbol>
+    <symbol id="ico-wallet" viewBox="0 0 24 24"><path fill="currentColor" d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.11 0 2 .89 2 2v1h-9a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></symbol>
+    <symbol id="ico-funnel" viewBox="0 0 24 24"><path fill="currentColor" d="M3 5h18v2H3V5zm2 4h14v2H5V9zm4 4h6v2H9v-2zm2 4h2v5h-2v-5z"/></symbol>
+    <symbol id="ico-alert" viewBox="0 0 24 24"><path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></symbol>
+    <symbol id="ico-refresh" viewBox="0 0 24 24"><path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.56 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></symbol>
+    <symbol id="ico-chart" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></symbol>
+    <symbol id="ico-cash" viewBox="0 0 24 24"><path fill="currentColor" d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></symbol>
+    <symbol id="ico-cpu" viewBox="0 0 24 24"><path fill="currentColor" d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/></symbol>
+    <symbol id="ico-file" viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8v-2zm0-4h8v2H8v-2z"/></symbol>
+    <symbol id="ico-phone" viewBox="0 0 24 24"><path fill="currentColor" d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></symbol>
+    <symbol id="ico-loop" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></symbol>
+    <symbol id="ico-bolt" viewBox="0 0 24 24"><path fill="currentColor" d="M7 2v11h3v9l7-12h-4l4-8z"/></symbol>
+    <symbol id="ico-headset" viewBox="0 0 24 24"><path fill="currentColor" d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/></symbol>
+  </svg>
+
+  <!-- 01 Hero -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div><div class="b2"></div><div class="b3"></div><div class="b4"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content">
+      <div class="badge"><span class="badge-dot"></span> Software de seguros · IA · Latinoamérica</div>
+      <div class="bar-accent"></div>
+      <h1>Toda tu agencia de seguros operando desde un solo lugar</h1>
+      <p class="sub">Pólizas, clientes, cotizaciones, renovaciones y expedición sincronizadas con tus aseguradoras en tiempo real.</p>
+      <p class="note">Guro es el canal que conecta tu operación con el mercado.</p>
+      <div style="margin-top:4mm;display:flex;gap:3mm;flex-wrap:wrap;align-items:center;">
+        <div class="cta-strip"><span class="dot"></span> Plataforma unificada</div>
+        <span class="pill">Una sola fuente de verdad operativa</span>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">01</span></div>
+  </section>
+
+  <!-- 02 Respaldado -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div><div class="b2"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Confianza</div>
+      <div class="bar-accent"></div>
+      <h2>Respaldado por <span class="grad">líderes del sector</span></h2>
+      <p class="sub" style="margin-bottom:4mm;max-width:190mm;">Integraciones y alianzas que validan la operación de tu agencia frente al mercado.</p>
+      <div class="seal-row">
+        <div class="seal">
+          <div class="ring ring-logo">
+            <img src="https://cdn.simpleicons.org/meta/ffffff" alt="Meta" class="seal-img" width="80" height="80" />
+          </div>
+          <div><div class="lbl">Proveedor autorizado</div><div class="name">Meta</div></div>
+        </div>
+        <div class="seal">
+          <div class="ring ring-logo">
+            <img src="https://www.sura.co/documents/1771353/0/Logo-SURA-blanco+1.svg/8937a328-d03b-7aa7-79bd-a5308a3931b3?version=1.0&amp;t=1704405886717" alt="Sura" class="seal-img" width="160" height="64" />
+          </div>
+          <div><div class="lbl">Proveedor autorizado</div><div class="name">Sura</div></div>
+        </div>
+        <div class="seal">
+          <div class="ring ring-logo">
+            <img src="https://insurtechcolombia.com/wp-content/uploads/2026/01/Logo-AIC-Dark.png" alt="Insurtech Colombia" class="seal-img seal-img--invert" width="160" height="64" />
+          </div>
+          <div><div class="lbl">Miembros</div><div class="name">Insurtech Colombia</div></div>
+        </div>
+      </div>
+      <div style="margin-top:6mm;display:flex;gap:3mm;flex-wrap:wrap;align-items:center;">
+        <span class="pill" style="gap:6px;"><img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="" width="14" height="14" style="display:block;border-radius:2px;" /> WhatsApp Business</span>
+        <span class="pill">Canales oficiales</span>
+        <span class="pill">Sincronización en tiempo real</span>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">02</span></div>
+  </section>
+
+  <!-- 03 Propuesta -->
+  <section class="slide">
+    <div class="aurora"><div class="b2"></div><div class="b3"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content split">
+      <div class="col-text">
+        <div class="badge"><span class="badge-dot"></span> Propuesta de valor</div>
+        <div class="bar-accent"></div>
+        <h2>Un solo software para operar <span class="grad">toda tu agencia</span></h2>
+        <p class="body-text">Guro concentra la operación comercial y de servicio: cotización, emisión, cobro, renovación y comunicación con el cliente, con datos alineados a lo que realmente existe en la aseguradora.</p>
+        <p class="body-text">El objetivo es eliminar duplicidad de sistemas, errores por digitación y tiempos muertos entre áreas — ventas, cartera y servicio trabajan sobre el mismo expediente.</p>
+        <p class="note">Menos fricción. Más trazabilidad. Decisiones con información actualizada.</p>
+      </div>
+      <div class="col-visual">
+        <div class="mock-stack">
+          <div class="mock-card c1"></div>
+          <div class="mock-card c2"></div>
+          <div class="mock-card main">
+            <div class="row"></div>
+            <div class="row short"></div>
+            <div class="row" style="width:70%"></div>
+            <div class="grid-mini">
+              <div class="cell"></div>
+              <div class="cell"></div>
+            </div>
+            <div style="margin-top:2.5mm;height:7mm;border-radius:2mm;background:linear-gradient(90deg,#573cff,#fb923c);opacity:0.85;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">03</span></div>
+  </section>
+
+  <!-- 04 Centraliza / Cotiza expandido -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Operación central</div>
+      <div class="bar-accent"></div>
+      <h2 style="font-size:19pt;">Centraliza · <span class="grad">Cotiza y expide</span></h2>
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag">CENTRALIZA</div>
+          <h3>Repositorio vivo de pólizas y clientes</h3>
+          <p class="body-text">Toda la cartera queda indexada por cliente, póliza y documento: tu equipo consulta el mismo expediente, con permisos por rol y trazabilidad de cambios.</p>
+          <ul>
+            <li>Historial de pólizas activas, vencidas, endosos y siniestros en un solo lugar</li>
+            <li>Adjuntos y pólizas en PDF vinculados al negocio, sin carpetas compartidas desordenadas</li>
+            <li>Base lista para segmentar, priorizar cobros y preparar campañas</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="tag">COTIZA Y EXPIDE</div>
+          <h3>Flujo de venta conectado a la aseguradora</h3>
+          <p class="body-text">Desde Guro inicias cotizaciones y emisión sin replicar datos en portales paralelos: reduces errores de captura y aceleras el cierre.</p>
+          <ul>
+            <li>Misma información del cliente reutilizada en cotización y expedición</li>
+            <li>Sincronización del estado de la póliza cuando la aseguradora confirma emisión o movimiento</li>
+            <li>Un recorrido comercial continuo: oportunidad → cotización → emisión → cobro</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">04</span></div>
+  </section>
+
+  <!-- 05 Sincronización con aseguradoras -->
+  <section class="slide">
+    <div class="aurora"><div class="b3"></div><div class="b4"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Integración</div>
+      <div class="bar-accent"></div>
+      <h2>Sincronización con <span class="grad">aseguradoras</span></h2>
+      <p class="body-text" style="margin-bottom:2.5mm;max-width:268mm;">La conexión no es solo “descargar un reporte”: es mantener alineados los datos operativos que la agencia usa día a día con lo que existe del otro lado — pólizas, movimientos de cartera, comisiones y estados de vigencia.</p>
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag">QUÉ SE SINCRONIZA</div>
+          <ul>
+            <li>Pólizas y endosos para que tu CRM refleje la realidad de la compañía</li>
+            <li>Cartera y recaudos para conciliar cobros sin cruces manuales en Excel</li>
+            <li>Comisiones y movimientos que alimentan liquidaciones y reportes</li>
+            <li>Actualización periódica para detectar cancelaciones, mora o cambios de prima</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="tag">QUÉ GANA TU AGENCIA</div>
+          <ul>
+            <li>Una sola fuente de verdad: menos disputas internas sobre “qué dato es el correcto”</li>
+            <li>Menos trabajo de conciliación entre portal, correo y hojas de cálculo</li>
+            <li>Equipos comercial y de servicio coordinados con información fresca</li>
+            <li>Base sólida para automatizar recordatorios y campañas sobre datos confiables</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">05</span></div>
+  </section>
+
+  <!-- 06 Recordatorios y automatización -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div><div class="b2"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Automatización</div>
+      <div class="bar-accent"></div>
+      <h2>Recordatorios y <span class="grad">ciclos de seguimiento</span></h2>
+      <p class="body-text" style="margin-bottom:2.5mm;">Los recordatorios dejan de ser “avisos sueltos” y pasan a ser parte de un calendario operativo: se disparan desde fechas reales de la póliza sincronizada (vencimiento, gracia, renovación) y pueden encadenar acciones en canales que ya usas.</p>
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag">LÓGICA</div>
+          <ul>
+            <li>Ventanas configurables (por ejemplo 30, 15 y 7 días antes del vencimiento)</li>
+            <li>Reglas por ramo, por compañía o por segmento de cliente</li>
+            <li>Priorización según valor de póliza, mora o riesgo de fuga</li>
+            <li>Historial de contactos para no repetir mensajes contradictorios</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="tag">CANALES</div>
+          <ul>
+            <li>WhatsApp con plantillas alineadas a tu operación comercial</li>
+            <li>Email para documentación o recordatorios formales</li>
+            <li>Escalamiento a asesor o cartera cuando el cliente no responde</li>
+            <li>Integración con el mismo expediente: el equipo ve qué se envió y qué falta</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">06</span></div>
+  </section>
+
+  <!-- 07 Chatbots y flujos -->
+  <section class="slide">
+    <div class="aurora"><div class="b2"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Conversación</div>
+      <div class="bar-accent"></div>
+      <h2>Chatbots y <span class="grad">flujos automatizados</span></h2>
+      <p class="body-text" style="margin-bottom:2.5mm;">Los flujos conversacionales permiten atender consultas frecuentes, calificar interés y empujar venta cruzada sin depender de que un asesor esté en línea 24/7 — siempre conectados a la data de pólizas y clientes en Guro.</p>
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag">DISEÑO DEL FLUJO</div>
+          <ul>
+            <li>Ramas por intención: cotizar, pagar, reportar un siniestro, conocer coberturas</li>
+            <li>Respuestas con información vigente del cliente (no genéricas desconectadas)</li>
+            <li>Handoff a humano con contexto: el asesor recibe el hilo completo</li>
+            <li>Medición de abandono y puntos de fricción para mejorar el guion</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="tag">CASOS DE USO</div>
+          <ul>
+            <li>Renovación: guiar pago, enviar link o derivar a cartera</li>
+            <li>Venta cruzada: ofrecer productos complementarios según perfil</li>
+            <li>Recuperación: reactivar clientes con pólizas próximas a vencer</li>
+            <li>Campañas: arranque masivo con personalización por plantilla y segmento</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">07</span></div>
+  </section>
+
+  <!-- 08 Call Center IA -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div><div class="b3"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Voz</div>
+      <div class="bar-accent"></div>
+      <h2>Call Center con <span class="grad">inteligencia artificial</span></h2>
+      <p class="body-text" style="margin-bottom:2.5mm;">Agentes de voz con IA ejecutan llamadas salientes masivas con guiones dinámicos: cobranza, recordatorio de vencimiento, confirmación de datos o seguimiento post cotización. Se registra resultado y siguiente paso en el CRM sin que tu equipo tipee acta de cada llamada.</p>
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag">CAPACIDADES</div>
+          <ul>
+            <li>Discado y colas priorizadas según reglas de negocio</li>
+            <li>Guion adaptable según respuesta del cliente (sí / no / reprogramar)</li>
+            <li>Integración con campañas y recordatorios ya programados</li>
+            <li>Métricas por intento, contacto efectivo, promesa de pago y objeciones</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="tag">VALOR OPERATIVO</div>
+          <ul>
+            <li>Escala el contacto sin crecer el call center tradicional al mismo ritmo</li>
+            <li>Reduce tiempos muertos entre intentos y hace seguimiento sistemático</li>
+            <li>Homogeneiza el mensaje y el tono de la agencia en cada llamada</li>
+            <li>Deja trazabilidad para auditoría y mejora continua del script</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">08</span></div>
+  </section>
+
+  <!-- 09 Canal + Renueva + diagrama -->
+  <section class="slide">
+    <div class="aurora"><div class="b3"></div><div class="b4"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content split">
+      <div class="col-text" style="flex:1;">
+        <div class="badge"><span class="badge-dot"></span> Conectividad</div>
+        <div class="bar-accent"></div>
+        <h2 style="font-size:19pt;">Canal único · <span class="grad">Renueva y retiene</span></h2>
+        <p class="body-text">Guro actúa como capa de orquestación: la información que llega de las aseguradoras alimenta cartera, recordatorios, bots y voz — el cliente percibe una sola agencia, no un desorden de sistemas.</p>
+        <div class="card" style="margin-top:2mm;">
+          <div class="tag">RENUEVA Y RETIENE</div>
+          <ul>
+            <li>Alertas alineadas al estado real de la póliza en la compañía</li>
+            <li>WhatsApp, chatbot y llamadas IA sobre el mismo expediente</li>
+            <li>Visibilidad de embudo: qué renovaciones están en riesgo y por qué</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col-visual" style="display:flex;align-items:center;justify-content:center;">
+        <svg width="100%" height="115mm" viewBox="0 0 320 320" style="max-width:95mm;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#573cff"/><stop offset="100%" stop-color="#fb923c"/>
+            </linearGradient>
+          </defs>
+          <circle cx="160" cy="160" r="118" fill="none" stroke="rgba(167,139,250,0.2)" stroke-width="1" stroke-dasharray="4 6"/>
+          <g stroke="url(#lg)" stroke-width="1.2" opacity="0.65">
+            <line x1="160" y1="160" x2="70" y2="75"/><line x1="160" y1="160" x2="250" y2="75"/>
+            <line x1="160" y1="160" x2="55" y2="180"/><line x1="160" y1="160" x2="265" y2="180"/>
+            <line x1="160" y1="160" x2="110" y2="255"/><line x1="160" y1="160" x2="210" y2="255"/>
+          </g>
+          <circle cx="70" cy="75" r="14" fill="#0a0a0f" stroke="rgba(167,139,250,0.5)" stroke-width="1.5"/>
+          <circle cx="70" cy="75" r="6" fill="#573cff"/>
+          <circle cx="250" cy="75" r="14" fill="#0a0a0f" stroke="rgba(167,139,250,0.5)" stroke-width="1.5"/>
+          <circle cx="250" cy="75" r="6" fill="#573cff"/>
+          <circle cx="55" cy="180" r="14" fill="#0a0a0f" stroke="rgba(167,139,250,0.5)" stroke-width="1.5"/>
+          <circle cx="55" cy="180" r="6" fill="#573cff"/>
+          <circle cx="265" cy="180" r="14" fill="#0a0a0f" stroke="rgba(167,139,250,0.5)" stroke-width="1.5"/>
+          <circle cx="265" cy="180" r="6" fill="#573cff"/>
+          <circle cx="110" cy="255" r="14" fill="#0a0a0f" stroke="rgba(167,139,250,0.5)" stroke-width="1.5"/>
+          <circle cx="110" cy="255" r="6" fill="#573cff"/>
+          <circle cx="210" cy="255" r="14" fill="#0a0a0f" stroke="rgba(167,139,250,0.5)" stroke-width="1.5"/>
+          <circle cx="210" cy="255" r="6" fill="#573cff"/>
+          <circle cx="160" cy="160" r="44" fill="rgba(87,60,255,0.15)" stroke="url(#lg)" stroke-width="2"/>
+          <circle cx="160" cy="160" r="28" fill="#573cff"/>
+          <text x="160" y="168" text-anchor="middle" fill="#fff" font-family="Plus Jakarta Sans, sans-serif" font-size="14" font-weight="800" letter-spacing="2">GURO</text>
+        </svg>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">09</span></div>
+  </section>
+
+  <!-- 10 Funciones detalle 1 -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Plataforma · 1/3</div>
+      <div class="bar-accent"></div>
+      <h2 style="font-size:19pt;">Módulos <span class="grad">operativos</span></h2>
+      <div class="func-grid">
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-doc"/></svg></div>
+            <div class="func-body">
+              <h4>Gestión de pólizas</h4>
+              <p>Controla emisión, endosos, anexos y estados en un solo expediente. Alertas de vigencia, historial de movimientos y visibilidad por equipo para que nada se pierda entre correos y chats.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-users"/></svg></div>
+            <div class="func-body">
+              <h4>CRM de clientes</h4>
+              <p>Ficha 360° con pólizas, interacciones y documentos. Segmenta por ramo, antigüedad o valor para priorizar oportunidades y campañas.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-wallet"/></svg></div>
+            <div class="func-body">
+              <h4>Gestión de cartera</h4>
+              <p>Concilia cobros, mora y pagos a compañías. Estados de cuenta y seguimiento por cliente reducen fricción con tesorería y con el asegurado.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-funnel"/></svg></div>
+            <div class="func-body">
+              <h4>Embudo de ventas</h4>
+              <p>Pipeline con etapas propias del seguro: desde lead hasta emisión. Asignación por productor y visibilidad del avance para gerencia comercial.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">10</span></div>
+  </section>
+
+  <!-- 11 Funciones detalle 2 -->
+  <section class="slide">
+    <div class="aurora"><div class="b2"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Plataforma · 2/3</div>
+      <div class="bar-accent"></div>
+      <h2 style="font-size:19pt;">Servicio y <span class="grad">continuidad</span></h2>
+      <div class="func-grid">
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-alert"/></svg></div>
+            <div class="func-body">
+              <h4>Siniestros</h4>
+              <p>Registro estructurado, adjuntos y seguimiento por etapas. Trazabilidad para el cliente y para la compañía; menos idas y vueltas por información incompleta.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-refresh"/></svg></div>
+            <div class="func-body">
+              <h4>Renovaciones</h4>
+              <p>Calendario de vencimientos conectado a la póliza real. Combina recordatorios automáticos y seguimiento humano cuando la cuenta lo requiere.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-chart"/></svg></div>
+            <div class="func-body">
+              <h4>Reportes y dashboards</h4>
+              <p>KPIs de producción, cartera, siniestralidad y comisiones con filtros por periodo y ramo. Exportación para dirección financiera y comercial.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-cash"/></svg></div>
+            <div class="func-body">
+              <h4>Comisiones automáticas</h4>
+              <p>Cálculo por póliza y liquidación por vendedor, con reglas de anticipos y ajustes. Menos planillas paralelas y cierres más rápidos.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">11</span></div>
+  </section>
+
+  <!-- 12 Funciones detalle 3 -->
+  <section class="slide">
+    <div class="aurora"><div class="b3"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Plataforma · 3/3</div>
+      <div class="bar-accent"></div>
+      <h2 style="font-size:19pt;">Inteligencia y <span class="grad">canales</span></h2>
+      <div class="func-grid">
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-cpu"/></svg></div>
+            <div class="func-body">
+              <h4>Asistente IA 24/7</h4>
+              <p>Consultas en lenguaje natural sobre pólizas, clientes y reportes. Acelera respuestas internas y libera al equipo de consultas repetitivas.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-file"/></svg></div>
+            <div class="func-body">
+              <h4>Lector PDF con IA</h4>
+              <p>Extrae datos de carátulas y anexos para cargar o validar información sin digitación manual masiva, con revisión cuando haga falta.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true" style="background:rgba(37,211,102,0.12);border-color:rgba(37,211,102,0.4);"><img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="" width="16" height="16" style="display:block;border-radius:2px;" /></div>
+            <div class="func-body">
+              <h4>WhatsApp Marketing</h4>
+              <p>Campañas con plantillas oficiales, segmentación y métricas de entrega. Coherente con chatbots y recordatorios sobre el mismo contacto.</p>
+            </div>
+          </div>
+        </div>
+        <div class="func-card">
+          <div class="func-row">
+            <div class="func-ico" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-phone"/></svg></div>
+            <div class="func-body">
+              <h4>Call Center IA</h4>
+              <p>Llamadas salientes a escala con métricas por campaña. Complementa bots y recordatorios para cerrar el ciclo cobro / renovación.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">12</span></div>
+  </section>
+
+  <!-- 13 Stats -->
+  <section class="slide">
+    <div class="aurora"><div class="b2"></div><div class="b3"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Trazabilidad</div>
+      <div class="bar-accent"></div>
+      <h2>Más de <span class="grad">500 agencias</span> en Latinoamérica</h2>
+      <p class="sub" style="margin-bottom:2mm;font-size:11.5pt;">Cifras que respaldan la operación diaria sobre la plataforma.</p>
+      <div class="stat-row">
+        <div class="stat"><div class="num">+$500MM</div><div class="lab">En pólizas administradas</div></div>
+        <div class="stat"><div class="num">500+</div><div class="lab">Agencias</div></div>
+        <div class="stat"><div class="num">1M+</div><div class="lab">Pólizas</div></div>
+        <div class="stat"><div class="num">3×</div><div class="lab">Más rápido</div></div>
+      </div>
+      <div class="stat-row" style="margin-top:2mm;">
+        <div class="stat"><div class="num">97%</div><div class="lab">Retención</div></div>
+        <div class="stat"><div class="num">45%</div><div class="lab">Conversión</div></div>
+        <div class="stat"><div class="num">90%</div><div class="lab">Menos manual</div></div>
+        <div class="stat"><div class="num">LA</div><div class="lab">Regional</div></div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">13</span></div>
+  </section>
+
+  <!-- 14 Impacto -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content top">
+      <div class="badge"><span class="badge-dot"></span> Impacto</div>
+      <div class="bar-accent"></div>
+      <h2>En el corazón de la <span class="grad">industria</span></h2>
+      <div class="grid-4">
+        <div class="impact-card">
+          <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-refresh"/></svg></div>
+          <h3>Renovaciones</h3>
+          <p>Alertas y voz IA para recuperar negocio que antes se perdía entre recordatorios informales.</p>
+        </div>
+        <div class="impact-card">
+          <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-bolt"/></svg></div>
+          <h3>Productividad</h3>
+          <p>Automatiza lo repetitivo; comercial y cartera se enfocan en conversaciones de valor.</p>
+        </div>
+        <div class="impact-card">
+          <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-headset"/></svg></div>
+          <h3>Disponibilidad</h3>
+          <p>Bots y llamadas IA amplían cobertura sin duplicar estructura de call center.</p>
+        </div>
+        <div class="impact-card">
+          <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><use href="#ico-loop"/></svg></div>
+          <h3>Local first</h3>
+          <p>Contexto latinoamericano: idioma, moneda y forma de trabajar la cartera regional.</p>
+        </div>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">14</span></div>
+  </section>
+
+  <!-- 15 CTA -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div><div class="b2"></div><div class="b3"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content">
+      <div class="bar-accent" style="width:20mm;"></div>
+      <h2>Operación alineada o <span class="grad">operación fragmentada</span></h2>
+      <p class="sub" style="max-width:200mm;font-size:12.5pt;">La diferencia está en velocidad de cobro, claridad de cartera y capacidad de responder al cliente con datos confiables. Guro integra sincronización, automatización y canales en un solo lugar.</p>
+      <div style="margin-top:6mm;display:flex;gap:3mm;flex-wrap:wrap;align-items:center;">
+        <div class="cta-strip"><span class="dot"></span> Diagnóstico con especialistas</div>
+        <span class="pill">Roadmap de implementación</span>
+        <span class="pill">Demo orientada a tu agencia</span>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">15</span></div>
+  </section>
+
+  <!-- 16 Cierre -->
+  <section class="slide">
+    <div class="aurora"><div class="b1"></div><div class="b3"></div><div class="b4"></div></div>
+    <div class="vignette"></div>
+    <div class="grid-lines"></div>
+    <div class="noise"></div>
+    <div class="corners"></div>
+    <div class="content">
+      <div class="badge"><span class="badge-dot"></span> Guro</div>
+      <div class="bar-accent" style="width:24mm;"></div>
+      <h1 style="font-size:25pt;">El software de seguros más inteligente de Latinoamérica</h1>
+      <p class="sub" style="margin-top:3mm;font-size:11.5pt;">SOC 2 · SSL · 99.9% uptime</p>
+      <div style="margin-top:7mm;display:flex;flex-wrap:wrap;gap:3mm;">
+        <span class="pill">soporte@guro.co</span>
+        <span class="pill">guro.co</span>
+        <span class="pill">@guro.tecnologia</span>
+      </div>
+    </div>
+    <div class="footer-mini"><span class="logo-text">Guro</span><span class="pg">16</span></div>
+  </section>
+
+</body>
+</html>

@@ -140,6 +140,28 @@ const PagosPoliza: React.FC<Props> = ({
     observaciones: '',
   });
 
+  // Edición de pago existente
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [pagoEditando, setPagoEditando] = useState<Pago | null>(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [editPago, setEditPago] = useState({
+    fecha_pago: '',
+    monto: '',
+    metodo_pago: 'efectivo',
+    referencia_pago: '',
+    observaciones: '',
+  });
+
+  // Edición de la cuota (cartera_item) — fecha vencimiento, monto, comisión
+  const [showEditCuotaModal, setShowEditCuotaModal] = useState(false);
+  const [cuotaEditando, setCuotaEditando] = useState<CuotaSimulada | null>(null);
+  const [guardandoCuota, setGuardandoCuota] = useState(false);
+  const [editCuota, setEditCuota] = useState({
+    fecha_limite_pago: '',
+    prima_total_pago: '',
+    comision_a_recibir: '',
+  });
+
   // Cargar pagos y recibos existentes
   const loadData = async () => {
     try {
@@ -384,6 +406,113 @@ const PagosPoliza: React.FC<Props> = ({
     }
   };
 
+  // Abrir modal para editar un pago existente
+  const abrirModalEditar = (pago: Pago) => {
+    setPagoEditando(pago);
+    setEditPago({
+      fecha_pago: (pago.fecha_pago || '').split('T')[0],
+      monto: String(pago.monto_pagado || ''),
+      metodo_pago: pago.metodo_pago || 'efectivo',
+      referencia_pago: pago.referencia_pago || '',
+      observaciones: pago.observaciones || '',
+    });
+    setShowEditModal(true);
+  };
+
+  // Guardar edición de pago
+  const handleGuardarEdicion = async () => {
+    if (!pagoEditando) return;
+    if (!editPago.monto || parseFloat(editPago.monto) <= 0) {
+      toast({ title: 'Error', description: 'Ingresa un monto válido', variant: 'destructive' });
+      return;
+    }
+    if (!editPago.fecha_pago) {
+      toast({ title: 'Error', description: 'Ingresa una fecha de pago válida', variant: 'destructive' });
+      return;
+    }
+    try {
+      setGuardandoEdicion(true);
+      const res = await api.put(`/saas/polizas/${polizaId}/pagos/${pagoEditando.id}`, {
+        fecha_pago: editPago.fecha_pago,
+        monto: parseFloat(editPago.monto),
+        metodo_pago: editPago.metodo_pago,
+        referencia_pago: editPago.referencia_pago || null,
+        observaciones: editPago.observaciones || null,
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Error al actualizar');
+      }
+      toast({ title: 'Pago actualizado', description: 'El pago ha sido modificado correctamente' });
+      setShowEditModal(false);
+      setPagoEditando(null);
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e.response?.data?.message || e.message || 'No se pudo actualizar',
+        variant: 'destructive',
+      });
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  };
+
+  // Abrir modal para editar cuota (cartera_item)
+  const abrirModalEditarCuota = (cuota: CuotaSimulada) => {
+    setCuotaEditando(cuota);
+    setEditCuota({
+      fecha_limite_pago: cuota.fechaVencimiento || '',
+      prima_total_pago: String(cuota.monto || ''),
+      comision_a_recibir: '',
+    });
+    setShowEditCuotaModal(true);
+  };
+
+  // Guardar edición de cuota
+  const handleGuardarCuota = async () => {
+    if (!cuotaEditando?.carteraItemId) {
+      toast({ title: 'Error', description: 'Esta cuota no se puede editar (sin cartera_item)', variant: 'destructive' });
+      return;
+    }
+    if (!editCuota.fecha_limite_pago) {
+      toast({ title: 'Error', description: 'Ingresa una fecha de vencimiento válida', variant: 'destructive' });
+      return;
+    }
+    if (!editCuota.prima_total_pago || parseFloat(editCuota.prima_total_pago) <= 0) {
+      toast({ title: 'Error', description: 'Ingresa un monto válido', variant: 'destructive' });
+      return;
+    }
+    try {
+      setGuardandoCuota(true);
+      const body: Record<string, any> = {
+        fecha_limite_pago: editCuota.fecha_limite_pago,
+        prima_total_pago: parseFloat(editCuota.prima_total_pago),
+      };
+      if (editCuota.comision_a_recibir) {
+        body.comision_a_recibir = parseFloat(editCuota.comision_a_recibir);
+      }
+      const res = await api.put(
+        `/saas/polizas/${polizaId}/cartera-items/${cuotaEditando.carteraItemId}`,
+        body,
+      );
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Error al actualizar cuota');
+      }
+      toast({ title: 'Cuota actualizada', description: 'Los cambios se guardaron correctamente' });
+      setShowEditCuotaModal(false);
+      setCuotaEditando(null);
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e.response?.data?.message || e.message || 'No se pudo actualizar',
+        variant: 'destructive',
+      });
+    } finally {
+      setGuardandoCuota(false);
+    }
+  };
+
   // Revertir un pago
   const handleRevertirPago = async (pagoId: number) => {
     if (!confirm('¿Está seguro de revertir este pago?')) return;
@@ -585,19 +714,30 @@ const PagosPoliza: React.FC<Props> = ({
                           </Button>
                         </Tooltip>
                       )}
-                      {cuota.pagos.length > 0 && (
-                        <Tooltip content={`${cuota.pagos.length} pago(s) registrado(s)`}>
-                          <Button
-                            size="xs"
-                            color="light"
-                            onClick={() => {
-                              setCuotaSeleccionada(cuota);
-                            }}
-                          >
-                            <Icon icon="solar:eye-bold" width={14} />
+                      {cuota.carteraItemId && (
+                        <Tooltip content="Editar cuota (fecha / monto)">
+                          <Button size="xs" color="warning" outline onClick={() => abrirModalEditarCuota(cuota)}>
+                            <Icon icon="solar:pen-bold" width={14} />
                           </Button>
                         </Tooltip>
                       )}
+                      {(() => {
+                        // Pagos asociados a esta cuota: si hay, ofrecer editar el pago más reciente
+                        const pagosCuota = cuota.carteraItemId
+                          ? pagos.filter(p => p.cartera_item_id === cuota.carteraItemId)
+                          : cuota.pagos;
+                        if (pagosCuota.length === 0) return null;
+                        const ultimoPago = [...pagosCuota].sort(
+                          (a, b) => new Date(b.fecha_pago).getTime() - new Date(a.fecha_pago).getTime()
+                        )[0];
+                        return (
+                          <Tooltip content={`Editar pago (fecha / monto) — ${pagosCuota.length} pago(s)`}>
+                            <Button size="xs" color="info" outline onClick={() => abrirModalEditar(ultimoPago)}>
+                              <Icon icon="solar:dollar-minimalistic-bold" width={14} />
+                            </Button>
+                          </Tooltip>
+                        );
+                      })()}
                     </div>
                   </Table.Cell>
                 </Table.Row>
@@ -971,6 +1111,174 @@ const PagosPoliza: React.FC<Props> = ({
             Registrar Pago y Generar Recibo
           </Button>
           <Button color="gray" onClick={() => setShowPagoModal(false)}>
+            Cancelar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal editar pago existente */}
+      <Modal show={showEditModal} onClose={() => setShowEditModal(false)} size="md">
+        <Modal.Header>
+          <span className="flex items-center gap-2">
+            <Icon icon="solar:pen-bold-duotone" width={20} className="text-amber-500" />
+            Editar Pago {pagoEditando ? `#${pagoEditando.id}` : ''}
+          </span>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <Icon icon="solar:info-circle-bold" width={16} className="mt-0.5 shrink-0" />
+              <span>
+                Estás forzando la fecha o el monto de un pago ya registrado.
+                Los recibos vinculados y la cartera se sincronizarán automáticamente.
+              </span>
+            </div>
+
+            <div>
+              <Label htmlFor="edit_fecha_pago">Fecha de pago *</Label>
+              <TextInput
+                id="edit_fecha_pago"
+                type="date"
+                value={editPago.fecha_pago}
+                onChange={(e) => setEditPago({ ...editPago, fecha_pago: e.target.value })}
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit_monto">Monto *</Label>
+              <TextInput
+                id="edit_monto"
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={editPago.monto}
+                onChange={(e) => setEditPago({ ...editPago, monto: e.target.value })}
+                placeholder="0.00"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="edit_metodo">Método de pago</Label>
+                <Select
+                  id="edit_metodo"
+                  value={editPago.metodo_pago}
+                  onChange={(e) => setEditPago({ ...editPago, metodo_pago: e.target.value })}
+                >
+                  <option value="efectivo">Efectivo</option>
+                  <option value="transferencia">Transferencia</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="tarjeta">Tarjeta</option>
+                  <option value="pse">PSE</option>
+                  <option value="otro">Otro</option>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit_referencia">Referencia</Label>
+                <TextInput
+                  id="edit_referencia"
+                  value={editPago.referencia_pago}
+                  onChange={(e) => setEditPago({ ...editPago, referencia_pago: e.target.value })}
+                  placeholder="Nro. transacción"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="edit_observaciones">Observaciones</Label>
+              <TextInput
+                id="edit_observaciones"
+                value={editPago.observaciones}
+                onChange={(e) => setEditPago({ ...editPago, observaciones: e.target.value })}
+                placeholder="Notas adicionales"
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="warning" onClick={handleGuardarEdicion} disabled={guardandoEdicion}>
+            {guardandoEdicion ? (
+              <Spinner size="sm" className="mr-2" />
+            ) : (
+              <Icon icon="solar:diskette-bold" width={16} className="mr-2" />
+            )}
+            Guardar Cambios
+          </Button>
+          <Button color="gray" onClick={() => setShowEditModal(false)} disabled={guardandoEdicion}>
+            Cancelar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal editar cuota (cartera_item) */}
+      <Modal show={showEditCuotaModal} onClose={() => setShowEditCuotaModal(false)} size="md">
+        <Modal.Header>
+          <span className="flex items-center gap-2">
+            <Icon icon="solar:calendar-bold-duotone" width={20} className="text-amber-500" />
+            Editar Cuota {cuotaEditando ? `#${cuotaEditando.numero}` : ''}
+          </span>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <Icon icon="solar:info-circle-bold" width={16} className="mt-0.5 shrink-0" />
+              <span>
+                Modifica la fecha de vencimiento, el monto o la comisión de esta cuota.
+                Los saldos se recalcularán automáticamente.
+              </span>
+            </div>
+
+            <div>
+              <Label htmlFor="edit_cuota_fecha">Fecha de vencimiento *</Label>
+              <TextInput
+                id="edit_cuota_fecha"
+                type="date"
+                value={editCuota.fecha_limite_pago}
+                onChange={(e) => setEditCuota({ ...editCuota, fecha_limite_pago: e.target.value })}
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit_cuota_monto">Monto de la cuota *</Label>
+              <TextInput
+                id="edit_cuota_monto"
+                type="number"
+                step="0.01"
+                min="0"
+                value={editCuota.prima_total_pago}
+                onChange={(e) => setEditCuota({ ...editCuota, prima_total_pago: e.target.value })}
+                placeholder="0.00"
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit_cuota_comision">Comisión a recibir (opcional)</Label>
+              <TextInput
+                id="edit_cuota_comision"
+                type="number"
+                step="0.01"
+                min="0"
+                value={editCuota.comision_a_recibir}
+                onChange={(e) => setEditCuota({ ...editCuota, comision_a_recibir: e.target.value })}
+                placeholder="Dejar vacío para conservar la actual"
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="warning" onClick={handleGuardarCuota} disabled={guardandoCuota}>
+            {guardandoCuota ? (
+              <Spinner size="sm" className="mr-2" />
+            ) : (
+              <Icon icon="solar:diskette-bold" width={16} className="mr-2" />
+            )}
+            Guardar Cuota
+          </Button>
+          <Button color="gray" onClick={() => setShowEditCuotaModal(false)} disabled={guardandoCuota}>
             Cancelar
           </Button>
         </Modal.Footer>

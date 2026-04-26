@@ -491,8 +491,8 @@ const ServiciosTerceros = () => {
         
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <Icon icon="solar:close-circle-bold" className="text-red-600" width={20} />
+            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+              <Icon icon="solar:close-circle-bold" className="text-red-600 dark:text-red-400" width={20} />
             </div>
             <div>
               <h3 className="text-lg font-bold text-dark dark:text-white">{estadisticas.servicios_error}</h3>
@@ -519,7 +519,7 @@ const ServiciosTerceros = () => {
             <div>
               <label className="block text-sm font-medium mb-1">Categoría</label>
               <select 
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full"
+                className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg px-3 py-2 text-sm w-full"
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
               >
@@ -537,7 +537,7 @@ const ServiciosTerceros = () => {
             <div>
               <label className="block text-sm font-medium mb-1">Estado</label>
               <select 
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full"
+                className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg px-3 py-2 text-sm w-full"
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
               >
@@ -596,7 +596,7 @@ const ServiciosTerceros = () => {
                   <Table.Row key={servicio.id} className="bg-white dark:border-gray-700 dark:bg-gray-800">
                     <Table.Cell>
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-gray-100 rounded-lg">
+                        <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
                           <Icon icon={obtenerIconoCategoria(servicio.categoria)} width={20} />
                         </div>
                         <div>

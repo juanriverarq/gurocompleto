@@ -33,15 +33,16 @@ const Results = () => {
     <section
       ref={ref}
       id="resultados"
-      className="relative overflow-hidden min-h-[auto] sm:min-h-screen flex flex-col justify-center"
-      style={{
-        backgroundImage: 'url(https://framerusercontent.com/images/6vqDsl7xtgechRbMSo6yAkGE.png?scale-down-to=512&width=2160&height=1658)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center center',
-        backgroundRepeat: 'no-repeat',
-      }}
+      className="relative overflow-hidden min-h-[auto] sm:min-h-screen flex flex-col justify-center bg-transparent"
     >
-      <div className="py-16 sm:py-24">
+      {/* Radial glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 50%, rgba(87,60,255,0.12) 0%, transparent 60%)',
+        }}
+      />
+      <div className="relative py-16 sm:py-24">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 30, filter: 'blur(6px)' }}
@@ -50,14 +51,14 @@ const Results = () => {
           className="text-center mb-16 sm:mb-20 px-4"
         >
           <h2
-            className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold text-[#0d0d0d] sm:text-white leading-[1.1] tracking-[-0.02em] mb-4"
-            style={{ fontFamily: "'General Sans', sans-serif" }}
+            className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold text-white leading-[1.1] tracking-[-0.02em] mb-4"
+            style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
           >
             Nuestro impacto en la
             <span className="hidden sm:inline"><br /></span>{' '}
-            industria de seguros
+            <span className="landing-grad-text">industria de seguros</span>
           </h2>
-          <p className="text-gray-500 sm:text-white/60 text-base sm:text-lg max-w-2xl mx-auto">
+          <p className="text-white/60 text-base sm:text-lg max-w-2xl mx-auto">
             Estamos trabajando para que cada agencia en Latinoamérica tenga acceso a tecnología de clase mundial. Este es solo el comienzo.
           </p>
         </motion.div>
@@ -71,23 +72,23 @@ const Results = () => {
               animate={isInView ? { opacity: 1, y: 0, scale: 1 } : {}}
               transition={{ duration: 0.6, delay: 0.15 + index * 0.1, ease: [0.22, 1, 0.36, 1] }}
               whileHover={{ y: -8, scale: 1.03, transition: { duration: 0.3 } }}
-              className="bg-white rounded-2xl p-6 sm:p-7 shadow-lg shadow-black/[0.06] flex flex-col cursor-default"
+              className="bg-white/5 border border-white/10 hover:border-[#573CFF]/40 rounded-2xl p-6 sm:p-7 shadow-xl shadow-black/40 flex flex-col cursor-default transition-colors duration-300"
             >
               {/* Icon */}
-              <div className="w-12 h-12 rounded-xl bg-[#573CFF]/10 flex items-center justify-center mb-5">
+              <div className="w-12 h-12 rounded-xl bg-[#573CFF]/15 border border-[#573CFF]/30 flex items-center justify-center mb-5">
                 <Icon icon={pillar.icon} className="w-6 h-6 text-[#573CFF]" />
               </div>
 
               {/* Title */}
               <h3
-                className="text-lg font-bold text-[#0d0d0d] mb-2"
-                style={{ fontFamily: "'General Sans', sans-serif" }}
+                className="text-lg font-bold text-white mb-2"
+                style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
               >
                 {pillar.title}
               </h3>
 
               {/* Description */}
-              <p className="text-sm text-gray-500 leading-relaxed">
+              <p className="text-sm text-white/60 leading-relaxed">
                 {pillar.desc}
               </p>
             </motion.div>

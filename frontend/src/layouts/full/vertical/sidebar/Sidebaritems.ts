@@ -123,7 +123,7 @@ const BaseMenuitems: MenuitemsType[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // 3. 💼 COMERCIAL (Ventas y seguimiento)
+  // 3. 💼 COMERCIAL (Ventas y tareas)
   // ═══════════════════════════════════════════════════════════════
   {
     navlabel: true,
@@ -137,7 +137,7 @@ const BaseMenuitems: MenuitemsType[] = [
   },
   {
     id: uniqueId(),
-    title: 'Seguimiento',
+    title: 'Tareas',
     icon: 'solar:clipboard-check-bold-duotone',
     href: '/apps/seguros/seguimiento',
   },
@@ -165,7 +165,18 @@ const BaseMenuitems: MenuitemsType[] = [
     id: uniqueId(),
     title: 'Cartera',
     icon: 'solar:wallet-bold-duotone',
-    href: '/apps/cartera/clientes',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'Cartera Manual',
+        href: '/apps/cartera/clientes',
+      },
+      {
+        id: uniqueId(),
+        title: 'Cartera Aseguradoras',
+        href: '/apps/cartera/aseguradoras',
+      },
+    ],
   },
   {
     id: uniqueId(),
@@ -178,6 +189,11 @@ const BaseMenuitems: MenuitemsType[] = [
     title: 'Comisiones',
     icon: 'solar:dollar-minimalistic-bold-duotone',
     children: [
+      {
+        id: uniqueId(),
+        title: 'Aseguradoras',
+        href: '/apps/comisiones/aseguradoras',
+      },
       {
         id: uniqueId(),
         title: 'Por Póliza',
@@ -356,6 +372,33 @@ const BaseMenuitems: MenuitemsType[] = [
     title: 'Internos',
     icon: 'solar:archive-bold-duotone',
     href: '/apps/legal/documentos-internos',
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 9. 🧮 COTIZADORES
+  // ═══════════════════════════════════════════════════════════════
+  {
+    navlabel: true,
+    subheader: 'Cotizadores',
+  },
+  {
+    id: uniqueId(),
+    title: 'Autos',
+    icon: 'solar:car-bold-duotone',
+    children: [
+      {
+        id: uniqueId(),
+        title: 'Comparador',
+        href: '/apps/cotizadores/autos/comparador',
+        chip: 'Nuevo',
+        chipColor: 'success',
+      },
+      {
+        id: uniqueId(),
+        title: 'Solo Bolívar',
+        href: '/apps/cotizadores/autos/bolivar',
+      },
+    ],
   },
 
   // ═══════════════════════════════════════════════════════════════

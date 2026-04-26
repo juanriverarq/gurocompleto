@@ -602,6 +602,19 @@ class CampaignService {
     }
   }
 
+  /**
+   * Recalcular estadísticas de una campaña desde campaign_messages
+   */
+  async recalculateStats(id: number): Promise<{ success: boolean; stats?: any; message?: string }> {
+    try {
+      const response = await this.makeRequest(`/saas/campaigns/${id}/recalculate-stats`, 'POST');
+      return { success: true, stats: response.stats || response.data };
+    } catch (error) {
+      console.error('Error recalculating campaign stats:', error);
+      return { success: false, message: 'Error al recalcular estadísticas' };
+    }
+  }
+
   // ========================
   // INSTANCIAS DE WHATSAPP
   // ========================

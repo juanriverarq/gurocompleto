@@ -15,6 +15,8 @@ import HorizontalMenu from "../../horizontal/header/HorizontalMenu";
 import { CustomizerContext } from "../../../../context/CustomizerContext";
 import { DashboardContext } from "src/context/DashboardContext/DashboardContext";
 import WalletWidget from "../../../../components/WalletWidget/WalletWidget";
+import InsurerStatus from "./InsurerStatus";
+import FloatingAssistant from "../../../../components/FloatingAssistant/FloatingAssistant";
 
 interface HeaderPropsType {
   layoutType: string;
@@ -25,6 +27,10 @@ const Header = ({ layoutType }: HeaderPropsType) => {
 
   const {  isLayout, activeMode, setActiveMode } =
     useContext(CustomizerContext);
+
+  const toggleTheme = () => {
+    setActiveMode(activeMode === 'dark' ? 'light' : 'dark');
+  };
 
     const {isMobileSidebarOpen,setIsMobileSidebarOpen} = useContext(DashboardContext);
 
@@ -83,13 +89,6 @@ const Header = ({ layoutType }: HeaderPropsType) => {
     }
   };
 
-  const toggleMode = () => {
-    const newMode = activeMode === "light" ? "dark" : "light";
-    document.documentElement.className = newMode;
-    try { localStorage.setItem('guro_active_mode', newMode); } catch {}
-    setActiveMode(newMode);
-  };
-
   // mobile-sidebar
   const handleClose = () => setIsMobileSidebarOpen(false);
 
@@ -101,7 +100,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
   return (
     <>
       <header
-        className={`z-[10] bg-transparent dark:bg-transparent`}
+        className={`z-[1] bg-transparent dark:bg-transparent`}
       >
         {/* Banner superior de trial o suscripción */}
         {(() => {
@@ -247,6 +246,9 @@ const Header = ({ layoutType }: HeaderPropsType) => {
 
           <Navbar.Collapse className="xl:block hidden">
             <div className="flex gap-3 items-center">
+              {/* Floating Assistant (Octupus) - a la izquierda de Wallet */}
+              <FloatingAssistant variant="topbar" />
+
                {/* Widget de Wallet */}
                <WalletWidget />
 
@@ -261,29 +263,27 @@ const Header = ({ layoutType }: HeaderPropsType) => {
                 </a>
               </Tooltip>
 
-              {/* Theme Toggle */}
+              {/* Theme toggle (claro / oscuro) */}
+              <Tooltip
+                content={activeMode === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                placement="bottom"
+                className="flowbite-tooltip"
+              >
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-label="Cambiar tema"
+                  className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
+                >
+                  <Icon
+                    icon={activeMode === 'dark' ? 'solar:sun-bold-duotone' : 'solar:moon-bold-duotone'}
+                    width="20"
+                  />
+                </button>
+              </Tooltip>
 
-              {/* Light Mode Button */}
-              {activeMode === "light" ? (
-                <div
-                  className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
-                  onClick={toggleMode}
-                >
-                  <span className="flex items-center">
-                    <Icon icon="solar:moon-line-duotone" width="20" />
-                  </span>
-                </div>
-              ) : (
-                // Dark Mode Button
-                <div
-                  className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
-                  onClick={toggleMode}
-                >
-                  <span className="flex items-center">
-                    <Icon icon="solar:sun-bold-duotone" width="20" />
-                  </span>
-                </div>
-              )}
+              {/* Estado de conexiones y sincronizaciones */}
+              <InsurerStatus />
 
               {/* WhatsApp Inbox Button */}
               <WhatsAppInboxButton />

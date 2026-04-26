@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Badge, Button, Spinner, Modal, TextInput, Textarea, Alert, Select } from 'flowbite-react';
+import { Badge, Button, Spinner, Modal, TextInput, Textarea, Alert, Select } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import HeroButton from 'src/components/HeroButton';
 import { Link } from 'react-router-dom';
@@ -216,30 +216,59 @@ const ChatbotsList: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Icon icon="solar:bot-bold-duotone" className="text-blue-500" width={28} />
-            Mis Chatbots
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Gestiona tus bots de respuesta automática
-          </p>
+    <div className="p-6 min-h-screen bg-gray-50 dark:bg-[#0A0A0A]">
+      {/* Header — matches flow editor style */}
+      <div className="mb-8">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-500/20 border border-indigo-300 dark:border-indigo-500/30 flex items-center justify-center shrink-0">
+              <Icon icon="solar:dialog-bold-duotone" className="text-indigo-600 dark:text-indigo-400" width={26} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+                Mis Chatbots
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-[#9CA3AF] mt-0.5">
+                Automatiza respuestas en WhatsApp con flujos inteligentes
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all"
+            >
+              <Icon icon="solar:add-circle-bold" width={16} />
+              Crear Chatbot
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Link to="/apps/whatsapp/chatbots/analisis">
-            <Button color="purple">
-              <Icon icon="solar:chart-2-bold" className="mr-2" width={20} />
-              Análisis
-            </Button>
-          </Link>
-          <Button color="blue" onClick={() => setShowCreateModal(true)}>
-            <Icon icon="solar:add-circle-bold" className="mr-2" width={20} />
-            Crear Chatbot
-          </Button>
-        </div>
+
+        {/* Stats row */}
+        {chatbots.length > 0 && (
+          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Chatbots', value: chatbots.length, icon: 'solar:dialog-bold-duotone', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', text: 'text-indigo-400' },
+              { label: 'Activos', value: chatbots.filter((c) => c.is_active).length, icon: 'solar:check-circle-bold', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400' },
+              { label: 'Flujos', value: chatbots.reduce((s, c) => s + (c.flows_count || 0), 0), icon: 'solar:routing-bold-duotone', bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400' },
+              { label: 'Triggers', value: chatbots.reduce((s, c) => s + (c.triggers_count || 0), 0), icon: 'solar:bolt-bold-duotone', bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="px-4 py-3 rounded-xl border border-gray-200 dark:border-[#1F1F1F] bg-white dark:bg-[#111111] flex items-center gap-3"
+              >
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${s.bg} ${s.border}`}>
+                  <Icon icon={s.icon} className={s.text} width={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white leading-none">{s.value}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-[#9CA3AF] mt-1 uppercase tracking-wide">{s.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -250,112 +279,145 @@ const ChatbotsList: React.FC = () => {
 
       {/* Chatbots Grid */}
       {chatbots.length === 0 ? (
-        <Card className="border-dashed border-2 border-gray-200 dark:border-gray-700">
-          <div className="text-center py-12">
-            <div className="w-16 h-16 mx-auto bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-              <Icon icon="solar:bot-bold-duotone" className="text-gray-400" width={32} />
+        <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-[#1F1F1F] bg-white dark:bg-[#111111] p-12">
+          <div className="text-center max-w-md mx-auto">
+            <div className="w-20 h-20 mx-auto bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 rounded-2xl flex items-center justify-center mb-4">
+              <Icon icon="solar:dialog-bold-duotone" className="text-indigo-500 dark:text-indigo-400" width={40} />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               No hay chatbots configurados
             </h3>
-            <p className="text-gray-500 mt-2 max-w-md mx-auto">
-              Crea tu primer chatbot para automatizar respuestas en WhatsApp
+            <p className="text-sm text-gray-500 dark:text-[#9CA3AF] mt-2">
+              Crea tu primer chatbot para responder automáticamente a tus clientes en WhatsApp 24/7.
             </p>
             <div className="flex justify-center mt-6">
               <HeroButton icon="solar:add-circle-bold" onClick={() => setShowCreateModal(true)} size="lg">Crear Primer Chatbot</HeroButton>
             </div>
           </div>
-        </Card>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {chatbots.map((chatbot) => (
-            <Card key={chatbot.id} className="hover:shadow-lg transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-lg ${chatbot.is_active ? 'bg-blue-100 dark:bg-blue-900' : 'bg-gray-100 dark:bg-gray-800'}`}>
-                    <Icon 
-                      icon="solar:bot-bold-duotone" 
-                      className={chatbot.is_active ? 'text-blue-500' : 'text-gray-400'} 
-                      width={28} 
-                    />
+            <div
+              key={chatbot.id}
+              className="group relative rounded-2xl border border-gray-200 dark:border-[#1F1F1F] bg-white dark:bg-[#111111] hover:border-indigo-500/40 dark:hover:border-indigo-500/40 hover:shadow-xl hover:shadow-indigo-500/5 transition-all overflow-hidden"
+            >
+              {/* Accent bar */}
+              <div className={`absolute top-0 left-0 right-0 h-0.5 ${chatbot.is_active ? 'bg-gradient-to-r from-emerald-500 via-emerald-400 to-emerald-500' : 'bg-gray-200 dark:bg-[#1F1F1F]'}`} />
+
+              <div className="p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border ${
+                        chatbot.is_active
+                          ? 'bg-emerald-500/10 border-emerald-500/30'
+                          : 'bg-gray-100 dark:bg-[#1A1A1A] border-gray-200 dark:border-[#2F2F2F]'
+                      }`}
+                    >
+                      <Icon
+                        icon="solar:dialog-bold-duotone"
+                        className={chatbot.is_active ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400'}
+                        width={24}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                        {chatbot.name}
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-[#9CA3AF] line-clamp-1 mt-0.5">
+                        {chatbot.description || 'Sin descripción'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {chatbot.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 line-clamp-1">
-                      {chatbot.description || 'Sin descripción'}
-                    </p>
-                  </div>
-                </div>
-                <Badge color={chatbot.is_active ? 'success' : 'gray'}>
-                  {chatbot.is_active ? 'Activo' : 'Inactivo'}
-                </Badge>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-2 text-gray-500">
-                  <Icon icon="solar:bolt-bold" width={16} />
-                  <span>{chatbot.triggers_count || 0} triggers</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-500">
-                  <Icon icon="solar:routing-bold" width={16} />
-                  <span>{chatbot.flows_count || 0} flujos</span>
-                </div>
-              </div>
-
-              {/* Instance selector */}
-              <div className="mt-3">
-                <Select
-                  sizing="sm"
-                  value={chatbot.instance_id || ''}
-                  onChange={(e) => handleChangeInstance(chatbot, e.target.value)}
-                >
-                  <option value="">Todas las conexiones</option>
-                  {instances.map((inst) => (
-                    <option key={inst.id} value={inst.instance_id}>
-                      {inst.phone_number || inst.instance_id}
-                      {inst.connection_type === 'cloud_api' ? ' (Cloud API)' : ''}
-                      {inst.status === 'connected' ? ' ✓' : ''}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    color={chatbot.is_active ? 'warning' : 'success'}
-                    className="flex-1"
-                    onClick={() => handleToggleActive(chatbot)}
+                  <div
+                    className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide border ${
+                      chatbot.is_active
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        : 'bg-gray-100 dark:bg-[#1A1A1A] text-gray-500 dark:text-[#9CA3AF] border-gray-200 dark:border-[#2F2F2F]'
+                    }`}
                   >
-                    <Icon icon={chatbot.is_active ? 'solar:pause-bold' : 'solar:play-bold'} className="mr-1" width={16} />
+                    <span className="inline-flex items-center gap-1">
+                      <span className={`w-1.5 h-1.5 rounded-full ${chatbot.is_active ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
+                      {chatbot.is_active ? 'Activo' : 'Inactivo'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-[#161616] border border-gray-100 dark:border-[#1F1F1F] flex items-center gap-2">
+                    <Icon icon="solar:bolt-bold-duotone" className="text-amber-400 shrink-0" width={16} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white leading-none">{chatbot.triggers_count || 0}</div>
+                      <div className="text-[10px] text-gray-500 dark:text-[#9CA3AF] mt-0.5 uppercase tracking-wide">Triggers</div>
+                    </div>
+                  </div>
+                  <div className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-[#161616] border border-gray-100 dark:border-[#1F1F1F] flex items-center gap-2">
+                    <Icon icon="solar:routing-bold-duotone" className="text-blue-400 shrink-0" width={16} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white leading-none">{chatbot.flows_count || 0}</div>
+                      <div className="text-[10px] text-gray-500 dark:text-[#9CA3AF] mt-0.5 uppercase tracking-wide">Flujos</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instance selector */}
+                <div className="mt-3">
+                  <label className="block text-[10px] font-medium text-gray-500 dark:text-[#9CA3AF] mb-1 uppercase tracking-wide">
+                    Conexión WhatsApp
+                  </label>
+                  <Select
+                    sizing="sm"
+                    value={chatbot.instance_id || ''}
+                    onChange={(e) => handleChangeInstance(chatbot, e.target.value)}
+                  >
+                    <option value="">Todas las conexiones</option>
+                    {instances.map((inst) => (
+                      <option key={inst.id} value={inst.instance_id}>
+                        {inst.phone_number || inst.instance_id}
+                        {inst.connection_type === 'cloud_api' ? ' (Cloud API)' : ''}
+                        {inst.status === 'connected' ? ' ✓' : ''}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-[#1F1F1F] flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleToggleActive(chatbot)}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      chatbot.is_active
+                        ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    }`}
+                  >
+                    <Icon icon={chatbot.is_active ? 'solar:pause-bold' : 'solar:play-bold'} width={14} />
                     {chatbot.is_active ? 'Pausar' : 'Activar'}
-                  </Button>
-                  <Link to={`/apps/whatsapp/chatbots/flujos?id=${chatbot.id}`}>
-                    <Button size="sm" color="light">
-                      <Icon icon="solar:settings-bold" width={16} />
-                    </Button>
+                  </button>
+                  <Link to={`/apps/whatsapp/chatbots/flujos?id=${chatbot.id}`} title="Editar flujos del chatbot">
+                    <button className="w-9 h-9 rounded-lg border border-gray-200 dark:border-[#2F2F2F] bg-white dark:bg-[#1A1A1A] hover:bg-indigo-50 dark:hover:bg-[#1F1F1F] hover:border-indigo-500/40 text-gray-500 dark:text-[#9CA3AF] hover:text-indigo-500 dark:hover:text-indigo-400 flex items-center justify-center transition-all">
+                      <Icon icon="solar:pen-new-square-bold-duotone" width={16} />
+                    </button>
                   </Link>
-                  <Button 
-                    size="sm" 
-                    color="light"
+                  <button
                     onClick={() => handleDuplicateChatbot(chatbot)}
                     title="Duplicar"
+                    className="w-9 h-9 rounded-lg border border-gray-200 dark:border-[#2F2F2F] bg-white dark:bg-[#1A1A1A] hover:bg-gray-50 dark:hover:bg-[#1F1F1F] text-gray-600 dark:text-[#9CA3AF] hover:text-white flex items-center justify-center transition-all"
                   >
                     <Icon icon="solar:copy-bold" width={16} />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    color="light"
+                  </button>
+                  <button
                     onClick={() => handleDeleteChatbot(chatbot)}
+                    title="Eliminar"
+                    className="w-9 h-9 rounded-lg border border-gray-200 dark:border-[#2F2F2F] bg-white dark:bg-[#1A1A1A] hover:bg-red-500/10 hover:border-red-500/40 text-red-500 flex items-center justify-center transition-all"
                   >
-                    <Icon icon="solar:trash-bin-trash-bold" className="text-red-500" width={16} />
-                  </Button>
+                    <Icon icon="solar:trash-bin-trash-bold" width={16} />
+                  </button>
                 </div>
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}

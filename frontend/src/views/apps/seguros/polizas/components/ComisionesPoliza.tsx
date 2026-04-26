@@ -292,6 +292,11 @@ const ComisionesPoliza: React.FC<Props> = ({
         
         // Cargar detalles como comisionesTemp
         const detalles = data.data.detalles || [];
+        // Obtener datos del vendedor para recuperar porcentajes reales (IVA, RTF, etc.)
+        // ya que en la DB de detalles porcentaje_iva/monto_iva almacenan ReteIVA, no IVA
+        const vendedorData = liquidacion.vendedor?.id 
+          ? vendedores.find(v => v.id === liquidacion.vendedor?.id) 
+          : null;
         const comisiones: ComisionTemp[] = detalles.map((d: any, idx: number) => {
           // Calcular % Com inversamente: comision_bruta = prima * (%Com/100) * (%Vendedor/100)
           // %Com = (comision_bruta * 10000) / (prima * %Vendedor)
@@ -312,10 +317,10 @@ const ComisionesPoliza: React.FC<Props> = ({
             porcentaje_comision: String(porcentajeComRamo),
             porcentaje_agencia: String(100 - porcentajeVendedor),
             porcentaje_vendedor: String(porcentajeVendedor),
-            porcentaje_rtf: String(d.porcentaje_retencion || 0),
-            porcentaje_iva: String(d.porcentaje_iva || 0),
-            porcentaje_reteiva: String(d.porcentaje_retencion_iva || 0),
-            porcentaje_reteica: String(d.porcentaje_retencion_ica || 0),
+            porcentaje_rtf: String(d.porcentaje_retencion || vendedorData?.porcentaje_retencion || 0),
+            porcentaje_iva: String(vendedorData?.porcentaje_iva ?? 19),
+            porcentaje_reteiva: String(d.porcentaje_iva || vendedorData?.porcentaje_retencion_iva || 0),
+            porcentaje_reteica: String(d.porcentaje_retencion_ica || vendedorData?.porcentaje_retencion_ica || 0),
             esPolizaPrincipal: idx === 0 && !d.anexo,
             esAnexo: !!d.anexo,
           };

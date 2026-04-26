@@ -122,6 +122,8 @@ class PolicyNotificationController extends Controller
                 'excluded_client_ids' => 'nullable|array',
                 'excluded_policy_types' => 'nullable|array',
                 'excluded_policy_statuses' => 'nullable|array',
+                'excluded_ramo_ids' => 'nullable|array',
+                'excluded_ramo_ids.*' => 'integer',
                 'send_to_client_phone' => 'boolean',
                 'send_to_client_mobile' => 'boolean',
                 'send_to_assigned_user' => 'boolean',
@@ -178,6 +180,7 @@ class PolicyNotificationController extends Controller
                     'excluded_client_ids',
                     'excluded_policy_types',
                     'excluded_policy_statuses',
+                    'excluded_ramo_ids',
                     'send_to_client_phone',
                     'send_to_client_mobile',
                     'send_to_assigned_user',
@@ -562,9 +565,10 @@ class PolicyNotificationController extends Controller
             $excludedClientIds = $config->excluded_client_ids ?? [];
             $excludedPolicyTypes = $config->excluded_policy_types ?? [];
             $excludedPolicyStatuses = $config->excluded_policy_statuses ?? [];
+            $excludedRamoIds = $config->excluded_ramo_ids ?? [];
 
             // Helper para aplicar exclusiones a una query
-            $applyExclusions = function ($query) use ($excludedClientIds, $excludedPolicyTypes, $excludedPolicyStatuses) {
+            $applyExclusions = function ($query) use ($excludedClientIds, $excludedPolicyTypes, $excludedPolicyStatuses, $excludedRamoIds) {
                 if (!empty($excludedClientIds)) {
                     $query->whereNotIn('client_id', $excludedClientIds);
                 }
@@ -576,6 +580,12 @@ class PolicyNotificationController extends Controller
                 }
                 if (!empty($excludedPolicyStatuses)) {
                     $query->whereNotIn('status', array_map('strtolower', $excludedPolicyStatuses));
+                }
+                if (!empty($excludedRamoIds)) {
+                    $query->where(function($q) use ($excludedRamoIds) {
+                        $q->whereNull('ramo_id')
+                          ->orWhereNotIn('ramo_id', $excludedRamoIds);
+                    });
                 }
                 return $query;
             };
@@ -655,6 +665,11 @@ class PolicyNotificationController extends Controller
                         now(),
                         now()->addDays($config->payment_days_before)
                     ])
+                    // Excluir pólizas marcadas como Pagado en Cartera e Impuestos
+                    ->where(function($q) {
+                        $q->whereNull('estado_cartera')
+                          ->orWhereRaw('LOWER(TRIM(estado_cartera)) != ?', ['pagado']);
+                    })
                     ->with('client');
                 
                 $polizas = $applyExclusions($query)->limit(20)->get();

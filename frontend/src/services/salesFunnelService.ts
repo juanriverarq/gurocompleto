@@ -211,6 +211,9 @@ export interface CreateLeadData {
   quality_rating: string;
   lead_score?: number;
   next_follow_up_at?: string;
+  referrer_type?: 'vendedor' | 'otro' | '';
+  referrer_vendedor_id?: number | string;
+  referrer_name?: string;
 }
 
 export interface UpdateLeadData extends Partial<CreateLeadData> {
@@ -242,9 +245,9 @@ export const STAGES = {
   'lead': 'Lead',
   'contacted': 'Contactado',
   'qualified': 'Calificado',
-  'presentation': 'Presentación',
-  'proposal': 'Propuesta',
-  'negotiation': 'Negociación',
+  'presentation': 'Cotización',
+  'proposal': 'Asesoría',
+  'negotiation': 'Seguimiento',
   'closed_won': 'Cerrado Ganado',
   'closed_lost': 'Cerrado Perdido'
 } as const;

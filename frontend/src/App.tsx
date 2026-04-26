@@ -17,6 +17,12 @@ const LazyTerminologiaProvider = lazy(() =>
 const LazyWhatsAppNotificationProvider = lazy(() => 
   import('./context/WhatsAppNotificationContext').then(mod => ({ default: mod.WhatsAppNotificationProvider }))
 );
+const LazyTaskNotificationProvider = lazy(() =>
+  import('./context/TaskNotificationContext').then(mod => ({ default: mod.TaskNotificationProvider }))
+);
+const LazyRuntSyncProvider = lazy(() =>
+  import('./context/RuntSyncContext').then(mod => ({ default: mod.RuntSyncProvider }))
+);
 
 function App() {
   const { activeMode } = useContext(CustomizerContext);
@@ -27,9 +33,13 @@ function App() {
         <LazyAuthProvider>
           <LazyTerminologiaProvider>
             <LazyWhatsAppNotificationProvider>
-              <Flowbite theme={{ theme: customTheme, mode: activeMode as 'light' | 'dark' }}>
-                <RouterProvider router={router} />
-              </Flowbite>
+              <LazyTaskNotificationProvider>
+              <LazyRuntSyncProvider>
+                <Flowbite theme={{ theme: customTheme, mode: activeMode as 'light' | 'dark' }}>
+                  <RouterProvider router={router} />
+                </Flowbite>
+              </LazyRuntSyncProvider>
+              </LazyTaskNotificationProvider>
             </LazyWhatsAppNotificationProvider>
           </LazyTerminologiaProvider>
         </LazyAuthProvider>

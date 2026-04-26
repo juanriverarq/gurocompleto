@@ -13,7 +13,7 @@ const WhatsAppInboxButton = () => {
     <Tooltip content="Inbox WhatsApp" placement="bottom" className="flowbite-tooltip">
       <button
         onClick={handleClick}
-        className="h-10 w-10 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 dark:hover:text-green-400 focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-darklink dark:text-white transition-colors"
+        className="h-10 w-10 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 dark:hover:text-green-400 focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
       >
         <Icon icon="ic:baseline-whatsapp" width="22" />
       </button>

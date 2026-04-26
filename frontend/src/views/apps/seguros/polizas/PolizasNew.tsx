@@ -61,6 +61,15 @@ const PolizasNew: React.FC = () => {
   const [showChangeStateModal, setShowChangeStateModal] = useState(false);
   const [newEstado, setNewEstado] = useState<EstadoCambio | ''>('');
   const [motivoCambio, setMotivoCambio] = useState('');
+  // Motivo específico cuando se cancela una póliza
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [cancellationReasons, setCancellationReasons] = useState<Array<{ key: string; label: string }>>([]);
+  useEffect(() => {
+    (async () => {
+      const list = await polizaService.getCancellationReasons();
+      setCancellationReasons(list || []);
+    })();
+  }, []);
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [renewFechaFin, setRenewFechaFin] = useState('');
 
@@ -140,7 +149,8 @@ const PolizasNew: React.FC = () => {
   ];
 
   const aseguradoras = [
-    'Seguros Sura', 'Mapfre', 'Bolívar Seguros', 'La Previsora', 'AXA Colpatria'
+    'Seguros Sura', 'Mapfre', 'Bolívar Seguros', 'La Previsora', 'AXA Colpatria',
+    'Finesa', 'Crediseguros', 'Sura', 'Crediestado', 'Previseguro'
   ];
 
   const estadosPoliza = [
@@ -670,6 +680,7 @@ const PolizasNew: React.FC = () => {
                               setSelectedPoliza(poliza);
                               setNewEstado((poliza.estado === 'PENDIENTE' ? 'ACTIVA' : poliza.estado) as EstadoCambio);
                               setMotivoCambio('');
+                              setCancellationReason('');
                               setShowChangeStateModal(true);
                             }}
                           >
@@ -831,8 +842,32 @@ const PolizasNew: React.FC = () => {
                 ))}
               </select>
             </div>
+            {/* Selector de motivo específico SOLO cuando el nuevo estado es CANCELADA */}
+            {newEstado === 'CANCELADA' && (
+              <div>
+                <Label htmlFor="cancellation_reason" className="mb-2 block">
+                  Motivo de cancelación <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="cancellation_reason"
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Selecciona un motivo —</option>
+                  {cancellationReasons.map((r) => (
+                    <option key={r.key} value={r.key}>{r.label}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-gray-500 dark:text-neutral-500 mt-1">
+                  Queda registrado en la póliza para consulta posterior.
+                </p>
+              </div>
+            )}
             <div>
-              <Label htmlFor="motivo_cambio" className="mb-2 block">Motivo (opcional)</Label>
+              <Label htmlFor="motivo_cambio" className="mb-2 block">
+                {newEstado === 'CANCELADA' ? 'Notas adicionales (opcional)' : 'Motivo (opcional)'}
+              </Label>
               <TextInput id="motivo_cambio" value={motivoCambio} onChange={(e) => setMotivoCambio(e.target.value)} placeholder="Ingresa un motivo" />
             </div>
           </div>
@@ -841,13 +876,24 @@ const PolizasNew: React.FC = () => {
           <Button color="gray" onClick={() => setShowChangeStateModal(false)}>Cancelar</Button>
           <Button
             color="primary"
+            disabled={newEstado === 'CANCELADA' && !cancellationReason}
             onClick={async () => {
               if (!selectedPoliza || !newEstado) return;
+              if (newEstado === 'CANCELADA' && !cancellationReason) {
+                toast({ variant: 'destructive', title: 'Motivo requerido', description: 'Selecciona el motivo de cancelación.' });
+                return;
+              }
               try {
-                await polizaService.cambiarEstado(selectedPoliza.id, newEstado, motivoCambio || undefined);
+                await polizaService.cambiarEstado(
+                  selectedPoliza.id,
+                  newEstado,
+                  motivoCambio || undefined,
+                  newEstado === 'CANCELADA' ? cancellationReason : undefined,
+                );
                 await loadPolizas();
                 await loadEstadisticas();
                 setShowChangeStateModal(false);
+                setCancellationReason('');
                 toast({ title: 'Estado actualizado', description: `La póliza ahora está ${newEstado}.` });
               } catch (error) {
                 toast({ variant: 'destructive', title: 'Error al cambiar estado', description: error instanceof Error ? error.message : 'Error desconocido' });

@@ -108,7 +108,9 @@ class SaasCommercialTasksController extends Controller
                 'contact_email' => 'nullable|email|max:255',
                 'estimated_duration_minutes' => 'nullable|integer|min:1',
                 'has_reminder' => 'boolean',
-                'reminder_at' => 'nullable|date|after:now'
+                'reminder_at' => 'nullable|date|after:now',
+                'assigned_company' => 'nullable|string|max:255',
+                'assigned_financial_entity' => 'nullable|string|max:255',
             ]);
 
             if ($validator->fails()) {
@@ -183,9 +185,9 @@ class SaasCommercialTasksController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Log::error('Error al crear tarea comercial: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
-                'error' => 'Error al crear la tarea',
-                'message' => $e->getMessage()
+                'error' => 'No se pudo crear la tarea. Inténtalo de nuevo.'
             ], 500);
         }
     }
@@ -308,9 +310,9 @@ class SaasCommercialTasksController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error al actualizar tarea comercial: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
-                'error' => 'Error al actualizar la tarea',
-                'message' => $e->getMessage()
+                'error' => 'No se pudo actualizar la tarea. Inténtalo de nuevo.'
             ], 500);
         }
     }
@@ -322,7 +324,7 @@ class SaasCommercialTasksController extends Controller
     {
         try {
             $brokerId = $this->getBrokerId($request);
-            
+
             if ($task->broker_id !== $brokerId) {
                 return response()->json(['error' => 'Acceso denegado'], 403);
             }
@@ -334,9 +336,9 @@ class SaasCommercialTasksController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error al eliminar tarea comercial: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
-                'error' => 'Error al eliminar la tarea',
-                'message' => $e->getMessage()
+                'error' => 'No se pudo eliminar la tarea. Inténtalo de nuevo.'
             ], 500);
         }
     }
@@ -624,6 +626,131 @@ class SaasCommercialTasksController extends Controller
     }
 
     /**
+     * Reasignar tarea a otro usuario/empleado
+     */
+    public function assign(Request $request, CommercialTask $task): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'assigned_to' => 'required|integer',
+                'reason' => 'nullable|string|max:1000',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'error' => 'Datos inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $data = $validator->validated();
+            $previous = $task->assigned_to;
+
+            $task->update(['assigned_to' => $data['assigned_to']]);
+
+            $task->addActivity('Tarea reasignada', [
+                'from' => $previous,
+                'to' => $data['assigned_to'],
+                'reason' => $data['reason'] ?? null,
+            ]);
+
+            $task->load([
+                'client' => function($q) {
+                    $q->select('id', 'first_name', 'last_name', 'document_number', 'email', 'phone');
+                },
+                'poliza' => function($q) {
+                    $q->select('id', 'policy_number', 'type', 'status');
+                },
+                'assignedUser' => function($q) { $q->select('id', 'name', 'email'); },
+                'assignedEmpleado' => function($q) { $q->select('id', 'nombres', 'apellidos', 'email'); },
+            ]);
+
+            return response()->json([
+                'message' => 'Tarea reasignada',
+                'data' => new CommercialTaskResource($task),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error al reasignar la tarea',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Agregar una nota a la bitácora de la tarea
+     */
+    public function addNote(Request $request, CommercialTask $task): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'note' => 'required|string|max:5000',
+                'is_private' => 'boolean',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'error' => 'Datos inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $data = $validator->validated();
+
+            $task->addActivity('Nota agregada', [
+                'note' => $data['note'],
+                'is_private' => $data['is_private'] ?? false,
+            ]);
+
+            // Acumular en notes (texto libre) también, para retro-compatibilidad
+            $stamp = now()->format('Y-m-d H:i');
+            $task->update([
+                'notes' => trim(($task->notes ?? '') . "\n[{$stamp}] " . $data['note']),
+            ]);
+
+            return response()->json([
+                'message' => 'Nota agregada',
+                'data' => $task->fresh()->activity_log,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error al agregar la nota',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Pausar tarea
+     */
+    public function pause(Request $request, CommercialTask $task): JsonResponse
+    {
+        try {
+            $reason = $request->input('reason');
+            $task->pause($reason);
+            $task->addActivity('Tarea pausada', ['reason' => $reason]);
+            return response()->json(['message' => 'Tarea pausada', 'data' => $task->fresh()]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Cancelar tarea
+     */
+    public function cancel(Request $request, CommercialTask $task): JsonResponse
+    {
+        try {
+            $reason = $request->input('reason');
+            $task->cancel($reason);
+            $task->addActivity('Tarea cancelada', ['reason' => $reason]);
+            return response()->json(['message' => 'Tarea cancelada', 'data' => $task->fresh()]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Get available clients for tasks
      */
     public function getClients(Request $request): JsonResponse
@@ -742,17 +869,20 @@ class SaasCommercialTasksController extends Controller
             });
         }
 
-        // Filtros específicos
+        // Filtros específicos (soportan valores separados por coma -> whereIn)
         if ($request->has('type') && $request->type) {
-            $query->where('type', $request->type);
+            $values = array_filter(array_map('trim', explode(',', (string) $request->type)));
+            count($values) > 1 ? $query->whereIn('type', $values) : $query->where('type', $values[0] ?? $request->type);
         }
 
         if ($request->has('status') && $request->status) {
-            $query->where('status', $request->status);
+            $values = array_filter(array_map('trim', explode(',', (string) $request->status)));
+            count($values) > 1 ? $query->whereIn('status', $values) : $query->where('status', $values[0] ?? $request->status);
         }
 
         if ($request->has('priority') && $request->priority) {
-            $query->where('priority', $request->priority);
+            $values = array_filter(array_map('trim', explode(',', (string) $request->priority)));
+            count($values) > 1 ? $query->whereIn('priority', $values) : $query->where('priority', $values[0] ?? $request->priority);
         }
 
         if ($request->has('assigned_to') && $request->assigned_to) {
@@ -761,6 +891,10 @@ class SaasCommercialTasksController extends Controller
 
         if ($request->has('client_id') && $request->client_id) {
             $query->where('client_id', $request->client_id);
+        }
+
+        if ($request->has('poliza_id') && $request->poliza_id) {
+            $query->where('poliza_id', $request->poliza_id);
         }
 
         // Filtros de fecha

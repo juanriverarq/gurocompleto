@@ -759,7 +759,7 @@ class ChatbotProcessorService
                 $options = $config['options'] ?? [];
                 $errorMessage = $config['error_message'] ?? null; // Mensaje de error personalizado
                 
-                $numberEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'];
+                $numberEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟','1️⃣1️⃣','1️⃣2️⃣','1️⃣3️⃣','1️⃣4️⃣','1️⃣5️⃣','1️⃣6️⃣','1️⃣7️⃣','1️⃣8️⃣','1️⃣9️⃣','2️⃣0️⃣'];
                 $optionsText = $text . "\n";
                 foreach ($options as $i => $opt) {
                     $emoji = $numberEmojis[$i] ?? (($i + 1) . '.');
@@ -989,6 +989,22 @@ class ChatbotProcessorService
             $aiContext = $this->replaceVariables($aiContext, $session['variables']);
         }
 
+        // Reglas de transferencia: inyectar en system_prompt para que la IA sepa cuándo/cómo transferir
+        $transferRules = is_array($config['transfer_rules'] ?? null) ? $config['transfer_rules'] : [];
+        if (!empty($transferRules)) {
+            $rulesBlock = "\n\nREGLAS DE TRANSFERENCIA A ASESOR (IMPORTANTE):\n" .
+                "Si detectas que el cliente necesita ser transferido a un asesor humano, incluye UNA de estas etiquetas AL FINAL de tu respuesta (el cliente NO verá la etiqueta):\n";
+            foreach ($transferRules as $rule) {
+                $id = trim((string) ($rule['id'] ?? ''));
+                $desc = trim((string) ($rule['description'] ?? ''));
+                if ($id === '' || $desc === '') continue;
+                $rulesBlock .= "- [TRANSFER:{$id}] → {$desc}\n";
+            }
+            $rulesBlock .= "- [TRANSFER] → Para cualquier otro caso que requiera asesor humano (fallback genérico).\n";
+            $rulesBlock .= "Usa SOLO UNA etiqueta por respuesta. No inventes etiquetas nuevas.";
+            $systemPrompt = ($systemPrompt ?? '') . $rulesBlock;
+        }
+
         // Opciones de configuración del nodo
         $options = [
             'system_prompt' => $systemPrompt,
@@ -1009,14 +1025,27 @@ class ChatbotProcessorService
 
         if ($result['success'] && $result['response']) {
             $aiResponse = $result['response'];
-            
-            // Detectar si la IA quiere transferir a un asesor (tag [TRANSFER] en la respuesta)
-            $wantsTransfer = str_contains($aiResponse, '[TRANSFER]');
-            if ($wantsTransfer) {
+
+            // Detectar etiquetas de transferencia específicas [TRANSFER:id] antes del genérico [TRANSFER]
+            $matchedRule = null;
+            $wantsTransfer = false;
+            if (!empty($transferRules) && preg_match('/\[TRANSFER:([a-zA-Z0-9_\-]+)\]/', $aiResponse, $m)) {
+                $ruleId = $m[1];
+                foreach ($transferRules as $rule) {
+                    if (($rule['id'] ?? null) === $ruleId) {
+                        $matchedRule = $rule;
+                        break;
+                    }
+                }
+                $aiResponse = preg_replace('/\[TRANSFER:[a-zA-Z0-9_\-]+\]/', '', $aiResponse);
+                $aiResponse = trim($aiResponse);
+                $wantsTransfer = true;
+            } elseif (str_contains($aiResponse, '[TRANSFER]')) {
                 $aiResponse = str_replace('[TRANSFER]', '', $aiResponse);
                 $aiResponse = trim($aiResponse);
+                $wantsTransfer = true;
             }
-            
+
             $aiResponse = $this->replaceVariables($aiResponse, $session['variables']);
             
             $sendResult = $this->bridge->sendMessage($instanceId, $phone, $aiResponse);
@@ -1037,8 +1066,17 @@ class ChatbotProcessorService
 
                 // Si la IA pidió transferir, escalar a asesor
                 if ($wantsTransfer) {
-                    return $this->escalateToAgent($session, $instanceId, $phone, $conversation,
-                        'La IA determinó que el cliente necesita atención de un asesor humano');
+                    $targetUserId = null;
+                    $customMessage = $config['transfer_default_message'] ?? null;
+                    $reason = 'La IA determinó que el cliente necesita atención de un asesor humano';
+                    if ($matchedRule) {
+                        $targetUserId = isset($matchedRule['user_id']) ? (int) $matchedRule['user_id'] : null;
+                        if (!empty($matchedRule['message'])) {
+                            $customMessage = $matchedRule['message'];
+                        }
+                        $reason = 'Regla: ' . ($matchedRule['name'] ?? $matchedRule['id'] ?? 'transferencia');
+                    }
+                    return $this->escalateToAgent($session, $instanceId, $phone, $conversation, $reason, $targetUserId, $customMessage);
                 }
 
                 // Modo conversacional: el nodo se queda esperando la siguiente respuesta del usuario
@@ -1928,16 +1966,18 @@ class ChatbotProcessorService
      * Escalar conversación a un asesor humano cuando el cliente se enreda.
      * Se activa tras N respuestas inválidas consecutivas.
      */
-    protected function escalateToAgent(array $session, string $instanceId, string $phone, WhatsAppConversation $conversation, string $reason): array
+    protected function escalateToAgent(array $session, string $instanceId, string $phone, WhatsAppConversation $conversation, string $reason, ?int $targetUserId = null, ?string $customMessage = null): array
     {
         Log::info("🚨 [CHATBOT] Escalando a asesor", [
             'phone' => $phone,
             'reason' => $reason,
             'conversation_id' => $conversation->id,
+            'target_user_id' => $targetUserId,
         ]);
 
-        // Mensaje al cliente
-        $escalationMsg = "Un momento, te voy a comunicar con un asesor para ayudarte mejor. 🙂";
+        // Mensaje al cliente (custom o default)
+        $escalationMsg = $customMessage ?: "Un momento, te voy a comunicar con un asesor para ayudarte mejor. 🙂";
+        $escalationMsg = $this->replaceVariables($escalationMsg, $session['variables'] ?? []);
         $this->bridge->sendMessage($instanceId, $phone, $escalationMsg);
         $conversation->addMessage([
             'direction' => 'outgoing',
@@ -1947,12 +1987,21 @@ class ChatbotProcessorService
             'status' => 'sent',
         ]);
 
-        // Asignar a un agente: buscar en el departamento de la conversación o el primer agente disponible
+        // Asignar a un agente: prioridad 1) targetUserId explícito 2) departamento 3) primer admin del broker
         $assignedUserId = null;
         $assignedUserName = null;
 
-        // 1. Si la conversación tiene departamento, buscar un agente del departamento
-        if ($conversation->department_id) {
+        // 0. Si se especificó un usuario objetivo (desde regla), usarlo directamente
+        if ($targetUserId) {
+            $agent = \App\Models\User::find($targetUserId);
+            if ($agent) {
+                $assignedUserId = $agent->id;
+                $assignedUserName = $agent->name;
+            }
+        }
+
+        // 1. Si no hay objetivo explícito y la conversación tiene departamento, buscar un agente del departamento
+        if (!$assignedUserId && $conversation->department_id) {
             $dept = WhatsAppDepartment::find($conversation->department_id);
             if ($dept) {
                 $conversation->classifyAndAssign($dept, 'Escalado por chatbot: ' . $reason);

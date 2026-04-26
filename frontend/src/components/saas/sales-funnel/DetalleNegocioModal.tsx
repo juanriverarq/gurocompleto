@@ -24,17 +24,17 @@ const STAGE_CONFIG = {
     icon: 'solar:check-circle-bold-duotone',
   },
   presentation: {
-    label: 'Presentación',
+    label: 'Cotización',
     color: 'bg-purple-100 text-purple-800',
     icon: 'solar:presentation-graph-bold-duotone',
   },
   proposal: {
-    label: 'Propuesta',
+    label: 'Asesoría',
     color: 'bg-yellow-100 text-yellow-800',
     icon: 'solar:document-text-bold-duotone',
   },
   negotiation: {
-    label: 'Negociación',
+    label: 'Seguimiento',
     color: 'bg-orange-100 text-orange-800',
     icon: 'solar:handshake-bold-duotone',
   },

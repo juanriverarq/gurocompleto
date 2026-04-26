@@ -40,6 +40,104 @@ class PagoPolizaController extends Controller
     }
 
     /**
+     * Editar una cuota (cartera_item) — fecha de vencimiento, monto, comisión.
+     * Recalcula campos dependientes (saldos, valor_neto_a_pagar) automáticamente.
+     */
+    public function updateCarteraItem(Request $request, $polizaId, $itemId)
+    {
+        $validator = Validator::make($request->all(), [
+            'fecha_limite_pago' => 'nullable|date',
+            'prima_total_pago' => 'nullable|numeric|min:0',
+            'comision_a_recibir' => 'nullable|numeric|min:0',
+            'anexo_numero' => 'nullable|string|max:100',
+            'numero_pago' => 'nullable|string|max:50',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $ci = DB::table('cartera_items')
+                ->where('id', $itemId)
+                ->where('poliza_id', $polizaId)
+                ->first();
+
+            if (!$ci) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cuota no encontrada',
+                ], 404);
+            }
+
+            $updateData = ['updated_at' => now()];
+
+            if ($request->filled('fecha_limite_pago')) {
+                $updateData['fecha_limite_pago'] = $request->fecha_limite_pago;
+            }
+            if ($request->has('anexo_numero')) {
+                $updateData['anexo_numero'] = $request->anexo_numero ?: null;
+            }
+            if ($request->has('numero_pago')) {
+                $updateData['numero_pago'] = $request->numero_pago ?: null;
+            }
+
+            // Si cambia el monto de la cuota, recalcular saldos y valor neto
+            if ($request->filled('prima_total_pago')) {
+                $nuevoTotal = (float) $request->prima_total_pago;
+                $comisionActual = $request->filled('comision_a_recibir')
+                    ? (float) $request->comision_a_recibir
+                    : (float) ($ci->comision_a_recibir ?? 0);
+                $valorNeto = max(0, $nuevoTotal - $comisionActual);
+                $valorRecaudado = (float) ($ci->valor_recaudado_oficina ?? 0);
+                $valorPagadoAseg = (float) ($ci->valor_pagado_aseguradora ?? 0);
+
+                $updateData['prima_total_pago'] = $nuevoTotal;
+                $updateData['prima_total'] = $nuevoTotal;
+                $updateData['comision_a_recibir'] = $comisionActual;
+                $updateData['valor_neto_a_pagar'] = $valorNeto;
+                $updateData['saldo_pendiente_oficina'] = max(0, $nuevoTotal - $valorRecaudado);
+                $updateData['saldo_pendiente_aseguradora'] = max(0, $valorNeto - $valorPagadoAseg);
+            } elseif ($request->filled('comision_a_recibir')) {
+                // Sólo cambió la comisión: recalcular valor neto
+                $comisionNueva = (float) $request->comision_a_recibir;
+                $totalActual = (float) ($ci->prima_total_pago ?? 0);
+                $valorPagadoAseg = (float) ($ci->valor_pagado_aseguradora ?? 0);
+                $valorNeto = max(0, $totalActual - $comisionNueva);
+                $updateData['comision_a_recibir'] = $comisionNueva;
+                $updateData['valor_neto_a_pagar'] = $valorNeto;
+                $updateData['saldo_pendiente_aseguradora'] = max(0, $valorNeto - $valorPagadoAseg);
+            }
+
+            DB::table('cartera_items')->where('id', $itemId)->update($updateData);
+
+            // Re-sincronizar para que los flags (recaudado_en_oficina, etc.) queden correctos
+            $this->syncCarteraItems((int) $polizaId, null, (int) $itemId);
+
+            DB::commit();
+
+            $updated = DB::table('cartera_items')->where('id', $itemId)->first();
+            return response()->json([
+                'success' => true,
+                'message' => 'Cuota actualizada',
+                'data' => $updated,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar cuota: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Get cartera_items for a specific poliza (real cuotas from SS)
      */
     public function carteraItemsByPoliza(Request $request, $polizaId)
@@ -426,6 +524,338 @@ class PagoPolizaController extends Controller
                 'success' => false,
                 'message' => 'Error al registrar cobro: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Editar un pago de póliza existente.
+     * Permite forzar fecha de pago, monto, método, referencia y observaciones.
+     * Sincroniza recibo de caja vinculado y cartera_items al terminar.
+     */
+    public function updatePago(Request $request, $polizaId, $pagoId)
+    {
+        $validator = Validator::make($request->all(), [
+            'fecha_pago' => 'nullable|date',
+            'monto' => 'nullable|numeric|min:0.01',
+            'metodo_pago' => 'nullable|string|max:50',
+            'referencia_pago' => 'nullable|string|max:255',
+            'observaciones' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $pago = PagoPoliza::where('poliza_id', $polizaId)
+                ->where('id', $pagoId)
+                ->first();
+
+            if (!$pago) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pago no encontrado',
+                ], 404);
+            }
+
+            $updateData = [];
+
+            if ($request->filled('fecha_pago')) {
+                $updateData['fecha_pago'] = $request->fecha_pago;
+            }
+            if ($request->filled('metodo_pago')) {
+                $updateData['metodo_pago'] = $request->metodo_pago;
+            }
+            if ($request->has('referencia_pago')) {
+                $updateData['referencia_pago'] = $request->referencia_pago;
+            }
+            if ($request->has('observaciones')) {
+                $updateData['observaciones'] = $request->observaciones;
+            }
+
+            // Monto: recalcular estado/saldo en base al nuevo valor
+            if ($request->filled('monto')) {
+                $nuevoMonto = (float) $request->monto;
+                $total = (float) ($pago->monto_total ?? $nuevoMonto);
+                if ($total <= 0) { $total = $nuevoMonto; }
+                $updateData['monto_pagado'] = $nuevoMonto;
+                $updateData['monto_pendiente'] = max(0, $total - $nuevoMonto);
+                if ($nuevoMonto >= $total - 0.01) {
+                    $updateData['estado'] = 'pagado';
+                } elseif ($nuevoMonto > 0) {
+                    $updateData['estado'] = 'parcial';
+                } else {
+                    $updateData['estado'] = 'pendiente';
+                }
+            }
+
+            if (!empty($updateData)) {
+                $pago->update($updateData);
+            }
+
+            // Sincronizar recibo de caja vinculado (si existe)
+            $reciboQuery = ReciboCaja::query();
+            if ($pago->recibo_caja_id) {
+                $reciboQuery->where('id', $pago->recibo_caja_id);
+            } else {
+                $reciboQuery->where('pago_poliza_id', $pago->id);
+            }
+            $recibo = $reciboQuery->first();
+            if ($recibo) {
+                $reciboUpdate = [];
+                if ($request->filled('fecha_pago')) {
+                    $reciboUpdate['fecha_realizo_pago_oficina'] = $request->fecha_pago;
+                    $reciboUpdate['fecha_realizo_pago'] = $request->fecha_pago;
+                    $reciboUpdate['fecha_pago'] = $request->fecha_pago;
+                }
+                if ($request->filled('metodo_pago')) {
+                    $reciboUpdate['forma_pago'] = $request->metodo_pago;
+                }
+                if ($request->filled('monto')) {
+                    $nuevoMonto = (float) $request->monto;
+                    if ($pago->tipo_recaudo === 'oficina') {
+                        $reciboUpdate['valor_recaudado_en_oficina'] = $nuevoMonto;
+                    } else {
+                        $reciboUpdate['valor_a_pagar'] = $nuevoMonto;
+                    }
+                }
+                if ($request->has('observaciones')) {
+                    $reciboUpdate['observaciones'] = $request->observaciones;
+                }
+                if (!empty($reciboUpdate)) {
+                    $recibo->update($reciboUpdate);
+                }
+            }
+
+            // Sincronizar cartera_items para reflejar los nuevos montos/fechas
+            $this->syncCarteraItems((int) $polizaId, null, $pago->cartera_item_id ?? null);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pago actualizado exitosamente',
+                'data' => $pago->fresh(),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar pago: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Marcar toda la póliza como totalmente pagada (usado cuando se cambia
+     * estado_cartera a "Pagado" desde la edición de la póliza).
+     *
+     * Crea (si no existen) los PagoPoliza de oficina + aseguradora y el
+     * CobroComision correspondiente para cada cuota; luego sincroniza
+     * cartera_items vía syncCarteraItems para reflejar el estado final
+     * (recaudado_en_oficina, recaudado_aseguradora, comisionada = true).
+     */
+    public function marcarPolizaPagada(Request $request, $polizaId)
+    {
+        try {
+            DB::beginTransaction();
+
+            $poliza = Poliza::findOrFail($polizaId);
+            $brokerId = $poliza->broker_id;
+            $renovacion = (int) ($poliza->numero_renovacion ?? 0);
+            $fecha = $request->input('fecha') ?: now()->toDateString();
+            $metodoPago = $request->input('metodo_pago', 'efectivo');
+            $observaciones = $request->input('observaciones', 'Marcado como pagado desde edición de póliza');
+
+            // Modos: por defecto ambos; el usuario puede elegir solo uno.
+            $marcarOficina = $request->boolean('oficina', true);
+            $marcarAseguradora = $request->boolean('aseguradora', true);
+            if (!$marcarOficina && !$marcarAseguradora) {
+                $marcarOficina = $marcarAseguradora = true; // fallback seguro
+            }
+
+            $created = ['oficina' => 0, 'aseguradora' => 0, 'comision' => 0];
+            $itemsTouched = 0;
+
+            // Validar aseguradora_id contra la tabla aseguradoras (algunos imports tienen FKs huérfanas)
+            $aseguradoraId = $poliza->aseguradora_id;
+            if ($aseguradoraId && !DB::table('aseguradoras')->where('id', $aseguradoraId)->exists()) {
+                $aseguradoraId = null;
+            }
+
+            $items = DB::table('cartera_items')
+                ->where('poliza_id', $polizaId)
+                ->where('broker_id', $brokerId)
+                ->where('numero_renovacion', $renovacion)
+                ->get();
+
+            if ($items->isEmpty()) {
+                // Sin cartera_items: trabajar a nivel de póliza
+                $montoTotal = ((float) ($poliza->total_amount ?? 0) > 0)
+                    ? (float) $poliza->total_amount
+                    : ((float) ($poliza->premium_amount ?? 0) + (float) ($poliza->vat_amount ?? 0));
+                $comision = (float) ($poliza->commission_amount ?? 0);
+                $valorNeto = max(0, $montoTotal - $comision);
+
+                if ($montoTotal > 0) {
+                    $this->ensurePagosForPagada(
+                        $poliza, null, $renovacion, $aseguradoraId,
+                        $montoTotal, $valorNeto, $comision,
+                        $fecha, $metodoPago, $observaciones, $created,
+                        $marcarOficina, $marcarAseguradora
+                    );
+                    $itemsTouched++;
+                }
+                $this->syncCarteraItems((int) $polizaId);
+            } else {
+                foreach ($items as $ci) {
+                    if ($ci->recibo_anulado) { continue; }
+                    $montoTotal = (float) $ci->prima_total_pago;
+                    $valorNeto = (float) $ci->valor_neto_a_pagar;
+                    $comision = (float) $ci->comision_a_recibir;
+                    if ($valorNeto <= 0 && $montoTotal > 0) {
+                        $valorNeto = max(0, $montoTotal - $comision);
+                    }
+
+                    $this->ensurePagosForPagada(
+                        $poliza, (int) $ci->id, $renovacion, $aseguradoraId,
+                        $montoTotal, $valorNeto, $comision,
+                        $fecha, $metodoPago, $observaciones, $created,
+                        $marcarOficina, $marcarAseguradora
+                    );
+                    $itemsTouched++;
+
+                    $this->syncCarteraItems((int) $polizaId, null, (int) $ci->id);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Póliza marcada como pagada ({$itemsTouched} cuota(s))",
+                'data' => [
+                    'items_procesados' => $itemsTouched,
+                    'pagos_creados' => $created,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('marcarPolizaPagada falló: ' . $e->getMessage(), ['poliza_id' => $polizaId]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al marcar como pagada: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Helper: asegura que existan PagoPoliza oficina + aseguradora y CobroComision
+     * para una cuota (cartera_item) o para la póliza si no hay cuotas.
+     */
+    private function ensurePagosForPagada(
+        Poliza $poliza,
+        ?int $carteraItemId,
+        int $renovacion,
+        ?int $aseguradoraId,
+        float $montoTotal,
+        float $valorNeto,
+        float $comision,
+        string $fecha,
+        string $metodoPago,
+        string $observaciones,
+        array &$created,
+        bool $marcarOficina = true,
+        bool $marcarAseguradora = true
+    ): void {
+        $base = [
+            'broker_id' => $poliza->broker_id,
+            'poliza_id' => $poliza->id,
+            'numero_renovacion' => $renovacion,
+            'cliente_id' => $poliza->client_id,
+            'cartera_item_id' => $carteraItemId,
+        ];
+
+        // 1. Pago oficina (sólo si marcarOficina)
+        if ($marcarOficina) {
+            $existsOficina = PagoPoliza::where('poliza_id', $poliza->id)
+                ->where('numero_renovacion', $renovacion)
+                ->where('tipo_recaudo', 'oficina')
+                ->where('estado', 'pagado')
+                ->when($carteraItemId, fn($q) => $q->where('cartera_item_id', $carteraItemId))
+                ->when(!$carteraItemId, fn($q) => $q->whereNull('cartera_item_id'))
+                ->exists();
+            if (!$existsOficina && $montoTotal > 0) {
+                PagoPoliza::create(array_merge($base, [
+                    'monto_total' => $montoTotal,
+                    'monto_pagado' => $montoTotal,
+                    'monto_pendiente' => 0,
+                    'tipo_recaudo' => 'oficina',
+                    'metodo_pago' => $metodoPago,
+                    'fecha_pago' => $fecha,
+                    'estado' => 'pagado',
+                    'observaciones' => $observaciones,
+                ]));
+                $created['oficina']++;
+            }
+        }
+
+        // 2. Pago aseguradora (sólo si marcarAseguradora)
+        $pagoAseg = null;
+        if ($marcarAseguradora) {
+            $pagoAseg = PagoPoliza::where('poliza_id', $poliza->id)
+                ->where('numero_renovacion', $renovacion)
+                ->where('tipo_recaudo', 'aseguradora')
+                ->where('estado', 'pagado')
+                ->when($carteraItemId, fn($q) => $q->where('cartera_item_id', $carteraItemId))
+                ->when(!$carteraItemId, fn($q) => $q->whereNull('cartera_item_id'))
+                ->first();
+            if (!$pagoAseg && $valorNeto > 0) {
+                $pagoAseg = PagoPoliza::create(array_merge($base, [
+                    'monto_total' => $valorNeto,
+                    'monto_pagado' => $valorNeto,
+                    'monto_pendiente' => 0,
+                    'tipo_recaudo' => 'aseguradora',
+                    'metodo_pago' => $metodoPago,
+                    'fecha_pago' => $fecha,
+                    'estado' => 'pagado',
+                    'observaciones' => 'Pago automático a aseguradora (póliza marcada Pagada)',
+                ]));
+                $created['aseguradora']++;
+            }
+        }
+
+        // 3. Cobro comisión (sólo si hubo pago a aseguradora)
+        if ($pagoAseg && $comision > 0) {
+            $existsComision = CobroComision::where('poliza_id', $poliza->id)
+                ->where('numero_renovacion', $renovacion)
+                ->where('estado', 'cobrado')
+                ->when($carteraItemId, fn($q) => $q->where('cartera_item_id', $carteraItemId))
+                ->when(!$carteraItemId, fn($q) => $q->whereNull('cartera_item_id'))
+                ->exists();
+            if (!$existsComision) {
+                CobroComision::create([
+                    'broker_id' => $poliza->broker_id,
+                    'poliza_id' => $poliza->id,
+                    'numero_renovacion' => $renovacion,
+                    'aseguradora_id' => $aseguradoraId,
+                    'pago_poliza_id' => $pagoAseg->id,
+                    'cartera_item_id' => $carteraItemId,
+                    'monto_comision' => $comision,
+                    'monto_cobrado' => $comision,
+                    'monto_pendiente' => 0,
+                    'fecha_cobro' => $fecha,
+                    'estado' => 'cobrado',
+                    'observaciones' => 'Comisión recibida automática (póliza marcada Pagada)',
+                ]);
+                $created['comision']++;
+            }
         }
     }
 
@@ -2372,21 +2802,25 @@ class PagoPolizaController extends Controller
             $totalRecaudadoOficina = (float) $pagosOficina->sum('monto_pagado');
             $totalPagadoAseguradora = (float) $pagosAseguradora->where('estado', 'pagado')->sum('monto_pagado');
             $totalComisionCobrada = (float) $cobrosComision->sum('monto_cobrado');
-            $recaudadoEnOficina = $totalRecaudadoOficina > 0;
             $recaudadoAseguradora = $totalPagadoAseguradora > 0;
             $comisionada = $totalComisionCobrada > 0;
-
-            $nuevoEstado = 'por_cobrar';
-            if ($recaudadoAseguradora && $comisionada) $nuevoEstado = 'comision_recibida';
-            elseif ($recaudadoAseguradora) $nuevoEstado = 'comision_por_cobrar';
-            elseif ($recaudadoEnOficina) $nuevoEstado = 'por_pagar';
 
             $cliente = $poliza->client;
             $clienteNombre = $cliente ? trim(($cliente->first_name ?? '') . ' ' . ($cliente->last_name ?? '')) : null;
             $montoTotalPoliza = ((float)($poliza->total_amount ?? 0) > 0 ? (float)$poliza->total_amount : ((float)($poliza->premium_amount ?? 0) + (float)($poliza->vat_amount ?? 0)));
             $comisionPoliza = $poliza->commission_amount ?? 0;
 
-            $fechaRecOf = $recaudadoEnOficina ? ($pagosOficina->sortByDesc('fecha_pago')->first()->fecha_pago ?? null) : null;
+            // Determine if office collection is complete or partial
+            $saldoPendienteOf = max(0, $montoTotalPoliza - $totalRecaudadoOficina);
+            $recaudadoEnOficina = $totalRecaudadoOficina > 0 && $saldoPendienteOf <= 0;
+            $recaudoParcialOficina = $totalRecaudadoOficina > 0 && $saldoPendienteOf > 0;
+
+            $nuevoEstado = 'por_cobrar';
+            if ($recaudadoAseguradora && $comisionada) $nuevoEstado = 'comision_recibida';
+            elseif ($recaudadoAseguradora) $nuevoEstado = 'comision_por_cobrar';
+            elseif ($recaudadoEnOficina) $nuevoEstado = 'por_pagar';
+
+            $fechaRecOf = ($recaudadoEnOficina || $recaudoParcialOficina) ? ($pagosOficina->sortByDesc('fecha_pago')->first()->fecha_pago ?? null) : null;
             $fechaPagoAs = $recaudadoAseguradora ? ($pagosAseguradora->where('estado', 'pagado')->sortByDesc('fecha_pago')->first()->fecha_pago ?? null) : null;
             $fechaCom = $comisionada ? ($cobrosComision->sortByDesc('updated_at')->first()->updated_at?->format('Y-m-d') ?? null) : null;
 
@@ -2410,11 +2844,12 @@ class PagoPolizaController extends Controller
                 'comision_vendedor' => 0,
                 'estado_cartera' => $nuevoEstado,
                 'recaudado_en_oficina' => $recaudadoEnOficina,
+                'recaudo_parcial_oficina' => $recaudoParcialOficina,
                 'recaudado_aseguradora' => $recaudadoAseguradora,
                 'comisionada' => $comisionada,
                 'valor_recaudado_oficina' => $totalRecaudadoOficina,
                 'valor_pagado_aseguradora' => $totalPagadoAseguradora,
-                'saldo_pendiente_oficina' => max(0, $montoTotalPoliza - $totalRecaudadoOficina),
+                'saldo_pendiente_oficina' => $saldoPendienteOf,
                 'saldo_pendiente_aseguradora' => $recaudadoEnOficina
                     ? max(0, $montoTotalPoliza - $comisionPoliza - $totalPagadoAseguradora)
                     : 0,
@@ -2444,7 +2879,6 @@ class PagoPolizaController extends Controller
         $cobrosComision
     ): void {
         $totalRecaudadoOficina = (float) $pagosOficina->sum('monto_pagado');
-        $recaudadoEnOficina = $totalRecaudadoOficina > 0;
 
         $totalPagadoAseguradora = (float) $pagosAseguradora->where('estado', 'pagado')->sum('monto_pagado');
         $recaudadoAseguradora = $totalPagadoAseguradora > 0;
@@ -2455,16 +2889,59 @@ class PagoPolizaController extends Controller
         $hasPagosGuro = $pagosOficina->isNotEmpty() || $pagosAseguradora->isNotEmpty() || $cobrosComision->isNotEmpty();
 
         if (!$hasPagosGuro) {
-            // No Guro pagos for this item — preserve its original imported state
-            // Don't touch financial values (they come from SoftSeguros import)
+            // No Guro pagos for this item.
+            // If this is a SS-imported item, preserve its original imported state.
+            // If it's a Guro-only item (or was previously modified by Guro), reset to por_cobrar.
+            $wasModifiedByGuro = in_array($ci->estado_cartera, ['por_pagar', 'comision_por_cobrar', 'comision_recibida'])
+                && !$ci->softseguros_pago_id;
+            $hasGuroFlags = $ci->recaudado_en_oficina || $ci->recaudo_parcial_oficina
+                || $ci->recaudado_aseguradora || $ci->comisionada
+                || ((float)($ci->valor_recaudado_oficina ?? 0) > 0);
+
+            if ($wasModifiedByGuro || $hasGuroFlags) {
+                // Delete any split sibling items (from partial recaudo)
+                DB::table('cartera_items')->where('split_from_id', $ci->id)->delete();
+
+                // If this item IS a split sibling, just delete it — the parent will be reset
+                if ($ci->split_from_id) {
+                    DB::table('cartera_items')->where('id', $ci->id)->delete();
+                    return;
+                }
+
+                // Restore original prima_total_pago if it was modified by a partial split
+                $originalTotal = (float) ($ci->prima_total_pago ?? 0);
+                if ($ci->recaudo_parcial_oficina) {
+                    // Recover full amount from poliza
+                    $originalTotal = ((float)($poliza->total_amount ?? 0) > 0)
+                        ? (float) $poliza->total_amount
+                        : ((float)($poliza->premium_amount ?? 0) + (float)($poliza->vat_amount ?? 0));
+                }
+
+                // Reset to por_cobrar — all pagos were reverted
+                DB::table('cartera_items')->where('id', $ci->id)->update([
+                    'estado_cartera' => 'por_cobrar',
+                    'recaudado_en_oficina' => false,
+                    'recaudo_parcial_oficina' => false,
+                    'recaudado_aseguradora' => false,
+                    'comisionada' => false,
+                    'valor_recaudado_oficina' => 0,
+                    'valor_pagado_aseguradora' => 0,
+                    'comision_recibida' => 0,
+                    'prima_total_pago' => $originalTotal,
+                    'prima_total' => $originalTotal,
+                    'prima_neta' => $poliza->premium_amount ?? 0,
+                    'valor_neto_a_pagar' => max(0, $originalTotal - (float)($poliza->commission_amount ?? 0)),
+                    'comision_a_recibir' => $poliza->commission_amount ?? 0,
+                    'saldo_pendiente_oficina' => $originalTotal,
+                    'saldo_pendiente_aseguradora' => 0,
+                    'fecha_recaudado_oficina' => null,
+                    'fecha_pago_aseguradora' => null,
+                    'fecha_comisionada' => null,
+                    'updated_at' => now(),
+                ]);
+            }
             return;
         }
-
-        // Determine nuevo estado
-        $nuevoEstado = 'por_cobrar';
-        if ($recaudadoAseguradora && $comisionada) $nuevoEstado = 'comision_recibida';
-        elseif ($recaudadoAseguradora) $nuevoEstado = 'comision_por_cobrar';
-        elseif ($recaudadoEnOficina) $nuevoEstado = 'por_pagar';
 
         // Use the ITEM's own prima_total_pago (cuota-specific), not the poliza total
         $ciTotal = (float) ($ci->prima_total_pago ?? 0);
@@ -2476,15 +2953,119 @@ class PagoPolizaController extends Controller
             $valorNetoAPagar = max(0, $montoTotalCuota - $comisionPoliza);
         }
 
+        // Determine if office collection is COMPLETE (not just partial)
+        $saldoPendienteOficina = max(0, $montoTotalCuota - $totalRecaudadoOficina);
+        $recaudadoEnOficina = $totalRecaudadoOficina > 0 && $saldoPendienteOficina <= 0;
+        $recaudoParcialOficina = $totalRecaudadoOficina > 0 && $saldoPendienteOficina > 0;
+
+        // ─── PARTIAL OFFICE RECAUDO: Split into 2 cartera_items ───
+        // Recaudado portion → por_pagar (ready to transfer to insurer)
+        // Pendiente portion → por_cobrar (still owed by client)
+        if ($recaudoParcialOficina && !$recaudadoAseguradora && !$comisionada) {
+            $comisionProporcional = $montoTotalCuota > 0
+                ? round($comisionPoliza * ($totalRecaudadoOficina / $montoTotalCuota), 2)
+                : 0;
+            $comisionPendiente = $comisionPoliza - $comisionProporcional;
+            $netoRecaudado = max(0, $totalRecaudadoOficina - $comisionProporcional);
+            $netoPendiente = max(0, $saldoPendienteOficina - $comisionPendiente);
+
+            $fechaRecOf = $pagosOficina->sortByDesc('fecha_pago')->first()->fecha_pago ?? null;
+
+            // Update original item → por_pagar (the recaudado portion)
+            DB::table('cartera_items')->where('id', $ci->id)->update([
+                'estado_cartera' => 'por_pagar',
+                'recaudado_en_oficina' => true,
+                'recaudo_parcial_oficina' => true,
+                'recaudado_aseguradora' => false,
+                'comisionada' => false,
+                'prima_total_pago' => $totalRecaudadoOficina,
+                'prima_total' => $totalRecaudadoOficina,
+                'prima_neta' => round(($poliza->premium_amount ?? 0) * ($totalRecaudadoOficina / $montoTotalCuota), 2),
+                'valor_neto_a_pagar' => $netoRecaudado,
+                'comision_a_recibir' => $comisionProporcional,
+                'valor_recaudado_oficina' => $totalRecaudadoOficina,
+                'saldo_pendiente_oficina' => 0,
+                'saldo_pendiente_aseguradora' => $netoRecaudado,
+                'valor_pagado_aseguradora' => 0,
+                'comision_recibida' => 0,
+                'fecha_recaudado_oficina' => $fechaRecOf,
+                'updated_at' => now(),
+            ]);
+
+            // Create or update the pendiente sibling item → por_cobrar
+            $existingSibling = DB::table('cartera_items')
+                ->where('split_from_id', $ci->id)
+                ->first();
+
+            $siblingData = [
+                'estado_cartera' => 'por_cobrar',
+                'recaudado_en_oficina' => false,
+                'recaudo_parcial_oficina' => false,
+                'recaudado_aseguradora' => false,
+                'comisionada' => false,
+                'prima_total_pago' => $saldoPendienteOficina,
+                'prima_total' => $saldoPendienteOficina,
+                'prima_neta' => round(($poliza->premium_amount ?? 0) * ($saldoPendienteOficina / $montoTotalCuota), 2),
+                'valor_neto_a_pagar' => $netoPendiente,
+                'comision_a_recibir' => $comisionPendiente,
+                'valor_recaudado_oficina' => 0,
+                'saldo_pendiente_oficina' => $saldoPendienteOficina,
+                'saldo_pendiente_aseguradora' => 0,
+                'valor_pagado_aseguradora' => 0,
+                'comision_recibida' => 0,
+                'fecha_recaudado_oficina' => null,
+                'fecha_pago_aseguradora' => null,
+                'fecha_comisionada' => null,
+                'updated_at' => now(),
+            ];
+
+            if ($existingSibling) {
+                DB::table('cartera_items')->where('id', $existingSibling->id)->update($siblingData);
+            } else {
+                // Clone metadata from parent + insert
+                $siblingData = array_merge($siblingData, [
+                    'broker_id' => $ci->broker_id,
+                    'poliza_id' => $ci->poliza_id,
+                    'numero_renovacion' => $ci->numero_renovacion,
+                    'cliente_id' => $ci->cliente_id,
+                    'poliza_numero' => $ci->poliza_numero,
+                    'cliente_nombre' => $ci->cliente_nombre,
+                    'cliente_documento' => $ci->cliente_documento,
+                    'aseguradora_nombre' => $ci->aseguradora_nombre,
+                    'ramo_principal' => $ci->ramo_principal,
+                    'vendedor_nombre' => $ci->vendedor_nombre,
+                    'forma_pago' => $ci->forma_pago,
+                    'fecha_inicio_vigencia' => $ci->fecha_inicio_vigencia,
+                    'fecha_fin_vigencia' => $ci->fecha_fin_vigencia,
+                    'comision_vendedor' => 0,
+                    'dias_vencidos' => 0,
+                    'split_from_id' => $ci->id,
+                    'created_at' => now(),
+                ]);
+                DB::table('cartera_items')->insert($siblingData);
+            }
+
+            return;
+        }
+
+        // ─── NON-PARTIAL: Standard state update ───
+        // Split siblings are independent items with their own lifecycle.
+        // They are only deleted on REVERT (no-pagos path above), not on state progression.
+
+        $nuevoEstado = 'por_cobrar';
+        if ($recaudadoAseguradora && $comisionada) $nuevoEstado = 'comision_recibida';
+        elseif ($recaudadoAseguradora) $nuevoEstado = 'comision_por_cobrar';
+        elseif ($recaudadoEnOficina) $nuevoEstado = 'por_pagar';
+
         // Date fields
-        $fechaRecOf = $recaudadoEnOficina ? ($pagosOficina->sortByDesc('fecha_pago')->first()->fecha_pago ?? null) : null;
+        $fechaRecOf = ($recaudadoEnOficina || $totalRecaudadoOficina > 0) ? ($pagosOficina->sortByDesc('fecha_pago')->first()->fecha_pago ?? null) : null;
         $fechaPagoAs = $recaudadoAseguradora ? ($pagosAseguradora->where('estado', 'pagado')->sortByDesc('fecha_pago')->first()->fecha_pago ?? null) : null;
         $fechaCom = $comisionada ? ($cobrosComision->sortByDesc('updated_at')->first()->updated_at?->format('Y-m-d') ?? null) : null;
 
         $updateData = [
             'estado_cartera' => $nuevoEstado,
-            // 3 flags SS-style (always in sync with estado_cartera)
             'recaudado_en_oficina' => $recaudadoEnOficina,
+            'recaudo_parcial_oficina' => false,
             'recaudado_aseguradora' => $recaudadoAseguradora,
             'comisionada' => $comisionada,
             'valor_pagado_aseguradora' => $totalPagadoAseguradora,
@@ -2510,8 +3091,7 @@ class PagoPolizaController extends Controller
         if ($pagosOficina->isNotEmpty()) {
             $updateData['valor_recaudado_oficina'] = $totalRecaudadoOficina;
             $updateData['fecha_recaudado_oficina'] = $fechaRecOf;
-            $saldoOficina = max(0, $montoTotalCuota - $totalRecaudadoOficina);
-            $updateData['saldo_pendiente_oficina'] = $saldoOficina;
+            $updateData['saldo_pendiente_oficina'] = max(0, $montoTotalCuota - $totalRecaudadoOficina);
         } elseif ($recaudadoAseguradora) {
             $updateData['valor_recaudado_oficina'] = $montoTotalCuota;
             $updateData['saldo_pendiente_oficina'] = 0;

@@ -177,6 +177,15 @@ Schedule::command('policy:send-notifications')
     ->appendOutputTo(storage_path('logs/policy-notifications.log'));
 
 /**
+ * Ejecuta notificaciones de automóviles (SOAT + RTM) programadas cada minuto.
+ * Ver comando: automovil:send-notifications
+ */
+Schedule::command('automovil:send-notifications')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/automovil-notifications.log'));
+
+/**
  * Sincroniza estadísticas de campañas de email desde SendGrid cada 5 minutos.
  * Actualiza métricas de aperturas, clics, entregas, rebotes para campañas activas.
  * Ver comando: sendgrid:sync-stats
@@ -232,6 +241,15 @@ Schedule::command('chatbot:check-inactivity')
     ->appendOutputTo(storage_path('logs/chatbot-inactivity.log'));
 
 /**
+ * Verifica salud de conexiones a aseguradoras y reconecta automáticamente.
+ * Ver comando: insurer-connections:healthcheck
+ */
+Schedule::command('insurer-connections:healthcheck --limit=200')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/insurer-connections.log'));
+
+/**
  * Envía notificaciones de clientes (cumpleaños, días especiales) cada minuto.
  * Verifica hora programada internamente antes de ejecutar.
  * Ver comando: client:send-notifications
@@ -240,3 +258,29 @@ Schedule::command('client:send-notifications')
     ->everyMinute()
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/client-notifications.log'));
+
+/**
+ * Refresh diario de cartera de todas las aseguradoras conectadas.
+ * Se ejecuta a las 21:00 Colombia: hora baja de tráfico del broker, y los
+ * portales de las aseguradoras están libres. El comando solo despacha
+ * SyncInsurerJob a la cola; el drain worker de abajo los consume.
+ */
+Schedule::command('insurer-sync:daily-cartera')
+    ->dailyAt('21:00')
+    ->timezone('America/Bogota')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->appendOutputTo(storage_path('logs/insurer-sync-daily.log'));
+
+/**
+ * Drain worker para la cola `default`.
+ * Arranca cada 10 min, procesa todos los jobs pendientes y sale
+ * (`--stop-when-empty`). Esto evita tener que mantener un systemd/supervisor
+ * dedicado: el cron de schedule:run basta para procesar la cola.
+ * Timeout 600s = espacio para /sura/cartera (Playwright + SAML).
+ */
+Schedule::command('queue:work --queue=default --stop-when-empty --timeout=600 --tries=1')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/queue-worker.log'));

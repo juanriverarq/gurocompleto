@@ -34,6 +34,8 @@ class Campaign extends Model
         'whatsapp_instance_id',
         'template_name',
         'template_language',
+        'media_url',
+        'media_type',
     ];
 
     protected $casts = [

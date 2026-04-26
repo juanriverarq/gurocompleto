@@ -47,13 +47,120 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   seguimientoService,
+  priorityConfigService,
   SeguimientoItem,
   CreateSeguimientoData,
   UpdateSeguimientoData,
   SeguimientoStatistics,
+  PriorityConfig,
+  getPriorityStyle,
+  getNextNotificationInfo,
 } from '../../../../services/seguimientoService';
 import { saasApi } from '../../../../services/saasApi';
+import { commercialTasksService } from 'src/services/commercialTasksService';
 import PermissionGate from 'src/components/PermissionGate';
+import { useSearchParams } from 'react-router-dom';
+
+// Paleta de colores predefinida para el editor de prioridades
+// Cada swatch define color hex, clase de fondo Tailwind y clase de texto Tailwind
+const PRIORITY_COLOR_PALETTE: Array<{
+  name: string;
+  color: string;
+  bg_color: string;
+  text_color: string;
+}> = [
+  { name: 'Gris',      color: '#6B7280', bg_color: 'bg-gray-100',    text_color: 'text-gray-800' },
+  { name: 'Zinc',      color: '#71717A', bg_color: 'bg-zinc-100',    text_color: 'text-zinc-800' },
+  { name: 'Rojo',      color: '#EF4444', bg_color: 'bg-red-100',     text_color: 'text-red-800' },
+  { name: 'Rosa',      color: '#EC4899', bg_color: 'bg-pink-100',    text_color: 'text-pink-800' },
+  { name: 'Morado',    color: '#A855F7', bg_color: 'bg-purple-100',  text_color: 'text-purple-800' },
+  { name: 'Índigo',    color: '#6366F1', bg_color: 'bg-indigo-100',  text_color: 'text-indigo-800' },
+  { name: 'Azul',      color: '#3B82F6', bg_color: 'bg-blue-100',    text_color: 'text-blue-800' },
+  { name: 'Cyan',      color: '#06B6D4', bg_color: 'bg-cyan-100',    text_color: 'text-cyan-800' },
+  { name: 'Teal',      color: '#14B8A6', bg_color: 'bg-teal-100',    text_color: 'text-teal-800' },
+  { name: 'Esmeralda', color: '#10B981', bg_color: 'bg-emerald-100', text_color: 'text-emerald-800' },
+  { name: 'Verde',     color: '#22C55E', bg_color: 'bg-green-100',   text_color: 'text-green-800' },
+  { name: 'Lima',      color: '#84CC16', bg_color: 'bg-lime-100',    text_color: 'text-lime-800' },
+  { name: 'Amarillo',  color: '#F59E0B', bg_color: 'bg-yellow-100',  text_color: 'text-yellow-800' },
+  { name: 'Ámbar',     color: '#D97706', bg_color: 'bg-amber-100',   text_color: 'text-amber-800' },
+  { name: 'Naranja',   color: '#F97316', bg_color: 'bg-orange-100',  text_color: 'text-orange-800' },
+];
+
+// Catálogo curado de iconos de Solar para prioridades
+const PRIORITY_ICON_CATALOG: string[] = [
+  'solar:flag-bold-duotone',
+  'solar:flag-2-bold-duotone',
+  'solar:flag-3-bold-duotone',
+  'solar:shield-warning-bold-duotone',
+  'solar:shield-check-bold-duotone',
+  'solar:shield-star-bold-duotone',
+  'solar:shield-keyhole-bold-duotone',
+  'solar:danger-triangle-bold-duotone',
+  'solar:danger-circle-bold-duotone',
+  'solar:danger-square-bold-duotone',
+  'solar:bell-bold-duotone',
+  'solar:bell-bing-bold-duotone',
+  'solar:star-bold-duotone',
+  'solar:star-circle-bold-duotone',
+  'solar:fire-bold-duotone',
+  'solar:bolt-bold-duotone',
+  'solar:bolt-circle-bold-duotone',
+  'solar:rocket-bold-duotone',
+  'solar:rocket-2-bold-duotone',
+  'solar:crown-bold-duotone',
+  'solar:crown-star-bold-duotone',
+  'solar:medal-star-bold-duotone',
+  'solar:medal-ribbon-star-bold-duotone',
+  'solar:target-bold-duotone',
+  'solar:clock-circle-bold-duotone',
+  'solar:alarm-bold-duotone',
+  'solar:stopwatch-bold-duotone',
+  'solar:hourglass-bold-duotone',
+  'solar:checklist-minimalistic-bold-duotone',
+  'solar:check-circle-bold-duotone',
+  'solar:heart-bold-duotone',
+  'solar:lightbulb-bolt-bold-duotone',
+  'solar:siren-bold-duotone',
+  'solar:cup-star-bold-duotone',
+];
+
+// Presets de tiempo (en minutos) para botones rápidos
+const FIRST_NOTIF_PRESETS: Array<{ label: string; value: number }> = [
+  { label: '15m', value: 15 },
+  { label: '30m', value: 30 },
+  { label: '1h', value: 60 },
+  { label: '2h', value: 120 },
+  { label: '4h', value: 240 },
+  { label: '8h', value: 480 },
+  { label: '12h', value: 720 },
+  { label: '1d', value: 1440 },
+  { label: '2d', value: 2880 },
+  { label: '3d', value: 4320 },
+];
+
+const REPEAT_PRESETS: Array<{ label: string; value: number }> = [
+  { label: 'Sin repetir', value: 0 },
+  { label: '30m', value: 30 },
+  { label: '1h', value: 60 },
+  { label: '2h', value: 120 },
+  { label: '4h', value: 240 },
+  { label: '6h', value: 360 },
+  { label: '12h', value: 720 },
+  { label: '1d', value: 1440 },
+];
+
+const formatMinutes = (minutes: number): string => {
+  if (minutes === 0) return '0min';
+  if (minutes >= 1440) {
+    const days = minutes / 1440;
+    return `${days % 1 === 0 ? days : days.toFixed(1)}d`;
+  }
+  if (minutes >= 60) {
+    const h = minutes / 60;
+    return `${h % 1 === 0 ? h : h.toFixed(1)}h`;
+  }
+  return `${minutes}min`;
+};
 
 // Estados dinámicos de seguimiento (basados en el backend real)
 const SEGUIMIENTO_STATES = {
@@ -97,14 +204,22 @@ const SeguimientoTableRow = memo(
     onChangeState,
     onDelete,
     onViewDetails,
+    onShowBitacora,
+    onReassign,
+    onComplete,
     getTipoIcon,
+    priorityConfigs,
   }: {
     item: SeguimientoItem;
     onEdit: (item: SeguimientoItem) => void;
     onChangeState: (item: SeguimientoItem) => void;
     onDelete: (id: number) => void;
     onViewDetails: (item: SeguimientoItem) => void;
+    onShowBitacora: (item: SeguimientoItem) => void;
+    onReassign: (item: SeguimientoItem) => void;
+    onComplete: (item: SeguimientoItem) => void;
     getTipoIcon: (type: string) => string;
+    priorityConfigs: Record<string, PriorityConfig>;
   }) => {
     const { hasPermission } = useUnifiedAuth();
     const canEdit = hasPermission('seguimiento_comercial', 'editar');
@@ -112,6 +227,16 @@ const SeguimientoTableRow = memo(
     const stateConfig =
       SEGUIMIENTO_STATES[item.status as keyof typeof SEGUIMIENTO_STATES] ||
       SEGUIMIENTO_STATES['pendiente'];
+
+    const priConfig = priorityConfigs[item.priority];
+    const fallbackPri = {
+      baja: { bg: 'bg-gray-100', text: 'text-gray-800', icon: 'solar:flag-bold-duotone', label: 'Baja' },
+      media: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: 'solar:flag-2-bold-duotone', label: 'Media' },
+      alta: { bg: 'bg-orange-100', text: 'text-orange-800', icon: 'solar:shield-warning-bold-duotone', label: 'Alta' },
+      critica: { bg: 'bg-red-100', text: 'text-red-800', icon: 'solar:danger-triangle-bold-duotone', label: 'Crítica' },
+    };
+    const priStyle = getPriorityStyle(priConfig, fallbackPri[item.priority as keyof typeof fallbackPri]);
+    const notif = getNextNotificationInfo(item, priConfig);
 
     return (
       <Table.Row className="hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -148,31 +273,31 @@ const SeguimientoTableRow = memo(
           </div>
         </Table.Cell>
         <Table.Cell className="whitespace-nowrap pr-8">
-          <Badge
-            className={`px-2 py-1 rounded-full text-xs font-medium ${
-              item.priority === 'critica'
-                ? 'bg-red-100 text-red-800'
-                : item.priority === 'alta'
-                ? 'bg-orange-100 text-orange-800'
-                : item.priority === 'media'
-                ? 'bg-yellow-100 text-yellow-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}
-          >
-            {item.priority === 'critica'
-              ? 'Crítica'
-              : item.priority === 'alta'
-              ? 'Alta'
-              : item.priority === 'media'
-              ? 'Media'
-              : 'Baja'}
-          </Badge>
+          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${priStyle.bg} ${priStyle.text}`}>
+            <Icon icon={priStyle.icon} className="w-3.5 h-3.5" />
+            {priStyle.label}
+          </span>
         </Table.Cell>
         <Table.Cell className="whitespace-nowrap pr-8">
           <div className="text-sm text-gray-900 dark:text-white">
             {item.scheduled_for
               ? format(new Date(item.scheduled_for), 'dd/MM/yyyy HH:mm', { locale: es })
               : '-'}
+          </div>
+        </Table.Cell>
+        <Table.Cell className="whitespace-nowrap pr-8">
+          <div className="text-xs text-gray-500">
+            {notif.due ? (
+              <span className="text-red-500 font-medium flex items-center gap-1">
+                <Icon icon="solar:bell-bold-duotone" className="w-3.5 h-3.5" />
+                {notif.text}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-gray-400">
+                <Icon icon="solar:bell-bing-bold-duotone" className="w-3.5 h-3.5" />
+                {notif.text}
+              </span>
+            )}
           </div>
         </Table.Cell>
         <Table.Cell className="whitespace-nowrap pr-8">
@@ -186,47 +311,52 @@ const SeguimientoTableRow = memo(
               label=""
               dismissOnClick={false}
               placement="left-start"
-              className="z-50"
-              style={{ minWidth: '300px' }}
               renderTrigger={() => (
-                <span className="h-9 w-9 flex justify-center items-center rounded-full hover:bg-lightprimary hover:text-primary cursor-pointer">
-                  <IconDots size={22} />
+                <span className="h-8 w-8 flex justify-center items-center rounded-lg hover:bg-[#573CFF]/10 hover:text-[#573CFF] cursor-pointer transition-colors">
+                  <IconDots size={18} />
                 </span>
               )}
             >
-              <Dropdown.Item
-                className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
-                onClick={() => onViewDetails(item)}
-              >
-                <Icon icon="solar:eye-bold-duotone" height={18} />
+              <Dropdown.Item onClick={() => onViewDetails(item)} className="flex gap-2 text-sm">
+                <Icon icon="solar:eye-bold-duotone" height={16} />
                 <span>Ver Detalles</span>
               </Dropdown.Item>
               {canEdit && (
-                <Dropdown.Item
-                  className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
-                  onClick={() => onEdit(item)}
-                >
-                  <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
+                <Dropdown.Item onClick={() => onEdit(item)} className="flex gap-2 text-sm">
+                  <Icon icon="solar:pen-new-square-bold-duotone" height={16} />
                   <span>Editar</span>
                 </Dropdown.Item>
               )}
-              <Dropdown.Divider />
+              <Dropdown.Item onClick={() => onShowBitacora(item)} className="flex gap-2 text-sm">
+                <Icon icon="solar:book-bookmark-bold-duotone" height={16} />
+                <span>Bitácora</span>
+              </Dropdown.Item>
               {canEdit && (
-                <Dropdown.Item
-                  className="flex gap-3 w-full justify-start text-left whitespace-nowrap"
-                  onClick={() => onChangeState(item)}
-                >
-                  <Icon icon="solar:refresh-circle-bold-duotone" height={18} />
+                <Dropdown.Item onClick={() => onReassign(item)} className="flex gap-2 text-sm">
+                  <Icon icon="solar:users-group-rounded-bold-duotone" height={16} />
+                  <span>Reasignar</span>
+                </Dropdown.Item>
+              )}
+              <Dropdown.Divider />
+              {canEdit && item.status !== 'completada' && (
+                <Dropdown.Item onClick={() => onComplete(item)} className="flex gap-2 text-sm text-emerald-600">
+                  <Icon icon="solar:check-circle-bold-duotone" height={16} />
+                  <span>Marcar Completada</span>
+                </Dropdown.Item>
+              )}
+              {canEdit && (
+                <Dropdown.Item onClick={() => onChangeState(item)} className="flex gap-2 text-sm">
+                  <Icon icon="solar:refresh-circle-bold-duotone" height={16} />
                   <span>Cambiar Estado</span>
                 </Dropdown.Item>
               )}
               <Dropdown.Divider />
               {canDelete && (
-                <Dropdown.Item
-                  className="flex gap-3 w-full justify-start text-left whitespace-nowrap text-red-600 hover:text-red-700"
+                <Dropdown.Item 
+                  className="text-red-600 flex gap-2 text-sm"
                   onClick={() => onDelete(item.id)}
                 >
-                  <Icon icon="solar:trash-bin-trash-bold-duotone" height={18} />
+                  <Icon icon="solar:trash-bin-trash-bold-duotone" height={16} />
                   <span>Eliminar</span>
                 </Dropdown.Item>
               )}
@@ -253,7 +383,7 @@ const Seguimiento: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Estados de filtros (corregidos según backend)
+  // Estados de filtros
   const [filters, setFilters] = useState({
     search: '',
     estado: 'todos',
@@ -262,6 +392,8 @@ const Seguimiento: React.FC = () => {
     asignado: '',
     fecha_desde: '',
     fecha_hasta: '',
+    client_id: undefined as number | undefined,
+    poliza_id: undefined as number | undefined,
   });
 
   // Controlador para cancelar requests en vuelo
@@ -310,21 +442,61 @@ const Seguimiento: React.FC = () => {
   const [clientes, setClientes] = useState<any[]>([]);
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [polizasCliente, setPolizasCliente] = useState<any[]>([]);
+  // Catálogo de aseguradoras para el selector "Asignar a → Aseguradoras"
+  const [aseguradorasList, setAseguradorasList] = useState<Array<{ id: number; nombre: string }>>([]);
+  // Catálogo de financieras / bancos (mismo listado que en Editar Póliza → campo Banco)
+  const financierasList = React.useMemo(() => [
+    // Financieras de primas / entidades del sector asegurador
+    'Finesa', 'Crediseguros', 'Sura', 'Crediestado', 'Previseguro',
+    // Bancos tradicionales
+    'Bancolombia', 'Banco de Bogotá', 'BBVA Colombia', 'Davivienda', 'Itaú Colombia',
+    'Scotiabank Colpatria', 'Banco de Occidente', 'Banco Popular', 'Banco AV Villas',
+    'Banco Caja Social', 'Banco Agrario', 'Banco Falabella', 'Banco Finandina',
+    'Banco Pichincha', 'Banco GNB Sudameris', 'Banco W', 'Banco Serfinanza',
+    'Lulo Bank', 'Nu (Nubank) Colombia', 'Coopcentral', 'Bancoomeva',
+  ], []);
   const [clienteQuery, setClienteQuery] = useState<string>('');
   const [polizaQuery, setPolizaQuery] = useState<string>('');
+
+  // Configuración de prioridades
+  const [priorityConfigs, setPriorityConfigs] = useState<Record<string, PriorityConfig>>({});
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+
+  // Bitácora
+  const [bitacoraOpen, setBitacoraOpen] = useState(false);
+  const [bitacoraTask, setBitacoraTask] = useState<SeguimientoItem | null>(null);
+  const [bitacoraEntries, setBitacoraEntries] = useState<any[]>([]);
+  const [bitacoraNotes, setBitacoraNotes] = useState<any[]>([]);
+  const [bitacoraNote, setBitacoraNote] = useState('');
+  const [bitacoraIsPrivate, setBitacoraIsPrivate] = useState(false);
+  const [loadingBitacora, setLoadingBitacora] = useState(false);
+
+  // Reasignar
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [reassignTask, setReassignTask] = useState<SeguimientoItem | null>(null);
+  const [reassignUserId, setReassignUserId] = useState<string>('');
+  const [reassignReason, setReassignReason] = useState('');
+  const [reassignUsers, setReassignUsers] = useState<any[]>([]);
+  const [loadingReassign, setLoadingReassign] = useState(false);
   const [nuevoErrores, setNuevoErrores] = useState<Record<string, string>>({});
   const [editarErrores, setEditarErrores] = useState<Record<string, string>>({});
 
   // Cargar usuarios y clientes cuando se abren modales
+  // Cargar usuarios al montar el componente (para el filtro "Asignado a")
+  useEffect(() => {
+    loadUsuarios();
+  }, [vendedoresHook, empleadosHook]);
+
   useEffect(() => {
     if (modalNuevoOpen || modalEditarOpen) {
-      loadUsuarios();
       // Cargar clientes iniciales para los combobox
       if (clientes.length === 0) {
         loadClientes();
       }
     }
-  }, [modalNuevoOpen, modalEditarOpen, vendedoresHook, empleadosHook]);
+  }, [modalNuevoOpen, modalEditarOpen]);
 
   // Búsqueda de clientes con debounce
   useEffect(() => {
@@ -343,6 +515,21 @@ const Seguimiento: React.FC = () => {
     if (savedPerPage) {
       setPerPage(parseInt(savedPerPage));
     }
+    // Cargar configuraciones de prioridad
+    loadPriorityConfigs();
+    // Cargar aseguradoras (para el selector "Asignar a → Aseguradoras")
+    (async () => {
+      try {
+        const r = await saasApi.getAseguradoras();
+        const arr = (r as any)?.data?.data || (r as any)?.data || [];
+        setAseguradorasList(
+          (Array.isArray(arr) ? arr : []).map((a: any) => ({
+            id: a.id,
+            nombre: a.nombre || a.name || `Aseguradora ${a.id}`,
+          })),
+        );
+      } catch { /* no bloquear UI */ }
+    })();
   }, []);
 
   // Debounce solo para búsqueda de texto
@@ -368,6 +555,8 @@ const Seguimiento: React.FC = () => {
     filters.asignado,
     filters.fecha_desde,
     filters.fecha_hasta,
+    filters.client_id,
+    filters.poliza_id,
     currentPage,
     perPage,
   ]);
@@ -402,6 +591,8 @@ const Seguimiento: React.FC = () => {
           assigned_to: filters.asignado ? Number(filters.asignado) : undefined,
           due_date_from: filters.fecha_desde || undefined,
           due_date_to: filters.fecha_hasta || undefined,
+          client_id: filters.client_id,
+          poliza_id: filters.poliza_id,
           page: currentPage,
           per_page: perPage,
         },
@@ -420,7 +611,7 @@ const Seguimiento: React.FC = () => {
     } catch (error: any) {
       console.error('[ERROR] Error loading seguimientos:', error);
       console.error('[ERROR] Error details:', error.message, error.stack);
-      setError('Error al cargar seguimientos: ' + error.message);
+      setError('Error al cargar tareas: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -444,6 +635,148 @@ const Seguimiento: React.FC = () => {
       }
     }
   };
+
+  const loadPriorityConfigs = async (autoSeedIfEmpty = false) => {
+    try {
+      setConfigLoading(true);
+      setConfigError(null);
+      const response = await priorityConfigService.getConfigs();
+      const list = response.data || [];
+      const map: Record<string, PriorityConfig> = {};
+      list.forEach((c) => {
+        map[c.priority_key] = c;
+      });
+
+      // Fallback: si el backend no tiene configs todavía, sembrar defaults
+      if (Object.keys(map).length === 0 && autoSeedIfEmpty) {
+        const seeded = await priorityConfigService.resetDefaults();
+        (seeded.data || []).forEach((c: any) => { map[c.priority_key] = c; });
+      }
+
+      setPriorityConfigs(map);
+    } catch (error: any) {
+      console.error('Error loading priority configs:', error);
+      setConfigError(error?.message || 'No se pudieron cargar las configuraciones de prioridad');
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  // Recargar (y sembrar si hace falta) al abrir el modal
+  useEffect(() => {
+    if (showConfigModal) {
+      loadPriorityConfigs(true);
+    }
+  }, [showConfigModal]);
+
+  // ═══════ Bitácora ═══════
+  const openBitacoraModal = useCallback(async (item: SeguimientoItem) => {
+    setBitacoraTask(item);
+    setBitacoraOpen(true);
+    setBitacoraEntries([]);
+    setBitacoraNotes([]);
+    setBitacoraNote('');
+    setBitacoraIsPrivate(false);
+    try {
+      setLoadingBitacora(true);
+      const log = await commercialTasksService.getActivityLog(item.id);
+      const notes = log.filter((e: any) => e.activity === 'Nota agregada');
+      const history = log.filter((e: any) => e.activity !== 'Nota agregada');
+      setBitacoraNotes(notes);
+      setBitacoraEntries(history);
+    } catch (e: any) {
+      toast({ title: 'Error al cargar bitácora', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoadingBitacora(false);
+    }
+  }, []);
+
+  const submitBitacoraNote = useCallback(async () => {
+    if (!bitacoraTask || !bitacoraNote.trim()) return;
+    try {
+      setLoadingBitacora(true);
+      const log = await commercialTasksService.addNote(bitacoraTask.id, bitacoraNote.trim(), bitacoraIsPrivate);
+      const notes = (log || []).filter((e: any) => e.activity === 'Nota agregada');
+      const history = (log || []).filter((e: any) => e.activity !== 'Nota agregada');
+      setBitacoraNotes(notes);
+      setBitacoraEntries(history);
+      setBitacoraNote('');
+      setBitacoraIsPrivate(false);
+      toast({ title: 'Nota agregada' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoadingBitacora(false);
+    }
+  }, [bitacoraTask, bitacoraNote, bitacoraIsPrivate]);
+
+  // ═══════ Reasignar ═══════
+  const openReassignModal = useCallback(async (item: SeguimientoItem) => {
+    setReassignTask(item);
+    setReassignUserId('');
+    setReassignReason('');
+    setReassignOpen(true);
+    if (reassignUsers.length === 0) {
+      try {
+        const users = await commercialTasksService.getUsers();
+        setReassignUsers(users || []);
+      } catch (e) {
+        console.warn('No se pudieron cargar usuarios para reasignar', e);
+      }
+    }
+  }, [reassignUsers.length]);
+
+  const submitReassign = useCallback(async () => {
+    if (!reassignTask || !reassignUserId) return;
+    try {
+      setLoadingReassign(true);
+      await commercialTasksService.reassignTask(reassignTask.id, Number(reassignUserId), reassignReason || undefined);
+      await loadSeguimientos();
+      setReassignOpen(false);
+      toast({ title: 'Tarea reasignada' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoadingReassign(false);
+    }
+  }, [reassignTask, reassignUserId, reassignReason]);
+
+  // ═══════ Marcar completada (rápido) ═══════
+  const handleQuickComplete = useCallback(async (item: SeguimientoItem) => {
+    if (!confirm(`¿Marcar "${item.title}" como completada?`)) return;
+    try {
+      await commercialTasksService.completeTask(item.id, { notes: 'Completada desde el listado' });
+      await loadSeguimientos();
+      toast({ title: 'Tarea completada' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  }, []);
+
+  // Deep-link: ?task=ID abre el detalle de la tarea (desde calendario / topbar)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const taskParam = searchParams.get('task');
+    if (!taskParam) return;
+    const taskId = Number(taskParam);
+    if (!Number.isFinite(taskId)) return;
+    (async () => {
+      try {
+        const res = await seguimientoService.getSeguimiento(taskId);
+        if (res?.data) {
+          setSelectedItem(res.data);
+          setModalOpen(true);
+        }
+      } catch (e) {
+        console.warn('[Seguimiento] no se pudo cargar tarea desde deep-link', e);
+      } finally {
+        // Limpiar el query param para que recargas no reabran el modal
+        const next = new URLSearchParams(searchParams);
+        next.delete('task');
+        setSearchParams(next, { replace: true });
+      }
+    })();
+  }, [searchParams]);
 
   const loadClientes = async (search?: string) => {
     try {
@@ -565,17 +898,20 @@ const Seguimiento: React.FC = () => {
   };
 
   const getPrioridadBadge = (prioridad: SeguimientoItem['priority']) => {
-    const prioridades = {
-      baja: { color: 'gray', text: 'Baja' },
-      media: { color: 'yellow', text: 'Media' },
-      alta: { color: 'orange', text: 'Alta' },
-      critica: { color: 'red', text: 'Crítica' },
+    const config = priorityConfigs[prioridad];
+    const fallback = {
+      baja: { bg: 'bg-gray-100', text: 'text-gray-800', icon: 'solar:flag-bold-duotone', label: 'Baja' },
+      media: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: 'solar:flag-2-bold-duotone', label: 'Media' },
+      alta: { bg: 'bg-orange-100', text: 'text-orange-800', icon: 'solar:shield-warning-bold-duotone', label: 'Alta' },
+      critica: { bg: 'bg-red-100', text: 'text-red-800', icon: 'solar:danger-triangle-bold-duotone', label: 'Crítica' },
     };
-    const config = prioridades[prioridad as keyof typeof prioridades] || {
-      color: 'gray',
-      text: prioridad,
-    };
-    return <Badge color={config.color}>{config.text}</Badge>;
+    const style = getPriorityStyle(config, fallback[prioridad as keyof typeof fallback]);
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
+        <Icon icon={style.icon} className="w-3.5 h-3.5" />
+        {style.label}
+      </span>
+    );
   };
 
   // Funciones auxiliares para los badges de la tabla
@@ -605,26 +941,6 @@ const Seguimiento: React.FC = () => {
       pausada: 'Pausado',
     };
     return estados[estado as keyof typeof estados] || estado;
-  };
-
-  const getPrioridadBadgeColor = (prioridad: string) => {
-    const prioridades = {
-      baja: 'gray',
-      media: 'warning',
-      alta: 'failure',
-      critica: 'failure',
-    };
-    return prioridades[prioridad as keyof typeof prioridades] || 'gray';
-  };
-
-  const getPrioridadText = (prioridad: string) => {
-    const prioridades = {
-      baja: 'Baja',
-      media: 'Media',
-      alta: 'Alta',
-      critica: 'Crítica',
-    };
-    return prioridades[prioridad as keyof typeof prioridades] || prioridad;
   };
 
   const validateNuevo = (): boolean => {
@@ -690,7 +1006,7 @@ const Seguimiento: React.FC = () => {
       setNuevoErrores({});
       setModalNuevoOpen(false);
     } catch (error: any) {
-      setError('Error al crear seguimiento: ' + error.message);
+      setError('Error al crear tarea: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -731,7 +1047,7 @@ const Seguimiento: React.FC = () => {
       setEditarItem(null);
       setEditarErrores({});
     } catch (error: any) {
-      setError('Error al actualizar seguimiento: ' + error.message);
+      setError('Error al actualizar tarea: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -943,6 +1259,8 @@ const Seguimiento: React.FC = () => {
       in_progress: 0,
       completed: 0,
       overdue: 0,
+      cancelada: 0,
+      pausada: 0,
       due_today: 0,
       due_this_week: 0,
       needing_follow_up: 0,
@@ -973,7 +1291,10 @@ const Seguimiento: React.FC = () => {
           stats.overdue++;
           break;
         case 'cancelada':
+          stats.cancelada++;
+          break;
         case 'pausada':
+          stats.pausada++;
           break;
         default:
           break;
@@ -1107,7 +1428,7 @@ const Seguimiento: React.FC = () => {
     return (
       <div className="flex justify-center items-center h-64">
         <Spinner size="xl" />
-        <span className="ml-2 text-lg">Cargando seguimientos...</span>
+        <span className="ml-2 text-lg">Cargando tareas...</span>
       </div>
     );
   }
@@ -1118,7 +1439,7 @@ const Seguimiento: React.FC = () => {
       action="ver"
       fallback={
         <Alert color="warning" className="my-6">
-          No tienes permisos para ver Seguimiento Comercial.
+          No tienes permisos para ver Tareas.
         </Alert>
       }
     >
@@ -1126,68 +1447,64 @@ const Seguimiento: React.FC = () => {
       <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            Gestión de Seguimientos
+            Gestión de Tareas
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Administra y realiza seguimiento a todas las actividades comerciales
+            Administra y realiza seguimiento a todas las tareas comerciales
           </p>
         </div>
-        <div className="flex items-center gap-3" />
+        <div className="flex items-center gap-3">
+          <Button
+            color="light"
+            size="sm"
+            onClick={() => setShowConfigModal(true)}
+            className="rounded-[10px] h-10"
+            title="Configurar prioridades"
+          >
+            <Icon icon="solar:settings-bold-duotone" className="w-4 h-4 mr-1.5" />
+            Configurar Prioridades
+          </Button>
+        </div>
       </div>
 
-      {/* Estadísticas optimizadas */}
+      {/* Tabs de Estado */}
       {statistics && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Pendientes</p>
-                <p className="text-2xl font-bold text-yellow-600">{statistics.pending}</p>
-              </div>
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Icon icon="solar:clock-circle-bold-duotone" className="w-6 h-6 text-yellow-600" />
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">En Progreso</p>
-                <p className="text-2xl font-bold text-blue-600">{statistics.in_progress}</p>
-              </div>
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Icon icon="solar:settings-bold-duotone" className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Completados</p>
-                <p className="text-2xl font-bold text-green-600">{statistics.completed}</p>
-              </div>
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Icon icon="solar:check-circle-bold-duotone" className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Vencidos</p>
-                <p className="text-2xl font-bold text-red-600">{statistics.overdue}</p>
-              </div>
-              <div className="p-2 bg-red-100 rounded-lg">
-                <Icon icon="solar:danger-circle-bold-duotone" className="w-6 h-6 text-red-600" />
-              </div>
-            </div>
-          </Card>
+        <div className="flex flex-wrap gap-2 mb-6">
+          {[
+            { key: 'todos', label: 'Todos', count: statistics.total, icon: 'solar:folder-bold-duotone', activeClass: 'bg-[#573CFF] text-white shadow-md', inactiveClass: 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300' },
+            { key: 'pendiente', label: 'Pendientes', count: statistics.pending, icon: 'solar:clock-circle-bold-duotone', activeClass: 'bg-yellow-500 text-white shadow-md', inactiveClass: 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400' },
+            { key: 'en_progreso', label: 'En Progreso', count: statistics.in_progress, icon: 'solar:settings-bold-duotone', activeClass: 'bg-blue-500 text-white shadow-md', inactiveClass: 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400' },
+            { key: 'completada', label: 'Completadas', count: statistics.completed, icon: 'solar:check-circle-bold-duotone', activeClass: 'bg-green-500 text-white shadow-md', inactiveClass: 'bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400' },
+            { key: 'vencida', label: 'Vencidas', count: statistics.overdue, icon: 'solar:danger-circle-bold-duotone', activeClass: 'bg-red-500 text-white shadow-md', inactiveClass: 'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400' },
+            { key: 'cancelada', label: 'Canceladas', count: statistics.cancelada, icon: 'solar:close-circle-bold-duotone', activeClass: 'bg-gray-600 text-white shadow-md', inactiveClass: 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400' },
+            { key: 'pausada', label: 'Pausadas', count: statistics.pausada, icon: 'solar:pause-circle-bold-duotone', activeClass: 'bg-purple-500 text-white shadow-md', inactiveClass: 'bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setFilters((prev) => ({ ...prev, estado: tab.key }));
+                setCurrentPage(1);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${
+                filters.estado === tab.key ? tab.activeClass : tab.inactiveClass
+              }`}
+            >
+              <Icon icon={tab.icon} className="w-4 h-4" />
+              <span>{tab.label}</span>
+              <span className={`ml-1 px-1.5 py-0.5 rounded-md text-xs font-bold ${
+                filters.estado === tab.key ? 'bg-white/20 text-white' : 'bg-black/5 text-current'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
         </div>
       )}
 
       {/* Header de Controles */}
       <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+        <div className="p-6 border-b border-gray-100 dark:border-gray-700 space-y-4">
+          {/* Fila 1: Búsqueda + Acciones */}
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -1224,9 +1541,212 @@ const Seguimiento: React.FC = () => {
               </Button>
 
               {canCreate && (
-                <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setModalNuevoOpen(true)}>Nuevo Seguimiento</HeroButton>
+                <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setModalNuevoOpen(true)}>Nueva Tarea</HeroButton>
               )}
             </div>
+          </div>
+
+          {/* Fila 2: Filtros Cliente + Póliza + Limpiar */}
+          <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
+            {/* Filtro Cliente */}
+            <div className="w-full lg:w-72">
+              <Combobox
+                value={clientes.find((c) => c.id === filters.client_id) || null}
+                onChange={(val: any) => {
+                  const clientId = val?.id as number | undefined;
+                  setFilters((prev) => ({ ...prev, client_id: clientId, poliza_id: undefined }));
+                  setCurrentPage(1);
+                  if (clientId) {
+                    loadPolizasDeCliente(clientId);
+                  } else {
+                    setPolizasCliente([]);
+                  }
+                }}
+                onClose={() => setClienteQuery('')}
+              >
+                <div className="relative">
+                  <ComboboxInput
+                    as={Input}
+                    className="w-full h-10 text-sm rounded-[10px]"
+                    displayValue={(c: any) => (c ? `${c.name} (${c.document})` : '')}
+                    onChange={(e) => setClienteQuery(e.target.value)}
+                    placeholder="Filtrar por cliente..."
+                  />
+                  <ComboboxButton className="group absolute inset-y-0 right-0 px-2.5">
+                    <Icon icon="solar:alt-arrow-down-outline" height={20} className="text-gray-400" />
+                  </ComboboxButton>
+                  {filters.client_id && (
+                    <button
+                      onClick={() => {
+                        setFilters((prev) => ({ ...prev, client_id: undefined, poliza_id: undefined }));
+                        setPolizasCliente([]);
+                      }}
+                      className="absolute inset-y-0 right-8 flex items-center px-1 text-gray-400 hover:text-gray-600"
+                    >
+                      <Icon icon="solar:close-circle-bold-duotone" height={16} />
+                    </button>
+                  )}
+                </div>
+                <ComboboxOptions
+                  anchor="bottom"
+                  transition
+                  className="absolute z-[70] mt-1 max-h-60 w-[var(--input-width)] overflow-auto rounded-md bg-white dark:bg-dark py-1 text-base shadow-md ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm transition duration-100 ease-in data-[leave]:data-[closed]:opacity-0"
+                >
+                  {clientes.length === 0 && clienteQuery.length >= 2 && (
+                    <div className="px-3 py-2 text-sm text-gray-500">No se encontraron clientes</div>
+                  )}
+                  {clientes.map((c) => (
+                    <ComboboxOption
+                      key={c.id}
+                      value={c}
+                      className="group flex cursor-pointer ui-dropdown-item bg-hover hover:text-primary data-[focus]:bg-hover data-[focus]:text-primary px-3 py-2"
+                    >
+                      <Icon
+                        icon="solar:check-read-linear"
+                        className="invisible group-data-[selected]:visible mr-2"
+                        height={20}
+                      />
+                      <div className="text-sm">
+                        {c.name} <span className="text-gray-400">({c.document})</span>
+                      </div>
+                    </ComboboxOption>
+                  ))}
+                </ComboboxOptions>
+              </Combobox>
+            </div>
+
+            {/* Filtro Asignado a */}
+            <div className="w-full lg:w-56">
+              <ShSelect
+                value={filters.asignado || undefined}
+                onValueChange={(val) => {
+                  setFilters((prev) => ({ ...prev, asignado: val === '__todos__' ? '' : val }));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-full h-10 text-sm rounded-[10px]">
+                  <SelectValue placeholder="Asignado a..." />
+                </SelectTrigger>
+                <SelectContent className="z-[70] max-h-[50vh]" position="popper" side="bottom" sideOffset={4}>
+                  <SelectItem value="__todos__">Todos</SelectItem>
+                  {usuarios.filter((u) => u.tipo !== 'vendedor').length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[11px] font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wide">
+                        Yo mismo / empleados
+                      </div>
+                      {usuarios.filter((u) => u.tipo !== 'vendedor').map((u) => (
+                        <SelectItem key={`filtro-user-${u.id}`} value={String(u.id)}>
+                          {u.name} {u.email ? `(${u.email})` : ''}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {usuarios.filter((u) => u.tipo === 'vendedor').length > 0 && (
+                    <>
+                      <div className="px-2 py-1 mt-1 text-[11px] font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wide border-t border-gray-200 dark:border-neutral-800">
+                        Vendedores
+                      </div>
+                      {usuarios.filter((u) => u.tipo === 'vendedor').map((u) => (
+                        <SelectItem key={`filtro-vend-${u.id}`} value={String(u.id)}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </ShSelect>
+            </div>
+
+            {/* Filtro Póliza (dependiente de cliente) */}
+            <div className="w-full lg:w-64">
+              <Combobox
+                value={polizasCliente.find((p) => p.id === filters.poliza_id) || null}
+                onChange={(val: any) => {
+                  setFilters((prev) => ({ ...prev, poliza_id: val?.id }));
+                  setCurrentPage(1);
+                }}
+                onClose={() => setPolizaQuery('')}
+              >
+                <div className="relative">
+                  <ComboboxInput
+                    as={Input}
+                    className={`w-full h-10 text-sm rounded-[10px] ${!filters.client_id ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''}`}
+                    displayValue={(p: any) =>
+                      p ? `${p.numero_poliza || p.policy_number}` : ''
+                    }
+                    onChange={(e) => setPolizaQuery(e.target.value)}
+                    placeholder={
+                      filters.client_id ? 'Filtrar por póliza...' : 'Seleccione primero un cliente'
+                    }
+                    disabled={!filters.client_id}
+                  />
+                  <ComboboxButton className="group absolute inset-y-0 right-0 px-2.5">
+                    <Icon icon="solar:alt-arrow-down-outline" height={20} className="text-gray-400" />
+                  </ComboboxButton>
+                  {filters.poliza_id && (
+                    <button
+                      onClick={() => setFilters((prev) => ({ ...prev, poliza_id: undefined }))}
+                      className="absolute inset-y-0 right-8 flex items-center px-1 text-gray-400 hover:text-gray-600"
+                    >
+                      <Icon icon="solar:close-circle-bold-duotone" height={16} />
+                    </button>
+                  )}
+                </div>
+                <ComboboxOptions
+                  anchor="bottom"
+                  transition
+                  className="absolute z-[70] mt-1 max-h-60 w-[var(--input-width)] overflow-auto rounded-md bg-white dark:bg-dark py-1 text-base shadow-md ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm transition duration-100 ease-in data-[leave]:data-[closed]:opacity-0"
+                >
+                  {polizasCliente.length === 0 && filters.client_id && (
+                    <div className="px-3 py-2 text-sm text-gray-500">Este cliente no tiene pólizas</div>
+                  )}
+                  {(polizaQuery
+                    ? polizasCliente.filter((p: any) =>
+                        `${p.numero_poliza || p.policy_number}`
+                          .toLowerCase()
+                          .includes(polizaQuery.toLowerCase()),
+                      )
+                    : polizasCliente
+                  ).map((p: any) => (
+                    <ComboboxOption
+                      key={p.id}
+                      value={p}
+                      className="group flex cursor-pointer ui-dropdown-item bg-hover hover:text-primary data-[focus]:bg-hover data-[focus]:text-primary px-3 py-2"
+                    >
+                      <Icon
+                        icon="solar:check-read-linear"
+                        className="invisible group-data-[selected]:visible mr-2"
+                        height={20}
+                      />
+                      <div className="text-sm">{p.numero_poliza || p.policy_number}</div>
+                    </ComboboxOption>
+                  ))}
+                </ComboboxOptions>
+              </Combobox>
+            </div>
+
+            {/* Botón Limpiar Filtros */}
+            {(filters.client_id || filters.poliza_id || filters.search || filters.asignado) && (
+              <button
+                onClick={() => {
+                  setFilters((prev) => ({
+                    ...prev,
+                    search: '',
+                    client_id: undefined,
+                    poliza_id: undefined,
+                    asignado: '',
+                  }));
+                  setPolizasCliente([]);
+                  setClienteQuery('');
+                  setPolizaQuery('');
+                  setCurrentPage(1);
+                }}
+                title="Limpiar filtros"
+                className="h-10 w-10 flex items-center justify-center rounded-[10px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer shrink-0"
+              >
+                <Icon icon="solar:eraser-bold-duotone" className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1239,10 +1759,10 @@ const Seguimiento: React.FC = () => {
           <div className="text-center py-12">
             <div className="flex flex-col items-center justify-center space-y-4">
               <Icon icon="solar:document-bold-duotone" className="w-16 h-16 text-gray-300" />
-              <p className="text-gray-500 text-lg font-medium">No hay seguimientos</p>
-              <p className="text-gray-400 text-sm">Comienza creando tu primer seguimiento</p>
+              <p className="text-gray-500 text-lg font-medium">No hay tareas</p>
+              <p className="text-gray-400 text-sm">Comienza creando tu primera tarea</p>
               {canCreate && (
-                <HeroButton icon="solar:add-circle-bold" onClick={() => setModalNuevoOpen(true)} size="lg">Crear primer seguimiento</HeroButton>
+                <HeroButton icon="solar:add-circle-bold" onClick={() => setModalNuevoOpen(true)} size="lg">Crear primera tarea</HeroButton>
               )}
             </div>
           </div>
@@ -1276,6 +1796,7 @@ const Seguimiento: React.FC = () => {
                   <Table.HeadCell>Estado</Table.HeadCell>
                   <Table.HeadCell>Prioridad</Table.HeadCell>
                   <Table.HeadCell>Fecha Programada</Table.HeadCell>
+                  <Table.HeadCell>Notificación</Table.HeadCell>
                   <Table.HeadCell>Asignado</Table.HeadCell>
                   <Table.HeadCell className="text-right">Acciones</Table.HeadCell>
                 </Table.Head>
@@ -1291,7 +1812,11 @@ const Seguimiento: React.FC = () => {
                         setSelectedItem(item);
                         setModalOpen(true);
                       }}
+                      onShowBitacora={openBitacoraModal}
+                      onReassign={openReassignModal}
+                      onComplete={handleQuickComplete}
                       getTipoIcon={getTipoIcon}
+                      priorityConfigs={priorityConfigs}
                     />
                   ))}
                 </Table.Body>
@@ -1307,7 +1832,7 @@ const Seguimiento: React.FC = () => {
                   {new Intl.NumberFormat('es-CO').format(
                     Math.min(currentPage * perPage, totalItems),
                   )}{' '}
-                  de {new Intl.NumberFormat('es-CO').format(totalItems)} seguimientos
+                  de {new Intl.NumberFormat('es-CO').format(totalItems)} tareas
                 </span>
                 <div className="flex items-center gap-2">
                   <span>Por página:</span>
@@ -1354,7 +1879,7 @@ const Seguimiento: React.FC = () => {
 
       {/* Modal de detalles */}
       <Modal show={modalOpen} onClose={() => setModalOpen(false)} size="lg">
-        <Modal.Header>Detalles del Seguimiento</Modal.Header>
+        <Modal.Header>Detalles de la Tarea</Modal.Header>
         <Modal.Body>
           {selectedItem && (
             <div className="space-y-4">
@@ -1431,9 +1956,9 @@ const Seguimiento: React.FC = () => {
         size="xl"
         className="[--modal-z:60]"
       >
-        <Modal.Header>Nuevo Seguimiento</Modal.Header>
+        <Modal.Header>Nueva Tarea</Modal.Header>
         <Modal.Body>
-          <TitleCard title="Información del Seguimiento">
+          <TitleCard title="Información de la Tarea">
             <div className="space-y-6">
               <FormField
                 id="nuevo_title"
@@ -1444,7 +1969,7 @@ const Seguimiento: React.FC = () => {
                   setNuevoSeguimiento((prev) => ({ ...prev, title: e.target.value }));
                   if (nuevoErrores.title) setNuevoErrores((prev) => ({ ...prev, title: '' }));
                 }}
-                placeholder="Título del seguimiento"
+                placeholder="Título de la tarea"
                 required
                 error={nuevoErrores.title}
               />
@@ -1499,27 +2024,90 @@ const Seguimiento: React.FC = () => {
                 <div>
                   <Label className="text-sm font-medium mb-1 block">Asignar a</Label>
                   <ShSelect
-                    value={
-                      nuevoSeguimiento.assigned_to
-                        ? String(nuevoSeguimiento.assigned_to)
-                        : undefined
-                    }
-                    onValueChange={(val) =>
-                      setNuevoSeguimiento((prev) => ({
-                        ...prev,
-                        assigned_to: val ? Number(val) : undefined,
-                      }))
-                    }
+                    value={(() => {
+                      if (nuevoSeguimiento.assigned_to) return `user:${nuevoSeguimiento.assigned_to}`;
+                      if (nuevoSeguimiento.assigned_company) return `aseg:${nuevoSeguimiento.assigned_company}`;
+                      if (nuevoSeguimiento.assigned_financial_entity) return `fin:${nuevoSeguimiento.assigned_financial_entity}`;
+                      return undefined;
+                    })()}
+                    onValueChange={(raw) => {
+                      const idx = (raw || '').indexOf(':');
+                      const grp = idx >= 0 ? raw.slice(0, idx) : '';
+                      const id = idx >= 0 ? raw.slice(idx + 1) : '';
+                      setNuevoSeguimiento((prev) => {
+                        if (grp === 'user') {
+                          return { ...prev, assigned_to: Number(id), assigned_company: undefined, assigned_financial_entity: undefined };
+                        }
+                        if (grp === 'aseg') {
+                          return { ...prev, assigned_to: undefined, assigned_company: id, assigned_financial_entity: undefined };
+                        }
+                        if (grp === 'fin') {
+                          return { ...prev, assigned_to: undefined, assigned_company: undefined, assigned_financial_entity: id };
+                        }
+                        return { ...prev, assigned_to: undefined, assigned_company: undefined, assigned_financial_entity: undefined };
+                      });
+                    }}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Seleccionar usuario" />
+                      <SelectValue placeholder="Yo mismo" />
                     </SelectTrigger>
-                    <SelectContent className="z-[70]">
-                      {usuarios.map((u) => (
-                        <SelectItem key={u.id} value={String(u.id)}>
-                          {u.name} {u.email ? `(${u.email})` : ''}
-                        </SelectItem>
-                      ))}
+                    <SelectContent className="z-[70] max-h-[50vh]" position="popper" side="bottom" sideOffset={4}>
+                      {/* Grupo 1: Yo mismo + empleados/usuarios */}
+                      {usuarios.filter((u) => u.tipo !== 'vendedor').length > 0 && (
+                        <>
+                          <div className="px-2 py-1 text-[11px] font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wide">
+                            Yo mismo / empleados
+                          </div>
+                          {usuarios
+                            .filter((u) => u.tipo !== 'vendedor')
+                            .map((u) => (
+                              <SelectItem key={`user-${u.id}`} value={`user:${u.id}`}>
+                                {u.name} {u.email ? `(${u.email})` : ''}
+                              </SelectItem>
+                            ))}
+                        </>
+                      )}
+                      {/* Grupo 2: Vendedores */}
+                      {usuarios.filter((u) => u.tipo === 'vendedor').length > 0 && (
+                        <>
+                          <div className="px-2 py-1 mt-1 text-[11px] font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wide border-t border-gray-200 dark:border-neutral-800">
+                            Vendedores
+                          </div>
+                          {usuarios
+                            .filter((u) => u.tipo === 'vendedor')
+                            .map((u) => (
+                              <SelectItem key={`vend-${u.id}`} value={`user:${u.id}`}>
+                                {u.name}
+                              </SelectItem>
+                            ))}
+                        </>
+                      )}
+                      {/* Grupo 3: Aseguradoras */}
+                      {aseguradorasList.length > 0 && (
+                        <>
+                          <div className="px-2 py-1 mt-1 text-[11px] font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wide border-t border-gray-200 dark:border-neutral-800">
+                            Aseguradoras
+                          </div>
+                          {aseguradorasList.map((a) => (
+                            <SelectItem key={`aseg-${a.id}`} value={`aseg:${a.nombre}`}>
+                              {a.nombre}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {/* Grupo 4: Financieras / Bancos (mismo listado que Editar Póliza) */}
+                      {financierasList.length > 0 && (
+                        <>
+                          <div className="px-2 py-1 mt-1 text-[11px] font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wide border-t border-gray-200 dark:border-neutral-800">
+                            Financieras
+                          </div>
+                          {financierasList.map((f) => (
+                            <SelectItem key={`fin-${f}`} value={`fin:${f}`}>
+                              {f}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
                     </SelectContent>
                   </ShSelect>
                 </div>
@@ -1580,9 +2168,17 @@ const Seguimiento: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Póliza</label>
                   <Combobox
                     value={polizasCliente.find((p) => p.id === nuevoSeguimiento.poliza_id) || null}
-                    onChange={(val: any) =>
-                      setNuevoSeguimiento((prev) => ({ ...prev, poliza_id: val?.id }))
-                    }
+                    onChange={(val: any) => {
+                      const polId = val?.id as number | undefined;
+                      setNuevoSeguimiento((prev) => ({
+                        ...prev,
+                        poliza_id: polId,
+                        // Auto-llenar compañía al elegir póliza (si el user no la había escrito)
+                        assigned_company: !prev.assigned_company && val?.insurance_company
+                          ? val.insurance_company
+                          : prev.assigned_company,
+                      }));
+                    }}
                     onClose={() => setPolizaQuery('')}
                     disabled={!nuevoSeguimiento.client_id}
                   >
@@ -1644,7 +2240,7 @@ const Seguimiento: React.FC = () => {
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="No especificado" />
                     </SelectTrigger>
-                    <SelectContent className="z-[70]">
+                    <SelectContent className="z-[70]" position="popper" sideOffset={4}>
                       <SelectItem value="phone">Teléfono</SelectItem>
                       <SelectItem value="email">Email</SelectItem>
                       <SelectItem value="whatsapp">WhatsApp</SelectItem>
@@ -1675,11 +2271,12 @@ const Seguimiento: React.FC = () => {
                     setNuevoErrores((prev) => ({ ...prev, description: '' }));
                 }}
                 type="textarea"
-                placeholder="Descripción del seguimiento"
+                placeholder="Descripción de la tarea"
                 required
                 rows={3}
                 error={nuevoErrores.description}
               />
+
             </div>
           </TitleCard>
         </Modal.Body>
@@ -1691,7 +2288,7 @@ const Seguimiento: React.FC = () => {
             data-testid="btn-crear-seguimiento"
           >
             {saving ? <Spinner size="sm" className="mr-2" /> : null}
-            Crear Seguimiento
+            Crear Tarea
           </Button>
           <Button color="gray" onClick={() => setModalNuevoOpen(false)} disabled={saving}>
             Cancelar
@@ -1706,7 +2303,7 @@ const Seguimiento: React.FC = () => {
         size="lg"
         className="[--modal-z:60]"
       >
-        <Modal.Header>Editar Seguimiento</Modal.Header>
+        <Modal.Header>Editar Tarea</Modal.Header>
         <Modal.Body>
           <div className="space-y-4">
             <div>
@@ -1720,7 +2317,7 @@ const Seguimiento: React.FC = () => {
                   setEditarSeguimiento((prev) => ({ ...prev, title: e.target.value }));
                   if (editarErrores.title) setEditarErrores((prev) => ({ ...prev, title: '' }));
                 }}
-                placeholder="Título del seguimiento"
+                placeholder="Título de la tarea"
                 className={editarErrores.title ? 'border-red-500' : ''}
               />
               {editarErrores.title && (
@@ -1742,7 +2339,7 @@ const Seguimiento: React.FC = () => {
                   <SelectTrigger className={`w-full ${editarErrores.type ? 'border-red-500' : ''}`}>
                     <SelectValue placeholder="Seleccionar tipo" />
                   </SelectTrigger>
-                  <SelectContent className="z-[70]">
+                  <SelectContent className="z-[70]" position="popper" sideOffset={4}>
                     <SelectItem value="seguimiento_cliente">Seguimiento Cliente</SelectItem>
                     <SelectItem value="llamada">Llamada</SelectItem>
                     <SelectItem value="email">Email</SelectItem>
@@ -1776,7 +2373,7 @@ const Seguimiento: React.FC = () => {
                   >
                     <SelectValue placeholder="Seleccionar prioridad" />
                   </SelectTrigger>
-                  <SelectContent className="z-[70]">
+                  <SelectContent className="z-[70]" position="popper" sideOffset={4}>
                     <SelectItem value="baja">Baja</SelectItem>
                     <SelectItem value="media">Media</SelectItem>
                     <SelectItem value="alta">Alta</SelectItem>
@@ -1807,7 +2404,7 @@ const Seguimiento: React.FC = () => {
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Yo mismo" />
                   </SelectTrigger>
-                  <SelectContent className="z-[70]">
+                  <SelectContent className="z-[70]" position="popper" sideOffset={4}>
                     {usuarios.map((u) => (
                       <SelectItem key={u.id} value={String(u.id)}>
                         {u.name}
@@ -1883,7 +2480,9 @@ const Seguimiento: React.FC = () => {
                     <ComboboxInput
                       as={Input}
                       className="w-full"
-                      displayValue={(p: any) => (p ? `${p.numero_poliza || p.policy_number}` : '')}
+                      displayValue={(p: any) =>
+                        p ? `${p.numero_poliza || p.policy_number}` : ''
+                      }
                       onChange={(e) => setPolizaQuery(e.target.value)}
                       placeholder={
                         editarSeguimiento.client_id
@@ -1935,7 +2534,7 @@ const Seguimiento: React.FC = () => {
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="No especificado" />
                   </SelectTrigger>
-                  <SelectContent className="z-[70]">
+                  <SelectContent className="z-[70]" position="popper" sideOffset={4}>
                     <SelectItem value="phone">Teléfono</SelectItem>
                     <SelectItem value="email">Email</SelectItem>
                     <SelectItem value="whatsapp">WhatsApp</SelectItem>
@@ -1969,7 +2568,7 @@ const Seguimiento: React.FC = () => {
                   if (editarErrores.description)
                     setEditarErrores((prev) => ({ ...prev, description: '' }));
                 }}
-                placeholder="Descripción del seguimiento"
+                placeholder="Descripción de la tarea"
                 rows={3}
                 className={editarErrores.description ? 'border-red-500' : ''}
               />
@@ -1986,10 +2585,379 @@ const Seguimiento: React.FC = () => {
             disabled={saving}
           >
             {saving ? <Spinner size="sm" className="mr-2" /> : null}
-            Actualizar Seguimiento
+            Actualizar Tarea
           </Button>
           <Button color="gray" onClick={() => setModalEditarOpen(false)} disabled={saving}>
             Cancelar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal Configuración de Prioridades */}
+      <Modal
+        show={showConfigModal}
+        onClose={() => setShowConfigModal(false)}
+        size="2xl"
+        className="z-[9999]"
+      >
+        <Modal.Header>Configuración de Prioridades</Modal.Header>
+        <Modal.Body>
+          {configLoading ? (
+            <div className="flex justify-center py-8">
+              <Spinner size="xl" />
+            </div>
+          ) : configError ? (
+            <div className="space-y-3">
+              <Alert color="failure" icon={() => <Icon icon="solar:danger-triangle-bold-duotone" className="w-5 h-5" />}>
+                <span className="font-medium">Error: </span>{configError}
+              </Alert>
+              <Button color="light" onClick={() => loadPriorityConfigs(true)}>
+                <Icon icon="solar:refresh-bold-duotone" className="w-4 h-4 mr-1.5" />
+                Reintentar
+              </Button>
+            </div>
+          ) : Object.keys(priorityConfigs).length === 0 ? (
+            <div className="text-center py-8 space-y-3">
+              <Icon icon="solar:settings-bold-duotone" className="w-12 h-12 mx-auto text-gray-300" />
+              <p className="text-sm text-gray-500">No hay configuraciones todavía.</p>
+              <Button color="light" onClick={() => loadPriorityConfigs(true)}>
+                <Icon icon="solar:refresh-bold-duotone" className="w-4 h-4 mr-1.5" />
+                Cargar valores por defecto
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {Object.entries(priorityConfigs).map(([key, config]) => {
+                const update = (patch: Partial<PriorityConfig>) => {
+                  setPriorityConfigs((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+                };
+                const isPaletteMatch = (sw: typeof PRIORITY_COLOR_PALETTE[number]) =>
+                  sw.bg_color === config.bg_color && sw.text_color === config.text_color;
+
+                return (
+                  <div
+                    key={key}
+                    className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 bg-white dark:bg-gray-900 shadow-sm"
+                  >
+                    {/* Preview card */}
+                    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${config.bg_color} ${config.text_color} shadow-sm`}
+                          style={{ boxShadow: `0 0 0 2px ${config.color}20` }}
+                        >
+                          <Icon icon={config.icon} className="w-5 h-5" />
+                          {config.label}
+                        </div>
+                        <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                          {key}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Notifica{' '}
+                        <span className="font-semibold text-gray-700 dark:text-gray-200">
+                          {formatMinutes(config.first_notification_minutes)}
+                        </span>{' '}
+                        antes
+                        {config.repeat_every_minutes > 0 && (
+                          <>
+                            , repite cada{' '}
+                            <span className="font-semibold text-gray-700 dark:text-gray-200">
+                              {formatMinutes(config.repeat_every_minutes)}
+                            </span>
+                          </>
+                        )}
+                        {' '}· máx.{' '}
+                        <span className="font-semibold text-gray-700 dark:text-gray-200">
+                          {config.max_notifications}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Nombre (label) */}
+                    <div className="mb-4">
+                      <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Nombre visible
+                      </Label>
+                      <Input
+                        value={config.label}
+                        onChange={(e) => update({ label: e.target.value })}
+                        className="text-sm mt-1"
+                        placeholder="Ej: Crítica"
+                      />
+                    </div>
+
+                    {/* Paleta de colores */}
+                    <div className="mb-4">
+                      <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                        <span>
+                          <Icon icon="solar:palette-bold-duotone" className="w-4 h-4 inline mr-1" />
+                          Color
+                        </span>
+                        <input
+                          type="color"
+                          value={config.color}
+                          onChange={(e) => update({ color: e.target.value })}
+                          className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
+                          title="Color personalizado (hex)"
+                        />
+                      </Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {PRIORITY_COLOR_PALETTE.map((sw) => {
+                          const active = isPaletteMatch(sw);
+                          return (
+                            <button
+                              key={sw.name}
+                              type="button"
+                              onClick={() =>
+                                update({
+                                  color: sw.color,
+                                  bg_color: sw.bg_color,
+                                  text_color: sw.text_color,
+                                })
+                              }
+                              title={sw.name}
+                              className={`w-8 h-8 rounded-lg border-2 transition-all hover:scale-110 ${
+                                active
+                                  ? 'border-gray-900 dark:border-white scale-110 shadow-md'
+                                  : 'border-transparent'
+                              }`}
+                              style={{ backgroundColor: sw.color }}
+                            >
+                              {active && (
+                                <Icon
+                                  icon="solar:check-read-bold"
+                                  className="w-4 h-4 text-white drop-shadow mx-auto"
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Elige un color del palette o usa el selector hex a la derecha.
+                      </p>
+                    </div>
+
+                    {/* Grid de iconos */}
+                    <div className="mb-4">
+                      <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        <Icon icon="solar:gallery-bold-duotone" className="w-4 h-4 inline mr-1" />
+                        Icono
+                      </Label>
+                      <div className="flex flex-wrap gap-1.5 mt-2 max-h-[160px] overflow-y-auto p-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                        {PRIORITY_ICON_CATALOG.map((ic) => {
+                          const active = config.icon === ic;
+                          return (
+                            <button
+                              key={ic}
+                              type="button"
+                              onClick={() => update({ icon: ic })}
+                              title={ic.replace('solar:', '').replace('-bold-duotone', '')}
+                              className={`w-9 h-9 rounded-md flex items-center justify-center transition-all ${
+                                active
+                                  ? `${config.bg_color} ${config.text_color} ring-2 ring-offset-1 scale-105`
+                                  : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                              }`}
+                              style={active ? { boxShadow: `0 0 0 2px ${config.color}` } : undefined}
+                            >
+                              <Icon icon={ic} className="w-5 h-5" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Input
+                          value={config.icon}
+                          onChange={(e) => update({ icon: e.target.value })}
+                          className="text-xs flex-1"
+                          placeholder="Icono Solar personalizado (ej: solar:flag-bold-duotone)"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Presets de tiempo */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          <Icon icon="solar:bell-bing-bold-duotone" className="w-4 h-4 inline mr-1" />
+                          Primera notificación
+                          <span className="ml-2 text-gray-400 font-normal">
+                            ({formatMinutes(config.first_notification_minutes)} antes)
+                          </span>
+                        </Label>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {FIRST_NOTIF_PRESETS.map((p) => (
+                            <button
+                              key={p.value}
+                              type="button"
+                              onClick={() => update({ first_notification_minutes: p.value })}
+                              className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                                config.first_notification_minutes === p.value
+                                  ? 'bg-primary text-white border-primary'
+                                  : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary hover:text-primary'
+                              }`}
+                            >
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                        <Input
+                          type="number"
+                          value={config.first_notification_minutes}
+                          onChange={(e) =>
+                            update({ first_notification_minutes: parseInt(e.target.value) || 0 })
+                          }
+                          className="text-xs mt-2"
+                          min={0}
+                          placeholder="Minutos personalizados"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          <Icon icon="solar:refresh-bold-duotone" className="w-4 h-4 inline mr-1" />
+                          Repetir cada
+                          <span className="ml-2 text-gray-400 font-normal">
+                            ({config.repeat_every_minutes === 0 ? 'Sin repetir' : formatMinutes(config.repeat_every_minutes)})
+                          </span>
+                        </Label>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {REPEAT_PRESETS.map((p) => (
+                            <button
+                              key={p.value}
+                              type="button"
+                              onClick={() => update({ repeat_every_minutes: p.value })}
+                              className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                                config.repeat_every_minutes === p.value
+                                  ? 'bg-primary text-white border-primary'
+                                  : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary hover:text-primary'
+                              }`}
+                            >
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                        <Input
+                          type="number"
+                          value={config.repeat_every_minutes}
+                          onChange={(e) =>
+                            update({ repeat_every_minutes: parseInt(e.target.value) || 0 })
+                          }
+                          className="text-xs mt-2"
+                          min={0}
+                          placeholder="Minutos personalizados"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Max notificaciones: slider */}
+                    <div className="mt-4">
+                      <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                        <span>
+                          <Icon icon="solar:notification-unread-lines-bold-duotone" className="w-4 h-4 inline mr-1" />
+                          Máximo de notificaciones
+                        </span>
+                        <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full ${config.bg_color} ${config.text_color}`}>
+                          {config.max_notifications}
+                        </span>
+                      </Label>
+                      <input
+                        type="range"
+                        min={1}
+                        max={20}
+                        step={1}
+                        value={config.max_notifications}
+                        onChange={(e) => update({ max_notifications: parseInt(e.target.value) || 1 })}
+                        className="w-full mt-2 accent-primary"
+                      />
+                      <div className="flex justify-between text-[10px] text-gray-400 mt-0.5">
+                        <span>1</span>
+                        <span>10</span>
+                        <span>20</span>
+                      </div>
+                    </div>
+
+                    {/* Toggle enabled */}
+                    <div className="mt-4 flex items-center gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        type="button"
+                        onClick={() => update({ enabled: !config.enabled })}
+                        role="switch"
+                        aria-checked={config.enabled}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          config.enabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                            config.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">
+                        {config.enabled ? 'Notificaciones activas' : 'Notificaciones pausadas'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="gray"
+            onClick={async () => {
+              if (!confirm('¿Restaurar valores por defecto?')) return;
+              try {
+                setConfigLoading(true);
+                const res = await priorityConfigService.resetDefaults();
+                const map: Record<string, PriorityConfig> = {};
+                (res.data || []).forEach((c: any) => { map[c.priority_key] = c; });
+                setPriorityConfigs(map);
+                toast({ title: 'Configuración restaurada' });
+              } catch (e: any) {
+                toast({ title: 'Error', description: e.message, variant: 'destructive' });
+              } finally {
+                setConfigLoading(false);
+              }
+            }}
+          >
+            Restaurar defaults
+          </Button>
+          <Button
+            onClick={async () => {
+              try {
+                setConfigLoading(true);
+                for (const [key, config] of Object.entries(priorityConfigs)) {
+                  await priorityConfigService.updateConfig(key, {
+                    label: config.label,
+                    icon: config.icon,
+                    color: config.color,
+                    bg_color: config.bg_color,
+                    text_color: config.text_color,
+                    first_notification_minutes: config.first_notification_minutes,
+                    repeat_every_minutes: config.repeat_every_minutes,
+                    max_notifications: config.max_notifications,
+                    enabled: config.enabled,
+                  });
+                }
+                toast({ title: 'Configuración guardada' });
+                setShowConfigModal(false);
+              } catch (e: any) {
+                toast({ title: 'Error', description: e.message, variant: 'destructive' });
+              } finally {
+                setConfigLoading(false);
+              }
+            }}
+            className="bg-[#573CFF] text-white"
+            disabled={configLoading}
+          >
+            {configLoading ? <Spinner size="sm" className="mr-2" /> : null}
+            Guardar Configuración
+          </Button>
+          <Button color="gray" onClick={() => setShowConfigModal(false)} disabled={configLoading}>
+            Cerrar
           </Button>
         </Modal.Footer>
       </Modal>
@@ -2001,7 +2969,7 @@ const Seguimiento: React.FC = () => {
         size="md"
         className="z-[9999]"
       >
-        <Modal.Header>Cambiar Estado del Seguimiento</Modal.Header>
+        <Modal.Header>Cambiar Estado de la Tarea</Modal.Header>
         <Modal.Body>
           <div className="space-y-4">
             <div>
@@ -2061,6 +3029,186 @@ const Seguimiento: React.FC = () => {
           <Button onClick={() => setShowStateModal(false)} disabled={changingState}>
             Cancelar
           </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ═══════ Modal Bitácora ═══════ */}
+      <Modal show={bitacoraOpen} size="3xl" onClose={() => setBitacoraOpen(false)}>
+        <Modal.Header>
+          <div className="flex items-center gap-3">
+            <Icon icon="solar:book-bookmark-bold-duotone" className="w-6 h-6 text-primary" />
+            <div>
+              <h3 className="text-lg font-semibold">Bitácora de la Tarea</h3>
+              {bitacoraTask && (
+                <p className="text-sm text-gray-500">{bitacoraTask.title}</p>
+              )}
+            </div>
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          {loadingBitacora && bitacoraEntries.length === 0 && bitacoraNotes.length === 0 ? (
+            <div className="flex justify-center py-8">
+              <Spinner size="lg" />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Agregar nota */}
+              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <Label className="text-sm font-medium">Agregar nota</Label>
+                <Textarea
+                  rows={3}
+                  value={bitacoraNote}
+                  onChange={(e) => setBitacoraNote(e.target.value)}
+                  placeholder="Escribe una observación, llamada, gestión..."
+                  className="mt-2"
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={bitacoraIsPrivate}
+                      onChange={(e) => setBitacoraIsPrivate(e.target.checked)}
+                      className="rounded"
+                    />
+                    Nota privada
+                  </label>
+                  <Button
+                    size="sm"
+                    color="primary"
+                    onClick={submitBitacoraNote}
+                    disabled={!bitacoraNote.trim() || loadingBitacora}
+                  >
+                    {loadingBitacora ? <Spinner size="sm" className="mr-1.5" /> : <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-1.5" />}
+                    Añadir
+                  </Button>
+                </div>
+              </div>
+
+              {/* Notas */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <Icon icon="solar:notebook-bold-duotone" className="w-4 h-4" />
+                  Notas ({bitacoraNotes.length})
+                </h4>
+                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  {bitacoraNotes.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">Sin notas todavía.</p>
+                  ) : (
+                    bitacoraNotes.map((n, i) => (
+                      <div key={i} className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 rounded">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-gray-500">
+                            {n.timestamp ? new Date(n.timestamp).toLocaleString('es-CO') : ''}
+                          </span>
+                          {n.data?.is_private && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
+                              <Icon icon="solar:lock-keyhole-minimalistic-bold" className="w-3 h-3 inline" /> privada
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-800 dark:text-gray-200">{n.data?.note}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Historial */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <Icon icon="solar:history-bold-duotone" className="w-4 h-4" />
+                  Historial ({bitacoraEntries.length})
+                </h4>
+                <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                  {bitacoraEntries.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">Sin actividad registrada.</p>
+                  ) : (
+                    bitacoraEntries.map((e, i) => (
+                      <div key={i} className="p-3 bg-white dark:bg-gray-900 border-l-4 border-primary rounded shadow-sm">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                            {e.activity}
+                          </span>
+                          <span className="text-[10px] text-gray-500">
+                            {e.timestamp ? new Date(e.timestamp).toLocaleString('es-CO') : ''}
+                          </span>
+                        </div>
+                        {e.data && Object.keys(e.data).length > 0 && (
+                          <pre className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 whitespace-pre-wrap font-mono bg-gray-50 dark:bg-gray-800 p-1.5 rounded">
+                            {JSON.stringify(e.data, null, 2)}
+                          </pre>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="gray" onClick={() => setBitacoraOpen(false)}>Cerrar</Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ═══════ Modal Reasignar ═══════ */}
+      <Modal show={reassignOpen} size="lg" onClose={() => setReassignOpen(false)}>
+        <Modal.Header>
+          <div className="flex items-center gap-3">
+            <Icon icon="solar:users-group-rounded-bold-duotone" className="w-6 h-6 text-primary" />
+            <div>
+              <h3 className="text-lg font-semibold">Reasignar Tarea</h3>
+              {reassignTask && (
+                <p className="text-sm text-gray-500">{reassignTask.title}</p>
+              )}
+            </div>
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Asignar a</Label>
+              <select
+                value={reassignUserId}
+                onChange={(e) => setReassignUserId(e.target.value)}
+                className="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="">Selecciona un usuario...</option>
+                {reassignUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || u.email || `Usuario ${u.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Motivo (opcional)</Label>
+              <Textarea
+                rows={3}
+                value={reassignReason}
+                onChange={(e) => setReassignReason(e.target.value)}
+                placeholder="Explica el motivo de la reasignación..."
+                className="mt-1"
+              />
+            </div>
+            <Alert color="info">
+              <div className="flex items-start gap-2 text-xs">
+                <Icon icon="solar:info-circle-bold-duotone" className="w-4 h-4 mt-0.5" />
+                <span>La acción se registrará automáticamente en la bitácora de la tarea.</span>
+              </div>
+            </Alert>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="primary"
+            onClick={submitReassign}
+            disabled={!reassignUserId || loadingReassign}
+          >
+            {loadingReassign ? <Spinner size="sm" className="mr-1.5" /> : null}
+            Reasignar
+          </Button>
+          <Button color="gray" onClick={() => setReassignOpen(false)}>Cancelar</Button>
         </Modal.Footer>
       </Modal>
     </PermissionGate>

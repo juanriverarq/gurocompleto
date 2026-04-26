@@ -32,6 +32,7 @@ export const IconSidebar = () => {
       'Inteligencia Artificial': 6,
       'Documentos': 7,
       'Configuración': 8,
+      'Cotizadores': 9,
     };
 
     // Determine which sections have at least one non-label item

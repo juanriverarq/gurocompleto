@@ -56,14 +56,17 @@ const WhatsAppPlantillas: React.FC = () => {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [mediaFile, setMediaFile] = useState<{ file: File; preview?: string } | null>(null);
 
   // Create form state
   const [form, setForm] = useState({
     name: '',
     category: 'MARKETING' as 'MARKETING' | 'UTILITY' | 'AUTHENTICATION',
     language: 'es',
-    header_type: 'NONE' as 'NONE' | 'TEXT',
+    header_type: 'NONE' as 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT',
     header_text: '',
+    header_media_url: '',
     body: '',
     footer: '',
     buttons: [] as ButtonFormItem[],
@@ -186,6 +189,9 @@ const WhatsAppPlantillas: React.FC = () => {
       if (form.header_type === 'TEXT' && form.header_text) {
         payload.header_text = form.header_text;
       }
+      if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.header_type) && form.header_media_url) {
+        payload.header_media_handle = form.header_media_url;
+      }
       if (form.footer) {
         payload.footer = form.footer;
       }
@@ -237,11 +243,55 @@ const WhatsAppPlantillas: React.FC = () => {
       language: 'es',
       header_type: 'NONE',
       header_text: '',
+      header_media_url: '',
       body: '',
       footer: '',
       buttons: [],
       example_body_params: [],
     });
+    setMediaFile(null);
+  };
+
+  const handleMediaUpload = async (file: File) => {
+    const headerType = form.header_type;
+    const allowedTypes: Record<string, string[]> = {
+      IMAGE: ['image/jpeg', 'image/png', 'image/webp'],
+      VIDEO: ['video/mp4', 'video/3gpp'],
+      DOCUMENT: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    };
+    if (!allowedTypes[headerType]?.includes(file.type)) {
+      setError(`Archivo no permitido para ${headerType}. Tipos válidos: ${allowedTypes[headerType]?.join(', ')}`);
+      return;
+    }
+    const maxSize = headerType === 'VIDEO' ? 16 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError(`El archivo excede el tamaño máximo (${headerType === 'VIDEO' ? '16MB' : '5MB'})`);
+      return;
+    }
+    setMediaFile({ file, preview: headerType === 'IMAGE' ? URL.createObjectURL(file) : undefined });
+    setUploading(true);
+    setError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('No autenticado');
+      const token = await user.getIdToken();
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('type', headerType);
+      const res = await fetch(`${API_BASE_URL}/saas/whatsapp-inbox/templates/upload-media`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al subir archivo');
+      setForm(f => ({ ...f, header_media_url: data.handle }));
+    } catch (err: any) {
+      setError(err.message);
+      setMediaFile(null);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const addButton = () => {
@@ -595,18 +645,19 @@ const WhatsAppPlantillas: React.FC = () => {
             {/* Header */}
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Encabezado (opcional)</label>
-              <div className="flex gap-2 mb-2">
-                {(['NONE', 'TEXT'] as const).map(type => (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {([{ key: 'NONE', label: 'Sin encabezado', icon: 'solar:close-circle-linear' }, { key: 'TEXT', label: 'Texto', icon: 'solar:text-bold' }, { key: 'IMAGE', label: 'Imagen', icon: 'solar:gallery-bold-duotone' }, { key: 'VIDEO', label: 'Video', icon: 'solar:videocamera-record-bold-duotone' }, { key: 'DOCUMENT', label: 'Documento', icon: 'solar:document-bold-duotone' }] as const).map(opt => (
                   <button
-                    key={type}
-                    onClick={() => setForm(f => ({ ...f, header_type: type }))}
-                    className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                      form.header_type === type
+                    key={opt.key}
+                    onClick={() => { setForm(f => ({ ...f, header_type: opt.key as any, header_media_url: '', header_text: '' })); setMediaFile(null); }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                      form.header_type === opt.key
                         ? 'border-primary bg-primary/10 text-primary font-medium'
                         : 'border-gray-200 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                   >
-                    {type === 'NONE' ? 'Sin encabezado' : 'Texto'}
+                    <Icon icon={opt.icon} width={14} />
+                    {opt.label}
                   </button>
                 ))}
               </div>
@@ -619,6 +670,58 @@ const WhatsAppPlantillas: React.FC = () => {
                   maxLength={60}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
                 />
+              )}
+              {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(form.header_type) && (
+                <div className="space-y-2">
+                  <p className="text-[10px] text-gray-400">
+                    {form.header_type === 'IMAGE' ? 'Sube una imagen de ejemplo (JPG/PNG, máx 5MB) para aprobar la plantilla.'
+                      : form.header_type === 'VIDEO' ? 'Sube un video de ejemplo (MP4, máx 16MB) para aprobar la plantilla.'
+                      : 'Sube un documento de ejemplo (PDF, máx 5MB) para aprobar la plantilla.'}
+                  </p>
+                  {!mediaFile && !form.header_media_url ? (
+                    <label
+                      className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f) handleMediaUpload(f); }}
+                    >
+                      <Icon icon={form.header_type === 'IMAGE' ? 'solar:gallery-add-bold-duotone' : form.header_type === 'VIDEO' ? 'solar:videocamera-add-bold-duotone' : 'solar:document-add-bold-duotone'} width={32} className="text-gray-400 mb-1" />
+                      <span className="text-xs text-gray-500">Arrastra o haz clic para subir</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5">{form.header_type === 'IMAGE' ? 'JPG, PNG, WebP' : form.header_type === 'VIDEO' ? 'MP4' : 'PDF, DOC, DOCX'}</span>
+                      <input type="file" className="hidden" accept={form.header_type === 'IMAGE' ? 'image/jpeg,image/png,image/webp' : form.header_type === 'VIDEO' ? 'video/mp4' : '.pdf,.doc,.docx'} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMediaUpload(f); }} />
+                    </label>
+                  ) : (
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                      {uploading ? (
+                        <><Spinner size="sm" /><span className="text-xs text-gray-500">Subiendo archivo...</span></>
+                      ) : (
+                        <>
+                          {mediaFile?.preview && form.header_type === 'IMAGE' && (
+                            <img src={mediaFile.preview} alt="Preview" className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-gray-600" />
+                          )}
+                          {!mediaFile?.preview && form.header_type === 'VIDEO' && (
+                            <div className="h-16 w-16 rounded-lg bg-gray-200 dark:bg-gray-600 flex items-center justify-center"><Icon icon="solar:videocamera-record-bold-duotone" width={24} className="text-gray-400" /></div>
+                          )}
+                          {!mediaFile?.preview && form.header_type === 'DOCUMENT' && (
+                            <div className="h-16 w-16 rounded-lg bg-gray-200 dark:bg-gray-600 flex items-center justify-center"><Icon icon="solar:document-bold-duotone" width={24} className="text-gray-400" /></div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">{mediaFile?.file.name || 'Archivo subido'}</p>
+                            <div className="flex items-center gap-1.5 text-xs">
+                              {form.header_media_url ? (
+                                <><Icon icon="solar:check-circle-bold" width={14} className="text-green-500" /><span className="text-green-600 dark:text-green-400">Subido correctamente</span></>
+                              ) : (
+                                <span className="text-gray-400">Procesando...</span>
+                              )}
+                            </div>
+                          </div>
+                          <button onClick={() => { setMediaFile(null); setForm(f => ({ ...f, header_media_url: '' })); }} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                            <Icon icon="solar:trash-bin-trash-bold" width={16} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 

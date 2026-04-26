@@ -48,7 +48,7 @@ interface MetaTemplate {
   language: string;
   components: any[];
   parsed?: {
-    header?: { type: string; text?: string };
+    header?: { format: string; text?: string; example_url?: string };
     body?: string;
     footer?: string;
     buttons?: { type: string; text: string }[];
@@ -109,6 +109,11 @@ const CreateCampaignWizard: React.FC<CreateCampaignWizardProps> = ({ open, onClo
   const [selectedSegment, setSelectedSegment] = useState<ClientSegment | null>(null);
   const [showSegmentManager, setShowSegmentManager] = useState(false);
 
+  // Estados para filtrado por etiquetas
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagMatchMode, setTagMatchMode] = useState<'any' | 'all'>('any');
+  const [tagInput, setTagInput] = useState('');
+
   // Estados para plantillas Meta
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -118,6 +123,11 @@ const CreateCampaignWizard: React.FC<CreateCampaignWizardProps> = ({ open, onClo
   const [messagePreview, setMessagePreview] = useState('');
   const [selectedPreviewClient, setSelectedPreviewClient] = useState<Cliente | null>(null);
   
+  // Estado para media header (IMAGE/VIDEO/DOCUMENT)
+  const [headerMediaUrl, setHeaderMediaUrl] = useState('');
+  const [headerMediaUploading, setHeaderMediaUploading] = useState(false);
+  const [headerMediaFile, setHeaderMediaFile] = useState<{ name: string; preview?: string } | null>(null);
+
   // Estados para validaciones
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [messageValidation, setMessageValidation] = useState<any>(null);
@@ -173,6 +183,12 @@ const CreateCampaignWizard: React.FC<CreateCampaignWizardProps> = ({ open, onClo
     setSelectedSegment(null);
     setShowSegmentManager(false);
     setSelectedMetaTemplate(null);
+    setSelectedTags([]);
+    setTagMatchMode('any');
+    setTagInput('');
+    setHeaderMediaUrl('');
+    setHeaderMediaFile(null);
+    setHeaderMediaUploading(false);
   };
 
   // Helper: extract template variables from body text
@@ -237,6 +253,10 @@ const CreateCampaignWizard: React.FC<CreateCampaignWizardProps> = ({ open, onClo
   // Handle selecting a Meta template
   const handleSelectMetaTemplate = (tpl: MetaTemplate) => {
     setSelectedMetaTemplate(tpl);
+    setHeaderMediaFile(null);
+    // Auto-fill header media URL from template's example image (no re-upload needed)
+    const exampleUrl = tpl.parsed?.header?.example_url || '';
+    setHeaderMediaUrl(exampleUrl);
     const body = tpl.parsed?.body || '';
     const vars = extractTemplateVars(body);
     const mapping: Record<string, { source: string; fixedValue: string }> = {};
@@ -257,6 +277,53 @@ const CreateCampaignWizard: React.FC<CreateCampaignWizardProps> = ({ open, onClo
       message_template: body,
       name: prev.name || `Campaña - ${tpl.name}`,
     }));
+  };
+
+  // Handle file upload for campaign header media (IMAGE/VIDEO/DOCUMENT)
+  const handleHeaderMediaUpload = async (file: File) => {
+    const headerFormat = selectedMetaTemplate?.parsed?.header?.format;
+    if (!headerFormat) return;
+    const mediaType = headerFormat.toLowerCase();
+    const allowedTypes: Record<string, string[]> = {
+      image: ['image/jpeg', 'image/png', 'image/webp'],
+      video: ['video/mp4', 'video/3gpp'],
+      document: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    };
+    if (!allowedTypes[mediaType]?.includes(file.type)) {
+      toast({ title: 'Archivo no válido', description: `Tipos permitidos: ${allowedTypes[mediaType]?.join(', ')}`, variant: 'destructive' });
+      return;
+    }
+    const maxSize = mediaType === 'video' ? 16 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({ title: 'Archivo muy grande', description: `Máximo ${mediaType === 'video' ? '16MB' : '5MB'}`, variant: 'destructive' });
+      return;
+    }
+    setHeaderMediaFile({ name: file.name, preview: mediaType === 'image' ? URL.createObjectURL(file) : undefined });
+    setHeaderMediaUploading(true);
+    try {
+      const user = (await import('src/config/firebase')).auth.currentUser;
+      if (!user) throw new Error('No autenticado');
+      const token = await user.getIdToken();
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api';
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('type', mediaType);
+      const res = await fetch(`${API_BASE}/saas/campaigns/upload-header-media`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al subir archivo');
+      setHeaderMediaUrl(data.url);
+      toast({ title: 'Archivo subido', description: file.name });
+    } catch (err: any) {
+      toast({ title: 'Error al subir', description: err.message, variant: 'destructive' });
+      setHeaderMediaFile(null);
+      setHeaderMediaUrl('');
+    } finally {
+      setHeaderMediaUploading(false);
+    }
   };
 
   const loadSegments = async () => {
@@ -500,11 +567,46 @@ if (reset) {
     setMessageValidation(validation);
   };
 
+  // Normalize tag for comparison (lowercase, trim, remove accents)
+  const normalizeTag = (t: string) => t.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/_/g, ' ');
+
+  // Extract unique tags from all clients
+  const availableTags = useMemo(() => {
+    const tagMap = new Map<string, string>();
+    clients.forEach(c => {
+      const tags = ((c as any).etiquetas || '').split(',').filter(Boolean);
+      tags.forEach((t: string) => {
+        const norm = normalizeTag(t);
+        if (norm && !tagMap.has(norm)) tagMap.set(norm, t.trim());
+      });
+    });
+    return Array.from(tagMap.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([normalized, display]) => ({ normalized, display }));
+  }, [clients]);
+
+  // Filter clients by selected tags
+  const clientsFilteredByTags = useMemo(() => {
+    if (selectedTags.length === 0) return clients;
+    const selectedNormalized = selectedTags.map(normalizeTag);
+    return clients.filter(c => {
+      const clientTags = ((c as any).etiquetas || '').split(',').filter(Boolean).map(normalizeTag);
+      if (tagMatchMode === 'all') {
+        return selectedNormalized.every(st => clientTags.includes(st));
+      } else {
+        return selectedNormalized.some(st => clientTags.includes(st));
+      }
+    });
+  }, [clients, selectedTags, tagMatchMode]);
+
   // Aplicar filtros con memo para evitar recomputes costosos
   const filteredClients = useMemo(() => {
-    let list = selectedSegment
-      ? clientSegmentService.applySegmentFilters(clients, selectedSegment.filters)
-      : clients;
+    let list = selectedTags.length > 0 ? clientsFilteredByTags : clients;
+
+    if (selectedSegment) {
+      list = clientSegmentService.applySegmentFilters(list, selectedSegment.filters);
+    }
 
     if (showOnlyWithPhone) {
       list = list.filter(c => !!c.celular_principal);
@@ -521,7 +623,7 @@ if (reset) {
     }
 
     return list;
-  }, [clients, selectedSegment, showOnlyWithPhone, searchTerm]);
+  }, [clients, clientsFilteredByTags, selectedTags, selectedSegment, showOnlyWithPhone, searchTerm]);
 
   // Limitar render para evitar listas DOM gigantes
   const MAX_RENDER = 300;
@@ -675,17 +777,25 @@ if (reset) {
 
     setLoading(true);
     try {
+      // When tags are selected, we must send explicit contacts even if "select all" is on
+      const isTagFiltered = selectedTags.length > 0;
+      const effectiveSelectAll = campaignData.selectAllClients && !isTagFiltered;
+
       const campaignPayload: any = {
         name: campaignData.name,
         description: campaignData.description,
         message_template: campaignData.message_template,
         whatsapp_instance_id: campaignData.whatsapp_instance_id,
-        select_all_clients: campaignData.selectAllClients
+        select_all_clients: effectiveSelectAll
       };
 
-      // Solo agregar contacts si NO se seleccionan todos los clientes
-      if (!campaignData.selectAllClients) {
-        campaignPayload.contacts = campaignData.selectedClients
+      // Build contact list: either manual selection or tag-filtered "all"
+      if (!effectiveSelectAll) {
+        const sourceClients = campaignData.selectAllClients && isTagFiltered
+          ? clientsFilteredByTags
+          : campaignData.selectedClients;
+
+        campaignPayload.contacts = sourceClients
           .filter(client => client.celular_principal)
           .map(client => ({
             id: client.id,
@@ -731,7 +841,17 @@ if (reset) {
         campaignPayload.template_language = campaignData.template_language || 'es';
         campaignPayload.variable_mapping = campaignData.variable_mapping;
 
-        if (!campaignData.selectAllClients && campaignPayload.contacts) {
+        // Build header media component for IMAGE/VIDEO/DOCUMENT templates
+        const headerFormat = selectedMetaTemplate?.parsed?.header?.format;
+        if (headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat) && headerMediaUrl && /^https?:\/\/.+/.test(headerMediaUrl)) {
+          const mediaType = headerFormat.toLowerCase() as 'image' | 'video' | 'document';
+          campaignPayload.header_media = {
+            type: mediaType,
+            url: headerMediaUrl,
+          };
+        }
+
+        if (!effectiveSelectAll && campaignPayload.contacts) {
           const vars = Object.keys(campaignData.variable_mapping || {});
           campaignPayload.contacts = campaignPayload.contacts.map((contact: any) => ({
             ...contact,
@@ -998,12 +1118,144 @@ if (reset) {
                   </div>
                 )}
 
+                {/* Header Media (IMAGE / VIDEO / DOCUMENT) — auto-filled from template */}
+                {selectedMetaTemplate && selectedMetaTemplate.parsed?.header?.format && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(selectedMetaTemplate.parsed.header.format) && (
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-3 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2">
+                      <Icon icon={
+                        selectedMetaTemplate.parsed.header.format === 'IMAGE' ? 'solar:gallery-bold-duotone'
+                        : selectedMetaTemplate.parsed.header.format === 'VIDEO' ? 'solar:videocamera-record-bold-duotone'
+                        : 'solar:document-bold-duotone'
+                      } className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <Label className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {selectedMetaTemplate.parsed.header.format === 'IMAGE' ? 'Imagen de cabecera'
+                          : selectedMetaTemplate.parsed.header.format === 'VIDEO' ? 'Video de cabecera'
+                          : 'Documento de cabecera'}
+                      </Label>
+                      {headerMediaUrl ? (
+                        <Badge className="text-[10px] bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">
+                          <Icon icon="solar:check-circle-bold" className="w-3 h-3 mr-0.5" /> Listo
+                        </Badge>
+                      ) : (
+                        <Badge className="text-[10px] bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">
+                          Requerido
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Auto-filled from template example */}
+                    {headerMediaUrl && !headerMediaFile ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-green-200 dark:border-green-500/30">
+                          {selectedMetaTemplate.parsed.header.format === 'IMAGE' ? (
+                            <img src={headerMediaUrl} alt="Cabecera" className="w-16 h-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" onError={e => (e.currentTarget.style.display = 'none')} />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                              <Icon icon={selectedMetaTemplate.parsed.header.format === 'VIDEO' ? 'solar:videocamera-record-bold-duotone' : 'solar:document-bold-duotone'} className="w-7 h-7 text-gray-400" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">Recurso de la plantilla</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Icon icon="solar:check-circle-bold" className="w-3.5 h-3.5 text-green-500" />
+                              <span className="text-xs text-green-600 dark:text-green-400">Se usará automáticamente</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-500/40 transition-colors">
+                            <Icon icon="solar:refresh-bold" className="w-3.5 h-3.5" />
+                            Cambiar archivo
+                            <input type="file" className="hidden"
+                              accept={selectedMetaTemplate.parsed!.header!.format === 'IMAGE' ? 'image/jpeg,image/png,image/webp'
+                                : selectedMetaTemplate.parsed!.header!.format === 'VIDEO' ? 'video/mp4,video/3gpp'
+                                : '.pdf,.doc,.docx'}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) handleHeaderMediaUpload(f); e.target.value = ''; }} />
+                          </label>
+                          <span className="text-[10px] text-gray-400 dark:text-gray-500">Opcional — solo si deseas usar un archivo diferente</span>
+                        </div>
+                      </div>
+                    ) : headerMediaUploading ? (
+                      <div className="flex items-center justify-center gap-2 py-6 border-2 border-dashed border-indigo-300 dark:border-indigo-500/40 rounded-xl bg-indigo-50/50 dark:bg-indigo-500/5">
+                        <Icon icon="solar:refresh-bold" className="w-5 h-5 animate-spin text-indigo-500" />
+                        <span className="text-sm text-indigo-600 dark:text-indigo-400">Subiendo archivo...</span>
+                      </div>
+                    ) : headerMediaFile && headerMediaUrl ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-green-200 dark:border-green-500/30">
+                          {headerMediaFile.preview ? (
+                            <img src={headerMediaFile.preview} alt="Preview" className="w-16 h-16 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                              <Icon icon={selectedMetaTemplate.parsed!.header!.format === 'VIDEO' ? 'solar:videocamera-record-bold-duotone' : 'solar:document-bold-duotone'} className="w-7 h-7 text-gray-400" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{headerMediaFile.name}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Icon icon="solar:check-circle-bold" className="w-3.5 h-3.5 text-green-500" />
+                              <span className="text-xs text-green-600 dark:text-green-400">Archivo personalizado subido</span>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => { setHeaderMediaFile(null); setHeaderMediaUrl(selectedMetaTemplate?.parsed?.header?.example_url || ''); }}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors" title="Volver al recurso de la plantilla">
+                            <Icon icon="solar:undo-left-bold" className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          Esta plantilla requiere un recurso de cabecera. Sube uno para continuar.
+                        </p>
+                        <label className="flex flex-col items-center justify-center gap-2 py-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500/50 hover:bg-indigo-50/30 dark:hover:bg-indigo-500/5 transition-colors">
+                          <Icon icon="solar:upload-minimalistic-bold-duotone" className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {selectedMetaTemplate.parsed!.header!.format === 'IMAGE' ? 'Subir imagen (JPG, PNG, máx 5MB)'
+                              : selectedMetaTemplate.parsed!.header!.format === 'VIDEO' ? 'Subir video (MP4, máx 16MB)'
+                              : 'Subir documento (PDF, máx 5MB)'}
+                          </span>
+                          <input type="file" className="hidden"
+                            accept={selectedMetaTemplate.parsed!.header!.format === 'IMAGE' ? 'image/jpeg,image/png,image/webp'
+                              : selectedMetaTemplate.parsed!.header!.format === 'VIDEO' ? 'video/mp4,video/3gpp'
+                              : '.pdf,.doc,.docx'}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleHeaderMediaUpload(f); e.target.value = ''; }} />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Template Preview */}
                 {selectedMetaTemplate && (
                   <div className="bg-[#e5ddd5] dark:bg-gray-800 rounded-xl p-3 border dark:border-gray-700">
                     <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Vista previa del mensaje</p>
                     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-3 max-w-xs border dark:border-gray-700">
-                      {selectedMetaTemplate.parsed?.header?.text && <p className="font-bold text-sm text-gray-900 dark:text-white mb-1">{selectedMetaTemplate.parsed.header.text}</p>}
+                      {/* Media header preview */}
+                      {selectedMetaTemplate.parsed?.header?.format && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(selectedMetaTemplate.parsed.header.format) && (
+                        headerMediaUrl && /^https?:\/\/.+/.test(headerMediaUrl) ? (
+                          selectedMetaTemplate.parsed.header.format === 'IMAGE' ? (
+                            <img src={headerMediaUrl} alt="Header" className="w-full h-32 object-cover rounded-md mb-2" onError={e => (e.currentTarget.style.display = 'none')} />
+                          ) : selectedMetaTemplate.parsed.header.format === 'VIDEO' ? (
+                            <div className="w-full h-32 bg-gray-900 rounded-md mb-2 flex items-center justify-center">
+                              <Icon icon="solar:play-circle-bold" className="w-10 h-10 text-white/70" />
+                            </div>
+                          ) : (
+                            <div className="w-full h-16 bg-gray-100 dark:bg-gray-800 rounded-md mb-2 flex items-center justify-center gap-2">
+                              <Icon icon="solar:document-bold" className="w-5 h-5 text-gray-400" />
+                              <span className="text-xs text-gray-500">Documento adjunto</span>
+                            </div>
+                          )
+                        ) : (
+                          <div className="w-full h-24 bg-gray-100 dark:bg-gray-800 rounded-md mb-2 flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600">
+                            <div className="text-center">
+                              <Icon icon={selectedMetaTemplate.parsed.header.format === 'IMAGE' ? 'solar:gallery-bold-duotone' : selectedMetaTemplate.parsed.header.format === 'VIDEO' ? 'solar:videocamera-record-bold-duotone' : 'solar:document-bold-duotone'} className="w-6 h-6 text-gray-400 mx-auto" />
+                              <span className="text-[10px] text-gray-400 mt-1">Sin {selectedMetaTemplate.parsed.header.format === 'IMAGE' ? 'imagen' : selectedMetaTemplate.parsed.header.format === 'VIDEO' ? 'video' : 'documento'}</span>
+                            </div>
+                          </div>
+                        )
+                      )}
+                      {selectedMetaTemplate.parsed?.header?.format === 'TEXT' && selectedMetaTemplate.parsed?.header?.text && <p className="font-bold text-sm text-gray-900 dark:text-white mb-1">{selectedMetaTemplate.parsed.header.text}</p>}
                       <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{selectedMetaTemplate.parsed?.body || ''}</p>
                       {selectedMetaTemplate.parsed?.footer && <p className="text-xs text-gray-400 mt-2">{selectedMetaTemplate.parsed.footer}</p>}
                       {selectedMetaTemplate.parsed?.buttons && selectedMetaTemplate.parsed.buttons.length > 0 && (
@@ -1047,14 +1299,123 @@ if (reset) {
                   <Icon icon="solar:users-group-two-rounded-bold-duotone" className="w-5 h-5" />
                 </div>
                 <div className="text-left">
-                  <div className={`font-semibold ${campaignData.selectAllClients ? 'text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>Enviar a todos los clientes</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{campaignData.selectAllClients ? '✓ Se enviará a todos los clientes activos con celular' : 'Haz clic para seleccionar todos automáticamente'}</div>
+                  <div className={`font-semibold ${campaignData.selectAllClients ? 'text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                    {selectedTags.length > 0 ? 'Enviar a todos los filtrados' : 'Enviar a todos los clientes'}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {campaignData.selectAllClients
+                      ? selectedTags.length > 0
+                        ? `✓ Se enviará a ${clientsFilteredByTags.filter(c => c.celular_principal).length} clientes filtrados con celular`
+                        : '✓ Se enviará a todos los clientes activos con celular'
+                      : 'Haz clic para seleccionar todos automáticamente'}
+                  </div>
                 </div>
               </div>
               <div className={`w-12 h-7 rounded-full p-1 transition-all ${campaignData.selectAllClients ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
                 <div className={`w-5 h-5 rounded-full bg-white shadow-md transition-transform ${campaignData.selectAllClients ? 'translate-x-5' : 'translate-x-0'}`} />
               </div>
             </button>
+
+            {/* Tag segmentation filter — visible always */}
+            {availableTags.length > 0 && (
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Icon icon="solar:tag-bold-duotone" className="w-[18px] h-[18px] text-indigo-500" />
+                    <h4 className="font-semibold text-sm text-gray-900 dark:text-white">Segmentar por etiquetas</h4>
+                  </div>
+                  {selectedTags.length > 0 && (
+                    <button type="button" className="text-xs text-red-500 hover:text-red-700 underline" onClick={() => setSelectedTags([])}>
+                      Limpiar filtros
+                    </button>
+                  )}
+                </div>
+
+                {/* AND/OR toggle */}
+                {selectedTags.length > 1 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500 dark:text-gray-400">Coincidencia:</span>
+                    <button type="button"
+                      className={`px-3 py-1 rounded-full font-medium transition-all ${tagMatchMode === 'any' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600'}`}
+                      onClick={() => setTagMatchMode('any')}>
+                      Cualquiera (OR)
+                    </button>
+                    <button type="button"
+                      className={`px-3 py-1 rounded-full font-medium transition-all ${tagMatchMode === 'all' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600'}`}
+                      onClick={() => setTagMatchMode('all')}>
+                      Todas (AND)
+                    </button>
+                    <span className="text-gray-400 dark:text-gray-500 ml-1">
+                      {tagMatchMode === 'any' ? 'Clientes con al menos una etiqueta' : 'Clientes con todas las etiquetas'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Tag search input + suggestions dropdown */}
+                <div className="relative">
+                  <div className="relative">
+                    <Icon icon="solar:magnifer-bold" className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                    <Input
+                      placeholder="Buscar etiqueta..."
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      className="h-8 pl-9 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                    />
+                  </div>
+                  {tagInput.trim() && (
+                    <div className="absolute z-10 top-full mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                      {availableTags
+                        .filter(t => t.normalized.includes(normalizeTag(tagInput)) && !selectedTags.map(normalizeTag).includes(t.normalized))
+                        .map(t => (
+                          <button key={t.normalized} type="button"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                            onClick={() => { setSelectedTags(prev => [...prev, t.display]); setTagInput(''); }}>
+                            <span className="font-medium">{t.display.replace(/_/g, ' ')}</span>
+                            <span className="text-xs text-gray-400 ml-2">
+                              ({clients.filter(c => ((c as any).etiquetas || '').split(',').some((ct: string) => normalizeTag(ct) === t.normalized)).length})
+                            </span>
+                          </button>
+                        ))}
+                      {availableTags.filter(t => t.normalized.includes(normalizeTag(tagInput)) && !selectedTags.map(normalizeTag).includes(t.normalized)).length === 0 && (
+                        <div className="px-3 py-2 text-sm text-gray-400">No se encontraron etiquetas</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Available tags as clickable chips (when nothing selected & no search) */}
+                {!tagInput.trim() && selectedTags.length === 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableTags.slice(0, 20).map(t => (
+                      <button key={t.normalized} type="button"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-indigo-400 hover:text-indigo-600 transition-all"
+                        onClick={() => setSelectedTags(prev => [...prev, t.display])}>
+                        {t.display.replace(/_/g, ' ')}
+                        <span className="text-gray-400">({clients.filter(c => ((c as any).etiquetas || '').split(',').some((ct: string) => normalizeTag(ct) === t.normalized)).length})</span>
+                      </button>
+                    ))}
+                    {availableTags.length > 20 && <span className="text-xs text-gray-400 self-center">+{availableTags.length - 20} más...</span>}
+                  </div>
+                )}
+
+                {/* Selected tags */}
+                {selectedTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedTags.map(tag => (
+                      <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
+                        {tag.replace(/_/g, ' ')}
+                        <button type="button" onClick={() => setSelectedTags(prev => prev.filter(t => normalizeTag(t) !== normalizeTag(tag)))} className="ml-0.5 hover:text-red-500">
+                          <Icon icon="solar:close-circle-bold" className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                    <span className="self-center text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                      → {clientsFilteredByTags.filter(c => c.celular_principal).length} clientes con teléfono
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {!campaignData.selectAllClients && (
               <>
@@ -1223,7 +1584,11 @@ if (reset) {
             {campaignData.selectAllClients && (
               <Alert className="dark:border-gray-700 dark:bg-gray-800">
                 <Icon icon="solar:info-circle-bold" className="w-4 h-4 dark:text-blue-400" />
-                <AlertDescription className="dark:text-gray-300">La campaña se enviará a todos los clientes activos con número de celular válido.</AlertDescription>
+                <AlertDescription className="dark:text-gray-300">
+                  {selectedTags.length > 0
+                    ? `La campaña se enviará a ${clientsFilteredByTags.filter(c => c.celular_principal).length} clientes filtrados por etiquetas con celular válido.`
+                    : 'La campaña se enviará a todos los clientes activos con número de celular válido.'}
+                </AlertDescription>
               </Alert>
             )}
 

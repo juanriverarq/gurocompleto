@@ -388,14 +388,21 @@ html.dark form textarea:hover,
 }
 
 html.dark form input,
-html.dark form input:focus,
 html.dark form input:hover,
+html.dark form input:active,
 .dark form input,
-.dark form input:focus,
-.dark form input:hover {
-  background-color: #374151 !important;
-  color: #ffffff !important;
-  border-color: #4b5563 !important;
+.dark form input:hover,
+.dark form input:active {
+  background-color: #26262e !important;
+  color: #f4f4f5 !important;
+  border-color: #3f3f46 !important;
+}
+
+html.dark form input:focus,
+.dark form input:focus {
+  background-color: #2a2a33 !important;
+  color: #fafafa !important;
+  border-color: rgba(87, 60, 255, 0.45) !important;
 }
 
 html.dark form option,

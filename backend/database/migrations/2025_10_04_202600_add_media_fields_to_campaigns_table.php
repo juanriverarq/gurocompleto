@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('campaigns', function (Blueprint $table) {
             // Campos para adjuntar media (imagen) a campañas
-            $table->string('media_url')->nullable()->after('message_template');
+            $table->text('media_url')->nullable()->after('message_template');
             $table->string('media_type')->nullable()->after('media_url');
         });
     }

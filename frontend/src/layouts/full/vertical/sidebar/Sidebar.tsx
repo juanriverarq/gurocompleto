@@ -90,6 +90,7 @@ const filteredMenuitems = getFilteredMenuItems(hasPermission, canAccessModule, t
       6: ['Inteligencia Artificial'],
       7: ['Documentos'],
       8: ['Configuración'],
+      9: ['Cotizadores'],
     };
 
     const targetSections = sectionMap[selectedIconId || 1] || [];

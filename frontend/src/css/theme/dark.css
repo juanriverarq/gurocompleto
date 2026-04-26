@@ -89,3 +89,46 @@
 .dark ::-webkit-calendar-picker-indicator {
     filter: invert(1);
 }
+
+/* Fix Flowbite dropdown dark mode */
+.dark .py-2.bg-white.border.border-gray-100.rounded-lg.shadow-lg {
+    background-color: var(--color-darkgray) !important;
+    border-color: var(--color-darkborder) !important;
+}
+
+.dark .py-2.bg-white.border.border-gray-100.rounded-lg.shadow-lg .py-2.px-4 {
+    background-color: transparent !important;
+    color: var(--color-white) !important;
+}
+
+.dark .py-2.bg-white.border.border-gray-100.rounded-lg.shadow-lg .py-2.px-4:hover {
+    background-color: var(--color-darkmuted) !important;
+}
+
+/* More specific Flowbite dropdown targeting */
+.dark [role="menu"].bg-white {
+    background-color: var(--color-darkgray) !important;
+    border-color: var(--color-darkborder) !important;
+}
+
+.dark [role="menu"].bg-white [role="menuitem"] {
+    color: var(--color-white) !important;
+}
+
+.dark [role="menu"].bg-white [role="menuitem"]:hover {
+    background-color: var(--color-darkmuted) !important;
+}
+
+/* Flowbite React dropdown specific */
+.dark .divide-y.divide-gray-100.bg-white.rounded-lg.shadow-lg {
+    background-color: var(--color-darkgray) !important;
+    border-color: var(--color-darkborder) !important;
+}
+
+.dark .divide-y.divide-gray-100.bg-white.rounded-lg.shadow-lg .block.px-4.py-2 {
+    color: var(--color-white) !important;
+}
+
+.dark .divide-y.divide-gray-100.bg-white.rounded-lg.shadow-lg .block.px-4.py-2:hover {
+    background-color: var(--color-darkmuted) !important;
+}

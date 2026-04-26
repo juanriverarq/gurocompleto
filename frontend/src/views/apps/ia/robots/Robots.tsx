@@ -711,8 +711,8 @@ const Robots = () => {
                     : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                 }`}
               >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center p-1.5 ${
-                  isSessionExpired ? 'bg-white ring-2 ring-red-400' : isConnected ? 'bg-white ring-2 ring-green-400' : 'bg-white dark:bg-gray-700'
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center p-1.5 bg-white ${
+                  isSessionExpired ? 'ring-2 ring-red-400' : isConnected ? 'ring-2 ring-green-400' : 'border border-gray-200'
                 }`}>
                   <img
                     src={aseg.logoUrl}
@@ -787,7 +787,7 @@ const Robots = () => {
               )}
               {!isSuraConnected ? (
                 <div className="text-center py-10">
-                  <div className="w-20 h-20 mx-auto mb-5 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center">
+                  <div className="w-20 h-20 mx-auto mb-5 bg-white border border-gray-200 dark:border-neutral-700 rounded-2xl flex items-center justify-center p-2">
                     <img src={company.logoUrl} alt={company.nombre} className="w-14 h-14 object-contain opacity-50 grayscale" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -1421,7 +1421,7 @@ const Robots = () => {
         return (
           <Card className="mb-6 p-5" style={{ borderRadius: `${isBorderRadius}px` }}>
             <div className="text-center py-10">
-              <div className="w-20 h-20 mx-auto mb-5 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center">
+              <div className="w-20 h-20 mx-auto mb-5 bg-white border border-gray-200 dark:border-neutral-700 rounded-2xl flex items-center justify-center p-2">
                 <img src={company.logoUrl} alt={company.nombre} className="w-14 h-14 object-contain opacity-50 grayscale" />
               </div>
               <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -1515,8 +1515,8 @@ const Robots = () => {
                         return aseg ? (
                           <div
                             key={asegId}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center overflow-hidden ${
-                              aseg.conectada ? 'bg-white ring-2 ring-green-400' : 'bg-gray-100'
+                            className={`w-8 h-8 rounded-full flex items-center justify-center overflow-hidden bg-white ${
+                              aseg.conectada ? 'ring-2 ring-green-400' : 'border border-gray-200'
                             }`}
                             title={aseg.nombre}
                           >

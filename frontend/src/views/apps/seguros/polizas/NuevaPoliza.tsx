@@ -468,10 +468,23 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // Modal "Cartera Pagada": al seleccionar "Pagado" en Cartera, preguntar
+  // qué tipo de recaudo se generó (oficina ó aseguradora — son excluyentes)
+  const [showCarteraPagadoModal, setShowCarteraPagadoModal] = useState(false);
+  const [carteraPagadoTipo, setCarteraPagadoTipo] = useState<'oficina' | 'aseguradora'>('oficina');
+  // Valor previo de estadoCartera (para revertir si cancelan)
+  const [estadoCarteraPrev, setEstadoCarteraPrev] = useState<string>('');
+  // Choice persistida para enviarse en el payload de guardado.
+  // null = el usuario aún no confirmó / no aplica.
+  const [carteraPagadoChoice, setCarteraPagadoChoice] = useState<'oficina' | 'aseguradora' | null>(null);
+
   // Beneficiarios dinámicos
   type Beneficiario = { nombre: string; documento: string; parentesco: string; porcentaje: string };
   const emptyBeneficiario = (): Beneficiario => ({ nombre: '', documento: '', parentesco: '', porcentaje: '' });
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([emptyBeneficiario()]);
+  const [cancellationReason, setCancellationReason] = useState<string>('');
+  const [cancellationReasonOther, setCancellationReasonOther] = useState<string>('');
+  const [cancellationReasons, setCancellationReasons] = useState<Array<{ key: string; label: string }>>([]);
   const [aseguradoras, setAseguradoras] = useState<{ id: string; nombre: string }[]>([]);
   const [sedes, setSedes] = useState<{ id: string; nombre: string }[]>([]);
   const [ramos, setRamos] = useState<{ id: string; nombre: string; subramo: string[]; comisiones_aseguradoras: { aseguradora_id: string; aseguradora_nombre?: string; porcentaje_iva: number; porcentaje_comision: number; pri_a_pre_por_defecto: number }[] }[]>([]);
@@ -538,26 +551,14 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     };
   }, [formData.numeroPoliza, isEditMode, polizaToEdit?.id]);
 
-  // Verificar si todos los campos obligatorios están completos para habilitar el botón Guardar
+  // Verificar si todos los campos obligatorios están completos para habilitar el botón Guardar.
+  // REGLA: solo "Forma de pago" es obligatorio. Todo lo demás es opcional.
   const canSavePoliza = useCallback((): boolean => {
-    // Paso 1: Información de la póliza
-    if (!formData.numeroPoliza?.trim() || formData.numeroPoliza.trim().length < 3) return false;
-    if (!formData.aseguradora?.trim()) return false;
-    if (!formData.ramoPrincipal?.trim()) return false;
-    if (!formData.fechaInicio) return false;
-    if (!formData.fechaFin) return false;
-    
-    // Paso 2: Cliente seleccionado
-    if (!selectedClient?.id) return false;
-    
-    // Paso 3: Información financiera
-    if (formData.primaNeta === undefined || formData.primaNeta === null || formData.primaNeta === '' || parseFloat(formData.primaNeta) < 0) return false;
-    
+    if (!formData.formaPago?.trim()) return false;
     // No permitir guardar si hay error de póliza duplicada (solo en modo crear, no en editar)
     if (polizaError && !isEditMode) return false;
-    
     return true;
-  }, [formData, selectedClient, polizaError, isEditMode]);
+  }, [formData.formaPago, polizaError, isEditMode]);
 
   // Autocompletar de placas (buscar en BD y permitir crear si no existe)
   const [placaInput, setPlacaInput] = useState<string>('');
@@ -683,6 +684,31 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     });
   }, []);
 
+  // Cargar motivos de cancelación
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await polizaService.getCancellationReasons();
+        setCancellationReasons(list || []);
+      } catch {}
+    })();
+  }, []);
+
+  // Precargar motivo de cancelación existente en modo edición
+  useEffect(() => {
+    if (isEditMode && polizaToEdit && (polizaToEdit as any).cancellation_reason && cancellationReasons.length > 0) {
+      const existing = (polizaToEdit as any).cancellation_reason;
+      // Si coincide con una clave conocida, usar esa clave; si no, es texto libre → "otro"
+      const isKnownKey = cancellationReasons.some(r => r.key === existing);
+      if (isKnownKey) {
+        setCancellationReason(existing);
+      } else {
+        setCancellationReason('otro');
+        setCancellationReasonOther(existing);
+      }
+    }
+  }, [isEditMode, polizaToEdit, cancellationReasons]);
+
   // Buscar clientes por query (debounce)
   useEffect(() => {
     const handler = setTimeout(async () => {
@@ -718,8 +744,16 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   const { sedes: sedesHook } = useSedes();
   const { vendedores: vendedoresHook } = useVendedores();
 
-  // Lista de bancos de Colombia (para select de Banco)
+  // Lista de bancos / financieras para el select de Banco.
+  // Incluye bancos tradicionales + financieras de seguros (Finesa, Crediseguros, etc.)
   const colombianBanks = [
+    // Financieras de primas / entidades del sector asegurador
+    'Finesa',
+    'Crediseguros',
+    'Sura',
+    'Crediestado',
+    'Previseguro',
+    // Bancos tradicionales
     'Bancolombia',
     'Banco de Bogotá',
     'BBVA Colombia',
@@ -744,7 +778,32 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   ];
 
   useEffect(() => {
-    setAseguradoras((asegHook || []).map((a: any) => ({ id: String(a.id), nombre: a.nombre || a.name })));
+    const aseguradorasBase = (asegHook || []).map((a: any) => ({ id: String(a.id), nombre: a.nombre || a.name }));
+    
+    // Agregar aseguradoras solicitadas si no existen
+    const aseguradorasAdicionales = ['Finesa', 'Crediseguros', 'Sura', 'Crediestado', 'Previseguro'];
+    const existentes = new Set(aseguradorasBase.map(a => a.nombre.toLowerCase()));
+    
+    // Verificar si existen variaciones similares
+    const adicionales = aseguradorasAdicionales
+      .filter(nombre => {
+        const nombreLower = nombre.toLowerCase();
+        const existeExacto = existentes.has(nombreLower);
+        
+        // Verificar si existe una variación que contenga el nombre
+        const existeVariacion = aseguradorasBase.some(a => 
+          a.nombre.toLowerCase().includes(nombreLower) || 
+          nombreLower.includes(a.nombre.toLowerCase())
+        );
+        
+        return !existeExacto && !existeVariacion;
+      })
+      .map((nombre, index) => ({
+        id: `custom-${index + 1}`,
+        nombre
+      }));
+    
+    setAseguradoras([...aseguradorasBase, ...adicionales]);
   }, [asegHook]);
 
   useEffect(() => {
@@ -1322,6 +1381,9 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           fecha_inicio: formData.fechaInicio,
           fecha_fin: formData.fechaFin,
           estado: mapUiToEstado(formData.tipoPoliza) || 'ACTIVA',
+          cancellation_reason: formData.tipoPoliza === 'cancelada'
+            ? (cancellationReason === 'otro' ? (cancellationReasonOther || 'otro') : (cancellationReason || undefined))
+            : undefined,
           sede: formData.sede || undefined,
           // Extensiones
           fecha_recepcion: formData.fechaRecepcion || undefined,
@@ -1372,6 +1434,9 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           total_poliza_financiada: (formData as any).totalPolizaFinanciada ? parseFloat((formData as any).totalPolizaFinanciada) : undefined,
           // Cartera
           estado_cartera: (formData as any).estadoCartera || undefined,
+          // Si el usuario eligió generar el recaudo al marcar "Pagado" (oficina XOR aseguradora)
+          cartera_pagado_oficina: carteraPagadoChoice === 'oficina' ? true : undefined,
+          cartera_pagado_aseguradora: carteraPagadoChoice === 'aseguradora' ? true : undefined,
           // Impuestos
           porcentaje_impuesto_bomberos: (formData as any).porcentajeImpuestoBomberos ? parseFloat((formData as any).porcentajeImpuestoBomberos) : undefined,
           impuesto_bomberos: (formData as any).impuestoBomberos ? parseFloat((formData as any).impuestoBomberos) : undefined,
@@ -1577,16 +1642,44 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           <SectionHeader title="Información principal de la póliza" icon="solar:document-bold" />
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="relative">
-              <FormField id="numeroPoliza" name="numeroPoliza" label="Número Póliza" value={formData.numeroPoliza} onChange={handleInputChange} error={errors.numeroPoliza} required placeholder="POL-2024-XXX" />
+              <FormField id="numeroPoliza" name="numeroPoliza" label="Número Póliza *" value={formData.numeroPoliza} onChange={handleInputChange} error={errors.numeroPoliza} placeholder="POL-2024-XXX" />
               {checkingPoliza && <div className="absolute right-2 top-8"><Spinner size="sm" /></div>}
               {!checkingPoliza && polizaError && !isEditMode && (
                 <div className="flex items-center gap-1 mt-0.5 text-amber-600 text-[10px]"><Icon icon="solar:danger-triangle-bold" className="w-3 h-3" /><span>{polizaError}</span></div>
               )}
             </div>
 
-            <FormField id="tipoPoliza" name="tipoPoliza" label="Estado" value={formData.tipoPoliza} onChange={handleInputChange} error={errors.tipoPoliza} required type="select" options={[
+            <FormField id="tipoPoliza" name="tipoPoliza" label="Estado" value={formData.tipoPoliza} onChange={handleInputChange} error={errors.tipoPoliza} type="select" options={[
               { value: '', label: 'Seleccionar' }, { value: 'vigente', label: 'Vigente' }, { value: 'vencida', label: 'Vencida' }, { value: 'cancelada', label: 'Cancelada' }, { value: 'cotizacion', label: 'Cotización' }, { value: 'devengada', label: 'Devengada' }, { value: 'expedicion', label: 'Expedición' }, { value: 'no_renovada', label: 'No renovada' },
             ]} />
+
+            {/* Motivo de cancelación - solo visible cuando estado es Cancelada */}
+            {formData.tipoPoliza === 'cancelada' && (
+              <>
+                <FormField
+                  id="cancellationReason"
+                  name="cancellationReason"
+                  label="Motivo de cancelación *"
+                  value={cancellationReason}
+                  onChange={(e: any) => setCancellationReason(e.target.value)}
+                  type="select"
+                  options={[
+                    { value: '', label: '— Selecciona un motivo —' },
+                    ...cancellationReasons.map(r => ({ value: r.key, label: r.label }))
+                  ]}
+                />
+                {cancellationReason === 'otro' && (
+                  <FormField
+                    id="cancellationReasonOther"
+                    name="cancellationReasonOther"
+                    label="Especifica el motivo *"
+                    value={cancellationReasonOther}
+                    onChange={(e: any) => setCancellationReasonOther(e.target.value)}
+                    placeholder="Describe el motivo de cancelación"
+                  />
+                )}
+              </>
+            )}
 
             <div className="flex items-center gap-3 pt-5">
               <label className="flex items-center gap-1.5 text-xs">
@@ -1597,14 +1690,14 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
               </label>
             </div>
 
-            <FormField id="aseguradora" name="aseguradora" label="Aseguradora" value={formData.aseguradora} onChange={(e: any) => {
+            <FormField id="aseguradora" name="aseguradora" label="Aseguradora *" value={formData.aseguradora} onChange={(e: any) => {
               handleInputChange(e);
               const newAseg = e.target.value;
               // Limpiar ramo y subramo si la aseguradora cambia
               if (newAseg !== formData.aseguradora) {
                 setFormData(prev => ({ ...prev, aseguradora: newAseg, ramoPrincipal: '', subramo: '' }));
               }
-            }} error={errors.aseguradora} required type="select" options={[{ value: '', label: 'Seleccionar' }, ...aseguradoras.map(a => ({ value: a.nombre, label: a.nombre }))]} />
+            }} error={errors.aseguradora} type="select" options={[{ value: '', label: 'Seleccionar' }, ...aseguradoras.map(a => ({ value: a.nombre, label: a.nombre }))]} />
 
             {(() => {
               // Filtrar ramos: si hay aseguradora seleccionada, mostrar solo ramos que tengan comisión con esa aseguradora
@@ -1614,7 +1707,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                 : ramos;
               // Si no hay ramos filtrados por aseguradora pero hay ramos en general, mostrar todos
               const ramosToShow = ramosDisponibles.length > 0 ? ramosDisponibles : ramos;
-              return <FormField id="ramoPrincipal" name="ramoPrincipal" label="Ramo" value={formData.ramoPrincipal} onChange={(e: any) => {
+              return <FormField id="ramoPrincipal" name="ramoPrincipal" label="Ramo *" value={formData.ramoPrincipal} onChange={(e: any) => {
                 handleInputChange(e);
                 const newRamo = e.target.value;
                 if (newRamo !== formData.ramoPrincipal) {
@@ -1636,7 +1729,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                     }
                   }
                 }
-              }} error={errors.ramoPrincipal} required type="select" options={[{ value: '', label: 'Seleccionar' }, ...ramosToShow.map(r => ({ value: r.nombre, label: r.nombre }))]} />;
+              }} error={errors.ramoPrincipal} type="select" options={[{ value: '', label: 'Seleccionar' }, ...ramosToShow.map(r => ({ value: r.nombre, label: r.nombre }))]} />;
             })()}
 
             {(() => {
@@ -1708,11 +1801,11 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           <SectionHeader title="Cliente" icon="solar:user-bold" />
           <div className="space-y-3 overflow-visible">
             <div className="relative" style={{ zIndex: 1000 }}>
-              <Label className="text-xs font-medium text-gray-900 dark:text-white mb-1 block">Buscar cliente <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium text-gray-900 dark:text-white mb-1 block">Buscar cliente</Label>
               <div className="flex gap-1">
                 <Input placeholder="Nombre, documento, teléfono..." value={selectedClient ? `${selectedClient.nombre} (${selectedClient.documento || 'sin doc'})` : clientQuery}
                   onChange={(e) => { setSelectedClient(null); setClientQuery(e.target.value); setFormData(prev => ({ ...prev, cliente_id: undefined as any })); }}
-                  className={`flex-1 ${errors['cliente_id'] ? 'border-red-500' : ''}`} required />
+                  className={`flex-1 ${errors['cliente_id'] ? 'border-red-500' : ''}`} />
                 <Button type="button" color="primary" size="xs" onClick={() => { setClientModalMode('new'); setClienteToEdit(null); setShowClientModal(true); }}>
                   <Icon icon="solar:user-plus-bold" className="w-3 h-3" />
                 </Button>
@@ -1758,8 +1851,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Vigencia" icon="solar:calendar-bold" />
           <div className="grid grid-cols-3 gap-3">
-            <FormField id="fechaExpedicion" name="fechaExpedicion" label="Expedición" type="date" value={formData.fechaExpedicion} onChange={handleInputChange} error={errors.fechaExpedicion} required />
-            <FormField id="fechaInicio" name="fechaInicio" label="Inicio" type="date" value={formData.fechaInicio} onChange={handleInputChange} error={errors.fechaInicio} required />
+            <FormField id="fechaExpedicion" name="fechaExpedicion" label="Expedición *" type="date" value={formData.fechaExpedicion} onChange={handleInputChange} error={errors.fechaExpedicion} />
+            <FormField id="fechaInicio" name="fechaInicio" label="Inicio *" type="date" value={formData.fechaInicio} onChange={handleInputChange} error={errors.fechaInicio} />
             <div>
               <Label htmlFor="fechaFin" className="text-xs font-medium text-gray-900 dark:text-white">Fin *</Label>
               <Input id="fechaFin" name="fechaFin" type="date" value={formData.fechaFin} onChange={handleInputChange} className={`mt-1 ${errors.fechaFin ? 'border-red-500' : ''}`} />
@@ -1883,7 +1976,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Forma de Pago" icon="solar:card-bold" />
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <FormField id="formaPago" name="formaPago" label="Forma" value={formData.formaPago} onChange={handleInputChange} error={errors.formaPago} required type="select" options={[
+            <FormField id="formaPago" name="formaPago" label="Forma *" value={formData.formaPago} onChange={handleInputChange} error={errors.formaPago} required type="select" options={[
               { value: '', label: 'Seleccionar' }, { value: 'contado', label: 'Contado' }, { value: 'credito', label: 'Crédito' }, { value: 'financiado', label: 'Financiado' }, { value: 'fraccionado', label: 'Fraccionado' },
             ]} />
             <FormField id="periodicidadPago" name="periodicidadPago" label="Periodicidad" value={formData.periodicidadPago} onChange={handleInputChange} type="select" options={[
@@ -1990,8 +2083,43 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         {/* === CARTERA E IMPUESTOS === */}
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Cartera e Impuestos" icon="solar:bill-list-bold" />
+          {(formData as any).estadoCartera === 'Pagado' && carteraPagadoChoice && (
+            <div className="mb-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-lg p-2 text-xs text-green-800 dark:text-green-300 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <Icon icon="solar:check-circle-bold" width={14} />
+                Al guardar se generará un recaudo
+                {carteraPagadoChoice === 'oficina' && <strong> en oficina</strong>}
+                {carteraPagadoChoice === 'aseguradora' && <strong> a aseguradora (pago directo)</strong>}
+                . Las cuotas quedarán marcadas como pagadas.
+              </span>
+              <button
+                type="button"
+                className="text-[11px] underline hover:text-green-900"
+                onClick={() => {
+                  setCarteraPagadoTipo(carteraPagadoChoice);
+                  setEstadoCarteraPrev('Pagado');
+                  setShowCarteraPagadoModal(true);
+                }}
+              >
+                Editar
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <FormField id="estadoCartera" name="estadoCartera" label="Cartera" value={(formData as any).estadoCartera || ''} onChange={handleInputChange} type="select" options={[
+            <FormField id="estadoCartera" name="estadoCartera" label="Cartera" value={(formData as any).estadoCartera || ''} onChange={(e: any) => {
+              const newVal = e.target.value;
+              const prevVal = (formData as any).estadoCartera || '';
+              handleInputChange(e);
+              if (newVal === 'Pagado' && prevVal !== 'Pagado') {
+                // Abrir modal para preguntar tipo de recaudo
+                setEstadoCarteraPrev(prevVal);
+                setCarteraPagadoTipo('oficina');
+                setShowCarteraPagadoModal(true);
+              } else if (newVal !== 'Pagado') {
+                // Si cambia a otro valor, limpiar la elección
+                setCarteraPagadoChoice(null);
+              }
+            }} type="select" options={[
               { value: '', label: 'Seleccionar' }, { value: 'Sin pagos Asignados', label: 'Sin pagos' }, { value: 'Al día', label: 'Al día' }, { value: 'En mora', label: 'En mora' }, { value: 'Pagado', label: 'Pagado' },
             ]} />
             <div>
@@ -2032,6 +2160,116 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
       </div>
 
       </form>
+
+      {/* Modal: opciones al marcar Cartera = Pagado */}
+      <Modal
+        show={showCarteraPagadoModal}
+        onClose={() => {
+          // Cerrar via backdrop equivale a cancelar: revertir si no había choice previa
+          if (!carteraPagadoChoice) {
+            setFormData((prev: any) => ({ ...prev, estadoCartera: estadoCarteraPrev }));
+          }
+          setShowCarteraPagadoModal(false);
+        }}
+        size="md"
+      >
+        <Modal.Header>
+          <span className="flex items-center gap-2">
+            <Icon icon="solar:wallet-money-bold-duotone" width={22} className="text-green-500" />
+            Marcar cartera como Pagada
+          </span>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              ¿Cómo se realizó el recaudo? Selecciona el tipo para generar el pago automáticamente y marcar las cuotas como pagadas:
+            </p>
+
+            <div className="space-y-2">
+              <label
+                className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition ${
+                  carteraPagadoTipo === 'oficina'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="carteraPagadoTipo"
+                  value="oficina"
+                  checked={carteraPagadoTipo === 'oficina'}
+                  onChange={() => setCarteraPagadoTipo('oficina')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Icon icon="solar:buildings-bold" width={18} className="text-blue-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Recaudo en Oficina</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    El cliente pagó en la oficina del broker. Se genera un pago de oficina y la cuota queda lista para pagar a la aseguradora.
+                  </p>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition ${
+                  carteraPagadoTipo === 'aseguradora'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-purple-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="carteraPagadoTipo"
+                  value="aseguradora"
+                  checked={carteraPagadoTipo === 'aseguradora'}
+                  onChange={() => setCarteraPagadoTipo('aseguradora')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Icon icon="solar:shield-check-bold" width={18} className="text-purple-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Pago a Aseguradora (directo)</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    El cliente pagó directo a la aseguradora. Se cobra la comisión y la cuota queda totalmente pagada.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-2 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+              <Icon icon="solar:info-circle-bold" width={14} className="mt-0.5 shrink-0" />
+              <span>Los pagos y recibos se generarán automáticamente al guardar la póliza.</span>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="success"
+            onClick={() => {
+              setCarteraPagadoChoice(carteraPagadoTipo);
+              setShowCarteraPagadoModal(false);
+            }}
+          >
+            <Icon icon="solar:check-circle-bold" width={16} className="mr-2" />
+            Confirmar
+          </Button>
+          <Button
+            color="gray"
+            onClick={() => {
+              // Cancelar: revertir estadoCartera a su valor previo y limpiar choice
+              if (!carteraPagadoChoice) {
+                setFormData((prev: any) => ({ ...prev, estadoCartera: estadoCarteraPrev }));
+              }
+              setShowCarteraPagadoModal(false);
+            }}
+          >
+            Cancelar
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Modal para crear/editar cliente */}
       <Modal show={showClientModal} onClose={() => setShowClientModal(false)} size="7xl">

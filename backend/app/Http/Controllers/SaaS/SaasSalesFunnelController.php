@@ -179,7 +179,10 @@ class SaasSalesFunnelController extends Controller
                 'custom_fields' => 'nullable|array',
                 'quality_rating' => 'required|in:' . implode(',', array_keys(SalesFunnel::QUALITY_RATINGS)),
                 'lead_score' => 'nullable|integer|min:0|max:100',
-                'next_follow_up_at' => 'nullable|date|after:now'
+                'next_follow_up_at' => 'nullable|date|after:now',
+                'referrer_type' => 'nullable|in:vendedor,otro',
+                'referrer_vendedor_id' => 'nullable|integer',
+                'referrer_name' => 'nullable|string|max:255',
             ]);
 
             $actor = \App\Http\Middleware\UnifiedAuthMiddleware::getAuthenticatedUser($request);
@@ -196,15 +199,26 @@ class SaasSalesFunnelController extends Controller
                 'potential_value' => $validated['potential_value']
             ]);
 
+            // Si el lead trae next_follow_up_at, creamos una tarea comercial
+            // en el módulo de Seguimiento + Calendario.
+            if (!empty($validated['next_follow_up_at'])) {
+                $this->createFollowUpTaskForLead($lead, $validated['next_follow_up_at']);
+            }
+
             return response()->json([
                 'message' => 'Lead creado exitosamente',
                 'lead' => $lead->load(['assignedAgent', 'creator'])
             ], 201);
 
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
-                'error' => 'Error al crear lead',
-                'message' => $e->getMessage()
+                'error' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error al crear lead: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'error' => 'No se pudo crear el lead. Inténtalo de nuevo.'
             ], 500);
         }
     }
@@ -293,14 +307,22 @@ class SaasSalesFunnelController extends Controller
                 'custom_fields' => 'nullable|array',
                 'quality_rating' => 'sometimes|required|in:' . implode(',', array_keys(SalesFunnel::QUALITY_RATINGS)),
                 'lead_score' => 'nullable|integer|min:0|max:100',
-                'next_follow_up_at' => 'nullable|date|after:now'
+                'next_follow_up_at' => 'nullable|date|after:now',
+                'referrer_type' => 'nullable|in:vendedor,otro',
+                'referrer_vendedor_id' => 'nullable|integer',
+                'referrer_name' => 'nullable|string|max:255',
             ]);
+
+            // Capturar si next_follow_up_at cambió para crear/actualizar tarea.
+            $followUpChanged = isset($validated['next_follow_up_at'])
+                && $validated['next_follow_up_at']
+                && (string) $validated['next_follow_up_at'] !== (string) $lead->next_follow_up_at;
 
             // Si cambia la etapa, actualizar fechas relacionadas
             if (isset($validated['stage']) && $validated['stage'] !== $lead->stage) {
                 $validated['stage_changed_at'] = now();
                 $validated['days_in_current_stage'] = 0;
-                
+
                 $lead->addActivity('stage_changed', [
                     'from_stage' => $lead->stage,
                     'to_stage' => $validated['stage'],
@@ -308,13 +330,45 @@ class SaasSalesFunnelController extends Controller
                 ]);
             }
 
+            // Detectar transición a business_state = 'cerrado' para sincronizar
+            // el estado del cliente vinculado.
+            $transicionACerrado = isset($validated['business_state'])
+                && $validated['business_state'] === 'cerrado'
+                && $lead->business_state !== 'cerrado';
+
             $lead->update($validated);
+
+            if ($followUpChanged) {
+                $this->createFollowUpTaskForLead($lead->fresh(), $validated['next_follow_up_at']);
+            }
+
+            if ($transicionACerrado && $lead->client_id) {
+                // Negocio cerrado → cliente queda inactivo salvo que tenga
+                // al menos una póliza vigente → en ese caso pasa a activo.
+                $cliente = \App\Models\Cliente::find($lead->client_id);
+                if ($cliente) {
+                    $tienePolizaActiva = \App\Models\Poliza::where('client_id', $cliente->id)
+                        ->whereIn('status', ['active', 'renewed', 'issued'])
+                        ->exists();
+                    $cliente->update(['status' => $tienePolizaActiva ? 'active' : 'inactive']);
+                    $lead->addActivity('client_status_sync', [
+                        'client_id' => $cliente->id,
+                        'new_status' => $tienePolizaActiva ? 'active' : 'inactive',
+                        'reason' => 'business_state=cerrado',
+                    ]);
+                }
+            }
 
             return response()->json([
                 'message' => 'Lead actualizado exitosamente',
                 'lead' => $lead->load(['assignedAgent', 'creator', 'client'])
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
             \Log::error('❌ [ERROR] SaasSalesFunnelController::update', [
                 'id' => $id,
@@ -322,10 +376,9 @@ class SaasSalesFunnelController extends Controller
                 'error_trace' => $e->getTraceAsString(),
                 'input_data' => $request->all()
             ]);
-            
+
             return response()->json([
-                'error' => 'Error al actualizar lead',
-                'message' => $e->getMessage()
+                'error' => 'No se pudo actualizar el lead. Inténtalo de nuevo.'
             ], 500);
         }
     }
@@ -700,5 +753,61 @@ class SaasSalesFunnelController extends Controller
             'contact_times' => SalesFunnel::CONTACT_TIMES,
             'company_sizes' => SalesFunnel::COMPANY_SIZES
         ]);
+    }
+
+    /**
+     * Crea una CommercialTask de seguimiento cuando un lead define
+     * `next_follow_up_at`. La tarea aparece automáticamente en:
+     *   - /apps/seguros/seguimiento (módulo de tareas comerciales)
+     *   - /apps/calendar (calendario del asesor)
+     *
+     * Si ya existe una tarea de follow-up para este lead (detectada por
+     * `external_reference = "sales_funnel:<id>"`), se actualiza en lugar
+     * de duplicarla.
+     */
+    protected function createFollowUpTaskForLead(SalesFunnel $lead, $followUpAt): void
+    {
+        try {
+            $externalRef = 'sales_funnel:' . $lead->id;
+            $contactName = trim("{$lead->first_name} {$lead->last_name}");
+            $title = "Seguimiento: {$contactName}";
+            $description = $lead->notes
+                ? "Próximo contacto del negocio #{$lead->id}. Notas: {$lead->notes}"
+                : "Próximo contacto del negocio #{$lead->id}.";
+
+            $existing = \App\Models\CommercialTask::where('broker_id', $lead->broker_id)
+                ->where('external_reference', $externalRef)
+                ->whereNotIn('status', ['completada', 'cancelada'])
+                ->first();
+
+            $data = [
+                'broker_id'    => $lead->broker_id,
+                'client_id'    => $lead->client_id,
+                'poliza_id'    => $lead->poliza_id,
+                'assigned_to'  => $lead->assigned_agent_id,
+                'created_by'   => $lead->created_by,
+                'title'        => $title,
+                'description'  => $description,
+                'type'         => 'seguimiento_cliente',
+                'status'       => 'pendiente',
+                'priority'     => 'media',
+                'due_date'     => $followUpAt,
+                'scheduled_for' => $followUpAt,
+                'contact_phone' => $lead->phone,
+                'contact_email' => $lead->email,
+                'external_reference' => $externalRef,
+            ];
+
+            if ($existing) {
+                $existing->update($data);
+            } else {
+                \App\Models\CommercialTask::create($data);
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('[SALES FUNNEL] No se pudo crear tarea de seguimiento', [
+                'lead_id' => $lead->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

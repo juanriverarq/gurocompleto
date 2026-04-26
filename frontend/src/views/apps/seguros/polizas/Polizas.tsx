@@ -1,23 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PermissionGate from 'src/components/PermissionGate';
 import {
-  Card,
   Button,
   Badge,
   Table,
   Modal,
   Tabs,
   Spinner,
-  Dropdown,
-  Checkbox,
 } from 'flowbite-react';
 import HistorialPoliza from './components/HistorialPoliza';
 import RenovacionesPoliza from './components/RenovacionesPoliza';
 
-import { IconDots } from '@tabler/icons-react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
-import HeroButton from 'src/components/HeroButton';
 import TableActionMenu, { TableMenuItem } from 'src/components/TableActionMenu';
 
 import {
@@ -39,6 +34,43 @@ import policyNotificationService from 'src/services/policyNotificationService';
 import { useWhatsAppSocket } from 'src/hooks/useWhatsAppSocket';
 import { useAutoTour } from 'src/components/GuroTour/useAutoTour';
 import { TOUR_POLIZAS } from 'src/components/GuroTour/tourConfigs';
+import suraLogo from 'src/assets/images/logoscompanias/sura.png';
+import bolivarLogo from 'src/assets/images/logoscompanias/bolivar.png';
+import hdiLogo from 'src/assets/images/logoscompanias/hdi.png';
+import estadoLogo from 'src/assets/images/logoscompanias/estado.png';
+import equidadLogo from 'src/assets/images/logoscompanias/equidad.png';
+import axaLogo from 'src/assets/images/logoscompanias/axa.png';
+import mapfreLogo from 'src/assets/images/logoscompanias/mapfre.png';
+import allianzLogo from 'src/assets/images/logoscompanias/allianz.png';
+
+const INSURER_LOGOS: Record<string, string> = {
+  sura: suraLogo,
+  bolivar: bolivarLogo,
+  bolívar: bolivarLogo,
+  hdi: hdiLogo,
+  estado: estadoLogo,
+  'seguros del estado': estadoLogo,
+  'la-equidad': equidadLogo,
+  'la equidad': equidadLogo,
+  equidad: equidadLogo,
+  axa: axaLogo,
+  'axa-colpatria': axaLogo,
+  mapfre: mapfreLogo,
+  allianz: allianzLogo,
+};
+
+const getInsurerLogo = (nombre: string): string | null => {
+  if (!nombre) return null;
+  const key = nombre.toLowerCase().trim();
+  if (INSURER_LOGOS[key]) return INSURER_LOGOS[key];
+  for (const [k, v] of Object.entries(INSURER_LOGOS)) {
+    if (key.includes(k)) return v;
+  }
+  return null;
+};
+
+type DetailSourceStats = { total: number; synced: number; failed: number; cancelled: number; pending: number; sample_error?: string | null };
+type DetailSyncData = { total: number; synced: number; failed: number; cancelled: number; pending: number; bySource?: Record<string, DetailSourceStats> };
 
 const Polizas: React.FC = () => {
   useAutoTour(TOUR_POLIZAS);
@@ -118,10 +150,66 @@ const Polizas: React.FC = () => {
   const [autosTabLoading, setAutosTabLoading] = useState(false);
   const [autosVinculados, setAutosVinculados] = useState<any[]>([]);
 
+  // Progreso de sincronización de detalles en segundo plano
+  const [detailSyncProgress, setDetailSyncProgress] = useState<DetailSyncData | null>(null);
+  const [detailSyncBusy, setDetailSyncBusy] = useState(false);
+  const [showSyncPopover, setShowSyncPopover] = useState(false);
+  const [showResyncDialog, setShowResyncDialog] = useState(false);
+  const detailSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const pollDetailSyncProgress = useCallback(async () => {
+    try {
+      const res = await polizaService.getDetailSyncProgress();
+      if (res.success && res.data) {
+        setDetailSyncProgress(res.data);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    pollDetailSyncProgress();
+    detailSyncPollRef.current = setInterval(pollDetailSyncProgress, 4000);
+    return () => { if (detailSyncPollRef.current) clearInterval(detailSyncPollRef.current); };
+  }, [pollDetailSyncProgress]);
+
+  // Listen for detail sync triggered by Inicio.tsx (same tab or other tabs)
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'guro_detail_sync_triggered') pollDetailSyncProgress();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [pollDetailSyncProgress]);
+
+  const handleSyncAllDetails = async (reset = false) => {
+    setDetailSyncBusy(true);
+    try {
+      await polizaService.syncAllPolizasDetail(reset ? { reset: true } : undefined);
+      await pollDetailSyncProgress();
+    } catch { /* ignore */ } finally {
+      setDetailSyncBusy(false);
+    }
+  };
+
+  const handleCancelDetailSync = async () => {
+    setDetailSyncBusy(true);
+    try {
+      await polizaService.cancelDetailSync();
+      await pollDetailSyncProgress();
+    } catch { /* ignore */ } finally {
+      setDetailSyncBusy(false);
+    }
+  };
+
   // Selección masiva
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkStateModal, setShowBulkStateModal] = useState(false);
   const [bulkTargetState, setBulkTargetState] = useState<string>('ACTIVA');
+  const [bulkCancellationReason, setBulkCancellationReason] = useState<string>('');
+  const [bulkMotivoCambio, setBulkMotivoCambio] = useState<string>('');
+  const [cancellationReasons, setCancellationReasons] = useState<Array<{ key: string; label: string }>>([]);
+  const [showBulkDeleteAllModal, setShowBulkDeleteAllModal] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
 
   // Paginación manejada por backend (se controla vía filtros page/per_page)
 
@@ -563,8 +651,22 @@ const Polizas: React.FC = () => {
             <div className="text-sm text-gray-500">{poliza.dni_cliente}</div>
           </div>
         );
-      case 'aseguradora':
-        return (poliza as any).aseguradora_nombre || poliza.aseguradora;
+      case 'aseguradora': {
+        const asegName = (poliza as any).aseguradora_nombre || poliza.aseguradora || '';
+        const logo = getInsurerLogo(asegName);
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center overflow-hidden border border-gray-200 dark:border-neutral-700 shrink-0">
+              {logo ? (
+                <img src={logo} alt="" className="w-5 h-5 object-contain" />
+              ) : (
+                <span className="text-[9px] font-bold text-[#111]">{asegName.charAt(0)}</span>
+              )}
+            </div>
+            <span>{asegName}</span>
+          </div>
+        );
+      }
       case 'ramo':
         return (
           <div className="flex items-center gap-2">
@@ -617,6 +719,26 @@ const Polizas: React.FC = () => {
         }
         return <span className="text-gray-400">—</span>;
       }
+      case 'origen': {
+        const src = poliza.sync_source || '';
+        if (src && src.includes('_sync')) {
+          const insurerKey = src.replace('_sync', '').replace('-', ' ');
+          const nameMap: Record<string, string> = { sura: 'Sura', bolivar: 'Bolívar', hdi: 'HDI', 'axa colpatria': 'AXA', 'seguros del estado': 'Estado' };
+          const label = nameMap[insurerKey] || insurerKey.charAt(0).toUpperCase() + insurerKey.slice(1);
+          return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#573CFF]/10 text-[#573CFF] dark:bg-[#573CFF]/20 dark:text-[#a78bfa]">
+              <Icon icon="solar:refresh-bold-duotone" className="w-3 h-3" />
+              {label}
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-neutral-400">
+            <Icon icon="solar:pen-bold-duotone" className="w-3 h-3" />
+            Manual
+          </span>
+        );
+      }
       default:
         return '-';
     }
@@ -636,6 +758,7 @@ const Polizas: React.FC = () => {
       sede: 'Sede',
       forma_pago: 'Forma de Pago',
       renovaciones: 'Renov.',
+      origen: 'Origen',
     };
     return columnMap[columnKey] || columnKey;
   };
@@ -717,19 +840,72 @@ const Polizas: React.FC = () => {
     }
   };
 
-  const handleOpenBulkStateModal = () => {
+  const handleBulkDeleteAll = async () => {
+    if (bulkDeleteConfirmText !== 'ELIMINAR TODAS') return;
+    try {
+      setLoading(true);
+      const response = await saasApi.bulkDeletePolizas({ delete_all: true });
+      if (response.success) {
+        const data = response.data as any;
+        toast({
+          title: 'Borrado masivo completado',
+          description: response.message || `Se eliminaron ${data?.deleted_count || 0} pólizas.`,
+        });
+        setShowBulkDeleteAllModal(false);
+        setBulkDeleteConfirmText('');
+        clearSelection();
+        await loadPolizas();
+        await loadEstadisticas();
+      } else {
+        throw new Error(response.message || 'Error al eliminar pólizas');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Error al eliminar pólizas',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenBulkStateModal = async () => {
     if (selectedIds.size === 0) return;
     setBulkTargetState('ACTIVA');
+    setBulkCancellationReason('');
+    setBulkMotivoCambio('');
     setShowBulkStateModal(true);
+    // Cargar motivos de cancelación si no están cargados
+    if (cancellationReasons.length === 0) {
+      try {
+        const list = await polizaService.getCancellationReasons();
+        setCancellationReasons(list || []);
+      } catch {}
+    }
   };
 
   const handleConfirmBulkStateChange = async () => {
     if (!bulkTargetState) return;
+    // Validar motivo de cancelación cuando aplica
+    if (bulkTargetState === 'CANCELADA' && !bulkCancellationReason) {
+      toast({
+        variant: 'destructive',
+        title: 'Motivo requerido',
+        description: 'Selecciona el motivo de cancelación.',
+      });
+      return;
+    }
     try {
       setLoading(true);
       const ids = Array.from(selectedIds);
       const results = await Promise.allSettled(
-        ids.map((id) => polizaService.cambiarEstado(id, bulkTargetState as any)),
+        ids.map((id) => polizaService.cambiarEstado(
+          id,
+          bulkTargetState as any,
+          bulkMotivoCambio || undefined,
+          bulkTargetState === 'CANCELADA' ? bulkCancellationReason : undefined,
+        )),
       );
       const ok = results.filter((r) => r.status === 'fulfilled').length;
       const fail = results.length - ok;
@@ -758,506 +934,492 @@ const Polizas: React.FC = () => {
         }
       >
         <div className="space-y-6">
-          {/* Estadísticas - Mejorado para tablets */}
+          {/* Estadísticas */}
           {estadisticas && estadisticas.total_polizas !== undefined && (
-            <div data-tour="polizas-stats" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
-              <Card className="p-3 md:p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p data-tour="polizas-page-title" className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Total Pólizas</p>
-                    <p className="text-lg md:text-2xl font-bold text-[#573CFF]">
-                      {estadisticas.total_polizas || 0}
-                    </p>
+            <div data-tour="polizas-stats" className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#573CFF20' }}>
+                    <Icon icon="solar:document-bold-duotone" width={18} style={{ color: '#573CFF' }} />
                   </div>
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-[#573CFF]/10 dark:bg-[#573CFF]/20 rounded-xl flex items-center justify-center">
-                    <Icon icon="solar:document-bold-duotone" className="w-5 h-5 text-[#573CFF]" />
-                  </div>
+                  <span data-tour="polizas-page-title" className="text-xs text-neutral-500 font-medium">Total Pólizas</span>
                 </div>
-              </Card>
-              <Card className="p-3 md:p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Activas</p>
-                    <p className="text-lg md:text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                      {estadisticas.polizas_activas || 0}
-                    </p>
+                <p className="text-xl font-bold text-white tracking-tight">{estadisticas.total_polizas || 0}</p>
+              </div>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#22c55e20' }}>
+                    <Icon icon="solar:check-circle-bold-duotone" width={18} style={{ color: '#22c55e' }} />
                   </div>
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500/10 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
-                  </div>
+                  <span className="text-xs text-neutral-500 font-medium">Activas</span>
                 </div>
-              </Card>
-              <Card className="p-3 md:p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Por Vencer</p>
-                    <p className="text-lg md:text-2xl font-bold text-amber-600 dark:text-amber-400">
-                      {estadisticas.polizas_por_vencer}
-                    </p>
+                <p className="text-xl font-bold text-white tracking-tight">{estadisticas.polizas_activas || 0}</p>
+              </div>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#f9731620' }}>
+                    <Icon icon="solar:clock-circle-bold-duotone" width={18} style={{ color: '#f97316' }} />
                   </div>
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-amber-500/10 dark:bg-amber-500/20 rounded-xl flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 bg-amber-500 rounded-full"></div>
-                  </div>
+                  <span className="text-xs text-neutral-500 font-medium">Por Vencer</span>
                 </div>
-              </Card>
-              <Card className="p-3 md:p-4 col-span-2 sm:col-span-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Prima Total</p>
-                    <p className="text-sm md:text-lg font-bold text-[#573CFF]">
-                      {polizaUtils.formatCurrency(estadisticas.valor_total_primas)}
-                    </p>
+                <p className="text-xl font-bold text-white tracking-tight">{estadisticas.polizas_por_vencer}</p>
+              </div>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#573CFF20' }}>
+                    <Icon icon="solar:wallet-bold-duotone" width={18} style={{ color: '#573CFF' }} />
                   </div>
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-[#573CFF]/10 dark:bg-[#573CFF]/20 rounded-xl flex items-center justify-center">
-                    <span className="text-[#573CFF] font-bold text-xs md:text-sm">$</span>
-                  </div>
+                  <span className="text-xs text-neutral-500 font-medium">Prima Total</span>
                 </div>
-              </Card>
-              <Card className="p-3 md:p-4 col-span-2 sm:col-span-3 md:col-span-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400">Vencidas</p>
-                    <p className="text-lg md:text-2xl font-bold text-rose-600 dark:text-rose-400">
-                      {estadisticas.polizas_vencidas}
-                    </p>
+                <p className="text-xl font-bold text-white tracking-tight">{polizaUtils.formatCurrency(estadisticas.valor_total_primas)}</p>
+              </div>
+              <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#ef444420' }}>
+                    <Icon icon="solar:danger-triangle-bold-duotone" width={18} style={{ color: '#ef4444' }} />
                   </div>
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-rose-500/10 dark:bg-rose-500/20 rounded-xl flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 bg-rose-500 rounded-full"></div>
-                  </div>
+                  <span className="text-xs text-neutral-500 font-medium">Vencidas</span>
                 </div>
-              </Card>
+                <p className="text-xl font-bold text-white tracking-tight">{estadisticas.polizas_vencidas}</p>
+              </div>
             </div>
           )}
 
-          {/* Header de Controles Rediseñado */}
-          <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
-            {/* Barra superior con búsqueda y acciones principales */}
-            <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-              <div className="flex flex-col lg:flex-row gap-4">
-                {/* Búsqueda principal */}
-                <div className="flex-1">
-                  <div className="relative">
-                    <Icon
-                      icon="solar:magnifer-bold-duotone"
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
-                    />
-                    <Input
-                      placeholder="Buscar por número de póliza, cliente o aseguradora..."
-                      value={filters.search || ''}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        handleFilterChange('search', e.target.value)
-                      }
-                      className="pl-10 h-10 text-sm rounded-[10px]"
-                    />
-                  </div>
-                </div>
+          {/* Tabla de pólizas */}
+          <div data-tour="polizas-table" className="rounded-2xl border border-neutral-800 bg-neutral-950/70 overflow-hidden">
+            {/* Search bar + actions */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800/60">
+              <div className="relative flex-1 max-w-sm">
+                <Icon icon="solar:magnifer-linear" className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" width={16} />
+                <input
+                  type="text"
+                  placeholder="Buscar por póliza, cliente o aseguradora..."
+                  value={filters.search || ''}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-sm text-white placeholder-neutral-500 focus:border-[#573CFF] focus:outline-none transition-colors"
+                />
+              </div>
+              <button onClick={() => setShowFilterDrawer(true)} className="relative rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors" title="Filtros">
+                <Icon icon="solar:filter-bold-duotone" width={18} />
+                {getActiveFiltersCount() > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{getActiveFiltersCount()}</span>
+                )}
+              </button>
+              <button onClick={() => setShowExportModal(true)} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors" title="Exportar">
+                <Icon icon="solar:download-bold-duotone" width={18} />
+              </button>
+              <button onClick={() => setShowColumnsModal(true)} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors" title="Columnas">
+                <Icon icon="solar:settings-bold-duotone" width={18} />
+              </button>
+              <button
+                onClick={() => {
+                  console.log('🔔 Click en botón de notificaciones. Estado actual:', notificationStatus);
+                  setShowNotificationsModal(true);
+                }}
+                className={`relative rounded-lg border px-2.5 py-2 transition-colors ${
+                  notificationStatus?.is_active && notificationStatus?.whatsapp_status?.connected
+                    ? 'border-green-500/40 bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                    : notificationStatus?.is_active && !notificationStatus?.whatsapp_status?.connected
+                    ? 'border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20 animate-pulse'
+                    : 'border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
+                }`}
+                title={
+                  notificationStatus?.is_active && notificationStatus?.whatsapp_status?.connected
+                    ? '✅ Notificaciones Activas - WhatsApp Conectado'
+                    : notificationStatus?.is_active && !notificationStatus?.whatsapp_status?.connected
+                    ? '⚠️ Notificaciones Activas - WhatsApp Desconectado'
+                    : 'Notificaciones Inactivas'
+                }
+              >
+                {notificationStatus?.is_active && (
+                  <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ${notificationStatus?.whatsapp_status?.connected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></span>
+                )}
+                <Icon icon="solar:bell-bold-duotone" width={18} />
+              </button>
+              {/* Pill de sincronización de detalles */}
+              {detailSyncProgress && detailSyncProgress.total > 0 && (() => {
+                const { total, synced, failed, cancelled, pending, bySource } = detailSyncProgress;
+                const done = synced + failed + cancelled;
+                const pct = Math.round((done / total) * 100);
+                const isRunning = pending > 0;
+                const hasErrors = failed > 0 && !isRunning;
 
-                {/* Botones de acción */}
-                <div className="flex gap-2">
-                  <Button
-                    color="light"
-                    onClick={() => loadPolizas()}
-                    disabled={loading}
-                    className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                    title="Actualizar"
-                  >
-                    <Icon
-                      icon="solar:refresh-bold-duotone"
-                      className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
-                    />
-                  </Button>
+                const SOURCE_LABELS: Record<string, string> = { hdi_sync: 'HDI', sura_sync: 'SURA', bolivar_sync: 'Bolívar' };
 
-                  <Button
-                    color="light"
-                    onClick={() => setShowFilterDrawer(true)}
-                    className="relative h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                    title="Filtros"
-                  >
-                    <Icon icon="solar:filter-bold-duotone" className="w-4 h-4" />
-                    {getActiveFiltersCount() > 0 && (
-                      <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-medium">
-                        {getActiveFiltersCount()}
+                const inferErrorMsg = (sampleError: string | null | undefined, src: string): { cause: string; action: string } => {
+                  if (!sampleError) return { cause: 'Error desconocido al sincronizar.', action: 'Intenta resincronizar.' };
+                  const e = sampleError.toLowerCase();
+                  if (e.includes('cod_ramo') || (e.includes('ramo') && src === 'bolivar_sync'))
+                    return { cause: 'Falta el código de ramo en el registro.', action: 'Ejecuta una nueva sincronización principal.' };
+                  if (e.includes('ramo') && src === 'sura_sync')
+                    return { cause: 'Falta el código de ramo en el registro.', action: 'Ejecuta una nueva sincronización principal desde Inicio.' };
+                  if (e.includes('timeout') || e.includes('timed out'))
+                    return { cause: 'La aseguradora tardó demasiado en responder.', action: 'Reintenta en horario de menor carga.' };
+                  if (e.includes('session') || e.includes('401') || e.includes('unauthorized'))
+                    return { cause: 'Sesión con la aseguradora expirada.', action: 'Reconecta la aseguradora y resincroniza.' };
+                  if (e.includes('404'))
+                    return { cause: 'Póliza no encontrada en el portal de la aseguradora.', action: 'Verifica que esté activa en el portal.' };
+                  if (e.includes('422'))
+                    return { cause: 'Parámetros insuficientes para consultar la aseguradora.', action: 'Ejecuta una nueva sincronización principal.' };
+                  if (e.includes('500') || e.includes('server'))
+                    return { cause: 'Error interno en el servidor de la aseguradora.', action: 'Reintenta más tarde.' };
+                  return { cause: 'Error inesperado al consultar la aseguradora.', action: 'Revisa los logs o reintenta.' };
+                };
+
+                return (
+                  <>
+                    <div className="relative" onMouseEnter={() => setShowSyncPopover(true)} onMouseLeave={() => setShowSyncPopover(false)}>
+                      {/* Pill */}
+                      <div className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-2.5 py-1.5 cursor-default">
+                        {isRunning
+                          ? <Icon icon="svg-spinners:ring-resize" width={13} className="text-neutral-500 shrink-0" />
+                          : hasErrors
+                          ? <Icon icon="solar:info-circle-linear" width={13} className="text-neutral-500 shrink-0" />
+                          : <Icon icon="solar:check-circle-linear" width={13} className="text-neutral-500 shrink-0" />
+                        }
+                        <span className="text-[11px] whitespace-nowrap text-neutral-400">
+                          {isRunning ? `Detalles ${done}/${total}` : hasErrors ? `${synced}✓ ${failed}✗ / ${total}` : `Detalles ${synced}/${total}`}
+                        </span>
+                        <div className="w-14 h-0.5 rounded-full bg-neutral-800 overflow-hidden">
+                          <div className="h-full rounded-full bg-neutral-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                        </div>
+                        {isRunning && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); void handleCancelDetailSync(); }}
+                            disabled={detailSyncBusy}
+                            className="text-neutral-600 hover:text-neutral-400 transition-colors p-0.5 disabled:opacity-40"
+                            title="Detener pendientes"
+                          >
+                            <Icon icon="solar:stop-circle-linear" width={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Popover */}
+                      {showSyncPopover && (
+                        <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-lg border border-neutral-800 bg-neutral-950 shadow-xl p-3.5 text-sm">
+                          <div className="absolute -top-1.5 right-5 w-3 h-3 rotate-45 border-l border-t border-neutral-800 bg-neutral-950" />
+
+                          {/* Header */}
+                          <p className="text-[12px] font-medium text-neutral-300 mb-0.5">
+                            {isRunning ? 'Sincronizando detalles' : hasErrors ? 'Sincronización finalizada con errores' : 'Sincronización completa'}
+                          </p>
+                          <p className="text-[11px] text-neutral-500 mb-3">
+                            {done} de {total} procesadas · {pct}%
+                            {synced > 0 && ` · ${synced} ok`}
+                            {failed > 0 && ` · ${failed} fallidas`}
+                            {pending > 0 && ` · ${pending} pendientes`}
+                            {cancelled > 0 && ` · ${cancelled} canceladas`}
+                          </p>
+
+                          {/* Progress bar */}
+                          <div className="w-full h-0.5 rounded-full bg-neutral-800 overflow-hidden mb-3">
+                            <div className="h-full rounded-full bg-neutral-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                          </div>
+
+                          {/* Per-insurer breakdown */}
+                          {bySource && Object.keys(bySource).length > 0 && (
+                            <div className="space-y-2.5 border-t border-neutral-800 pt-3 mb-3">
+                              {Object.entries(bySource).map(([src, s]) => {
+                                const label = SOURCE_LABELS[src] ?? src;
+                                const srcPct = s.total > 0 ? Math.round(((s.synced + s.failed + s.cancelled) / s.total) * 100) : 0;
+                                const errInfo = s.failed > 0 ? inferErrorMsg(s.sample_error, src) : null;
+                                return (
+                                  <div key={src}>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[11px] text-neutral-400">{label}</span>
+                                      <span className="text-[10px] text-neutral-600">
+                                        {s.synced > 0 && `${s.synced} ok`}
+                                        {s.synced > 0 && s.failed > 0 && ' · '}
+                                        {s.failed > 0 && `${s.failed} fallidas`}
+                                        {(s.synced > 0 || s.failed > 0) && s.pending > 0 && ' · '}
+                                        {s.pending > 0 && `${s.pending} pend.`}
+                                        {s.synced === 0 && s.failed === 0 && s.pending === 0 && `${s.cancelled} canceladas`}
+                                      </span>
+                                    </div>
+                                    <div className="w-full h-0.5 rounded-full bg-neutral-800 overflow-hidden mb-1.5">
+                                      <div className="h-full rounded-full bg-neutral-600 transition-all" style={{ width: `${srcPct}%` }} />
+                                    </div>
+                                    {errInfo && (
+                                      <div className="border-l-2 border-neutral-700 pl-2 space-y-0.5">
+                                        <p className="text-[10px] text-neutral-500 leading-relaxed">{errInfo.cause}</p>
+                                        <p className="text-[10px] text-neutral-600 leading-relaxed">→ {errInfo.action}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="flex gap-2 border-t border-neutral-800 pt-3">
+                            {isRunning && (
+                              <button
+                                onClick={() => { setShowSyncPopover(false); void handleCancelDetailSync(); }}
+                                disabled={detailSyncBusy}
+                                className="flex-1 rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-2.5 py-1.5 text-[11px] text-neutral-400 transition-colors disabled:opacity-40"
+                              >
+                                Detener
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setShowSyncPopover(false); setShowResyncDialog(true); }}
+                              disabled={detailSyncBusy}
+                              className="flex-1 rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-2.5 py-1.5 text-[11px] text-neutral-400 transition-colors disabled:opacity-40"
+                            >
+                              Resincronizar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Resync confirmation dialog */}
+                    {showResyncDialog && (
+                      <div className="fixed inset-0 z-[200] flex items-center justify-center" onClick={() => setShowResyncDialog(false)}>
+                        <div className="absolute inset-0 bg-black/50" />
+                        <div
+                          className="relative w-80 rounded-lg border border-neutral-800 bg-neutral-950 p-5 shadow-2xl"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <p className="text-[13px] font-medium text-neutral-200 mb-1">¿Qué deseas resincronizar?</p>
+                          <p className="text-[11px] text-neutral-500 mb-4">Solo las fallidas es más rápido. Si necesitas actualizar una póliza en particular, hazlo desde el editor de la póliza.</p>
+                          <div className="space-y-2">
+                            {failed > 0 && (
+                              <button
+                                onClick={() => { setShowResyncDialog(false); void handleSyncAllDetails(false); }}
+                                disabled={detailSyncBusy}
+                                className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors disabled:opacity-40"
+                              >
+                                Solo las fallidas
+                                <span className="block text-[10px] text-neutral-600 mt-0.5">{failed} póliza{failed !== 1 ? 's' : ''} con error</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setShowResyncDialog(false); void handleSyncAllDetails(true); }}
+                              disabled={detailSyncBusy}
+                              className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors disabled:opacity-40"
+                            >
+                              Todas ({total} pólizas)
+                              <span className="block text-[10px] text-neutral-600 mt-0.5">Proceso largo — puede tardar varios minutos</span>
+                            </button>
+                            <button
+                              onClick={() => setShowResyncDialog(false)}
+                              className="w-full rounded px-3 py-1.5 text-[11px] text-neutral-600 hover:text-neutral-400 transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
-                  </Button>
+                  </>
+                );
+              })()}
 
-                  <Button
-                    color="light"
-                    onClick={() => setShowExportModal(true)}
-                    className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                    title="Exportar Pólizas"
+              {canCreatePolicy && (
+                <span data-tour="polizas-create-btn">
+                  <button
+                    onClick={() => setShowCreateTypeModal(true)}
+                    className="flex items-center gap-2 rounded-lg border border-[#573CFF]/40 bg-[#573CFF] hover:bg-[#4b31e6] px-4 py-2 text-sm font-medium text-white transition-colors"
                   >
-                    <Icon icon="solar:download-bold-duotone" className="w-4 h-4" />
-                  </Button>
-
-                  <Button
-                    color="light"
-                    onClick={() => setShowColumnsModal(true)}
-                    className="h-10 w-10 p-0 border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center"
-                    title="Personalizar Vista"
-                  >
-                    <Icon icon="solar:settings-bold-duotone" className="w-4 h-4" />
-                  </Button>
-
-                  <Button
-                    color="light"
-                    onClick={() => {
-                      console.log(
-                        '🔔 Click en botón de notificaciones. Estado actual:',
-                        notificationStatus,
-                      );
-                      setShowNotificationsModal(true);
-                    }}
-                    className={`relative h-10 w-10 p-0 rounded-[10px] flex items-center justify-center transition-all border-2 ${
-                      notificationStatus?.is_active &&
-                      notificationStatus?.whatsapp_status?.connected
-                        ? 'border-green-500 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-500 shadow-green-200 shadow-md'
-                        : notificationStatus?.is_active &&
-                          !notificationStatus?.whatsapp_status?.connected
-                        ? 'border-red-500 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-500 animate-pulse shadow-red-200 shadow-md'
-                        : 'border-gray-300 bg-white hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:bg-gray-800'
-                    }`}
-                    title={
-                      notificationStatus?.is_active &&
-                      notificationStatus?.whatsapp_status?.connected
-                        ? '✅ Notificaciones Activas - WhatsApp Conectado'
-                        : notificationStatus?.is_active &&
-                          !notificationStatus?.whatsapp_status?.connected
-                        ? '⚠️ Notificaciones Activas - WhatsApp Desconectado'
-                        : 'Notificaciones Inactivas - Click para configurar'
-                    }
-                  >
-                    {notificationStatus?.is_active &&
-                      notificationStatus?.whatsapp_status?.connected && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
-                      )}
-                    {notificationStatus?.is_active &&
-                      !notificationStatus?.whatsapp_status?.connected && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></div>
-                      )}
-                    <Icon
-                      icon="solar:bell-bold-duotone"
-                      className={`w-5 h-5 transition-colors ${
-                        notificationStatus?.is_active &&
-                        notificationStatus?.whatsapp_status?.connected
-                          ? 'text-green-600 dark:text-green-400'
-                          : notificationStatus?.is_active &&
-                            !notificationStatus?.whatsapp_status?.connected
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-gray-500 dark:text-gray-400'
-                      }`}
-                    />
-                  </Button>
-
-                  {canCreatePolicy && (
-                    <span data-tour="polizas-create-btn"><HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreateTypeModal(true)}>Nueva Póliza</HeroButton></span>
-                  )}
-                </div>
-              </div>
+                    <Icon icon="solar:add-circle-bold-duotone" width={18} />
+                    Nueva Póliza
+                  </button>
+                </span>
+              )}
             </div>
-          </div>
-
-          {/* Tabla de pólizas - Mejorada con columnas dinámicas */}
-          <Card data-tour="polizas-table">
-            {loading ? (
-              <div className="flex justify-center items-center py-8">
-                <Spinner size="lg" />
-                <span className="ml-2">Cargando pólizas...</span>
-              </div>
-            ) : !polizas || polizas.length === 0 ? (
-              <div className="text-center py-8">
-                <Icon
-                  icon="solar:document-bold-duotone"
-                  className="w-16 h-16 text-gray-300 mx-auto mb-4"
-                />
-                <p className="text-gray-500 mb-4">No se encontraron pólizas</p>
-                <div className="flex justify-center">
+            {/* Table content */}
+            <div className="overflow-x-auto">
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Icon icon="svg-spinners:ring-resize" width={32} className="text-[#573CFF]" />
+                </div>
+              ) : !polizas || polizas.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
+                  <Icon icon="solar:document-bold-duotone" width={48} className="mb-3 opacity-40" />
+                  <p className="text-sm font-medium">No se encontraron pólizas</p>
                   {canCreatePolicy && (
-                    <HeroButton icon="solar:add-circle-bold-duotone" onClick={() => setShowCreateTypeModal(true)} size="lg">Crear primera póliza</HeroButton>
+                    <button
+                      onClick={() => setShowCreateTypeModal(true)}
+                      className="mt-3 flex items-center gap-2 rounded-lg border border-[#573CFF]/40 bg-[#573CFF] hover:bg-[#4b31e6] px-4 py-2 text-sm font-medium text-white transition-colors"
+                    >
+                      <Icon icon="solar:add-circle-bold-duotone" width={16} />
+                      Crear primera póliza
+                    </button>
                   )}
                 </div>
-              </div>
-            ) : (
-              <>
-                {selectedIds.size > 0 && (
-                  <div className="p-3 mb-3 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-between">
-                    <div className="text-sm text-blue-900">
-                      {selectedIds.size} póliza(s) seleccionadas
+              ) : (
+                <>
+                  {selectedIds.size > 0 && (
+                    <div className="mx-4 mt-3 p-3 rounded-lg border border-[#573CFF]/40 dark:border-[#573CFF]/30 bg-[#573CFF]/8 dark:bg-[#573CFF]/10 flex items-center justify-between">
+                      <span className="text-sm text-gray-800 dark:text-neutral-300">{selectedIds.size} póliza(s) seleccionadas</span>
+                      <div className="flex gap-2">
+                        <button onClick={handleBulkDeletePolizas} className="flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 text-xs text-red-400 transition-colors">
+                          <Icon icon="solar:trash-bin-minimalistic-bold-duotone" width={14} />
+                          Eliminar
+                        </button>
+                        {estadisticas && estadisticas.total_polizas > 0 && (
+                          <button onClick={() => setShowBulkDeleteAllModal(true)} className="flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/20 hover:bg-red-500/30 px-3 py-1.5 text-xs text-red-300 transition-colors">
+                            <Icon icon="solar:trash-bin-trash-bold-duotone" width={14} />
+                            Eliminar TODAS ({estadisticas.total_polizas})
+                          </button>
+                        )}
+                        <button onClick={handleOpenBulkStateModal} className="flex items-center gap-1.5 rounded-lg border border-[#573CFF]/40 bg-[#573CFF]/10 hover:bg-[#573CFF]/20 px-3 py-1.5 text-xs text-[#573CFF] dark:text-[#a78bfa] transition-colors">
+                          <Icon icon="solar:settings-bold-duotone" width={14} />
+                          Cambiar estado
+                        </button>
+                        <button onClick={clearSelection} className="rounded-lg border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 text-xs text-neutral-400 transition-colors">
+                          Limpiar
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        color="failure"
-                        size="sm"
-                        onClick={handleBulkDeletePolizas}
-                        className="rounded-[10px]"
-                      >
-                        <Icon
-                          icon="solar:trash-bin-minimalistic-bold-duotone"
-                          className="w-4 h-4 mr-1"
-                        />
-                        Eliminar seleccionadas
-                      </Button>
-                      <Button
-                        color="blue"
-                        size="sm"
-                        onClick={handleOpenBulkStateModal}
-                        className="rounded-[10px]"
-                      >
-                        <Icon icon="solar:settings-bold-duotone" className="w-4 h-4 mr-1" />
-                        Cambiar estado
-                      </Button>
-                      <Button
-                        color="light"
-                        size="sm"
-                        onClick={clearSelection}
-                        className="rounded-[10px]"
-                      >
-                        Limpiar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {/* Vista de tabla para pantallas grandes */}
-                <div className="hidden lg:block">
-                  <div className="guro-table-wrap">
-                    <table className="guro-table">
+                  )}
+
+                  {/* Desktop table */}
+                  <div className="hidden lg:block">
+                    <table className="w-full text-left">
                       <thead>
-                        <tr>
+                        <tr className="border-b border-neutral-800 text-[11px] uppercase tracking-wider text-neutral-500">
                           {visibleColumns.map((columnKey) => (
-                            <th key={columnKey} className="whitespace-nowrap">{getColumnName(columnKey)}</th>
+                            <th key={columnKey} className="px-4 py-3 font-medium whitespace-nowrap">{getColumnName(columnKey)}</th>
                           ))}
-                          <th className="sticky-right">Acciones</th>
+                          <th className="px-4 py-3 font-medium text-right">Acciones</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {polizas &&
-                          polizas.length > 0 &&
-                          polizas.map((poliza) => (
-                            <tr
-                              key={poliza.id}
-                              className={`group${selectedIds.has(String(poliza.id)) ? ' row-selected' : ''}`}
-                              onClick={() => toggleSelectOne(poliza.id as string)}
-                            >
-                              {visibleColumns.map((columnKey) => (
-                                <td key={columnKey} className="whitespace-nowrap">
-                                  {renderTableCell(poliza, columnKey)}
-                                </td>
-                              ))}
-                              <td className="sticky-right" onClick={(e) => e.stopPropagation()}>
-                                <TableActionMenu>
-                                  <TableMenuItem onClick={() => handleViewPoliza(poliza)}>
-                                    <Icon icon="solar:eye-bold-duotone" height={18} />
-                                    <span>Ver Detalles</span>
-                                  </TableMenuItem>
-                                  {poliza.enlace_externo && (
-                                    <TableMenuItem className="text-blue-600" onClick={() => window.open(poliza.enlace_externo, '_blank')}>
-                                      <Icon icon="solar:link-round-bold-duotone" height={18} />
-                                      <span>Enlace Externo</span>
-                                    </TableMenuItem>
-                                  )}
-                                  {canEditPolicy && (
-                                    <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
-                                      <TableMenuItem>
-                                        <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
-                                        <span>Editar</span>
-                                      </TableMenuItem>
-                                    </Link>
-                                  )}
-                                  {canDeletePolicy && (
-                                    <TableMenuItem className="text-red-600 hover:text-red-700" onClick={() => handleDeletePoliza(poliza)}>
-                                      <Icon icon="solar:trash-bin-minimalistic-bold-duotone" height={18} />
-                                      <span>Eliminar</span>
-                                    </TableMenuItem>
-                                  )}
-                                </TableActionMenu>
+                      <tbody className="divide-y divide-neutral-800/60">
+                        {polizas.map((poliza) => (
+                          <tr
+                            key={poliza.id}
+                            className={`hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors cursor-pointer ${selectedIds.has(String(poliza.id)) ? 'bg-[#573CFF]/10 dark:bg-[#573CFF]/5' : ''}`}
+                            onClick={() => toggleSelectOne(poliza.id as string)}
+                          >
+                            {visibleColumns.map((columnKey) => (
+                              <td key={columnKey} className="px-4 py-3 text-sm text-neutral-300 whitespace-nowrap">
+                                {renderTableCell(poliza, columnKey)}
                               </td>
-                            </tr>
-                          ))}
+                            ))}
+                            <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                              <TableActionMenu>
+                                <TableMenuItem onClick={() => handleViewPoliza(poliza)}>
+                                  <Icon icon="solar:eye-bold-duotone" height={18} />
+                                  <span>Ver Detalles</span>
+                                </TableMenuItem>
+                                {poliza.enlace_externo && (
+                                  <TableMenuItem className="text-blue-600" onClick={() => window.open(poliza.enlace_externo, '_blank')}>
+                                    <Icon icon="solar:link-round-bold-duotone" height={18} />
+                                    <span>Enlace Externo</span>
+                                  </TableMenuItem>
+                                )}
+                                {canEditPolicy && (
+                                  <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
+                                    <TableMenuItem>
+                                      <Icon icon="solar:pen-new-square-bold-duotone" height={18} />
+                                      <span>Editar</span>
+                                    </TableMenuItem>
+                                  </Link>
+                                )}
+                                {canDeletePolicy && (
+                                  <TableMenuItem className="text-red-600 hover:text-red-700" onClick={() => handleDeletePoliza(poliza)}>
+                                    <Icon icon="solar:trash-bin-minimalistic-bold-duotone" height={18} />
+                                    <span>Eliminar</span>
+                                  </TableMenuItem>
+                                )}
+                              </TableActionMenu>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
 
-                {/* Vista de cards para tablets y móviles */}
-                <div className="lg:hidden space-y-4">
-                  {polizas &&
-                    polizas.length > 0 &&
-                    polizas.map((poliza) => (
-                      <Card key={poliza.id} className="p-4">
+                  {/* Mobile cards */}
+                  <div className="lg:hidden p-4 space-y-3">
+                    {polizas.map((poliza) => (
+                      <div key={poliza.id} className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4" onClick={() => handleViewPoliza(poliza)}>
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             {getTipoIcon(poliza.ramo_principal)}
                             <div>
-                              <h3 className="font-medium text-gray-900 dark:text-white">
-                                {poliza.numero_poliza}
-                              </h3>
-                              <p className="text-sm text-gray-500">
-                                {(poliza as any).aseguradora_nombre || poliza.aseguradora}
-                              </p>
+                              <h3 className="font-medium text-white text-sm">{poliza.numero_poliza}</h3>
+                              <p className="text-xs text-neutral-500">{(poliza as any).aseguradora_nombre || poliza.aseguradora}</p>
                             </div>
                           </div>
-                          <Badge color={getEstadoBadge(poliza.estado || 'ACTIVA')}>
-                            {estadosPoliza.find((e) => e.value === poliza.estado)?.label ||
-                              poliza.estado}
-                          </Badge>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                            poliza.estado === 'ACTIVA' ? 'bg-emerald-500/15 text-emerald-400' :
+                            poliza.estado === 'VENCIDA' ? 'bg-red-500/15 text-red-400' :
+                            'bg-neutral-500/15 text-neutral-400'
+                          }`}>
+                            {estadosPoliza.find((e) => e.value === poliza.estado)?.label || poliza.estado}
+                          </span>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div className="grid grid-cols-2 gap-3 text-sm">
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Cliente</p>
-                            <p className="text-sm font-medium uppercase">
-                              {poliza.nombres_cliente} {poliza.apellidos_cliente}
-                            </p>
-                            <p className="text-xs text-gray-500">{poliza.dni_cliente}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Ramo</p>
-                            <div className="flex items-center gap-2">
-                              {getTipoIcon(poliza.ramo_principal)}
-                              <span className="text-sm uppercase">
-                                {(poliza as any).ramo_nombre ||
-                                  tiposSeguro.find((t) => t.value === poliza.ramo_principal)
-                                    ?.label ||
-                                  poliza.ramo_principal}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Prima Total</p>
-                            <p className="text-sm font-medium">
-                              {polizaUtils.formatCurrency(
-                                (poliza.total || 0) > 0
-                                  ? poliza.total || 0
-                                  : poliza.prima_neta + (poliza.iva || 0),
-                              )}
-                            </p>
+                            <p className="text-[10px] text-neutral-500 uppercase mb-0.5">Cliente</p>
+                            <p className="text-neutral-300 truncate">{poliza.nombres_cliente} {poliza.apellidos_cliente}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Vencimiento</p>
-                            <p className="text-sm">{formatDate(poliza.fecha_fin)}</p>
-                            <p className={`text-xs ${getColorVencimiento(poliza)}`}>
-                              {getDiasVencimiento(poliza)}
-                            </p>
+                            <p className="text-[10px] text-neutral-500 uppercase mb-0.5">Prima</p>
+                            <p className="text-white font-medium">{polizaUtils.formatCurrency((poliza.total || 0) > 0 ? poliza.total || 0 : poliza.prima_neta + (poliza.iva || 0))}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-neutral-500 uppercase mb-0.5">Ramo</p>
+                            <p className="text-neutral-400 truncate">{(poliza as any).ramo_nombre || poliza.ramo_principal}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-neutral-500 uppercase mb-0.5">Vence</p>
+                            <p className="text-neutral-400">{formatDate(poliza.fecha_fin)}</p>
                           </div>
                         </div>
-
-                        <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <Icon icon="solar:calendar-bold-duotone" className="w-4 h-4" />
-                            <span>Creada: {formatDate(poliza.created_at || '')}</span>
-                          </div>
-                          <Dropdown
-                            label=""
-                            dismissOnClick={false}
-                            placement="left-start"
-                            className="z-50"
-                            renderTrigger={() => (
-                              <span className="h-8 w-8 flex justify-center items-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
-                                <IconDots size={18} />
-                              </span>
-                            )}
-                          >
-                            <Dropdown.Item
-                              className="flex gap-3"
-                              onClick={() => handleViewPoliza(poliza)}
-                            >
-                              <Icon icon="solar:eye-bold" height={16} />
-                              <span>Ver Detalles</span>
-                            </Dropdown.Item>
-                            {poliza.enlace_externo && (
-                              <Dropdown.Item
-                                className="flex gap-3 text-blue-600"
-                                onClick={() => window.open(poliza.enlace_externo, '_blank')}
-                              >
-                                <Icon icon="solar:link-round-bold-duotone" height={16} />
-                                <span>Enlace Externo</span>
-                              </Dropdown.Item>
-                            )}
-                            {canEditPolicy && (
-                              <Link to={`/apps/seguros/polizas/editar/${poliza.id}`}>
-                                <Dropdown.Item className="flex gap-3">
-                                  <Icon icon="solar:pen-new-square-broken" height={16} />
-                                  <span>Editar</span>
-                                </Dropdown.Item>
-                              </Link>
-                            )}
-                            {canDeletePolicy && (
-                              <Dropdown.Item
-                                className="flex gap-3 text-red-600 hover:text-red-700"
-                                onClick={() => handleDeletePoliza(poliza)}
-                              >
-                                <Icon icon="solar:trash-bin-minimalistic-outline" height={16} />
-                                <span>Eliminar</span>
-                              </Dropdown.Item>
-                            )}
-                          </Dropdown>
-                        </div>
-                      </Card>
-                    ))}
-                </div>
-
-                {/* Paginación - tal cual Clientes */}
-                {pagination && pagination.last_page > 1 && (
-                  <div className="flex items-center justify-between p-4 border-t">
-                    <div className="text-sm text-gray-600">
-                      Mostrando {pagination.from} a {pagination.to} de {pagination.total} pólizas
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span>Por página:</span>
-                        <select
-                          className="border rounded-md px-2 py-1 text-sm dark:bg-darkgray"
-                          value={filters.per_page}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setFilters((prev) => ({ ...prev, per_page: val, page: 1 }));
-                          }}
-                        >
-                          <option value={15}>15</option>
-                          <option value={25}>25</option>
-                          <option value={50}>50</option>
-                        </select>
                       </div>
-                      <Button
-                        size="sm"
-                        color="gray"
-                        disabled={pagination.current_page === 1}
-                        onClick={() =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            page: Math.max(1, (prev.page || 1) - 1),
-                          }))
-                        }
-                        className="rounded-[10px]"
-                      >
-                        <Icon icon="solar:alt-arrow-left-bold-duotone" className="w-4 h-4" />
-                      </Button>
-                      <span className="text-sm text-gray-600">
-                        Página {pagination.current_page} de {pagination.last_page}
-                      </span>
-                      <Button
-                        size="sm"
-                        color="gray"
-                        disabled={pagination.current_page === pagination.last_page}
-                        onClick={() =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            page: Math.min(pagination.last_page, (prev.page || 1) + 1),
-                          }))
-                        }
-                        className="rounded-[10px]"
-                      >
-                        <Icon icon="solar:alt-arrow-right-bold-duotone" className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    ))}
                   </div>
-                )}
-              </>
+                </>
+              )}
+            </div>
+
+            {/* Pagination */}
+            {pagination && pagination.last_page > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-800">
+                <span className="text-xs text-neutral-500">
+                  Mostrando {pagination.from}-{pagination.to} de {pagination.total}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setFilters((prev) => ({ ...prev, page: Math.max(1, (prev.page || 1) - 1) }))}
+                    disabled={pagination.current_page === 1}
+                    className="rounded-lg px-2.5 py-1.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors"
+                  >
+                    <Icon icon="solar:alt-arrow-left-linear" width={16} />
+                  </button>
+                  {Array.from({ length: Math.min(pagination.last_page, 7) }, (_, i) => {
+                    let pageNum: number;
+                    if (pagination.last_page <= 7) pageNum = i + 1;
+                    else if ((pagination.current_page || 1) <= 4) pageNum = i + 1;
+                    else if ((pagination.current_page || 1) >= pagination.last_page - 3) pageNum = pagination.last_page - 6 + i;
+                    else pageNum = (pagination.current_page || 1) - 3 + i;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setFilters((prev) => ({ ...prev, page: pageNum }))}
+                        className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${(pagination.current_page || 1) === pageNum ? 'bg-[#573CFF] text-white' : 'text-neutral-500 hover:text-white hover:bg-neutral-800'}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setFilters((prev) => ({ ...prev, page: Math.min(pagination.last_page, (prev.page || 1) + 1) }))}
+                    disabled={pagination.current_page === pagination.last_page}
+                    className="rounded-lg px-2.5 py-1.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-30 transition-colors"
+                  >
+                    <Icon icon="solar:alt-arrow-right-linear" width={16} />
+                  </button>
+                </div>
+              </div>
             )}
-          </Card>
+          </div>
 
           {/* Modal de selección de tipo de póliza */}
           <Modal show={showCreateTypeModal} onClose={() => setShowCreateTypeModal(false)} size="md">
@@ -1605,13 +1767,53 @@ const Polizas: React.FC = () => {
                     </option>
                   ))}
                 </select>
+
+                {/* Selector de motivo SOLO cuando el nuevo estado es CANCELADA */}
+                {bulkTargetState === 'CANCELADA' && (
+                  <div>
+                    <label className="text-sm block mb-1">
+                      Motivo de cancelación <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      className="w-full border rounded-md p-2 dark:bg-darkgray"
+                      value={bulkCancellationReason}
+                      onChange={(e) => setBulkCancellationReason(e.target.value)}
+                    >
+                      <option value="">— Selecciona un motivo —</option>
+                      {cancellationReasons.map((r) => (
+                        <option key={r.key} value={r.key}>{r.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Queda registrado en cada póliza para consulta posterior.
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-sm block mb-1">
+                    {bulkTargetState === 'CANCELADA' ? 'Notas adicionales (opcional)' : 'Motivo (opcional)'}
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full border rounded-md p-2 dark:bg-darkgray"
+                    value={bulkMotivoCambio}
+                    onChange={(e) => setBulkMotivoCambio(e.target.value)}
+                    placeholder="Ingresa un motivo"
+                  />
+                </div>
+
                 <p className="text-xs text-gray-500">
                   Se aplicará a todas las pólizas seleccionadas.
                 </p>
               </div>
             </Modal.Body>
             <Modal.Footer>
-              <Button color="blue" onClick={handleConfirmBulkStateChange}>
+              <Button
+                color="blue"
+                onClick={handleConfirmBulkStateChange}
+                disabled={bulkTargetState === 'CANCELADA' && !bulkCancellationReason}
+              >
                 Aplicar
               </Button>
               <Button color="gray" onClick={() => setShowBulkStateModal(false)}>
@@ -1651,6 +1853,73 @@ const Polizas: React.FC = () => {
               loadNotificationStatus(); // Recargar estado después de cerrar
             }}
           />
+
+          {/* Modal de borrado masivo total */}
+          <Modal
+            show={showBulkDeleteAllModal}
+            onClose={() => {
+              setShowBulkDeleteAllModal(false);
+              setBulkDeleteConfirmText('');
+            }}
+            size="md"
+          >
+            <Modal.Header>
+              <div className="flex items-center gap-2 text-red-600">
+                <Icon icon="solar:danger-triangle-bold-duotone" className="w-5 h-5" />
+                <span>Eliminar TODAS las pólizas</span>
+              </div>
+            </Modal.Header>
+            <Modal.Body>
+              <div className="space-y-4">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                  <p className="text-sm text-red-800 dark:text-red-200 font-medium">
+                    ⚠️ Esta acción eliminará TODAS las pólizas ({estadisticas?.total_polizas || 0}) de tu cuenta.
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-300 mt-1">
+                    También se eliminarán los pagos, recibos de caja y registros de cartera asociados.
+                    Esta acción NO se puede deshacer.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Escribe <strong className="text-red-600">ELIMINAR TODAS</strong> para confirmar:
+                  </label>
+                  <input
+                    type="text"
+                    value={bulkDeleteConfirmText}
+                    onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800"
+                    placeholder="ELIMINAR TODAS"
+                  />
+                </div>
+              </div>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button
+                color="failure"
+                onClick={handleBulkDeleteAll}
+                disabled={bulkDeleteConfirmText !== 'ELIMINAR TODAS' || loading}
+              >
+                {loading ? (
+                  <>
+                    <Spinner size="sm" className="mr-2" />
+                    Eliminando...
+                  </>
+                ) : (
+                  'Confirmar eliminación total'
+                )}
+              </Button>
+              <Button
+                color="gray"
+                onClick={() => {
+                  setShowBulkDeleteAllModal(false);
+                  setBulkDeleteConfirmText('');
+                }}
+              >
+                Cancelar
+              </Button>
+            </Modal.Footer>
+          </Modal>
         </div>
       </PermissionGate>
     </OnboardingGuard>

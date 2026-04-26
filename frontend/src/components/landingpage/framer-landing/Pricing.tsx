@@ -185,7 +185,7 @@ const PlanFeatures = ({ plan }: { plan: typeof plans[number] }) => {
   return (
     <>
       <div className="mb-2">
-        <p className="text-xs font-bold text-[#0d0d0d] uppercase tracking-wider mb-3">
+        <p className="text-xs font-bold text-white uppercase tracking-wider mb-3">
           {isEnterprise ? 'Todo lo de Professional +' : 'Incluye:'}
         </p>
         <ul className="space-y-2">
@@ -193,9 +193,9 @@ const PlanFeatures = ({ plan }: { plan: typeof plans[number] }) => {
             <li key={feature.name} className="flex items-start gap-2">
               <Icon icon="solar:check-circle-bold" className="w-4 h-4 flex-shrink-0 mt-0.5 text-[#573CFF]" />
               <div className="flex flex-col">
-                <span className="text-sm text-gray-600">{feature.name}</span>
+                <span className="text-sm text-white/80">{feature.name}</span>
                 {!isEnterprise && feature.note && (
-                  <span className="text-[11px] text-gray-400">{feature.note}</span>
+                  <span className="text-[11px] text-white/40">{feature.note}</span>
                 )}
               </div>
             </li>
@@ -205,12 +205,12 @@ const PlanFeatures = ({ plan }: { plan: typeof plans[number] }) => {
 
       {expanded && visibleNotIncluded.length > 0 && (
         <div className="mb-2">
-          <p className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-3">No incluye:</p>
+          <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">No incluye:</p>
           <ul className="space-y-2">
             {visibleNotIncluded.map((name) => (
               <li key={name} className="flex items-start gap-2">
-                <Icon icon="solar:close-circle-bold" className="w-4 h-4 flex-shrink-0 mt-0.5 text-gray-300" />
-                <span className="text-sm text-gray-300">{name}</span>
+                <Icon icon="solar:close-circle-bold" className="w-4 h-4 flex-shrink-0 mt-0.5 text-white/30" />
+                <span className="text-sm text-white/40">{name}</span>
               </li>
             ))}
           </ul>
@@ -220,7 +220,7 @@ const PlanFeatures = ({ plan }: { plan: typeof plans[number] }) => {
       {hasMore && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1 text-xs font-medium text-[#573CFF] hover:text-[#4530cc] transition-colors mt-2"
+          className="flex items-center gap-1 text-xs font-medium text-[#573CFF] hover:text-[#7a63ff] transition-colors mt-2"
         >
           {expanded ? 'Ver menos' : 'Ver más'}
           <Icon
@@ -273,7 +273,7 @@ const Pricing = () => {
   };
 
   return (
-    <section ref={ref} id="precios" className="py-14 sm:py-28 bg-white">
+    <section ref={ref} id="precios" className="py-14 sm:py-28 bg-transparent">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <motion.div
@@ -286,14 +286,14 @@ const Pricing = () => {
             initial={{ opacity: 0, y: 20, filter: 'blur(6px)' }}
             animate={isInView ? { opacity: 1, y: 0, filter: 'blur(0px)' } : {}}
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold text-[#0d0d0d] leading-[1.1] tracking-[-0.02em] mb-4"
-            style={{ fontFamily: "'General Sans', sans-serif" }}
+            className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold text-white leading-[1.1] tracking-[-0.02em] mb-4"
+            style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
           >
             Elige un plan
             <span className="hidden sm:inline"><br /></span>{' '}
-            o comienza gratis
+            <span className="landing-grad-text">para tu operación</span>
           </motion.h2>
-          <p className="text-gray-500 text-base sm:text-lg max-w-xl mx-auto">
+          <p className="text-white/60 text-base sm:text-lg max-w-xl mx-auto">
             Planes para agentes, agencias y corredores de todos los tamaños.
           </p>
         </motion.div>
@@ -305,11 +305,11 @@ const Pricing = () => {
           transition={{ delay: 0.2 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 mb-10 sm:mb-14"
         >
-          <div className="flex items-center gap-2 bg-[#f5f5f5] rounded-full p-1">
+          <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full p-1">
             <button
               onClick={() => setIsAnnual(false)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                !isAnnual ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-gray-400'
+                !isAnnual ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-white/50'
               }`}
             >
               Mensual
@@ -317,7 +317,7 @@ const Pricing = () => {
             <button
               onClick={() => setIsAnnual(true)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                isAnnual ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-gray-400'
+                isAnnual ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-white/50'
               }`}
             >
               Anual
@@ -336,7 +336,7 @@ const Pricing = () => {
         </motion.div>
 
         {/* Cards */}
-        <div className="grid lg:grid-cols-4 gap-0 border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="grid lg:grid-cols-4 gap-0 border border-white/10 rounded-2xl overflow-hidden bg-white/[0.02]">
           {plans.map((plan, index) => {
             const isCustom = 'isEnterprise' in plan && plan.isEnterprise;
             const users = planUsers[plan.name] || plan.minUsers;
@@ -357,15 +357,15 @@ const Pricing = () => {
                 animate={isInView ? { opacity: 1, y: 0, scale: 1 } : {}}
                 transition={{ duration: 0.6, delay: 0.1 + index * 0.12, ease: [0.22, 1, 0.36, 1] }}
                 whileHover={{ y: -6, transition: { duration: 0.3 } }}
-                className={`p-7 sm:p-8 flex flex-col transition-shadow duration-300 hover:shadow-xl ${
-                  index < plans.length - 1 ? 'lg:border-r border-b lg:border-b-0 border-gray-200' : ''
-                } bg-white`}
+                className={`p-7 sm:p-8 flex flex-col transition-all duration-300 hover:bg-white/[0.04] ${
+                  index < plans.length - 1 ? 'lg:border-r border-b lg:border-b-0 border-white/10' : ''
+                }`}
               >
                 {/* Name + badge */}
                 <div className="flex items-center gap-2 mb-2">
                   <h3
-                    className="text-lg font-bold text-[#0d0d0d]"
-                    style={{ fontFamily: "'General Sans', sans-serif" }}
+                    className="text-lg font-bold text-white"
+                    style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
                   >
                     {plan.name}
                   </h3>
@@ -377,7 +377,7 @@ const Pricing = () => {
                 </div>
 
                 {/* Description */}
-                <p className="text-sm text-gray-400 mb-1 leading-relaxed">{plan.description}</p>
+                <p className="text-sm text-white/50 mb-1 leading-relaxed">{plan.description}</p>
 
                 {/* User selector */}
                 {!isCustom && (
@@ -385,24 +385,24 @@ const Pricing = () => {
                     <button
                       onClick={() => setUsersForPlan(plan.name, plan.minUsers, -1)}
                       disabled={users <= plan.minUsers}
-                      className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                      className="w-7 h-7 rounded-lg border border-white/15 flex items-center justify-center text-white/60 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
                     >
                       <Icon icon="solar:minus-circle-linear" className="text-sm" />
                     </button>
-                    <span className="text-sm font-semibold text-[#0d0d0d] min-w-[60px] text-center">
+                    <span className="text-sm font-semibold text-white min-w-[60px] text-center">
                       {users} {users === 1 ? 'usuario' : 'usuarios'}
                     </span>
                     <button
                       onClick={() => setUsersForPlan(plan.name, plan.minUsers, 1)}
-                      className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 transition"
+                      className="w-7 h-7 rounded-lg border border-white/15 flex items-center justify-center text-white/60 hover:bg-white/10 transition"
                     >
                       <Icon icon="solar:add-circle-linear" className="text-sm" />
                     </button>
-                    <span className="text-[10px] text-gray-300 ml-1">· {plan.presetStorageGB} GB</span>
+                    <span className="text-[10px] text-white/40 ml-1">· {plan.presetStorageGB} GB</span>
                   </div>
                 )}
                 {isCustom && (
-                  <p className="text-xs text-gray-400 mb-4">Usuarios y almacenamiento a tu medida</p>
+                  <p className="text-xs text-white/50 mb-4">Usuarios y almacenamiento a tu medida</p>
                 )}
 
                 {/* Price */}
@@ -411,33 +411,33 @@ const Pricing = () => {
                     <>
                       <div className="flex items-baseline gap-1.5">
                         <span
-                          className="text-3xl sm:text-4xl font-bold text-[#0d0d0d] tracking-tight"
-                          style={{ fontFamily: "'General Sans', sans-serif" }}
+                          className="text-3xl sm:text-4xl font-bold text-white tracking-tight"
+                          style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
                         >
                           {formatPrice(monthlyDisplay)}
                         </span>
-                        <span className="text-sm text-gray-400 font-medium">/mes</span>
+                        <span className="text-sm text-white/50 font-medium">/mes</span>
                       </div>
                       {isAnnual && annualTotal && (
                         <div className="flex items-center gap-2 mt-1">
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-white/50">
                             {formatPrice(annualTotal)}/año
                           </p>
-                          <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded">
                             -12%
                           </span>
                         </div>
                       )}
                       {!isAnnual && monthlyPrice && (
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-white/50 mt-1">
                           {formatPrice(monthlyPrice * 12)}/año sin descuento
                         </p>
                       )}
                     </>
                   ) : (
                     <div
-                      className="text-3xl sm:text-4xl font-bold text-[#0d0d0d] tracking-tight"
-                      style={{ fontFamily: "'General Sans', sans-serif" }}
+                      className="text-3xl sm:text-4xl font-bold text-white tracking-tight"
+                      style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
                     >
                       A tu medida
                     </div>
@@ -448,7 +448,7 @@ const Pricing = () => {
                 {isCustom ? (
                   <button
                     onClick={() => navigate('/comenzar')}
-                    className="block w-full py-3 rounded-xl font-bold text-center text-sm uppercase tracking-wider transition-colors mb-7 bg-[#0d0d0d] text-white hover:bg-[#1a1a2e]"
+                    className="block w-full py-3 rounded-xl font-bold text-center text-sm uppercase tracking-wider transition-colors mb-7 bg-white/10 border border-white/15 text-white hover:bg-white/15"
                   >
                     {plan.cta}
                   </button>
@@ -458,7 +458,7 @@ const Pricing = () => {
                     className={`block w-full py-3 rounded-xl font-bold text-center text-sm uppercase tracking-wider transition-colors mb-7 ${
                       plan.popular
                         ? 'bg-[#573CFF] text-white hover:bg-[#4530cc]'
-                        : 'bg-[#0d0d0d] text-white hover:bg-[#1a1a2e]'
+                        : 'bg-white/10 border border-white/15 text-white hover:bg-white/15'
                     }`}
                   >
                     {plan.cta}

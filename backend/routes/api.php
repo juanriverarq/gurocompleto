@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\BillingController;
 use App\Http\Controllers\SaaS\AuditController;
 use App\Http\Controllers\SaaS\EmpleadosController;
 use App\Http\Controllers\SaaS\SaasCommercialTasksController;
+use App\Http\Controllers\SaaS\SaasCommercialTaskPriorityConfigController;
 use App\Http\Controllers\SaaS\SaasSalesFunnelController;
 use App\Http\Controllers\SaaS\SaasSalesTeamsController;
 use App\Http\Controllers\SaaS\SaasSalesGoalsController;
@@ -862,6 +863,7 @@ Route::middleware(['unified.auth', 'security.auth'])->prefix('saas/whatsapp-inbo
     // Plantillas de mensaje (Meta Cloud API templates)
     Route::get('templates', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'index']);
     Route::post('templates', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'store']);
+    Route::post('templates/upload-media', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'uploadMedia']);
     Route::delete('templates/{templateName}', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'destroy']);
     Route::post('templates/send', [\App\Http\Controllers\Api\WhatsAppTemplateController::class, 'send']);
 });
@@ -1027,6 +1029,12 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/activas-para-siniestros', [SaasPolizasController::class, 'activasParaSiniestrosDev']);
             Route::get('/exportar', [SaasPolizasController::class, 'exportar']);
             Route::post('/', [SaasPolizasController::class, 'store']);
+            Route::post('/sync-details-batch', [SaasPolizasController::class, 'syncPolizasDetailBatch']);
+            Route::post('/sync-all-details', [SaasPolizasController::class, 'syncAllPolizasDetail']);
+            Route::post('/cancel-detail-sync', [SaasPolizasController::class, 'cancelDetailSync']);
+            Route::get('/detail-sync-progress', [SaasPolizasController::class, 'detailSyncProgress']);
+            Route::post('/{id}/sync-detail', [SaasPolizasController::class, 'syncPolizaDetail'])->whereNumber('id');
+            Route::get('/{id}/caratula-pdf', [SaasPolizasController::class, 'downloadCaratulaPdf'])->whereNumber('id');
             Route::get('/{id}', [SaasPolizasController::class, 'show'])->whereNumber('id');
             Route::put('/{id}', [SaasPolizasController::class, 'update'])->whereNumber('id');
             Route::delete('/{id}', [SaasPolizasController::class, 'destroy'])->whereNumber('id');
@@ -1037,6 +1045,7 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/{id}/documents/signed-url', [PolizaDocumentsController::class, 'signedUrl'])->whereNumber('id');
             Route::get('/{id}/documents/stream', [PolizaDocumentsController::class, 'stream'])->whereNumber('id');
             Route::post('/{id}/cambiar-estado', [SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
+            Route::get('/cancellation-reasons', [SaasPolizasController::class, 'cancellationReasons']);
 
             // Renovaciones
             Route::get('/renovaciones', [SaasPolizasController::class, 'renovacionesDev']);
@@ -1064,6 +1073,8 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/{id}', [AutomovilesController::class, 'show'])->whereNumber('id');
             Route::put('/{id}', [AutomovilesController::class, 'update'])->whereNumber('id');
             Route::delete('/{id}', [AutomovilesController::class, 'destroy'])->whereNumber('id');
+            Route::post('/{id}/consultar-runt', [AutomovilesController::class, 'consultarRunt'])->whereNumber('id');
+            Route::post('/sync-runt', [AutomovilesController::class, 'syncRuntMasivo']);
         });
 
         // Comisiones Manuales de Pólizas
@@ -1098,6 +1109,12 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/needing-attention', [SaasCommercialTasksController::class, 'needingAttention']);
             Route::get('/clients', [SaasCommercialTasksController::class, 'getClients']);
             Route::get('/users', [SaasCommercialTasksController::class, 'getUsers']);
+
+            // Configuración de prioridades (DEBE ir antes de los wildcards /{task} para no ser "comida" por ellos)
+            Route::get('/priority-configs', [SaasCommercialTaskPriorityConfigController::class, 'index']);
+            Route::post('/priority-configs/reset', [SaasCommercialTaskPriorityConfigController::class, 'resetDefaults']);
+            Route::put('/priority-configs/{priorityKey}', [SaasCommercialTaskPriorityConfigController::class, 'update']);
+
             Route::get('/{task}', [SaasCommercialTasksController::class, 'show']);
             Route::put('/{task}', [SaasCommercialTasksController::class, 'update']);
             Route::delete('/{task}', [SaasCommercialTasksController::class, 'destroy']);
@@ -1210,6 +1227,38 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/{id}', [App\Http\Controllers\SaaS\AseguradorasController::class, 'show'])->whereNumber('id');
             Route::put('/{id}', [App\Http\Controllers\SaaS\AseguradorasController::class, 'update'])->whereNumber('id');
             Route::delete('/{id}', [App\Http\Controllers\SaaS\AseguradorasController::class, 'destroy'])->whereNumber('id');
+        });
+
+        // Integraciones de aseguradoras (paso 1 onboarding)
+        Route::prefix('integraciones/aseguradoras')->group(function () {
+            Route::get('/conexiones', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'index']);
+            Route::post('/sync', [App\Http\Controllers\SaaS\InsurerSyncController::class, 'sync']);
+            Route::get('/sync/history', [App\Http\Controllers\SaaS\InsurerSyncController::class, 'history']);
+            Route::post('/sync/{batchId}/cancel', [App\Http\Controllers\SaaS\InsurerSyncController::class, 'cancel']);
+            Route::get('/sync/{batchId}/status', [App\Http\Controllers\SaaS\InsurerSyncController::class, 'status']);
+            Route::post('/{insurer}/conectar', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'connect']);
+            Route::post('/{insurer}/conectar-navegador', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'connectBrowser']);
+            Route::post('/{insurer}/conectar-auto', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'connectAuto']);
+            Route::post('/{insurer}/reconectar', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'reconnect']);
+            Route::post('/{insurer}/health-check', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'healthCheck']);
+            Route::get('/{insurer}/session-status', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'sessionStatus']);
+            Route::get('/{insurer}/connect-status', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'connectStatus']);
+            Route::post('/{insurer}/desconectar', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'disconnect']);
+        });
+
+        // Cartera consolidada de aseguradoras
+        Route::prefix('cartera-aseguradoras')->group(function () {
+            Route::get('/', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'index']);
+            Route::get('/stats', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'stats']);
+            Route::get('/cuotas/{policyNumber}', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'cuotas']);
+        });
+
+        // Recibos con comisiones sincronizados desde aseguradoras (Sura por ahora)
+        Route::prefix('recibos-comisiones')->group(function () {
+            Route::get('/', [App\Http\Controllers\SaaS\RecibosComisionesController::class, 'index']);
+            Route::get('/stats', [App\Http\Controllers\SaaS\RecibosComisionesController::class, 'stats']);
+            Route::post('/sync', [App\Http\Controllers\SaaS\RecibosComisionesController::class, 'sync']);
+            Route::get('/by-policy/{policyNumber}', [App\Http\Controllers\SaaS\RecibosComisionesController::class, 'byPolicy']);
         });
         
         // Vendedores
@@ -1523,11 +1572,15 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::get('/polizas/{id}/documents/signed-url', [PolizaDocumentsController::class, 'signedUrl'])->whereNumber('id');
     Route::get('/polizas/{id}/documents/stream', [PolizaDocumentsController::class, 'stream'])->whereNumber('id');
 
+    Route::post('/polizas/sync-details-batch', [SaasPolizasController::class, 'syncPolizasDetailBatch']);
+    Route::post('/polizas/{id}/sync-detail', [SaasPolizasController::class, 'syncPolizaDetail'])->whereNumber('id');
+
     // Rutas con {id} (constricción numérica para evitar capturar 'documents')
     Route::get('/polizas/{id}', [SaasPolizasController::class, 'show'])->whereNumber('id');
     Route::put('/polizas/{id}', [SaasPolizasController::class, 'update'])->whereNumber('id');
     Route::put('/polizas/{id}/estado', [SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
     Route::delete('/polizas/{id}', [SaasPolizasController::class, 'destroy'])->whereNumber('id');
+    Route::post('/polizas/bulk-delete', [SaasPolizasController::class, 'bulkDelete']);
 
     // =============================
     // Documentos de siniestros (fuera del grupo prefix por rutas duplicadas dev)
@@ -1678,7 +1731,8 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
            // Subida de media para campañas (multipart/form-data: media)
             Route::post('/media-upload', [\App\Http\Controllers\Api\CampaignController::class, 'uploadMedia']);
           
-           Route::post('/media-upload', [\App\Http\Controllers\Api\CampaignController::class, 'uploadMedia']);
+           // Upload media for campaign template headers (IMAGE/VIDEO/DOCUMENT) → Firebase Storage → public URL
+            Route::post('/upload-header-media', [\App\Http\Controllers\Api\CampaignController::class, 'uploadCampaignMedia']);
           
           
            // Nuevas acciones de control de ejecución
@@ -2277,6 +2331,12 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::get('/cartera', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'carteraDev']); // OPTIMIZACIÓN: Endpoint específico para cartera
         Route::get('/estadisticas', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'estadisticasDev']);
         Route::post('/', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'store']);
+        Route::post('/sync-details-batch', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'syncPolizasDetailBatch']);
+        Route::post('/sync-all-details', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'syncAllPolizasDetail']);
+        Route::post('/cancel-detail-sync', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'cancelDetailSync']);
+        Route::get('/detail-sync-progress', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'detailSyncProgress']);
+        Route::post('/{id}/sync-detail', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'syncPolizaDetail'])->whereNumber('id');
+        Route::get('/{id}/caratula-pdf', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'downloadCaratulaPdf'])->whereNumber('id');
         Route::get('/{id}', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'show'])->whereNumber('id');
         Route::put('/{id}', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'update'])->whereNumber('id');
         Route::delete('/{id}', [\App\Http\Controllers\SaaS\SaasPolizasController::class, 'destroy'])->whereNumber('id');
@@ -2286,10 +2346,13 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
 
         // Cartera items (cuotas reales de SS)
         Route::get('/{id}/cartera-items', [\App\Http\Controllers\Api\PagoPolizaController::class, 'carteraItemsByPoliza'])->whereNumber('id');
+        Route::put('/{id}/cartera-items/{itemId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'updateCarteraItem'])->whereNumber('id')->whereNumber('itemId');
 
         // Pagos y cobros
         Route::get('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'index'])->whereNumber('id');
         Route::post('/{id}/pagos', [\App\Http\Controllers\Api\PagoPolizaController::class, 'store'])->whereNumber('id');
+        Route::put('/{id}/pagos/{pagoId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'updatePago'])->whereNumber('id')->whereNumber('pagoId');
+        Route::post('/{id}/marcar-pagada', [\App\Http\Controllers\Api\PagoPolizaController::class, 'marcarPolizaPagada'])->whereNumber('id');
         Route::delete('/{id}/pagos/{pagoId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPago'])->whereNumber('id')->whereNumber('pagoId');
         Route::delete('/{id}/pagos/revertir-oficina', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirRecaudosOficina'])->whereNumber('id');
         Route::delete('/{id}/pagos/revertir-aseguradora', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPagoAseguradoraDePoliza'])->whereNumber('id');
@@ -2415,6 +2478,19 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
         Route::get('/logs', [\App\Http\Controllers\Api\ClientNotificationController::class, 'getLogs']);
         Route::get('/whatsapp-templates', [\App\Http\Controllers\Api\ClientNotificationController::class, 'getWhatsAppTemplates']);
         Route::get('/scheduled', [\App\Http\Controllers\Api\ClientNotificationController::class, 'getScheduledNotifications']);
+    });
+
+    // =============================
+    // RUTAS DE NOTIFICACIONES DE AUTOMÓVILES (SOAT + RTM)
+    // =============================
+    Route::prefix('automovil-notifications')->group(function () {
+        Route::get('/config', [\App\Http\Controllers\Api\AutomovilNotificationController::class, 'getConfig']);
+        Route::put('/config', [\App\Http\Controllers\Api\AutomovilNotificationController::class, 'updateConfig']);
+        Route::get('/logs', [\App\Http\Controllers\Api\AutomovilNotificationController::class, 'getLogs']);
+        Route::get('/stats', [\App\Http\Controllers\Api\AutomovilNotificationController::class, 'getStats']);
+        Route::get('/scheduled', [\App\Http\Controllers\Api\AutomovilNotificationController::class, 'getScheduledNotifications']);
+        Route::post('/skip', [\App\Http\Controllers\Api\AutomovilNotificationController::class, 'skipNotification']);
+        Route::get('/whatsapp-templates', [\App\Http\Controllers\Api\AutomovilNotificationController::class, 'getWhatsAppTemplates']);
     });
 
 });

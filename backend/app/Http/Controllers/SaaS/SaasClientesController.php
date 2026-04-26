@@ -566,14 +566,28 @@ class SaasClientesController extends Controller
 
             // Reglas condicionales
             if ($validatedData['client_type'] === 'persona') {
-                if (empty($validatedData['first_name']) || empty($validatedData['last_name'])) {
-                    throw new \Exception('Nombre y apellidos son obligatorios para cliente persona');
+                $errores = [];
+                if (empty($validatedData['first_name'])) {
+                    $errores['first_name'] = ['Los nombres son obligatorios para cliente persona.'];
+                }
+                if (empty($validatedData['last_name'])) {
+                    $errores['last_name'] = ['Los apellidos son obligatorios para cliente persona.'];
+                }
+                if (!empty($errores)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages($errores);
                 }
             } else {
                 // Para empresas, solo razón social y NIT son obligatorios
                 // Los datos del representante legal son opcionales
-                if (empty($validatedData['company']) || empty($validatedData['document_number'])) {
-                    throw new \Exception('Razón social y NIT son obligatorios para cliente empresa');
+                $errores = [];
+                if (empty($validatedData['company'])) {
+                    $errores['company'] = ['La razón social es obligatoria para cliente empresa.'];
+                }
+                if (empty($validatedData['document_number'])) {
+                    $errores['document_number'] = ['El NIT es obligatorio para cliente empresa.'];
+                }
+                if (!empty($errores)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages($errores);
                 }
             }
 
@@ -609,10 +623,17 @@ class SaasClientesController extends Controller
                 'data' => $this->transformClienteToFrontend($cliente)
             ], 201);
 
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al crear el cliente: ' . $e->getMessage(),
+                'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error al crear cliente: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo crear el cliente. Inténtalo de nuevo.',
             ], 500);
         }
     }
@@ -843,11 +864,17 @@ class SaasClientesController extends Controller
                 'data' => $this->transformClienteToFrontend($cliente)
             ]);
 
-        } catch (\Exception $e) {
-            \Log::error('Error al actualizar cliente: ' . $e->getMessage());
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al actualizar el cliente: ' . $e->getMessage(),
+                'message' => 'Hay datos faltantes o inválidos. Revisa los campos marcados.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Error al actualizar cliente: ' . $e->getMessage(), ['exception' => $e]);
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo actualizar el cliente. Inténtalo de nuevo.',
             ], 500);
         }
     }
@@ -897,10 +924,10 @@ class SaasClientesController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar el cliente: ' . $e->getMessage(),
+                'message' => 'No se pudo eliminar el cliente. Inténtalo de nuevo.',
             ], 500);
         }
     }
@@ -978,10 +1005,10 @@ class SaasClientesController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar clientes: ' . $e->getMessage(),
+                'message' => 'No se pudieron eliminar los clientes. Inténtalo de nuevo.',
             ], 500);
         }
     }
@@ -1265,6 +1292,9 @@ class SaasClientesController extends Controller
             'prioridad' => $cliente->priority,
             'estado_civil' => $cliente->marital_status,
             'etiquetas' => is_array($cliente->tags) ? implode(',', $cliente->tags) : ($cliente->tags ?? ''),
+            'source' => $cliente->source,
+            'sync_source' => $cliente->custom_fields['_sync_source'] ?? null,
+            'sync_at' => $cliente->custom_fields['_sync_at'] ?? null,
             'created_at' => $cliente->created_at,
             'updated_at' => $cliente->updated_at,
         ];

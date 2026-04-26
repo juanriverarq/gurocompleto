@@ -106,7 +106,34 @@ const NuevaPolizaColectiva: React.FC = () => {
   const { vendedores: vendedoresHook } = useVendedores();
   const { sedes: sedesHook } = useSedes();
 
-  useEffect(() => { setAseguradoras((asegHook || []).map((a: any) => ({ id: String(a.id), nombre: a.nombre || a.name }))); }, [asegHook]);
+  useEffect(() => {
+    const aseguradorasBase = (asegHook || []).map((a: any) => ({ id: String(a.id), nombre: a.nombre || a.name }));
+    
+    // Agregar aseguradoras solicitadas si no existen
+    const aseguradorasAdicionales = ['Finesa', 'Crediseguros', 'Sura', 'Crediestado', 'Previseguro'];
+    const existentes = new Set(aseguradorasBase.map(a => a.nombre.toLowerCase()));
+    
+    // Verificar si existen variaciones similares
+    const adicionales = aseguradorasAdicionales
+      .filter(nombre => {
+        const nombreLower = nombre.toLowerCase();
+        const existeExacto = existentes.has(nombreLower);
+        
+        // Verificar si existe una variación que contenga el nombre
+        const existeVariacion = aseguradorasBase.some(a => 
+          a.nombre.toLowerCase().includes(nombreLower) || 
+          nombreLower.includes(a.nombre.toLowerCase())
+        );
+        
+        return !existeExacto && !existeVariacion;
+      })
+      .map((nombre, index) => ({
+        id: `custom-${index + 1}`,
+        nombre
+      }));
+    
+    setAseguradoras([...aseguradorasBase, ...adicionales]);
+  }, [asegHook]);
   useEffect(() => { setRamos((ramosHook || []).map((r: any) => ({
     id: String(r.id),
     nombre: r.nombre || r.name,
@@ -463,14 +490,13 @@ const NuevaPolizaColectiva: React.FC = () => {
   const renderClientSearch = () => (
     <div className="md:col-span-2">
       <div className="relative">
-        <Label className="text-sm font-medium text-gray-900 dark:text-white mb-1 block">Buscar y seleccionar cliente (tomador) <span className="text-red-500">*</span></Label>
+        <Label className="text-sm font-medium text-gray-900 dark:text-white mb-1 block">Buscar y seleccionar cliente (tomador)</Label>
         <div className="flex gap-2">
           <Input
             placeholder="Razón social, NIT, nombre o email"
             value={selectedClient ? `${selectedClient.nombre} (${selectedClient.documento || 'sin doc'})` : clientQuery}
             onChange={(e) => { setSelectedClient(null); setClientQuery(e.target.value); }}
             className="flex-1"
-            required
           />
           <Button type="button" color="primary" onClick={() => { setClientModalMode('new'); setClienteToEdit(null); setShowClientModal(true); }}>
             <Icon icon="solar:user-plus-bold" className="w-4 h-4 mr-1" /> Nuevo
@@ -582,9 +608,9 @@ const NuevaPolizaColectiva: React.FC = () => {
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Información de la Póliza Colectiva" icon="solar:document-bold" />
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <FormField id="numeroPoliza" name="numeroPoliza" label="Número Póliza" value={numeroPoliza} onChange={(e) => { setNumeroPoliza(e.target.value); clearStepError('numeroPoliza'); }} required placeholder="POL-2024-XXX" error={stepErrors.numeroPoliza} />
+            <FormField id="numeroPoliza" name="numeroPoliza" label="Número Póliza *" value={numeroPoliza} onChange={(e) => { setNumeroPoliza(e.target.value); clearStepError('numeroPoliza'); }} placeholder="POL-2024-XXX" error={stepErrors.numeroPoliza} />
 
-            <FormField id="estadoPoliza" name="estadoPoliza" label="Estado" type="select" value={estadoPoliza} onChange={(e) => setEstadoPoliza(e.target.value)} required options={[
+            <FormField id="estadoPoliza" name="estadoPoliza" label="Estado" type="select" value={estadoPoliza} onChange={(e) => setEstadoPoliza(e.target.value)} options={[
               { value: 'ACTIVA', label: 'Vigente' }, { value: 'VENCIDA', label: 'Vencida' }, { value: 'CANCELADA', label: 'Cancelada' }, { value: 'SUSPENDIDA', label: 'Suspendida' }, { value: 'COTIZACION', label: 'Cotización' }, { value: 'EXPEDICION', label: 'Expedición' },
             ]} />
 
@@ -597,10 +623,10 @@ const NuevaPolizaColectiva: React.FC = () => {
               </label>
             </div>
 
-            <FormField id="aseguradora" name="aseguradora" label="Aseguradora" type="select" value={aseguradora} onChange={(e) => { setAseguradora(e.target.value); setRamo(''); setSubramo(''); clearStepError('aseguradora'); }} required error={stepErrors.aseguradora}
+            <FormField id="aseguradora" name="aseguradora" label="Aseguradora *" type="select" value={aseguradora} onChange={(e) => { setAseguradora(e.target.value); setRamo(''); setSubramo(''); clearStepError('aseguradora'); }} error={stepErrors.aseguradora}
               options={[{ value: '', label: 'Seleccionar' }, ...aseguradoras.map(a => ({ value: a.nombre, label: a.nombre }))]} />
 
-            <FormField id="ramo" name="ramo" label="Ramo" type="select" value={ramo} onChange={(e) => {
+            <FormField id="ramo" name="ramo" label="Ramo *" type="select" value={ramo} onChange={(e) => {
               const newRamo = e.target.value;
               setRamo(newRamo); setSubramo(''); clearStepError('ramo');
               if (aseguradora && newRamo) {
@@ -615,7 +641,7 @@ const NuevaPolizaColectiva: React.FC = () => {
                   }
                 }
               }
-            }} required error={stepErrors.ramo}
+            }} error={stepErrors.ramo}
               options={[{ value: '', label: 'Seleccionar' }, ...ramos.map(r => ({ value: r.nombre, label: r.nombre }))]} />
 
             {(() => {
@@ -672,12 +698,12 @@ const NuevaPolizaColectiva: React.FC = () => {
           <SectionHeader title="Cliente (Tomador)" icon="solar:user-bold" />
           <div className="space-y-3 overflow-visible">
             <div className="relative" style={{ zIndex: 1000 }}>
-              <Label className="text-xs font-medium text-gray-900 dark:text-white mb-1 block">Buscar cliente <span className="text-red-500">*</span></Label>
+              <Label className="text-xs font-medium text-gray-900 dark:text-white mb-1 block">Buscar cliente</Label>
               <div className="flex gap-1">
                 <Input placeholder="Razón social, NIT, nombre o email"
                   value={selectedClient ? `${selectedClient.nombre} (${selectedClient.documento || 'sin doc'})` : clientQuery}
                   onChange={(e) => { setSelectedClient(null); setClientQuery(e.target.value); }}
-                  className={`flex-1 ${stepErrors.cliente ? 'border-red-500' : ''}`} required />
+                  className={`flex-1 ${stepErrors.cliente ? 'border-red-500' : ''}`} />
                 <Button type="button" color="primary" size="xs" onClick={() => { setClientModalMode('new'); setClienteToEdit(null); setShowClientModal(true); }}>
                   <Icon icon="solar:user-plus-bold" className="w-3 h-3" />
                 </Button>
@@ -716,9 +742,9 @@ const NuevaPolizaColectiva: React.FC = () => {
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Vigencia" icon="solar:calendar-bold" />
           <div className="grid grid-cols-3 gap-3">
-            <FormField id="fechaExpedicion" name="fechaExpedicion" label="Expedición" type="date" value={fechaExpedicion} onChange={(e) => { setFechaExpedicion(e.target.value); clearStepError('fechaExpedicion'); }} required error={stepErrors.fechaExpedicion} />
-            <FormField id="fechaInicio" name="fechaInicio" label="Inicio" type="date" value={fechaInicio} onChange={(e) => { setFechaInicio(e.target.value); clearStepError('fechaInicio'); }} required error={stepErrors.fechaInicio} />
-            <FormField id="fechaFin" name="fechaFin" label="Fin" type="date" value={fechaFin} onChange={(e) => { setFechaFin(e.target.value); clearStepError('fechaFin'); }} required error={stepErrors.fechaFin} />
+            <FormField id="fechaExpedicion" name="fechaExpedicion" label="Expedición *" type="date" value={fechaExpedicion} onChange={(e) => { setFechaExpedicion(e.target.value); clearStepError('fechaExpedicion'); }} error={stepErrors.fechaExpedicion} />
+            <FormField id="fechaInicio" name="fechaInicio" label="Inicio *" type="date" value={fechaInicio} onChange={(e) => { setFechaInicio(e.target.value); clearStepError('fechaInicio'); }} error={stepErrors.fechaInicio} />
+            <FormField id="fechaFin" name="fechaFin" label="Fin *" type="date" value={fechaFin} onChange={(e) => { setFechaFin(e.target.value); clearStepError('fechaFin'); }} error={stepErrors.fechaFin} />
           </div>
           {fechaRecepcion || true ? (
             <div className="grid grid-cols-3 gap-3 mt-3">
@@ -796,7 +822,7 @@ const NuevaPolizaColectiva: React.FC = () => {
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Información Financiera" icon="solar:wallet-bold" />
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <FormField id="primaNeta" name="primaNeta" label="Prima Neta *" type="number" value={primaNeta} onChange={(e) => { setPrimaNeta(e.target.value); clearStepError('primaNeta'); }} required error={stepErrors.primaNeta} />
+            <FormField id="primaNeta" name="primaNeta" label="Prima Neta *" type="number" value={primaNeta} onChange={(e) => { setPrimaNeta(e.target.value); clearStepError('primaNeta'); }} error={stepErrors.primaNeta} />
             <FormField id="porcentajeIva" name="porcentajeIva" label="% IVA" type="number" value={porcentajeIva} onChange={(e) => setPorcentajeIva(e.target.value)} />
             <FormField id="iva" name="iva" label="IVA" type="number" value={iva} onChange={(e) => setIva(e.target.value)} />
             <FormField id="total" name="total" label="Total" type="number" value={total} onChange={(e) => setTotal(e.target.value)} />
@@ -824,7 +850,7 @@ const NuevaPolizaColectiva: React.FC = () => {
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Forma de Pago" icon="solar:card-bold" />
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <FormField id="formaPago" name="formaPago" label="Forma" type="select" value={formaPago} onChange={(e) => setFormaPago(e.target.value)} options={[
+            <FormField id="formaPago" name="formaPago" label="Forma *" type="select" value={formaPago} onChange={(e) => setFormaPago(e.target.value)} options={[
               { value: '', label: 'Seleccionar' }, { value: 'contado', label: 'Contado' }, { value: 'credito', label: 'Crédito' }, { value: 'financiado', label: 'Financiado' },
             ]} />
             <FormField id="periodicidadPago" name="periodicidadPago" label="Periodicidad" type="select" value={periodicidadPago} onChange={(e) => setPeriodicidadPago(e.target.value)} options={[

@@ -12,6 +12,8 @@ use App\Models\VehLine;
 use App\Models\VehPrice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class AutomovilesController extends Controller
 {
@@ -118,6 +120,29 @@ class AutomovilesController extends Controller
                 'line_id' => $a->line_id,
                 'insured_value' => $insuredValue,
                 'insured_meta' => $insuredMeta,
+                // SOAT
+                'numero_soat' => $a->numero_soat,
+                'fecha_inicio_soat' => $a->fecha_inicio_soat?->format('Y-m-d'),
+                'fecha_vencimiento_soat' => $a->fecha_vencimiento_soat?->format('Y-m-d'),
+                'aseguradora_soat' => $a->aseguradora_soat,
+                'estado_soat' => $a->estado_soat,
+                // RTM
+                'numero_certificado_rtm' => $a->numero_certificado_rtm,
+                'fecha_expedicion_rtm' => $a->fecha_expedicion_rtm?->format('Y-m-d'),
+                'fecha_vencimiento_rtm' => $a->fecha_vencimiento_rtm?->format('Y-m-d'),
+                'nombre_cda_rtm' => $a->nombre_cda_rtm,
+                'estado_rtm' => $a->estado_rtm,
+                // Estado legal
+                'estado_automotor' => $a->estado_automotor,
+                'gravamenes' => $a->gravamenes,
+                'prendas' => $a->prendas,
+                'organismo_transito' => $a->organismo_transito,
+                'fecha_registro_runt' => $a->fecha_registro_runt?->format('Y-m-d'),
+                // Propietario
+                'propietario_nombre' => $a->propietario_nombre,
+                'propietario_documento' => $a->propietario_documento,
+                // Meta
+                'runt_consulted_at' => $a->runt_consulted_at?->format('Y-m-d H:i:s'),
             ];
         });
 
@@ -305,6 +330,269 @@ class AutomovilesController extends Controller
         if (!$auto) return response()->json(['success'=>false,'message'=>'Automóvil no encontrado'],404);
         $auto->delete();
         return response()->json(['success'=>true]);
+    }
+
+    public function syncRuntMasivo(Request $request)
+    {
+        $brokerId = $this->getBrokerId($request);
+        $onlyPending = $request->boolean('only_pending', true);
+
+        $query = Automovil::where('broker_id', $brokerId)
+            ->whereNotNull('placa')
+            ->where('placa', '!=', '')
+            ->whereNotNull('client_id');
+
+        if ($onlyPending) {
+            $query->where(function ($q) {
+                $q->whereNull('runt_consulted_at')
+                  ->orWhereNull('fecha_vencimiento_soat')
+                  ->orWhereNull('fecha_vencimiento_rtm');
+            });
+        }
+
+        $limit = (int) $request->get('limit', 50);
+        if ($limit < 1) $limit = 50;
+        if ($limit > 500) $limit = 500;
+
+        $autos = $query->with('client')->limit($limit)->get();
+        $total = $autos->count();
+
+        return response()->stream(function () use ($autos, $total) {
+            set_time_limit(0);
+            ini_set('max_execution_time', '0');
+            // Let PHP notice when the client disconnects so we can break out.
+            ignore_user_abort(false);
+            while (ob_get_level()) ob_end_flush();
+
+            $send = function ($event, $data) {
+                echo "event: {$event}\n";
+                echo 'data: ' . json_encode($data) . "\n\n";
+                @flush();
+                return connection_aborted() === 0;
+            };
+
+            if (!$send('init', ['total' => $total])) {
+                return;
+            }
+
+            $success = 0;
+            $failed = 0;
+            $skipped = 0;
+            $index = 0;
+            $cancelled = false;
+
+            foreach ($autos as $auto) {
+                // Stop immediately if the client closed the SSE stream.
+                if (connection_aborted()) {
+                    $cancelled = true;
+                    break;
+                }
+                $index++;
+                $documento = $auto->client->document_number ?? null;
+
+                if (!$documento) {
+                    $skipped++;
+                    $send('progress', [
+                        'index' => $index, 'total' => $total,
+                        'placa' => $auto->placa, 'status' => 'skipped',
+                        'message' => 'Sin documento de cliente',
+                        'success' => $success, 'failed' => $failed, 'skipped' => $skipped,
+                    ]);
+                    continue;
+                }
+
+                try {
+                    $response = Http::timeout(10)->get('https://historialrunt.org/api/consultar.php', [
+                        'placa' => strtoupper($auto->placa),
+                        'documento' => $documento,
+                    ]);
+
+                    $body = $response->json() ?? [];
+                    if (!$response->ok() || empty($body['success'])) {
+                        $failed++;
+                        $msg = $body['error'] ?? $body['mensaje'] ?? $body['message'] ?? ('HTTP ' . $response->status());
+                        $send('progress', [
+                            'index' => $index, 'total' => $total,
+                            'placa' => $auto->placa, 'status' => 'failed',
+                            'message' => mb_substr($msg, 0, 120),
+                            'success' => $success, 'failed' => $failed, 'skipped' => $skipped,
+                        ]);
+                        continue;
+                    }
+
+                    $this->applyRuntData($auto, $body);
+                    $auto->save();
+                    $success++;
+
+                    $send('progress', [
+                        'index' => $index, 'total' => $total,
+                        'placa' => $auto->placa, 'status' => 'success',
+                        'soat_venc' => $auto->fecha_vencimiento_soat?->format('Y-m-d'),
+                        'rtm_venc' => $auto->fecha_vencimiento_rtm?->format('Y-m-d'),
+                        'success' => $success, 'failed' => $failed, 'skipped' => $skipped,
+                    ]);
+                } catch (\Throwable $e) {
+                    $failed++;
+                    $send('progress', [
+                        'index' => $index, 'total' => $total,
+                        'placa' => $auto->placa, 'status' => 'failed',
+                        'message' => $e->getMessage(),
+                        'success' => $success, 'failed' => $failed, 'skipped' => $skipped,
+                    ]);
+                }
+
+                // Short pause between RUNT lookups (100ms total), honoring mid-loop abort.
+                if (connection_aborted()) { $cancelled = true; break; }
+                usleep(100000);
+            }
+
+            $send('done', [
+                'total' => $total, 'success' => $success,
+                'failed' => $failed, 'skipped' => $skipped,
+                'cancelled' => $cancelled,
+            ]);
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
+    private function applyRuntData(Automovil $auto, array $data): void
+    {
+        $vehiculo = $data['vehiculo'] ?? [];
+        $datosTecnicos = $data['datosTecnicos'] ?? [];
+        $soat = $data['soat'] ?? [];
+        $rtm = $data['rtm'] ?? [];
+        $estadoLegal = $data['estadoLegal'] ?? [];
+        $propietario = $data['propietario'] ?? [];
+
+        $vehicleFields = [
+            'marca' => $vehiculo['marca'] ?? null,
+            'linea' => $vehiculo['linea'] ?? null,
+            'color' => $vehiculo['color'] ?? null,
+            'cilindraje' => !empty($vehiculo['cilindraje']) ? (int) $vehiculo['cilindraje'] : null,
+            'tipo_servicio' => $vehiculo['tipoServicio'] ?? null,
+            'clase' => $vehiculo['clase'] ?? null,
+            'combustible' => $vehiculo['tipoCombustible'] ?? null,
+            'numero_motor' => $datosTecnicos['numMotor'] ?? null,
+            'numero_chasis' => $datosTecnicos['numChasis'] ?? null,
+            'vin' => $datosTecnicos['vin'] ?? null,
+            'tipo_carroceria' => $datosTecnicos['tipoCarroceria'] ?? null,
+        ];
+
+        foreach ($vehicleFields as $field => $value) {
+            if ($value !== null && ($auto->{$field} === null || $auto->{$field} === '')) {
+                $auto->{$field} = $value;
+            }
+        }
+
+        if (!empty($vehiculo['modelo']) && $auto->anio === null) {
+            $auto->anio = (int) $vehiculo['modelo'];
+        }
+
+        $auto->numero_soat = $soat['numSoat'] ?? $auto->numero_soat;
+        $auto->fecha_inicio_soat = !empty($soat['fechaInicioPoliza']) ? $soat['fechaInicioPoliza'] : $auto->fecha_inicio_soat;
+        $auto->fecha_vencimiento_soat = !empty($soat['fechaVencimSoat']) ? $soat['fechaVencimSoat'] : $auto->fecha_vencimiento_soat;
+        $auto->aseguradora_soat = $soat['razonSocialAsegur'] ?? $auto->aseguradora_soat;
+        $auto->estado_soat = $soat['estadoSoat'] ?? $soat['estado'] ?? $auto->estado_soat;
+
+        $auto->numero_certificado_rtm = $rtm['numeCerti'] ?? $auto->numero_certificado_rtm;
+        $auto->fecha_expedicion_rtm = !empty($rtm['fechaExpedicionRvt']) ? $rtm['fechaExpedicionRvt'] : $auto->fecha_expedicion_rtm;
+        $auto->fecha_vencimiento_rtm = !empty($rtm['fechaVencimientoRvt']) ? $rtm['fechaVencimientoRvt'] : $auto->fecha_vencimiento_rtm;
+        $auto->nombre_cda_rtm = $rtm['nombreCda'] ?? $auto->nombre_cda_rtm;
+        $auto->estado_rtm = $rtm['estadoRvt'] ?? $auto->estado_rtm;
+
+        $auto->estado_automotor = $estadoLegal['estadoAutomotor'] ?? $vehiculo['estadoAutomotor'] ?? $auto->estado_automotor;
+        $auto->gravamenes = $estadoLegal['gravamenes'] ?? $vehiculo['gravamenes'] ?? $auto->gravamenes;
+        $auto->prendas = $estadoLegal['prendas'] ?? $vehiculo['prendas'] ?? $auto->prendas;
+        $auto->organismo_transito = $estadoLegal['organismoTransito'] ?? $vehiculo['organismoTransito'] ?? $auto->organismo_transito;
+        $auto->fecha_registro_runt = !empty($vehiculo['fechaRegistro']) ? $vehiculo['fechaRegistro'] : $auto->fecha_registro_runt;
+
+        $auto->propietario_nombre = $propietario['nombre'] ?? $auto->propietario_nombre;
+        $auto->propietario_documento = $propietario['documento'] ?? $auto->propietario_documento;
+
+        $auto->runt_consulted_at = now();
+        $auto->runt_raw_data = $data;
+    }
+
+    public function consultarRunt(Request $request, int $id)
+    {
+        $brokerId = $this->getBrokerId($request);
+        $auto = Automovil::where('broker_id', $brokerId)->where('id', $id)->with('client')->first();
+        if (!$auto) {
+            return response()->json(['success' => false, 'message' => 'Automóvil no encontrado'], 404);
+        }
+
+        $placa = $auto->placa;
+        if (!$placa) {
+            return response()->json(['success' => false, 'message' => 'El automóvil no tiene placa registrada'], 422);
+        }
+
+        // Obtener documento del cliente asociado
+        $documento = null;
+        if ($auto->client) {
+            $cliente = $auto->client;
+            $documento = $cliente->document_number ?? null;
+            if (!$documento && $cliente->client_type === 'EMPRESA') {
+                $documento = $cliente->legal_representative_document_number ?? null;
+            }
+        }
+
+        // Permitir override manual del documento
+        if ($request->has('documento') && $request->get('documento')) {
+            $documento = $request->get('documento');
+        }
+
+        if (!$documento) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontró documento del cliente asociado. Asocie un cliente o envíe el parámetro "documento".',
+            ], 422);
+        }
+
+        try {
+            $response = Http::timeout(30)->get('https://historialrunt.org/api/consultar.php', [
+                'placa' => strtoupper($placa),
+                'documento' => $documento,
+            ]);
+
+            if (!$response->ok()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al consultar RUNT: HTTP ' . $response->status(),
+                ], 502);
+            }
+
+            $data = $response->json();
+
+            if (empty($data['success'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $data['error'] ?? $data['mensaje'] ?? $data['message'] ?? 'RUNT no retornó datos válidos',
+                ], 422);
+            }
+
+            $this->applyRuntData($auto, $data);
+            $auto->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Consulta RUNT exitosa. Datos actualizados.',
+                'data' => $auto->fresh(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('RUNT consultation failed', [
+                'automovil_id' => $id,
+                'placa' => $placa,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al consultar RUNT: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function catalogos(Request $request)

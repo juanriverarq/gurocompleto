@@ -1361,8 +1361,8 @@ class LiquidacionesVendedoresController extends Controller
                         'monto_retencion' => $rtfCalculada,
                         'porcentaje_retencion_ica' => $porcentajeReteica,
                         'monto_retencion_ica' => $reteicaCalculada,
-                        'porcentaje_iva' => $porcentajeReteiva, // Usamos este campo para ReteIVA
-                        'monto_iva' => $reteivaCalculada,
+                        'porcentaje_iva' => $porcentajeIva,
+                        'monto_iva' => $ivaCalculado,
                         'comision_neta' => $netoComision,
                     ];
 
@@ -1370,7 +1370,7 @@ class LiquidacionesVendedoresController extends Controller
                     $totales['monto_bruto_total'] += $valorComision;
                     $totales['monto_retencion_total'] += $rtfCalculada;
                     $totales['monto_retencion_ica_total'] += $reteicaCalculada;
-                    $totales['monto_iva_total'] += $reteivaCalculada;
+                    $totales['monto_iva_total'] += $ivaCalculado;
                     $totales['monto_neto_total'] += $netoComision;
                 }
 
@@ -1573,8 +1573,8 @@ class LiquidacionesVendedoresController extends Controller
                     'monto_retencion' => $rtfCalculada,
                     'porcentaje_retencion_ica' => $porcentajeReteica,
                     'monto_retencion_ica' => $reteicaCalculada,
-                    'porcentaje_iva' => $porcentajeReteiva,
-                    'monto_iva' => $reteivaCalculada,
+                    'porcentaje_iva' => $porcentajeIva,
+                    'monto_iva' => $ivaCalculado,
                     'comision_neta' => $netoComision,
                 ];
 
@@ -1582,7 +1582,7 @@ class LiquidacionesVendedoresController extends Controller
                 $totales['monto_bruto_total'] += $valorComision;
                 $totales['monto_retencion_total'] += $rtfCalculada;
                 $totales['monto_retencion_ica_total'] += $reteicaCalculada;
-                $totales['monto_iva_total'] += $reteivaCalculada;
+                $totales['monto_iva_total'] += $ivaCalculado;
                 $totales['monto_neto_total'] += $netoComision;
             }
 

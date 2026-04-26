@@ -162,26 +162,26 @@ const ToolCard = ({ tool }: { tool: typeof tools[0] }) => {
       onMouseLeave={() => setHovered(false)}
     >
       <div
-        className="bg-white rounded-[24px] p-5 sm:p-6 shadow-xl shadow-black/[0.06] cursor-pointer h-full flex flex-col transition-all duration-300"
+        className="bg-white/5 border border-white/10 backdrop-blur-md rounded-[24px] p-5 sm:p-6 shadow-xl shadow-black/40 cursor-pointer h-full flex flex-col transition-all duration-300 hover:border-[#573CFF]/40"
         style={{ transform: hovered ? 'translateY(-6px)' : 'translateY(0)' }}
       >
         {/* Icon */}
-        <div className={`w-12 h-12 rounded-2xl ${tool.iconBg} flex items-center justify-center mb-4 transition-transform duration-300`}
+        <div className="w-12 h-12 rounded-2xl bg-[#573CFF]/15 border border-[#573CFF]/30 flex items-center justify-center mb-4 transition-transform duration-300"
           style={{ transform: hovered ? 'scale(1.1)' : 'scale(1)' }}
         >
-          <Icon icon={tool.icon} className={`w-6 h-6 ${tool.iconColor}`} />
+          <Icon icon={tool.icon} className="w-6 h-6 text-[#573CFF]" />
         </div>
 
         {/* Title */}
         <h3
-          className="text-[#0d0d0d] font-bold text-[17px] leading-tight mb-2"
-          style={{ fontFamily: "'General Sans', sans-serif" }}
+          className="text-white font-bold text-[17px] leading-tight mb-2"
+          style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
         >
           {tool.title}
         </h3>
 
         {/* Description */}
-        <p className="text-[13px] text-gray-500 leading-relaxed mb-4 flex-1">
+        <p className="text-[13px] text-white/50 leading-relaxed mb-4 flex-1">
           {tool.desc}
         </p>
 
@@ -189,10 +189,10 @@ const ToolCard = ({ tool }: { tool: typeof tools[0] }) => {
         <div className="space-y-2">
           {tool.features.map((f, i) => (
             <div key={i} className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
-                <Icon icon={f.icon} className="w-3 h-3 text-gray-400" />
+              <div className="w-5 h-5 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                <Icon icon={f.icon} className="w-3 h-3 text-[#573CFF]" />
               </div>
-              <span className="text-[12px] text-gray-600 leading-snug">{f.text}</span>
+              <span className="text-[12px] text-white/60 leading-snug">{f.text}</span>
             </div>
           ))}
         </div>
@@ -207,25 +207,24 @@ const ToolsCarousel = () => {
   return (
     <section
       id="herramientas"
-      className="relative overflow-hidden"
-      style={{
-        backgroundImage: 'url(https://framerusercontent.com/images/6vqDsl7xtgechRbMSo6yAkGE.png)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'bottom center',
-        backgroundRepeat: 'no-repeat',
-        transform: 'rotate(180deg)',
-      }}
+      className="relative overflow-hidden bg-transparent"
     >
-      {/* Counter-rotate all content so it's right-side up */}
-      <div className="py-16 sm:py-24" style={{ transform: 'rotate(180deg)' }}>
+      {/* Subtle radial glow */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-40"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 0%, rgba(87,60,255,0.15) 0%, transparent 60%)',
+        }}
+      />
+      <div className="relative py-16 sm:py-24">
         <div className="text-center px-5 mb-10 sm:mb-20">
           <h2
-            className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold text-[#0d0d0d] leading-[1.1] tracking-[-0.02em]"
-            style={{ fontFamily: "'General Sans', sans-serif" }}
+            className="text-3xl sm:text-4xl lg:text-[3.25rem] font-bold text-white leading-[1.1] tracking-[-0.02em]"
+            style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
           >
             El conjunto de herramientas completo
             <span className="hidden sm:inline"><br /></span>{' '}
-            para agencias de seguros modernas
+            <span className="landing-grad-text">para agencias de seguros modernas</span>
           </h2>
         </div>
 

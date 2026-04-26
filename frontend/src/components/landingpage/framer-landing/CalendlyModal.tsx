@@ -41,7 +41,7 @@ const CalendlyModal = ({ isOpen, onClose }: CalendlyModalProps) => {
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="fixed inset-4 sm:inset-8 md:inset-12 lg:inset-16 z-[9999] flex flex-col bg-white rounded-[24px] shadow-2xl overflow-hidden"
-            style={{ fontFamily: "'General Sans', sans-serif" }}
+            style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">

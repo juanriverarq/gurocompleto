@@ -1,0 +1,427 @@
+/*
+ * Light mode overrides — ALCANCE LIMITADO
+ * ----------------------------------------
+ * Varios componentes de /apps/* (Polizas, Clientes, Inicio, dashboards)
+ * fueron diseñados con clases dark-only (bg-neutral-*, text-white, etc.)
+ * sin pares `dark:` responsivos.
+ *
+ * Estas reglas SOLO aplican dentro de `.page-wrapper` (layout autenticado
+ * en UnifiedProtectedFullLayout) para NO afectar:
+ *  - Landing pública (/, /blog, /precios, /terminos, etc.)
+ *  - Auth pages
+ *  - Master panel / otros layouts
+ *
+ * Usa `html:not(.dark) .page-wrapper` para scope y especificidad.
+ */
+
+/* ==================== FONDOS (neutral dark → light) ==================== */
+html:not(.dark) .page-wrapper .bg-neutral-950      { background-color: #ffffff; }
+html:not(.dark) .page-wrapper .bg-neutral-900      { background-color: #ffffff; }
+html:not(.dark) .page-wrapper .bg-neutral-800      { background-color: #f3f4f6; } /* gray-100 */
+html:not(.dark) .page-wrapper .bg-neutral-700      { background-color: #e5e7eb; } /* gray-200 */
+html:not(.dark) .page-wrapper .bg-black            { background-color: #ffffff; }
+
+/* Con transparencias (backdrop cards) — incluye todas las variantes /10 a /90 */
+html:not(.dark) .page-wrapper .bg-neutral-950\/90  { background-color: rgba(255, 255, 255, 0.98); }
+html:not(.dark) .page-wrapper .bg-neutral-950\/80  { background-color: rgba(255, 255, 255, 0.95); }
+html:not(.dark) .page-wrapper .bg-neutral-950\/70  { background-color: rgba(255, 255, 255, 0.9); }
+html:not(.dark) .page-wrapper .bg-neutral-950\/60  { background-color: rgba(255, 255, 255, 0.85); }
+html:not(.dark) .page-wrapper .bg-neutral-950\/50  { background-color: rgba(255, 255, 255, 0.8); }
+html:not(.dark) .page-wrapper .bg-neutral-950\/40  { background-color: rgba(249, 250, 251, 0.7); }
+html:not(.dark) .page-wrapper .bg-neutral-950\/30  { background-color: rgba(249, 250, 251, 0.6); }
+html:not(.dark) .page-wrapper .bg-neutral-950\/20  { background-color: rgba(249, 250, 251, 0.5); }
+html:not(.dark) .page-wrapper .bg-neutral-950\/10  { background-color: rgba(249, 250, 251, 0.4); }
+
+html:not(.dark) .page-wrapper .bg-neutral-900\/90  { background-color: rgba(255, 255, 255, 0.98); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/80  { background-color: rgba(255, 255, 255, 0.95); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/70  { background-color: rgba(255, 255, 255, 0.9); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/60  { background-color: rgba(255, 255, 255, 0.85); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/50  { background-color: rgba(249, 250, 251, 0.9); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/40  { background-color: rgba(249, 250, 251, 0.7); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/30  { background-color: rgba(249, 250, 251, 0.6); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/20  { background-color: rgba(249, 250, 251, 0.5); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/10  { background-color: rgba(249, 250, 251, 0.4); }
+
+html:not(.dark) .page-wrapper .bg-neutral-800\/90  { background-color: rgba(243, 244, 246, 0.98); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/80  { background-color: rgba(243, 244, 246, 0.95); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/70  { background-color: rgba(243, 244, 246, 0.9); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/60  { background-color: rgba(243, 244, 246, 0.85); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/50  { background-color: rgba(243, 244, 246, 0.8); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/40  { background-color: rgba(243, 244, 246, 0.7); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/30  { background-color: rgba(243, 244, 246, 0.6); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/20  { background-color: rgba(243, 244, 246, 0.5); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/10  { background-color: rgba(243, 244, 246, 0.4); }
+
+/* Hover states */
+html:not(.dark) .page-wrapper .hover\:bg-neutral-900:hover { background-color: #f9fafb; } /* gray-50 */
+html:not(.dark) .page-wrapper .hover\:bg-neutral-800:hover { background-color: #f3f4f6; } /* gray-100 */
+html:not(.dark) .page-wrapper .hover\:bg-neutral-700:hover { background-color: #e5e7eb; } /* gray-200 */
+
+/* Hover states — opacity variants (bg-neutral-900/50 etc.) */
+html:not(.dark) .page-wrapper .hover\:bg-neutral-900\/50:hover  { background-color: #f3f4f6; }
+html:not(.dark) .page-wrapper .hover\:bg-neutral-900\/30:hover  { background-color: #f9fafb; }
+html:not(.dark) .page-wrapper .hover\:bg-neutral-800\/50:hover  { background-color: #f3f4f6; }
+html:not(.dark) .page-wrapper .hover\:bg-neutral-800\/40:hover  { background-color: #f3f4f6; }
+html:not(.dark) .page-wrapper .hover\:bg-neutral-800\/30:hover  { background-color: #f9fafb; }
+html:not(.dark) .page-wrapper .hover\:bg-neutral-700\/50:hover  { background-color: #e5e7eb; }
+
+/* bg-* opacity variants (non-hover) */
+html:not(.dark) .page-wrapper .bg-neutral-900\/50  { background-color: rgba(243, 244, 246, 0.8); }
+html:not(.dark) .page-wrapper .bg-neutral-900\/30  { background-color: rgba(249, 250, 251, 0.7); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/50  { background-color: rgba(243, 244, 246, 0.8); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/40  { background-color: rgba(243, 244, 246, 0.7); }
+html:not(.dark) .page-wrapper .bg-neutral-800\/30  { background-color: rgba(243, 244, 246, 0.6); }
+html:not(.dark) .page-wrapper .bg-neutral-700\/50  { background-color: rgba(229, 231, 235, 0.7); }
+html:not(.dark) .page-wrapper .bg-neutral-700\/30  { background-color: rgba(229, 231, 235, 0.5); }
+
+/* ==================== BORDES ==================== */
+html:not(.dark) .page-wrapper .border-neutral-950  { border-color: #e5e7eb; } /* gray-200 */
+html:not(.dark) .page-wrapper .border-neutral-900  { border-color: #e5e7eb; }
+html:not(.dark) .page-wrapper .border-neutral-800  { border-color: #e5e7eb; }
+html:not(.dark) .page-wrapper .border-neutral-700  { border-color: #d1d5db; } /* gray-300 */
+html:not(.dark) .page-wrapper .border-neutral-600  { border-color: #d1d5db; }
+
+html:not(.dark) .page-wrapper .border-neutral-800\/90 { border-color: rgba(229, 231, 235, 0.95); }
+html:not(.dark) .page-wrapper .border-neutral-800\/80 { border-color: rgba(229, 231, 235, 0.9); }
+html:not(.dark) .page-wrapper .border-neutral-800\/70 { border-color: rgba(229, 231, 235, 0.85); }
+html:not(.dark) .page-wrapper .border-neutral-800\/60 { border-color: rgba(229, 231, 235, 0.8); }
+html:not(.dark) .page-wrapper .border-neutral-800\/50 { border-color: rgba(229, 231, 235, 0.7); }
+html:not(.dark) .page-wrapper .border-neutral-800\/40 { border-color: rgba(229, 231, 235, 0.6); }
+html:not(.dark) .page-wrapper .border-neutral-800\/30 { border-color: rgba(229, 231, 235, 0.5); }
+html:not(.dark) .page-wrapper .border-neutral-800\/20 { border-color: rgba(229, 231, 235, 0.4); }
+
+html:not(.dark) .page-wrapper .border-neutral-700\/50 { border-color: rgba(209, 213, 219, 0.7); }
+html:not(.dark) .page-wrapper .border-neutral-700\/40 { border-color: rgba(209, 213, 219, 0.6); }
+
+html:not(.dark) .page-wrapper .border-neutral-900\/80 { border-color: rgba(229, 231, 235, 0.9); }
+html:not(.dark) .page-wrapper .border-neutral-900\/60 { border-color: rgba(229, 231, 235, 0.8); }
+
+/* ==================== TEXTO ==================== */
+html:not(.dark) .page-wrapper .text-white          { color: #111827; } /* gray-900 */
+html:not(.dark) .page-wrapper .text-neutral-100    { color: #111827; }
+html:not(.dark) .page-wrapper .text-neutral-200    { color: #1f2937; } /* gray-800 */
+html:not(.dark) .page-wrapper .text-neutral-300    { color: #374151; } /* gray-700 */
+html:not(.dark) .page-wrapper .text-neutral-400    { color: #6b7280; } /* gray-500 */
+html:not(.dark) .page-wrapper .text-neutral-500    { color: #6b7280; }
+html:not(.dark) .page-wrapper .text-neutral-600    { color: #4b5563; } /* gray-600 */
+
+/* Hover text */
+html:not(.dark) .page-wrapper .hover\:text-white:hover        { color: #111827; }
+html:not(.dark) .page-wrapper .hover\:text-neutral-200:hover  { color: #1f2937; }
+html:not(.dark) .page-wrapper .hover\:text-neutral-300:hover  { color: #374151; }
+
+/* Placeholders */
+html:not(.dark) .page-wrapper .placeholder-neutral-500::placeholder { color: #9ca3af; } /* gray-400 */
+html:not(.dark) .page-wrapper .placeholder-neutral-400::placeholder { color: #9ca3af; }
+
+/*
+ * EXCEPCIONES — elementos donde text-white SÍ debe quedarse blanco
+ * (botones con fondo de color sólido, badges, etc.)
+ * Restauramos el blanco cuando el elemento tiene fondos saturados.
+ */
+html:not(.dark) .page-wrapper .bg-primary.text-white,
+html:not(.dark) .page-wrapper .bg-\[\#573CFF\].text-white,
+html:not(.dark) .page-wrapper .bg-\[\#0d0d0d\] .text-white,
+html:not(.dark) .page-wrapper .bg-black .text-white,
+html:not(.dark) .page-wrapper .bg-blue-500.text-white,
+html:not(.dark) .page-wrapper .bg-blue-600.text-white,
+html:not(.dark) .page-wrapper .bg-red-500.text-white,
+html:not(.dark) .page-wrapper .bg-red-600.text-white,
+html:not(.dark) .page-wrapper .bg-green-500.text-white,
+html:not(.dark) .page-wrapper .bg-green-600.text-white,
+html:not(.dark) .page-wrapper .bg-emerald-500.text-white,
+html:not(.dark) .page-wrapper .bg-emerald-600.text-white,
+html:not(.dark) .page-wrapper .bg-amber-500.text-white,
+html:not(.dark) .page-wrapper .bg-yellow-500.text-white,
+html:not(.dark) .page-wrapper .bg-orange-500.text-white,
+html:not(.dark) .page-wrapper .bg-purple-500.text-white,
+html:not(.dark) .page-wrapper .bg-purple-600.text-white,
+html:not(.dark) .page-wrapper .bg-pink-500.text-white,
+html:not(.dark) .page-wrapper .bg-indigo-500.text-white,
+html:not(.dark) .page-wrapper .bg-indigo-600.text-white,
+html:not(.dark) .page-wrapper button[class*="bg-red"] .text-white,
+html:not(.dark) .page-wrapper button[class*="bg-green"] .text-white,
+html:not(.dark) .page-wrapper button[class*="bg-blue"] .text-white,
+html:not(.dark) .page-wrapper .bg-gradient-to-r.text-white,
+html:not(.dark) .page-wrapper .bg-gradient-to-l.text-white,
+html:not(.dark) .page-wrapper .bg-gradient-to-br.text-white,
+html:not(.dark) .page-wrapper .bg-gradient-to-bl.text-white {
+  color: #ffffff !important;
+}
+
+/* Wallet widget (gradiente personalizado con CSS en <style>) */
+html:not(.dark) .page-wrapper .wallet-gradient-surface,
+html:not(.dark) .page-wrapper .wallet-gradient-surface *,
+html:not(.dark) .page-wrapper .wallet-gradient-surface .text-white,
+html:not(.dark) .page-wrapper .wallet-gradient-surface [class*="text-white"] {
+  color: #ffffff !important;
+}
+
+/* Inicio sync button (gradiente con halo) — mantener texto blanco */
+html:not(.dark) .page-wrapper .inicio-sync-inner,
+html:not(.dark) .page-wrapper .inicio-sync-shell .text-white {
+  color: #ffffff !important;
+}
+
+/* Badges con fondo saturado inline */
+html:not(.dark) .page-wrapper [class*="bg-red-5"][class*="text-white"],
+html:not(.dark) .page-wrapper [class*="bg-green-5"][class*="text-white"],
+html:not(.dark) .page-wrapper [class*="bg-blue-5"][class*="text-white"],
+html:not(.dark) .page-wrapper [class*="bg-purple-5"][class*="text-white"],
+html:not(.dark) .page-wrapper [class*="bg-indigo-5"][class*="text-white"],
+html:not(.dark) .page-wrapper [class*="bg-pink-5"][class*="text-white"],
+html:not(.dark) .page-wrapper [class*="bg-amber-5"][class*="text-white"],
+html:not(.dark) .page-wrapper [class*="bg-orange-5"][class*="text-white"] {
+  color: #ffffff !important;
+}
+
+/* Preservar blanco en bordes/focus rings mencionados con text-white intencionalmente via style inline */
+html:not(.dark) .page-wrapper [style*="background-color: rgb(87, 60, 255)"] .text-white,
+html:not(.dark) .page-wrapper [style*="background-color:#573CFF"] .text-white,
+html:not(.dark) .page-wrapper [style*="background:#573CFF"] .text-white {
+  color: #ffffff !important;
+}
+
+/* Shadow adjustments for cards in light mode (si las sombras oscuras se ven mal) */
+html:not(.dark) .page-wrapper .shadow-black\/50,
+html:not(.dark) .page-wrapper .shadow-neutral-950 {
+  --tw-shadow-color: rgba(0, 0, 0, 0.1);
+  --tw-shadow: var(--tw-shadow-colored);
+}
+
+/* ==================== INICIO SYNC MODAL ==================== */
+/*
+ * El modal "Sincroniza tu información" se renderiza vía createPortal en
+ * document.body (fuera de .page-wrapper), así que necesita scope propio.
+ * Usa .inicio-sync-modal como selector raíz.
+ */
+html:not(.dark) .inicio-sync-modal {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+html:not(.dark) .inicio-sync-modal .text-white,
+html:not(.dark) .inicio-sync-modal .text-neutral-100 { color: #111827 !important; }
+html:not(.dark) .inicio-sync-modal .text-neutral-200 { color: #1f2937 !important; }
+html:not(.dark) .inicio-sync-modal .text-neutral-300 { color: #374151 !important; }
+html:not(.dark) .inicio-sync-modal .text-neutral-400 { color: #6b7280 !important; }
+html:not(.dark) .inicio-sync-modal .text-neutral-500 { color: #6b7280 !important; }
+html:not(.dark) .inicio-sync-modal .text-neutral-600 { color: #4b5563 !important; }
+
+html:not(.dark) .inicio-sync-modal .border-neutral-800    { border-color: #e5e7eb !important; }
+html:not(.dark) .inicio-sync-modal .border-neutral-800\/80 { border-color: rgba(229,231,235,0.8) !important; }
+html:not(.dark) .inicio-sync-modal .border-neutral-700    { border-color: #d1d5db !important; }
+html:not(.dark) .inicio-sync-modal .border-neutral-600    { border-color: #d1d5db !important; }
+
+html:not(.dark) .inicio-sync-modal .bg-neutral-800       { background-color: #f3f4f6 !important; }
+html:not(.dark) .inicio-sync-modal .bg-neutral-950\/70   { background-color: rgba(255,255,255,0.98) !important; }
+html:not(.dark) .inicio-sync-modal .bg-neutral-950\/8    { background-color: rgba(249,250,251,0.95) !important; }
+
+html:not(.dark) .inicio-sync-modal .hover\:border-neutral-700:hover { border-color: #9ca3af !important; }
+html:not(.dark) .inicio-sync-modal .hover\:bg-white\/5:hover         { background-color: rgba(0,0,0,0.05) !important; }
+
+/* Stage indicator dots — preserve colored states */
+html:not(.dark) .inicio-sync-modal .bg-neutral-800.text-neutral-500 {
+  background-color: #e5e7eb !important;
+  color: #6b7280 !important;
+}
+html:not(.dark) .inicio-sync-modal .bg-neutral-800 {
+  background-color: #f3f4f6 !important;
+}
+html:not(.dark) .inicio-sync-modal .text-neutral-600 { color: #4b5563 !important; }
+
+/* Sidebar label */
+html:not(.dark) .inicio-sync-modal aside {
+  border-right-color: #e5e7eb;
+}
+
+/* ==================== CHATBOT FLOW EDITOR ==================== */
+/*
+ * FlowEditorJointJS usa colores hex completamente hardcodeados sin dark: pairs.
+ * Scoped a .chatbot-editor-root que se añade al div raíz del editor.
+ *
+ * Paleta light para el editor:
+ *   #0A0A0A (canvas/page)   → #f1f5f9  (slate-100 — fondo de canvas)
+ *   #111111 (sidebar/header) → #ffffff  (blanco)
+ *   #161616 (btn bg)         → #f3f4f6  (gray-100)
+ *   #1A1A1A (input/add btn)  → #f9fafb  (gray-50)
+ *   #1F1F1F (active/divider) → #e5e7eb  (gray-200)
+ *   #2A2A2A (hover)          → #e5e7eb  (gray-200)
+ *   #2F2F2F (border)         → #d1d5db  (gray-300)
+ *   #3F3F46 (dashed border)  → #9ca3af  (gray-400)
+ *   text-[#F3F4F6]           → #111827  (gray-900)
+ *   text-[#9CA3AF]           → #6b7280  (gray-500)
+ *   text-[#6B7280]           → #6b7280  (same — ya está bien)
+ *   border-[#1F1F1F]         → #e5e7eb
+ *   border-[#2F2F2F]         → #d1d5db
+ */
+
+/* Fondos */
+html:not(.dark) .chatbot-editor-root .bg-\[\#0A0A0A\]    { background-color: #f1f5f9; }
+html:not(.dark) .chatbot-editor-root .bg-\[\#111111\]    { background-color: #ffffff; }
+html:not(.dark) .chatbot-editor-root .bg-\[\#161616\]    { background-color: #f3f4f6; }
+html:not(.dark) .chatbot-editor-root .bg-\[\#1A1A1A\]    { background-color: #f9fafb; }
+html:not(.dark) .chatbot-editor-root .bg-\[\#1F1F1F\]    { background-color: #e5e7eb; }
+
+/* Hover fondos */
+html:not(.dark) .chatbot-editor-root .hover\:bg-\[\#1F1F1F\]:hover  { background-color: #e5e7eb; }
+html:not(.dark) .chatbot-editor-root .hover\:bg-\[\#1A1A1A\]:hover  { background-color: #f3f4f6; }
+html:not(.dark) .chatbot-editor-root .hover\:bg-\[\#2F2F2F\]:hover  { background-color: #d1d5db; }
+html:not(.dark) .chatbot-editor-root .hover\:bg-\[\#2A2A2A\]:hover  { background-color: #e5e7eb; }
+
+/* Texto */
+html:not(.dark) .chatbot-editor-root .text-\[\#F3F4F6\]  { color: #111827; }
+html:not(.dark) .chatbot-editor-root .text-\[\#9CA3AF\]  { color: #6b7280; }
+html:not(.dark) .chatbot-editor-root .text-\[\#6B7280\]  { color: #6b7280; }
+
+/* text-white — el editor usa BlankLayout (sin .page-wrapper), hay que cubrirlo aquí */
+html:not(.dark) .chatbot-editor-root .text-white { color: #111827 !important; }
+
+/* Hover texto */
+html:not(.dark) .chatbot-editor-root .hover\:text-white:hover        { color: #111827 !important; }
+html:not(.dark) .chatbot-editor-root .hover\:text-\[\#60A5FA\]:hover { color: #3b82f6; }
+
+/* Inputs y selects con text-white explícito */
+html:not(.dark) .chatbot-editor-root input.text-white,
+html:not(.dark) .chatbot-editor-root textarea.text-white,
+html:not(.dark) .chatbot-editor-root select.text-white { color: #111827 !important; }
+html:not(.dark) .chatbot-editor-root input,
+html:not(.dark) .chatbot-editor-root textarea,
+html:not(.dark) .chatbot-editor-root select {
+  color: #111827;
+  background-color: #ffffff;
+  border-color: #d1d5db;
+}
+
+/* Labels con text-white (checkboxes, toggles) */
+html:not(.dark) .chatbot-editor-root label.text-white { color: #374151 !important; }
+
+/* Bordes */
+html:not(.dark) .chatbot-editor-root .border-\[\#1F1F1F\]  { border-color: #e5e7eb; }
+html:not(.dark) .chatbot-editor-root .border-\[\#2F2F2F\]  { border-color: #d1d5db; }
+html:not(.dark) .chatbot-editor-root .border-\[\#3F3F46\]  { border-color: #9ca3af; }
+
+/* Hover bordes */
+html:not(.dark) .chatbot-editor-root .hover\:border-\[\#2F2F2F\]:hover { border-color: #9ca3af; }
+
+/* Excepciones — botones sólidos deben mantener su color y texto blanco */
+/* bg-indigo-500 = rgb(99,102,241): NO se sobreescribe, se preserva su color original */
+html:not(.dark) .chatbot-editor-root button.bg-indigo-500 {
+  background-color: rgb(99 102 241) !important;
+  color: #ffffff !important;
+}
+html:not(.dark) .chatbot-editor-root button.bg-indigo-500:hover,
+html:not(.dark) .chatbot-editor-root button.hover\:bg-indigo-400:hover {
+  background-color: rgb(129 140 248) !important;
+}
+html:not(.dark) .chatbot-editor-root button.text-red-400   { color: #ef4444 !important; }
+
+/* "Punto de entrada" — emerald text demasiado claro en fondo blanco */
+html:not(.dark) .chatbot-editor-root .text-emerald-300    { color: #059669 !important; } /* → emerald-600 */
+html:not(.dark) .chatbot-editor-root .text-emerald-200    { color: #047857 !important; } /* → emerald-700 */
+html:not(.dark) .chatbot-editor-root .text-emerald-200\/80 { color: #047857 !important; opacity: 1 !important; }
+html:not(.dark) .chatbot-editor-root .text-emerald-400    { color: #059669 !important; } /* icono play → emerald-600 */
+/* badge canvas nodo start */
+html:not(.dark) .chatbot-editor-root .bg-emerald-500\/20  { background-color: #d1fae5 !important; } /* emerald-100 */
+html:not(.dark) .chatbot-editor-root .border-emerald-500\/30 { border-color: #6ee7b7 !important; } /* emerald-300 */
+
+/* Navigator mini-map */
+html:not(.dark) .chatbot-editor-root .bg-\[\#818CF8\]    { background-color: #6366f1; }
+html:not(.dark) .chatbot-editor-root .border-\[\#818CF8\] { border-color: #6366f1; }
+
+/* ── JointJS SVG Canvas — light mode overrides ──
+ * JointJS sets background-color via inline style on .joint-paper element.
+ * SVG presentation attributes (fill/stroke) have lower specificity than CSS,
+ * so these selectors override them without needing element-level !important tricks. */
+
+/* Canvas background (inline style set by JointJS paper API — needs !important) */
+html:not(.dark) .chatbot-editor-root .joint-paper { background-color: #f1f5f9 !important; }
+html:not(.dark) .chatbot-editor-root .joint-paper > svg { background-color: #f1f5f9 !important; }
+
+/* Grid dots (JointJS renders grid as SVG pattern — override fill) */
+html:not(.dark) .chatbot-editor-root .joint-paper > svg pattern circle { fill: #cbd5e1 !important; }
+html:not(.dark) .chatbot-editor-root .joint-paper > svg pattern rect   { fill: #cbd5e1 !important; }
+
+/* Node body (card background + border) */
+html:not(.dark) .chatbot-editor-root [joint-selector="body"] { fill: #ffffff !important; stroke: #e2e8f0 !important; }
+
+/* Icon background pill */
+html:not(.dark) .chatbot-editor-root [joint-selector="iconBg"] { fill: #f1f5f9 !important; stroke: #e2e8f0 !important; }
+
+/* Icon path — keep accent color, just lighten if too dark */
+html:not(.dark) .chatbot-editor-root [joint-selector="icon"] { opacity: 1; }
+
+/* Node title label */
+html:not(.dark) .chatbot-editor-root [joint-selector="label"] { fill: #111827 !important; }
+
+/* Node type sub-label */
+html:not(.dark) .chatbot-editor-root [joint-selector="typeLabel"] { fill: #6b7280 !important; }
+
+/* Connection lines */
+html:not(.dark) .chatbot-editor-root [joint-selector="line"] { stroke: #94a3b8 !important; }
+
+/* Edge label background and text */
+html:not(.dark) .chatbot-editor-root [joint-selector="labelBody"] { fill: #f8fafc !important; stroke: #e2e8f0 !important; }
+html:not(.dark) .chatbot-editor-root [joint-selector="labelText"] { fill: #374151 !important; }
+
+/* Port dots on hover */
+html:not(.dark) .chatbot-editor-root [magnet="true"] circle { fill: #6366f1 !important; stroke: #ffffff !important; }
+
+/* Navigator / mini-map SVG inside its container */
+html:not(.dark) .chatbot-editor-root .joint-navigator { background-color: #e2e8f0 !important; }
+html:not(.dark) .chatbot-editor-root .joint-navigator svg { background-color: #e2e8f0 !important; }
+html:not(.dark) .chatbot-editor-root .joint-navigator [joint-selector="body"] { fill: #c7d2fe !important; stroke: #6366f1 !important; }
+
+/* ==================== FLOATING ASSISTANT PANEL ==================== */
+/*
+ * El panel Octupus se renderiza vía createPortal en document.body
+ * (fuera de .page-wrapper). Scope propio: .floating-assistant-panel
+ * que se añadió al div principal del panel.
+ */
+
+/* Fondos principales */
+html:not(.dark) .floating-assistant-panel                { background-color: #ffffff; }
+html:not(.dark) .floating-assistant-panel .bg-\[\#0d0d0e\] { background-color: #ffffff !important; }
+html:not(.dark) .floating-assistant-panel .bg-\[\#08090b\] { background-color: #f9fafb !important; }
+html:not(.dark) .floating-assistant-panel .bg-\[\#1e1e1e\] { background-color: #ede9fe !important; } /* burbuja usuario */
+html:not(.dark) .floating-assistant-panel .bg-\[\#26262e\] { background-color: #f3f4f6 !important; } /* input container */
+
+/* Bordes custom hex */
+html:not(.dark) .floating-assistant-panel .border-\[\#3f3f46\] { border-color: #d1d5db !important; }
+
+/* Fondos neutral-* */
+html:not(.dark) .floating-assistant-panel .bg-neutral-950  { background-color: #ffffff !important; }
+html:not(.dark) .floating-assistant-panel .bg-neutral-900  { background-color: #f9fafb !important; }
+html:not(.dark) .floating-assistant-panel .bg-neutral-800  { background-color: #f3f4f6 !important; }
+
+/* Hover fondos */
+html:not(.dark) .floating-assistant-panel .hover\:bg-neutral-900:hover { background-color: #f3f4f6 !important; }
+html:not(.dark) .floating-assistant-panel .hover\:bg-neutral-800:hover { background-color: #e5e7eb !important; }
+
+/* Texto */
+html:not(.dark) .floating-assistant-panel .text-white       { color: #111827 !important; }
+html:not(.dark) .floating-assistant-panel .text-neutral-100 { color: #111827 !important; }
+html:not(.dark) .floating-assistant-panel .text-neutral-200 { color: #1f2937 !important; }
+html:not(.dark) .floating-assistant-panel .text-neutral-300 { color: #374151 !important; }
+html:not(.dark) .floating-assistant-panel .text-neutral-400 { color: #6b7280 !important; }
+html:not(.dark) .floating-assistant-panel .text-neutral-500 { color: #6b7280 !important; }
+html:not(.dark) .floating-assistant-panel .text-neutral-600 { color: #4b5563 !important; }
+html:not(.dark) .floating-assistant-panel .text-neutral-700 { color: #374151 !important; }
+
+/* Hover texto */
+html:not(.dark) .floating-assistant-panel .hover\:text-white:hover       { color: #111827 !important; }
+html:not(.dark) .floating-assistant-panel .hover\:text-neutral-200:hover { color: #1f2937 !important; }
+
+/* Bordes neutral-* */
+html:not(.dark) .floating-assistant-panel .border-neutral-800     { border-color: #e5e7eb !important; }
+html:not(.dark) .floating-assistant-panel .border-neutral-800\/60 { border-color: rgba(229,231,235,0.6) !important; }
+html:not(.dark) .floating-assistant-panel .border-neutral-800\/70 { border-color: rgba(229,231,235,0.7) !important; }
+html:not(.dark) .floating-assistant-panel .border-neutral-800\/30 { border-color: rgba(229,231,235,0.3) !important; }
+html:not(.dark) .floating-assistant-panel .border-neutral-700     { border-color: #d1d5db !important; }
+
+/* Input dentro del panel */
+html:not(.dark) .floating-assistant-panel input {
+  background-color: transparent !important;
+  color: #111827 !important;
+}
+html:not(.dark) .floating-assistant-panel input::placeholder { color: #9ca3af !important; }

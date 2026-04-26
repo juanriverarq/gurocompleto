@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/shadcn-ui/Default-Ui/tabs';
 import saasApi from 'src/services/saasApi';
 import ArchivosCliente from 'src/views/apps/seguros/clientes/components/ArchivosCliente';
+import TareasAsociadas from 'src/views/apps/seguros/components/TareasAsociadas';
 import { Icon as IconifyIcon } from '@iconify/react';
 import { ArrowLeft, Save } from 'lucide-react';
 
@@ -173,10 +174,11 @@ const EditarCliente: React.FC = () => {
         </Card>
 
         <Tabs defaultValue="datos-especificos" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="datos-especificos">Datos Específicos</TabsTrigger>
             <TabsTrigger value="contacto">Contacto</TabsTrigger>
             <TabsTrigger value="adicional">Información Adicional</TabsTrigger>
+            <TabsTrigger value="tareas">Tareas</TabsTrigger>
             <TabsTrigger value="archivos">Archivos</TabsTrigger>
           </TabsList>
 
@@ -345,6 +347,14 @@ const EditarCliente: React.FC = () => {
             </Card>
           </TabsContent>
 
+          <TabsContent value="tareas" className="space-y-4">
+            {id && (
+              <TareasAsociadas
+                clientId={id}
+                clientName={cliente?.nombre + (cliente?.apellidos ? ' ' + cliente.apellidos : '')}
+              />
+            )}
+          </TabsContent>
           <TabsContent value="archivos" className="space-y-4">
             {id && <ArchivosCliente clienteId={id} />}
           </TabsContent>

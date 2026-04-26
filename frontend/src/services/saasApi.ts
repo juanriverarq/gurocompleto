@@ -525,6 +525,16 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
+  async bulkDeletePolizas(params: { delete_all?: boolean; ids?: string[] }): Promise<ApiResponse<{ deleted_count: number }>> {
+    const response = await fetch(`${API_BASE_URL}/saas/polizas/bulk-delete`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
+
+    return this.handleResponse(response);
+  }
+
   async asignarCliente(clienteId: string, asesorId: string): Promise<ApiResponse<ClienteSaaS>> {
     const response = await fetch(`${API_BASE_URL}/saas/clientes/${clienteId}/asignar`, {
       method: 'POST',
@@ -861,6 +871,86 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
+  async consultarRunt(id: number | string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/automoviles/${id}/consultar-runt`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify({}),
+    });
+    return this.handleResponse(response);
+  }
+
+  async syncRuntMasivoStream(
+    opts: { onlyPending?: boolean; limit?: number; signal?: AbortSignal } = {},
+    onProgress?: (data: any) => void,
+    onDone?: (data: any) => void,
+    onError?: (err: string) => void,
+  ): Promise<void> {
+    const headers = await this.getAuthHeaders();
+    try {
+      const response = await fetch(`${API_BASE_URL}/saas/automoviles/sync-runt`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          only_pending: opts.onlyPending !== false,
+          limit: opts.limit ?? 50,
+        }),
+        signal: opts.signal,
+      });
+      if (!response.ok || !response.body) {
+        const text = await response.text();
+        onError?.(text || `HTTP ${response.status}`);
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let gotDone = false;
+      let lastProgress: any = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              if (currentEvent === 'progress' || currentEvent === 'init') {
+                lastProgress = parsed;
+                onProgress?.(parsed);
+              } else if (currentEvent === 'done') {
+                gotDone = true;
+                onDone?.(parsed);
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+      // Stream ended without done event — synthesize one from last progress
+      if (!gotDone) {
+        onDone?.({
+          total: lastProgress?.total ?? 0,
+          success: lastProgress?.success ?? 0,
+          failed: lastProgress?.failed ?? 0,
+          skipped: lastProgress?.skipped ?? 0,
+          cancelled: opts.signal?.aborted === true,
+        });
+      }
+    } catch (e: any) {
+      // Don't report AbortError as a failure — it was an explicit user cancel
+      if (e?.name === 'AbortError') {
+        onDone?.({ total: 0, success: 0, failed: 0, skipped: 0, cancelled: true });
+        return;
+      }
+      onError?.(e?.message || 'Error de conexión');
+    }
+  }
+
   async getAutomovilInsuredValue(params: {
     brand_id: number;
     model_id: number;
@@ -917,6 +1007,244 @@ class SaasApiService {
 
     return this.handleResponse(response);
   }
+
+  // ===== INTEGRACIONES ASEGURADORAS =====
+  async getInsurerConnections(): Promise<ApiResponse<any[]>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/conexiones`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async connectInsurer(insurerCode: string, credentials: Record<string, any>): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/conectar`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify({ credentials }),
+    });
+    return this.handleResponse(response);
+  }
+
+  async connectBrowserInsurer(insurerCode: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/conectar-navegador`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  /**
+   * Headless auto-login con credenciales + MFA relay (Belvo-style).
+   *
+   * Paso 1 — llamar con credenciales. Si la aseguradora pide OTP, el backend
+   * devuelve 202 con `challenge_id` y el flujo queda pausado en el servidor
+   * esperando el código.
+   *
+   * Paso 2 — llamar con `challengeId` + `mfaCode` (sin credenciales). El server
+   * despierta el browser pausado, inyecta el OTP y completa el login.
+   */
+  async connectAutoInsurer(
+    insurerCode: string,
+    credentials: Record<string, string> | undefined,
+    mfaCode?: string,
+    challengeId?: string,
+  ): Promise<{ success: boolean; requires_mfa?: boolean; challenge_id?: string; message?: string; data?: any }> {
+    const body: any = {};
+    if (challengeId) {
+      body.challenge_id = challengeId;
+      body.mfa_code = mfaCode || '';
+    } else {
+      body.credentials = credentials || {};
+    }
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/conectar-auto`, {
+      method: 'POST',
+      headers: { ...(await this.getAuthHeadersOnly()), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    // 202 = job encolado (flujo async). El MFA real se detecta por polling.
+    return await this.handleResponse(response) as any;
+  }
+
+  async reconnectInsurer(insurerCode: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/reconectar`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async healthCheckInsurer(insurerCode: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/health-check`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async disconnectInsurer(insurerCode: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/desconectar`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getSessionStatus(insurerCode: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/session-status`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  /**
+   * Estado del job asíncrono de conexión (para polling tras dispatch).
+   * Devuelve `connect_job_status`: idle | queued | processing | requires_mfa | success | failed
+   */
+  async getConnectStatus(insurerCode: string): Promise<ApiResponse<{
+    insurer_code?: string;
+    status?: string;
+    connected?: boolean;
+    connect_job_status: 'idle' | 'queued' | 'processing' | 'requires_mfa' | 'success' | 'failed';
+    connect_job_id?: string;
+    connect_job_mode?: string;
+    connect_job_message?: string | null;
+    connect_job_error?: string | null;
+    requires_mfa?: boolean;
+    challenge_id?: string | null;
+    started_at?: string | null;
+    finished_at?: string | null;
+    connected_at?: string | null;
+    expires_at?: string | null;
+  }>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/connect-status`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  /**
+   * Wrapper que ejecuta una llamada a la API de aseguradoras con reconexión transparente.
+   * Si la primera llamada falla con 401/403, intenta reconectar vía Laravel y reintenta.
+   */
+  async callWithReconnect<T>(insurerCode: string, apiFn: () => Promise<ApiResponse<T>>): Promise<ApiResponse<T>> {
+    const result = await apiFn();
+    if (result.success) return result;
+    // Si falla, intentar reconectar y reintentar
+    const reconnect = await this.reconnectInsurer(insurerCode).catch(() => null);
+    if (reconnect?.success) {
+      return apiFn();
+    }
+    return result;
+  }
+
+  async syncInsurers(insurers: string[], types: string[]): Promise<ApiResponse<{ batch_id: string }>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/sync`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify({ insurers, types }),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getSyncStatus(batchId: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/sync/${batchId}/status`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async cancelSync(batchId: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/sync/${batchId}/cancel`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getSyncHistory(limit = 10): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/sync/history?limit=${limit}`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  // ===== CARTERA CONSOLIDADA ASEGURADORAS =====
+
+  async getCarteraAseguradoras(params: {
+    page?: number; per_page?: number; tab?: string; search?: string; insurer?: string;
+  }): Promise<ApiResponse<any>> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set('page', String(params.page));
+    if (params.per_page) searchParams.set('per_page', String(params.per_page));
+    if (params.tab) searchParams.set('tab', params.tab);
+    if (params.search) searchParams.set('search', params.search);
+    if (params.insurer) searchParams.set('insurer', params.insurer);
+    const response = await fetch(`${API_BASE_URL}/saas/cartera-aseguradoras?${searchParams}`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getCarteraAseguradorasStats(insurer?: string): Promise<ApiResponse<any>> {
+    const url = insurer
+      ? `${API_BASE_URL}/saas/cartera-aseguradoras/stats?insurer=${insurer}`
+      : `${API_BASE_URL}/saas/cartera-aseguradoras/stats`;
+    const response = await fetch(url, { headers: await this.getAuthHeaders() });
+    return this.handleResponse(response);
+  }
+
+  async getCarteraAseguradorasCuotas(policyNumber: string): Promise<ApiResponse<any>> {
+    const url = `${API_BASE_URL}/saas/cartera-aseguradoras/cuotas/${encodeURIComponent(policyNumber)}`;
+    const response = await fetch(url, { headers: await this.getAuthHeaders() });
+    return this.handleResponse(response);
+  }
+
+  // ===== RECIBOS CON COMISIONES SINCRONIZADOS =====
+
+  async getRecibosComisiones(params: {
+    page?: number; per_page?: number; search?: string; insurer?: string;
+    anio?: string; mes?: string; ramo?: string; policy?: string;
+  }): Promise<ApiResponse<any>> {
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+    });
+    const response = await fetch(`${API_BASE_URL}/saas/recibos-comisiones?${sp}`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getRecibosComisionesStats(params: {
+    insurer?: string; anio?: string; mes?: string;
+  } = {}): Promise<ApiResponse<any>> {
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+    });
+    const response = await fetch(`${API_BASE_URL}/saas/recibos-comisiones/stats?${sp}`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async getRecibosComisionesByPolicy(policyNumber: string): Promise<ApiResponse<any>> {
+    const url = `${API_BASE_URL}/saas/recibos-comisiones/by-policy/${encodeURIComponent(policyNumber)}`;
+    const response = await fetch(url, { headers: await this.getAuthHeaders() });
+    return this.handleResponse(response);
+  }
+
+  async syncRecibosComisiones(params: {
+    anio: string; mes: string; ramo?: string; insurer?: string;
+  }): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/recibos-comisiones/sync`, {
+      method: 'POST',
+      headers: { ...(await this.getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    return this.handleResponse(response);
+  }
+
   // ===== BÚSQUEDA GLOBAL (Top Bar) =====
   async globalSearch(
     q: string,

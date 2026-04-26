@@ -1,6 +1,18 @@
 import { toast } from 'src/hooks/use-toast';
 import { auth } from '../config/firebase';
 
+export interface PolizaCoverageRow {
+  id?: number;
+  coverage_type?: string | null;
+  coverage_name?: string | null;
+  coverage_code?: string | null;
+  insured_value?: number | string | null;
+  deductible?: string | null;
+  deductible_value?: number | string | null;
+  deductible_percentage?: number | string | null;
+  source_insurer?: string | null;
+}
+
 // Tipos para las pólizas
 export interface Poliza {
   id?: string;
@@ -86,6 +98,9 @@ export interface Poliza {
   fecha_inicio: string;
   fecha_fin: string;
   estado?: 'ACTIVA' | 'VENCIDA' | 'CANCELADA' | 'SUSPENDIDA';
+  cancellation_reason?: string;
+  cancelled_at?: string;
+  cancelled_by?: number | null;
   sede?: string;
   
   // Campos SaaS
@@ -96,6 +111,12 @@ export interface Poliza {
   // Metadatos
   created_at?: string;
   updated_at?: string;
+
+  /** Sincronización detalle (microservicio aseguradoras) */
+  detail_sync_status?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed' | string | null;
+  detail_sync_at?: string | null;
+  detail_sync_error?: string | null;
+  coverages?: PolizaCoverageRow[];
   
   // Campos calculados
   nombre_completo_cliente?: string;
@@ -159,6 +180,10 @@ export type CreatePolizaInput = {
   banco?: string;
   cuotas?: number;
   numero_tarjeta?: string;
+
+  // Origen (sync vs manual)
+  sync_source?: string;
+  sync_at?: string;
 };
 
 export interface PolizaFilters {
@@ -177,6 +202,8 @@ export interface PolizaFilters {
   renovable?: boolean | string;
   fecha_recepcion_desde?: string;
   fecha_recepcion_hasta?: string;
+  // Motivo de cancelación (aplicable cuando estado=CANCELADA)
+  cancellation_reason?: string;
   sort_field?: string;
   sort_direction?: 'asc' | 'desc';
   per_page?: number;
@@ -914,6 +941,119 @@ export const polizaService = {
   },
 
   /**
+   * Sincronizar detalle (coberturas + datos enriquecidos) desde el microservicio de la aseguradora.
+   */
+  async syncPolizaDetail(
+    id: string,
+    options?: { async?: boolean; insurer_connection_id?: number }
+  ): Promise<
+    ApiResponse<{
+      async?: boolean;
+      poliza_id?: number;
+      insurer_connection_id?: number;
+      detail_sync_status?: string;
+      detail_sync_at?: string | null;
+      detail_sync_error?: string | null;
+      coverages_count?: number;
+    }>
+  > {
+    return makeRequest(`${API_PREFIX}/${id}/sync-detail`, {
+      method: 'POST',
+      body: JSON.stringify({
+        async: options?.async ?? false,
+        insurer_connection_id: options?.insurer_connection_id,
+      }),
+    });
+  },
+
+  /**
+   * Descargar carátula PDF de una póliza desde la aseguradora (solo HDI por ahora).
+   */
+  async downloadCaratulaPdf(id: string): Promise<void> {
+    const token = await getAuthToken();
+    const url = `${API_BASE_URL}${API_PREFIX}/${id}/caratula-pdf`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      let msg = `Error ${response.status}`;
+      try { const j = await response.json(); msg = j.message || msg; } catch {}
+      throw new Error(msg);
+    }
+    const blob = await response.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    a.download = match ? match[1] : `caratula_${id}.pdf`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  },
+
+  /**
+   * Sincronizar detalle para varias pólizas (por defecto en cola).
+   */
+  async syncPolizasDetailBatch(body: {
+    poliza_ids: number[];
+    insurer_connection_id?: number;
+    async?: boolean;
+  }): Promise<
+    ApiResponse<{
+      async: boolean;
+      results: Array<{
+        poliza_id: number;
+        success: boolean;
+        queued?: boolean;
+        error?: string;
+        detail_sync_status?: string;
+        detail_sync_error?: string | null;
+      }>;
+    }>
+  > {
+    return makeRequest(`${API_PREFIX}/sync-details-batch`, {
+      method: 'POST',
+      body: JSON.stringify({
+        poliza_ids: body.poliza_ids,
+        insurer_connection_id: body.insurer_connection_id,
+        async: body.async !== false,
+      }),
+    });
+  },
+
+  /**
+   * Encola sincronización de detalle. reset=true vuelve a sincronizar incluso las ya completadas.
+   */
+  async syncAllPolizasDetail(opts?: { syncSource?: string; reset?: boolean }): Promise<ApiResponse<{ queued: number; skipped: number; total: number }>> {
+    return makeRequest(`${API_PREFIX}/sync-all-details`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(opts?.syncSource ? { sync_source: opts.syncSource } : {}),
+        ...(opts?.reset ? { reset: true } : {}),
+      }),
+    });
+  },
+
+  /**
+   * Cancela la sincronización de detalle pendiente (marca las no procesadas como canceladas).
+   */
+  async cancelDetailSync(): Promise<ApiResponse<{ cancelled: number }>> {
+    return makeRequest(`${API_PREFIX}/cancel-detail-sync`, { method: 'POST', body: '{}' });
+  },
+
+  /**
+   * Progreso de sincronización de detalles: pendientes, sincronizadas, fallidas, canceladas.
+   */
+  async getDetailSyncProgress(): Promise<ApiResponse<{
+    total: number; synced: number; failed: number; cancelled: number; pending: number;
+    bySource?: Record<string, { total: number; synced: number; failed: number; cancelled: number; pending: number; sample_error?: string | null }>;
+  }>> {
+    return makeRequest(`${API_PREFIX}/detail-sync-progress`);
+  },
+
+  /**
    * Obtener historial de renovaciones (contactos y eventos) de una póliza
    */
   async getHistorialRenovaciones(id: string): Promise<ApiResponse<any[]>> {
@@ -1339,14 +1479,17 @@ export const polizaService = {
    * Cambiar estado de una póliza
    */
   async cambiarEstado(
-    id: string, 
+    id: string,
     estado: 'ACTIVA' | 'VENCIDA' | 'CANCELADA' | 'SUSPENDIDA',
-    motivo?: string
+    motivo?: string,
+    cancellationReason?: string,
   ): Promise<ApiResponse<Poliza>> {
     try {
+      const body: any = { estado, motivo };
+      if (cancellationReason) body.cancellation_reason = cancellationReason;
       const response = await makeRequest<Poliza>(`${API_PREFIX}/${id}/cambiar-estado`, {
         method: 'POST',
-        body: JSON.stringify({ estado, motivo }),
+        body: JSON.stringify(body),
       });
 
       if (response.success) {
@@ -1364,6 +1507,21 @@ export const polizaService = {
         description: error instanceof Error ? error.message : "Error desconocido",
       });
       throw error;
+    }
+  },
+
+  /**
+   * Catálogo de motivos de cancelación (constantes en el backend).
+   */
+  async getCancellationReasons(): Promise<Array<{ key: string; label: string }>> {
+    try {
+      const r = await makeRequest<Array<{ key: string; label: string }>>(
+        `${API_PREFIX}/cancellation-reasons`,
+        { method: 'GET' },
+      );
+      return (r as any)?.data || [];
+    } catch {
+      return [];
     }
   },
 

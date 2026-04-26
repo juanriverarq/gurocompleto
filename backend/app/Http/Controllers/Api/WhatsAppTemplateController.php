@@ -8,6 +8,7 @@ use App\Models\WhatsAppConversation;
 use App\Services\WhatsAppCloudApiService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class WhatsAppTemplateController extends Controller
@@ -108,6 +109,7 @@ class WhatsAppTemplateController extends Controller
             'language' => 'nullable|string|max:10',
             'header_type' => 'nullable|string|in:NONE,TEXT,IMAGE,VIDEO,DOCUMENT',
             'header_text' => 'nullable|string|max:60',
+            'header_media_handle' => 'nullable|string',
             'body' => 'required|string|max:1024',
             'footer' => 'nullable|string|max:60',
             'buttons' => 'nullable|array|max:3',
@@ -134,6 +136,12 @@ class WhatsAppTemplateController extends Controller
                 }
             } else {
                 $header['format'] = $validated['header_type'];
+                // Meta requires an example handle for media headers (IMAGE, VIDEO, DOCUMENT)
+                if (!empty($validated['header_media_handle'])) {
+                    $header['example'] = [
+                        'header_handle' => [$validated['header_media_handle']],
+                    ];
+                }
             }
             $components[] = $header;
         }
@@ -178,13 +186,23 @@ class WhatsAppTemplateController extends Controller
             ];
         }
 
-        $result = $this->cloudApi->createMessageTemplate($instance, [
+        $templatePayload = [
             'name' => $validated['name'],
             'language' => $validated['language'] ?? 'es',
             'category' => $validated['category'],
             'components' => $components,
             'allow_category_change' => true,
+        ];
+
+        Log::info('📋 [TEMPLATE CREATE] Payload to Meta', [
+            'name' => $templatePayload['name'],
+            'header_type' => $validated['header_type'] ?? 'NONE',
+            'has_handle' => !empty($validated['header_media_handle']),
+            'handle_preview' => !empty($validated['header_media_handle']) ? substr($validated['header_media_handle'], 0, 60) . '...' : null,
+            'components_count' => count($components),
         ]);
+
+        $result = $this->cloudApi->createMessageTemplate($instance, $templatePayload);
 
         if (!$result['success']) {
             return response([
@@ -328,6 +346,115 @@ class WhatsAppTemplateController extends Controller
     }
 
     /**
+     * Subir media para header de plantilla (imagen, video, documento)
+     * Usa la Meta Resumable Upload API para obtener un handle (h:...)
+     * que luego se usa en header_handle al crear la plantilla.
+     */
+    public function uploadMedia(Request $request): Response
+    {
+        $instance = $this->getActiveInstance($request);
+        if (!$instance) {
+            return response(['error' => 'No se encontró una instancia de WhatsApp Cloud API activa.'], 404);
+        }
+
+        $request->validate([
+            'file' => 'required|file|max:16384', // 16MB max
+            'type' => 'required|string|in:IMAGE,VIDEO,DOCUMENT',
+        ]);
+
+        $file = $request->file('file');
+        $type = $request->input('type');
+
+        // Validar mime types según tipo
+        $allowedMimes = [
+            'IMAGE' => ['image/jpeg', 'image/png', 'image/webp'],
+            'VIDEO' => ['video/mp4', 'video/3gpp'],
+            'DOCUMENT' => ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        ];
+
+        $mime = $file->getMimeType();
+        if (!in_array($mime, $allowedMimes[$type] ?? [])) {
+            return response([
+                'error' => 'Tipo de archivo no permitido. Válidos: ' . implode(', ', $allowedMimes[$type] ?? []),
+            ], 422);
+        }
+
+        try {
+            $appId = env('META_APP_ID');
+            $token = $instance->cloud_api_token;
+
+            if (!$appId || !$token) {
+                return response(['error' => 'Falta configuración de META_APP_ID o token de Cloud API.'], 500);
+            }
+
+            $fileSize = $file->getSize();
+            $baseUrl = 'https://graph.facebook.com/v22.0';
+
+            // Step 1: Create upload session
+            $sessionResponse = Http::withToken($token)->post("{$baseUrl}/{$appId}/uploads", [
+                'file_length' => $fileSize,
+                'file_type' => $mime,
+                'access_token' => $token,
+            ]);
+
+            if (!$sessionResponse->successful()) {
+                $err = $sessionResponse->json('error.message', 'Error al crear sesión de upload');
+                Log::error('📤 [TEMPLATE UPLOAD] Session creation failed', ['response' => $sessionResponse->json()]);
+                return response(['error' => $err], 400);
+            }
+
+            $uploadSessionId = $sessionResponse->json('id');
+            if (!$uploadSessionId) {
+                return response(['error' => 'No se obtuvo session ID de Meta.'], 500);
+            }
+
+            Log::info('📤 [TEMPLATE UPLOAD] Session created', ['session_id' => $uploadSessionId]);
+
+            // Step 2: Upload file data to the session
+            $fileContents = file_get_contents($file->getRealPath());
+
+            $uploadResponse = Http::withToken($token)
+                ->withHeaders([
+                    'file_offset' => '0',
+                ])
+                ->withBody($fileContents, $mime)
+                ->post("{$baseUrl}/{$uploadSessionId}");
+
+            if (!$uploadResponse->successful()) {
+                $err = $uploadResponse->json('error.message', 'Error al subir archivo a Meta');
+                Log::error('📤 [TEMPLATE UPLOAD] File upload failed', ['response' => $uploadResponse->json()]);
+                return response(['error' => $err], 400);
+            }
+
+            $handle = $uploadResponse->json('h');
+            if (!$handle) {
+                Log::error('📤 [TEMPLATE UPLOAD] No handle returned', ['response' => $uploadResponse->json()]);
+                return response(['error' => 'Meta no devolvió un handle para el archivo.'], 500);
+            }
+
+            Log::info('📤 [TEMPLATE UPLOAD] Success', [
+                'handle' => substr($handle, 0, 50) . '...',
+                'mime' => $mime,
+                'size' => $fileSize,
+            ]);
+
+            return response([
+                'success' => true,
+                'handle' => $handle,
+                'filename' => $file->getClientOriginalName(),
+                'mime' => $mime,
+                'size' => $fileSize,
+            ], 200);
+
+        } catch (\Throwable $e) {
+            Log::error('📤 [TEMPLATE UPLOAD] Exception', ['error' => $e->getMessage()]);
+            return response([
+                'error' => 'Error al subir archivo: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Parse template components for frontend display
      */
     private function parseTemplateComponents(array $components): array
@@ -346,7 +473,16 @@ class WhatsAppTemplateController extends Controller
                     $parsed['header'] = [
                         'format' => $component['format'] ?? 'TEXT',
                         'text' => $component['text'] ?? null,
+                        'example_url' => null,
                     ];
+                    // Extract example media URL from Meta's response (for IMAGE/VIDEO/DOCUMENT headers)
+                    $handles = $component['example']['header_handle'] ?? [];
+                    if (!empty($handles) && is_array($handles)) {
+                        $url = $handles[0] ?? null;
+                        if ($url && str_starts_with($url, 'http')) {
+                            $parsed['header']['example_url'] = $url;
+                        }
+                    }
                     break;
                 case 'body':
                     $parsed['body'] = $component['text'] ?? '';

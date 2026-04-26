@@ -215,6 +215,18 @@ class SendPolicyNotifications extends Command
         $progressBar->start();
 
         foreach ($policies as $policy) {
+            // Si la cartera está "Pagado" no enviar notificación de pago pendiente
+            if ($type === 'payment_due'
+                && is_string($policy->estado_cartera ?? null)
+                && strcasecmp(trim((string) $policy->estado_cartera), 'Pagado') === 0
+            ) {
+                $this->newLine();
+                $this->warn("  ⏭️  Póliza {$policy->policy_number} excluida — cartera marcada como Pagado");
+                $skipped++;
+                $progressBar->advance();
+                continue;
+            }
+
             // Verificar exclusiones
             if ($this->shouldSkipPolicy($config, $policy)) {
                 $this->newLine();
@@ -293,6 +305,7 @@ class SendPolicyNotifications extends Command
         $excludedClientIds = $config->excluded_client_ids ?? [];
         $excludedPolicyTypes = $config->excluded_policy_types ?? [];
         $excludedPolicyStatuses = $config->excluded_policy_statuses ?? [];
+        $excludedRamoIds = $config->excluded_ramo_ids ?? [];
         
         $uniquePolicyIds = [];
         $allPolicies = [];
@@ -321,6 +334,12 @@ class SendPolicyNotifications extends Command
             if (!empty($excludedPolicyStatuses)) {
                 $query->whereNotIn('status', array_map('strtolower', $excludedPolicyStatuses));
             }
+            if (!empty($excludedRamoIds)) {
+                $query->where(function($q) use ($excludedRamoIds) {
+                    $q->whereNull('ramo_id')
+                      ->orWhereNotIn('ramo_id', $excludedRamoIds);
+                });
+            }
 
             $targetDate = now()->addDays($days)->startOfDay();
 
@@ -342,9 +361,14 @@ class SendPolicyNotifications extends Command
                 case 'payment_due':
                     $query->whereIn('payment_status', ['pending', 'overdue'])
                         ->whereNotNull('payment_due_date')
-                        ->whereDate('payment_due_date', '=', $targetDate);
+                        ->whereDate('payment_due_date', '=', $targetDate)
+                        // Excluir pólizas marcadas como Pagado en Cartera e Impuestos
+                        ->where(function($q) {
+                            $q->whereNull('estado_cartera')
+                              ->orWhereRaw('LOWER(TRIM(estado_cartera)) != ?', ['pagado']);
+                        });
                     
-                    $this->line("  🔍 Buscando pólizas con pago venciendo el: {$targetDate->format('Y-m-d')} (en {$days} días)");
+                    $this->line("  🔍 Buscando pólizas con pago venciendo el: {$targetDate->format('Y-m-d')} (en {$days} días, excluyendo cartera Pagada)");
                     break;
             }
 
@@ -389,6 +413,12 @@ class SendPolicyNotifications extends Command
 
         // Verificar estado de póliza excluido
         if ($config->isPolicyStatusExcluded($policy->status)) {
+            return true;
+        }
+
+        // Verificar ramo excluido
+        $excludedRamoIds = $config->excluded_ramo_ids ?? [];
+        if (!empty($excludedRamoIds) && $policy->ramo_id && in_array($policy->ramo_id, $excludedRamoIds)) {
             return true;
         }
 

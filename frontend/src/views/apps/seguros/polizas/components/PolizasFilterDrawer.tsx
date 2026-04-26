@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from 'src/components/shadcn-ui/Default-Ui/select';
-import { PolizaFilters } from 'src/services/polizaService';
+import { PolizaFilters, polizaService } from 'src/services/polizaService';
 
 interface PolizasFilterDrawerProps {
   isOpen: boolean;
@@ -26,11 +26,19 @@ const PolizasFilterDrawer: React.FC<PolizasFilterDrawerProps> = ({
   onFiltersChange
 }) => {
   const [localFilters, setLocalFilters] = useState<PolizaFilters>(filters);
+  const [cancellationReasons, setCancellationReasons] = useState<Array<{ key: string; label: string }>>([]);
 
   // Sincronizar con props cuando cambien
   useEffect(() => {
     setLocalFilters(filters);
   }, [filters]);
+
+  useEffect(() => {
+    (async () => {
+      const list = await polizaService.getCancellationReasons();
+      setCancellationReasons(list || []);
+    })();
+  }, []);
 
   const handleFilterChange = (key: keyof PolizaFilters, value: string | number) => {
     setLocalFilters(prev => ({
@@ -78,6 +86,7 @@ const PolizasFilterDrawer: React.FC<PolizasFilterDrawerProps> = ({
     if (localFilters.renovable !== undefined && localFilters.renovable !== '') count++;
     if (localFilters.fecha_recepcion_desde) count++;
     if (localFilters.fecha_recepcion_hasta) count++;
+    if (localFilters.cancellation_reason) count++;
     return count;
   };
 
@@ -239,6 +248,30 @@ const PolizasFilterDrawer: React.FC<PolizasFilterDrawerProps> = ({
                    </SelectContent>
                  </Select>
                </div>
+
+              {/* Motivo de cancelación (solo útil cuando el estado es CANCELADA, pero se permite filtrar libre) */}
+              <div className="space-y-2">
+                <Label htmlFor="cancellation_reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Motivo de cancelación
+                </Label>
+                <Select
+                  value={localFilters.cancellation_reason || 'all'}
+                  onValueChange={(value) => handleFilterChange('cancellation_reason', value === 'all' ? '' : value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Cualquier motivo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Cualquier motivo</SelectItem>
+                    {cancellationReasons.map((r) => (
+                      <SelectItem key={r.key} value={r.key}>{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-gray-500 dark:text-gray-500">
+                  Aplica solo a pólizas canceladas. Filtra por el motivo que registraste al cancelar.
+                </p>
+              </div>
             </div>
           </div>
 

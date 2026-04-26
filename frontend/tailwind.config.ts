@@ -31,7 +31,7 @@ const config: Config = {
   			sm: '0 6px 24.2px -10px rgba(41, 52, 61, .22)',
   			'btn-shadow': 'box-shadow: rgba(0, 0, 0, .05) 0 9px 17.5px',
   			tw: 'rgba(175, 182, 201, 0.2) 0px 2px 4px -1px',
-  			btnshdw: '0 17px 20px -8px rgba(77, 91, 236, .231372549)',
+  			btnshdw: '0 17px 20px -8px rgba(87, 60, 255, .231372549)',
   			elevation1: '0px 12px 30px -2px rgba(58,75,116,0.14);',
   			elevation2: '0px 24px 24px -12px rgba(0,0,0,0.05);',
   			elevation3: '0px 24px 24px -12px rgba(99,91,255,0.15);',

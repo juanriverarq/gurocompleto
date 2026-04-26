@@ -24,6 +24,7 @@ const TrabajaConNosotros = Loadable(lazyRetry(() => import('../views/pages/Traba
 /* ****Apps***** */
 const CombinedDashboard = Loadable(lazyRetry(() => import('../views/combined/CombinedDashboard')));
 const Inicio = Loadable(lazyRetry(() => import('../views/inicio/Inicio')));
+const GuroHub = Loadable(lazyRetry(() => import('../views/hub/GuroHub')));
 
 // authentication
 const Login = Loadable(lazyRetry(() => import('../views/authentication/auth1/Login')));
@@ -157,6 +158,12 @@ const MiPaginaWeb = Loadable(lazyRetry(() => import('../views/apps/marketing/mi-
 const ComparadorSeguros = Loadable(
   lazyRetry(() => import('../views/apps/marketing/comparador-seguros/ComparadorSeguros')),
 );
+const CotizadorBolivarAutos = Loadable(
+  lazyRetry(() => import('../views/apps/cotizadores/autos/CotizadorBolivar')),
+);
+const ComparadorAutos = Loadable(
+  lazyRetry(() => import('../views/apps/cotizadores/autos/ComparadorAutos')),
+);
 const CreadorContenido = Loadable(
   lazyRetry(() => import('../views/apps/marketing/creador-contenido/CreadorContenido')),
 );
@@ -208,6 +215,8 @@ const ComisionesPorPoliza = Loadable(
 );
 const AnticiposAjustes = Loadable(lazyRetry(() => import('../views/apps/comisiones/AnticiposAjustes')));
 const CarteraClientes = Loadable(lazyRetry(() => import('../views/apps/cartera/CarteraClientes')));
+const CarteraAseguradoras = Loadable(lazyRetry(() => import('../views/apps/cartera-aseguradoras/CarteraAseguradoras')));
+const ComisionesAseguradoras = Loadable(lazyRetry(() => import('../views/apps/comisiones-aseguradoras/ComisionesAseguradoras')));
 const ReciboCaja = Loadable(lazyRetry(() => import('../views/apps/cartera/ReciboCaja')));
 const RecibosCuadreCaja = Loadable(lazyRetry(() => import('../views/apps/cartera/RecibosCuadreCaja')));
 const ReportesFinancieros = Loadable(
@@ -261,8 +270,7 @@ const WhatsAppDashboard = Loadable(lazyRetry(() => import('../views/apps/whatsap
 const WhatsAppConexiones = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppConexiones')));
 const WhatsAppInbox = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppInboxPro')));
 const ChatbotsList = Loadable(lazyRetry(() => import('../views/apps/whatsapp/ChatbotsList')));
-const ChatbotsAnalytics = Loadable(lazyRetry(() => import('../views/apps/whatsapp/ChatbotsAnalytics')));
-const ChatbotFlowEditor = Loadable(lazyRetry(() => import('../views/apps/whatsapp/chatbot-editor/FlowEditorSimple')));
+const ChatbotFlowEditor = Loadable(lazyRetry(() => import('../views/apps/whatsapp/chatbot-editor/FlowEditorJointJS')));
 const WhatsAppContactos = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppContactos')));
 const WhatsAppPlantillas = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppPlantillas')));
 
@@ -302,7 +310,7 @@ const Router = [
       // Transitional route while SaaS contexto/tenant se termina de resolver
       { path: '/dashboard-building', element: <ForceLightMode><DashboardBuilding /></ForceLightMode> },
       { path: '/empleados/login', element: <EmpleadoLogin /> },
-      { path: '/auth/login', element: <ForceLightMode><Login /></ForceLightMode> },
+      { path: '/auth/login', element: <Login /> },
     ],
   },
   // Dashboard bajo /apps
@@ -311,6 +319,8 @@ const Router = [
     element: <UnifiedProtectedFullLayout />,
     children: [
       { path: '/apps/', exact: true, element: <Inicio /> },
+      { path: '/apps/inicio', element: <Inicio /> },
+      { path: '/apps/hub', element: <GuroHub /> },
       { path: '/apps/dashboard', element: <CombinedDashboard /> },
 
       // Seguros Routes
@@ -364,6 +374,10 @@ const Router = [
       { path: '/apps/marketing/creador-contenido', element: <CreadorContenido /> },
       { path: '/apps/marketing/mi-web', element: <MiPaginaWeb /> },
 
+      // Cotizadores Routes
+      { path: '/apps/cotizadores/autos/bolivar', element: <CotizadorBolivarAutos /> },
+      { path: '/apps/cotizadores/autos/comparador', element: <ComparadorAutos /> },
+
       // Admin Routes
       { path: '/apps/admin/usuarios', element: <Usuarios /> },
       { path: '/apps/admin/usuarios/reportes', element: <ReportesUsuarios /> },
@@ -390,8 +404,10 @@ const Router = [
       { path: '/apps/admin/importacion-multiple', element: <ImportacionMultiple /> },
       // Comisiones y Cartera Routes
       { path: '/apps/comisiones/por-poliza', element: <ComisionesPorPoliza /> },
+      { path: '/apps/comisiones/aseguradoras', element: <ComisionesAseguradoras /> },
       { path: '/apps/comisiones/anticipos-ajustes', element: <AnticiposAjustes /> },
       { path: '/apps/cartera/clientes', element: <CarteraClientes /> },
+      { path: '/apps/cartera/aseguradoras', element: <CarteraAseguradoras /> },
       { path: '/apps/cartera/recibos-caja', element: <RecibosCuadreCaja /> },
       { path: '/apps/cartera/liquidar-vendedores', element: <LiquidarVendedores /> },
       { path: '/apps/cartera/reportes-financieros', element: <ReportesFinancieros /> },
@@ -456,8 +472,7 @@ const Router = [
       { path: '/apps/whatsapp/plantillas', element: <WhatsAppPlantillas /> },
       { path: '/apps/whatsapp/chatbots', element: <ChatbotsList /> },
       { path: '/apps/whatsapp/chatbots/nuevo', element: <ChatbotsList /> },
-      { path: '/apps/whatsapp/chatbots/flujos', element: <ChatbotFlowEditor /> },
-      { path: '/apps/whatsapp/chatbots/analisis', element: <ChatbotsAnalytics /> },
+      // { path: '/apps/whatsapp/chatbots/flujos', element: <ChatbotFlowEditor /> },
       { path: '/apps/whatsapp/chatbots/respuestas', element: <ChatbotsList /> },
       { path: '/apps/whatsapp/contactos', element: <WhatsAppContactos /> },
             { path: '/apps/whatsapp/reportes', element: <WhatsAppDashboard /> },
@@ -470,6 +485,8 @@ const Router = [
     path: '/',
     element: <BlankLayout />,
     children: [
+      // Flow Editor - Full screen sin header
+      { path: '/apps/whatsapp/chatbots/flujos', element: <ChatbotFlowEditor /> },
       // Recibo de Caja - Sin header para impresión
       { path: '/apps/cartera/recibo-caja/:id', element: <ReciboCaja /> },
       // Redirect público a la ubicación en dashboard
@@ -483,17 +500,17 @@ const Router = [
         element: <FrontendLayout />,
         children: [{ path: '', element: <Checkout /> }],
       },
-      // Nuevo flujo de onboarding simplificado
-      { path: '/comenzar', element: <ForceLightMode><SelectAppsFlow /></ForceLightMode> },
-      { path: '/comenzar/registro', element: <ForceLightMode><SignupFlow /></ForceLightMode> },
+      // Nuevo flujo de onboarding simplificado (nueva linea dark)
+      { path: '/comenzar', element: <SelectAppsFlow /> },
+      { path: '/comenzar/registro', element: <SignupFlow /> },
       // Variante con branding SURA
-      { path: '/sura', element: <ForceLightMode><SelectAppsFlow /></ForceLightMode> },
-      { path: '/sura/registro', element: <ForceLightMode><SignupFlow /></ForceLightMode> },
+      { path: '/sura', element: <SelectAppsFlow /> },
+      { path: '/sura/registro', element: <SignupFlow /> },
       { path: '/web/:slug', element: <MiniWebPublic /> },
       { path: '/web/:slug/:tipo', element: <QuoteForm /> },
       { path: '/empleados', element: <Navigate to="/empleados/login" /> },
       { path: '/empleados/login', element: <EmpleadoLogin /> },
-      { path: '/auth/login', element: <ForceLightMode><Login /></ForceLightMode> },
+      { path: '/auth/login', element: <Login /> },
       { path: '/auth/register', element: <Navigate to="/comenzar" replace /> },
       { path: '/auth/forgot-password', element: <ForceLightMode><ForgotPassword /></ForceLightMode> },
       { path: '/auth/two-steps', element: <TwoSteps /> },

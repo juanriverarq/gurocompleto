@@ -94,6 +94,13 @@ const AVAILABLE_COLUMNS: ColumnOption[] = [
     description: 'Número de renovaciones',
     icon: 'solar:refresh-bold',
     defaultVisible: false
+  },
+  {
+    key: 'origen',
+    label: 'Origen',
+    description: 'Sincronizado desde aseguradora o carga manual',
+    icon: 'solar:import-bold',
+    defaultVisible: false
   }
 ];
 

@@ -16,7 +16,7 @@ import { GuroToastContainer } from 'src/components/GuroToast/GuroToast';
 import ModuleGate from 'src/components/ModuleGate';
 
 const UnifiedProtectedFullLayout: React.FC = () => {
-  const { activeLayout } = useContext(CustomizerContext);
+  const { activeLayout, activeMode, setActiveMode } = useContext(CustomizerContext);
   const {
     isAuthenticated,
     loading,
@@ -30,6 +30,20 @@ const UnifiedProtectedFullLayout: React.FC = () => {
   } = useUnifiedAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Sincronizar la clase `.dark` del <html> con el modo activo del Customizer.
+  // El modo se persiste en localStorage.guro_active_mode y puede alternarse
+  // desde el toggle de tema en el top bar (ver Header.tsx).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const mode = activeMode === 'light' ? 'light' : 'dark';
+    document.documentElement.classList.remove(mode === 'dark' ? 'light' : 'dark');
+    document.documentElement.classList.add(mode);
+    try {
+      localStorage.setItem('guro_active_mode', mode);
+      localStorage.setItem('flowbite-theme-mode', mode);
+    } catch {}
+  }, [activeMode]);
 
   // Debug mínimo para inspeccionar estados y evitar "pantallas muertas"
   useEffect(() => {
@@ -376,8 +390,6 @@ const UnifiedProtectedFullLayout: React.FC = () => {
             </div>
           </div>
         </div>
-        {/* Chat flotante global - DESACTIVADO TEMPORALMENTE */}
-        {/* <FloatingChat /> */}
       </div>
       <GuroToastContainer />
     </GuroTourProvider>

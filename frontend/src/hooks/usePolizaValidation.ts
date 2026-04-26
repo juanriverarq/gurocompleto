@@ -224,16 +224,14 @@ export const usePolizaValidation = () => {
     const stepErrors: ValidationErrors = {};
     
     switch (step) {
-      case 0: // Paso 1 - Información General
-        stepErrors.numeroPoliza = validatePolizaNumber(formData.numeroPoliza);
-        stepErrors.aseguradora = validateRequired(formData.aseguradora, 'La aseguradora');
-        stepErrors.ramoPrincipal = validateRequired(formData.ramoPrincipal, 'El ramo principal');
-        stepErrors.tipoPoliza = validateRequired(formData.tipoPoliza, 'El tipo de póliza');
-        // Si el ramo es 'otros' o existe riesgo asegurado, exigir valor numérico
+      case 0: // Paso 1 - Información General (ningún campo obligatorio)
+        // Validaciones de formato (solo si el usuario escribió algo)
+        if (formData.numeroPoliza && formData.numeroPoliza.length < 5) {
+          stepErrors.numeroPoliza = 'El número de póliza debe tener al menos 5 caracteres';
+        }
         if (formData.valorRiesgoAsegurado) {
           stepErrors.valorRiesgoAsegurado = validateNumericPositive(formData.valorRiesgoAsegurado, 'El valor del riesgo asegurado');
         }
-        // Validación suave de placas si el ramo es automotor (Automóvil o SOAT) y se ingresaron
         if ((((s) => s.includes('auto') || s.includes('soat'))((formData.ramoPrincipal || '').toLowerCase())) && Array.isArray((formData as any).placas)) {
           const list = (formData as any).placas as string[];
           const invalid = list.find(p => !!validatePlate(p));
@@ -243,28 +241,24 @@ export const usePolizaValidation = () => {
         }
         break;
 
-      case 1: // Paso 2 - Cliente
-        if (!(formData as any).cliente_id) {
-          stepErrors['cliente_id'] = 'Debes seleccionar un cliente';
-        }
+      case 1: // Paso 2 - Cliente (opcional)
         break;
 
-      case 2: // Paso 3 - Financiera y Pagos
-        // Validaciones financieras (requeridos/formatos)
-        stepErrors.primaNeta = validateNumericPositive(formData.primaNeta, 'La prima neta') || validateRequired(formData.primaNeta, 'La prima neta');
-        stepErrors.porcentajeIva = validatePercentage(formData.porcentajeIva, 'El porcentaje de IVA');
-        // Requeridos de pago
+      case 2: // Paso 3 - Financiera y Pagos — SOLO forma de pago obligatoria
         stepErrors.formaPago = validateRequired(formData.formaPago, 'La forma de pago');
-        stepErrors.medioPago = validateRequired(formData.medioPago, 'El medio de pago');
-        // Validaciones de pago
+        // Validaciones de formato (no obligatorias)
+        if (formData.primaNeta) {
+          stepErrors.primaNeta = validateNumericPositive(formData.primaNeta, 'La prima neta');
+        }
+        if (formData.porcentajeIva) {
+          stepErrors.porcentajeIva = validatePercentage(formData.porcentajeIva, 'El porcentaje de IVA');
+        }
         if (formData.cuotas) {
           stepErrors.cuotas = validateIntegerMin(formData.cuotas, 1, 'El número de cuotas');
         }
         if (formData.numeroTarjeta) {
           stepErrors.numeroTarjeta = validateCardNumberMinDigits(formData.numeroTarjeta, 4);
         }
-        
-        // Validaciones opcionales
         if (formData.porcentajeComision) {
           stepErrors.porcentajeComision = validatePercentage(formData.porcentajeComision, 'El porcentaje de comisión');
         }
@@ -273,10 +267,7 @@ export const usePolizaValidation = () => {
         }
         break;
 
-      case 3: // Paso 4 - Fechas
-        stepErrors.fechaExpedicion = validateDate(formData.fechaExpedicion, 'La fecha de expedición');
-        stepErrors.fechaInicio = validateDate(formData.fechaInicio, 'La fecha de inicio');
-        stepErrors.fechaFin = validateDate(formData.fechaFin, 'La fecha de fin');
+      case 3: // Paso 4 - Fechas (opcionales; solo se valida rango si ambas existen)
         if (formData.fechaInicio && formData.fechaFin) {
           const rangeError = validateDateRange(formData.fechaInicio, formData.fechaFin);
           if (rangeError) {

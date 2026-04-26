@@ -260,11 +260,13 @@ export const MODULES: ModuleItem[] = [
   {
     key: 'ia_chatbot',
     name: 'Asistente IA',
-    description: 'Asistente IA 24/7 para ventas y soporte',
+    description: 'Incluye 1,000 conversaciones/mes',
     icon: 'solar:cpu-bolt-bold-duotone',
     color: 'bg-lightprimary',
-    pricePerUser: 32500,
-    longDescription: 'Asistente con IA avanzada para atención al cliente, ventas y soporte 24/7. Incluye 1,000 conversaciones/mes.',
+    pricePerUser: 0,
+    mandatory: true,
+    consumptionBased: true,
+    longDescription: 'Asistente con IA avanzada para atención al cliente, ventas y soporte 24/7. Incluye 1,000 conversaciones/mes. Consumo adicional se descuenta de tu Wallet Guro.',
   },
   {
     key: 'ia_chatbot_sura',

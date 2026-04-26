@@ -1,9 +1,9 @@
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { Icon } from '@iconify/react';
 
 const logos = [
-  { name: 'SURA', url: 'https://images.seeklogo.com/logo-png/32/1/sura-logo-png_seeklogo-328191.png', highlight: true },
+  // SURA ocultado temporalmente — re-activar cuando se confirme alianza
+  // { name: 'SURA', url: 'https://images.seeklogo.com/logo-png/32/1/sura-logo-png_seeklogo-328191.png', highlight: true },
   { name: 'Seguros Bolívar', url: 'https://d1yjjnpx0p53s8.cloudfront.net/styles/logo-thumbnail/s3/032019/seguros_bolivar.jpg?Kv_sRIqG71PgCVryIyJxZ48DlEBN3xJt&itok=YAoRdSt8', big: true },
   { name: 'HDI Seguros', url: 'https://www.hdi.cl/media/506086/microsoftteams-image-58.png' },
   { name: 'Allianz', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Allianz.svg/1280px-Allianz.svg.png' },
@@ -22,20 +22,7 @@ const LogoStrip = () => {
   return (
     <section ref={ref} className="py-10 sm:py-14 bg-white">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Sura highlight badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="flex justify-center mb-6"
-        >
-          <div className="inline-flex items-center gap-2 bg-[#573CFF]/5 border border-[#573CFF]/10 rounded-full px-4 py-1.5">
-            <Icon icon="solar:verified-check-bold" className="w-4 h-4 text-[#573CFF]" />
-            <span className="text-xs font-bold text-[#573CFF] uppercase tracking-[0.1em]">
-              Proveedores oficiales de SURA
-            </span>
-          </div>
-        </motion.div>
+        {/* Badge "Proveedores oficiales de SURA" ocultado temporalmente */}
 
         <motion.p
           initial={{ opacity: 0 }}

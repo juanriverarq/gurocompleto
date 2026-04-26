@@ -14,6 +14,8 @@
 @import './layouts/rtl.css';
 @import './polizas-form.css';
 @import './components/guro-table.css';
+@import './light-mode-overrides.css';
+@import './dark-mode-overrides.css';
 
 @tailwind base;
 @tailwind components;
@@ -111,14 +113,21 @@
   }
   
   html.dark input,
-  html.dark input:focus,
   html.dark input:hover,
+  html.dark input:active,
   .dark input,
-  .dark input:focus,
-  .dark input:hover {
-    background-color: #374151 !important;
-    color: #ffffff !important;
-    border-color: #4b5563 !important;
+  .dark input:hover,
+  .dark input:active {
+    background-color: #26262e !important;
+    color: #f4f4f5 !important;
+    border-color: #3f3f46 !important;
+  }
+
+  html.dark input:focus,
+  .dark input:focus {
+    background-color: #2a2a33 !important;
+    color: #fafafa !important;
+    border-color: rgba(87, 60, 255, 0.45) !important;
   }
   
   html select,
@@ -597,25 +606,31 @@ html.dark textarea:active,
   border-color: #4b5563 !important;
 }
 
+/* Campo: fondo distinto del borde para que no se pierda el control en dark */
 html.dark form input,
-html.dark form input:focus,
 html.dark form input:hover,
 html.dark form input:active,
 html.dark input,
-html.dark input:focus,
 html.dark input:hover,
 html.dark input:active,
 .dark form input,
-.dark form input:focus,
 .dark form input:hover,
 .dark form input:active,
 .dark input,
-.dark input:focus,
 .dark input:hover,
 .dark input:active {
-  background-color: #374151 !important;
-  color: #ffffff !important;
-  border-color: #4b5563 !important;
+  background-color: #26262e !important;
+  color: #f4f4f5 !important;
+  border-color: #3f3f46 !important;
+}
+
+html.dark form input:focus,
+html.dark input:focus,
+.dark form input:focus,
+.dark input:focus {
+  background-color: #2a2a33 !important;
+  color: #fafafa !important;
+  border-color: rgba(87, 60, 255, 0.45) !important;
 }
 
 html.dark form option,

@@ -39,6 +39,7 @@ interface CarteraItem {
   estado_cartera: 'por_cobrar' | 'por_pagar' | 'comision_por_cobrar' | 'comision_recibida';
   // 3 flags SS-style
   recaudado_en_oficina: boolean;
+  recaudo_parcial_oficina: boolean;
   recaudado_aseguradora: boolean;
   comisionada: boolean;
   recibo_pago_directo: boolean;
@@ -66,6 +67,8 @@ interface CarteraItem {
   fecha_comisionada: string | null;
   fecha_inicio_vigencia: string | null;
   fecha_fin_vigencia: string | null;
+  // Split tracking
+  split_from_id: number | null;
   // Extra
   numero_remision: string | null;
   observacion_bitacora: string | null;
@@ -1411,6 +1414,12 @@ const CarteraClientes = () => {
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title={`Anexo: ${anexoLabel}`}>
               <Icon icon="solar:document-add-bold" className="w-3 h-3 mr-0.5" />
               Anexo {anexoNumOnly || ''}
+            </span>
+          )}
+          {(item.recaudo_parcial_oficina || item.split_from_id) && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300" title={item.split_from_id ? `Saldo pendiente de recaudo parcial (origen #${item.split_from_id})` : 'Recaudo parcial - la póliza se dividió en recaudado y pendiente'}>
+              <Icon icon="solar:chart-2-bold-duotone" className="w-3 h-3 mr-0.5" />
+              {item.split_from_id ? 'Saldo Parcial' : 'Parcial'}
             </span>
           )}
         </div>
