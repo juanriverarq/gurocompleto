@@ -1979,9 +1979,6 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
             <FormField id="formaPago" name="formaPago" label="Forma *" value={formData.formaPago} onChange={handleInputChange} error={errors.formaPago} required type="select" options={[
               { value: '', label: 'Seleccionar' }, { value: 'contado', label: 'Contado' }, { value: 'credito', label: 'Crédito' }, { value: 'financiado', label: 'Financiado' }, { value: 'fraccionado', label: 'Fraccionado' },
             ]} />
-            <FormField id="periodicidadPago" name="periodicidadPago" label="Periodicidad" value={formData.periodicidadPago} onChange={handleInputChange} type="select" options={[
-              { value: '', label: 'Seleccionar' }, { value: 'anual', label: 'Anual' }, { value: 'semestral', label: 'Semestral' }, { value: 'trimestral', label: 'Trimestral' }, { value: 'mensual', label: 'Mensual' },
-            ]} />
             <div>
               <Label htmlFor="medioPago" className="text-xs font-medium text-gray-900 dark:text-white">Medio</Label>
               <select id="medioPago" name="medioPago" value={formData.medioPago} onChange={handleInputChange} className={`mt-1 block w-full border rounded-md p-2 text-sm bg-white dark:bg-gray-800 ${errors.medioPago ? 'border-red-500' : ''}`}>
@@ -1997,15 +1994,27 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                 <option value="transferencia">Transferencia</option>
               </select>
             </div>
-            <FormField id="banco" name="banco" label="Banco" value={formData.banco || ''} onChange={handleInputChange} type="select" options={[{ value: '', label: 'Seleccionar' }, ...colombianBanks.map(b => ({ value: b, label: b })), { value: 'otro', label: 'Otro' }]} />
+
+            {/* Periodicidad: solo si NO es contado */}
+            {formData.formaPago && formData.formaPago !== 'contado' && (
+              <FormField id="periodicidadPago" name="periodicidadPago" label="Periodicidad" value={formData.periodicidadPago} onChange={handleInputChange} type="select" options={[
+                { value: '', label: 'Seleccionar' }, { value: 'anual', label: 'Anual' }, { value: 'semestral', label: 'Semestral' }, { value: 'trimestral', label: 'Trimestral' }, { value: 'mensual', label: 'Mensual' },
+              ]} />
+            )}
 
             {/* Cuotas: visible cuando forma de pago es fraccionado/financiado O medio es tarjeta */}
             {(formData.formaPago === 'fraccionado' || formData.formaPago === 'financiado' || formData.medioPago === 'tarjeta_credito') && (
               <div><Label htmlFor="cuotas" className="text-xs font-medium">Cuotas</Label><Input id="cuotas" name="cuotas" type="number" value={formData.cuotas || ''} onChange={handleCuotasChange} placeholder="Ej: 12" className="mt-1" /></div>
             )}
-            {/* Campos condicionales de medio de pago */}
+
+            {/* Banco: solo si el medio lo requiere */}
+            {['transferencia', 'pse', 'consignacion', 'debito', 'cheque', 'cheque_al_dia', 'cheque_postfechado'].includes(formData.medioPago) && (
+              <FormField id="banco" name="banco" label="Banco" value={formData.banco || ''} onChange={handleInputChange} type="select" options={[{ value: '', label: 'Seleccionar' }, ...colombianBanks.map(b => ({ value: b, label: b })), { value: 'otro', label: 'Otro' }]} />
+            )}
+
+            {/* Detalle dinámico según medio */}
             {formData.medioPago === 'tarjeta_credito' && (
-              <div><Label htmlFor="numeroTarjeta" className="text-xs font-medium">N° Tarjeta</Label><Input id="numeroTarjeta" name="numeroTarjeta" value={formData.numeroTarjeta || ''} onChange={handleCardNumberChange} placeholder="Últimos 4" className="mt-1" /></div>
+              <div><Label htmlFor="numeroTarjeta" className="text-xs font-medium">N° Tarjeta (últimos 4)</Label><Input id="numeroTarjeta" name="numeroTarjeta" value={formData.numeroTarjeta || ''} onChange={handleCardNumberChange} placeholder="0000" className="mt-1" /></div>
             )}
             {formData.medioPago === 'convenio' && (
               <div><Label htmlFor="agreement_term" className="text-xs font-medium">Convenio</Label>
@@ -2013,7 +2022,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                   <option value="">Seleccionar</option><option value="contado">Contado</option><option value="30_45">30-45 días</option><option value="30_60">30-60 días</option><option value="60_90">60-90 días</option>
                 </select></div>
             )}
-            {(formData.medioPago === 'cheque' || formData.medioPago === 'cheque_al_dia') && (
+            {(formData.medioPago === 'cheque' || formData.medioPago === 'cheque_al_dia' || formData.medioPago === 'cheque_postfechado') && (
               <div><Label htmlFor="cheque_number" className="text-xs font-medium"># Cheque</Label><Input id="cheque_number" name="cheque_number" value={(formData as any).cheque_number || ''} onChange={handleInputChange} placeholder="000000" className="mt-1" /></div>
             )}
             {formData.medioPago === 'debito' && (
@@ -2025,64 +2034,92 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         {/* === COMISIONES === */}
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Comisiones" icon="solar:money-bag-bold" />
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 -mt-1">
+            Los montos en gris se calculan automáticamente desde los porcentajes y la prima neta.
+          </p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Comisión principal */}
             <div>
               <Label htmlFor="porcentajeComision" className="text-xs font-medium">% Comisión</Label>
               <Input id="porcentajeComision" name="porcentajeComision" type="number" value={formData.porcentajeComision} onChange={handleInputChange} placeholder="15" className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="comision" className="text-xs font-medium">Comisión</Label>
-              <Input id="comision" name="comision" value={formatCurrencyDisplay(formData.comision)} readOnly className="mt-1 bg-gray-50 dark:bg-gray-800" />
+              <Label htmlFor="comision" className="text-xs font-medium text-gray-500">Comisión</Label>
+              <Input id="comision" name="comision" value={formatCurrencyDisplay(formData.comision)} readOnly className="mt-1 bg-gray-50 dark:bg-gray-800 cursor-not-allowed" />
             </div>
-            <div>
-              <Label htmlFor="ivaComision" className="text-xs font-medium">IVA Comisión</Label>
-              <Input id="ivaComision" name="ivaComision" value={formatCurrencyDisplay((formData as any).ivaComision)} onChange={handleCurrencyChange('ivaComision' as any)} placeholder="0" className="mt-1" />
-            </div>
+            {/* Sobrecomisión */}
             <div>
               <Label htmlFor="porcentajeSobrecomision" className="text-xs font-medium">% Sobrecomisión</Label>
               <Input id="porcentajeSobrecomision" name="porcentajeSobrecomision" type="number" value={(formData as any).porcentajeSobrecomision} onChange={handleInputChange} placeholder="0" className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="sobrecomision" className="text-xs font-medium">Sobrecomisión</Label>
-              <Input id="sobrecomision" name="sobrecomision" value={formatCurrencyDisplay((formData as any).sobrecomision)} onChange={handleCurrencyChange('sobrecomision' as any)} placeholder="0" className="mt-1" />
+              <Label htmlFor="sobrecomision" className="text-xs font-medium text-gray-500">Sobrecomisión</Label>
+              <Input id="sobrecomision" name="sobrecomision" value={formatCurrencyDisplay((formData as any).sobrecomision)} readOnly className="mt-1 bg-gray-50 dark:bg-gray-800 cursor-not-allowed" />
             </div>
+            {/* Comisión vendedor */}
             <div>
               <Label htmlFor="porcentajeComisionVendedor" className="text-xs font-medium">% Com. Vendedor</Label>
               <Input id="porcentajeComisionVendedor" name="porcentajeComisionVendedor" type="number" value={(formData as any).porcentajeComisionVendedor} onChange={handleInputChange} placeholder="0" className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="comisionVendedor" className="text-xs font-medium">Com. Vendedor</Label>
-              <Input id="comisionVendedor" name="comisionVendedor" value={formatCurrencyDisplay((formData as any).comisionVendedor)} onChange={handleCurrencyChange('comisionVendedor' as any)} placeholder="0" className="mt-1" />
+              <Label htmlFor="comisionVendedor" className="text-xs font-medium text-gray-500">Com. Vendedor</Label>
+              <Input id="comisionVendedor" name="comisionVendedor" value={formatCurrencyDisplay((formData as any).comisionVendedor)} readOnly className="mt-1 bg-gray-50 dark:bg-gray-800 cursor-not-allowed" />
             </div>
             <div>
-              <Label htmlFor="coinsuranceParticipation" className="text-xs font-medium">% Coaseguro</Label>
-              <Input id="coinsuranceParticipation" name="coinsuranceParticipation" type="number" value={(formData as any).coinsuranceParticipation} onChange={handleInputChange} placeholder="0" className="mt-1" />
+              <Label htmlFor="ivaComision" className="text-xs font-medium text-gray-500">IVA Comisión</Label>
+              <Input id="ivaComision" name="ivaComision" value={formatCurrencyDisplay((formData as any).ivaComision)} readOnly className="mt-1 bg-gray-50 dark:bg-gray-800 cursor-not-allowed" />
             </div>
           </div>
+
+          {/* Avanzado: coaseguro + retenciones */}
+          <details className="mt-3 group">
+            <summary className="cursor-pointer list-none flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 select-none">
+              <Icon icon="solar:alt-arrow-right-linear" className="group-open:rotate-90 transition-transform" width={12} />
+              Avanzado: coaseguro y retenciones
+            </summary>
+            <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <Label htmlFor="coinsuranceParticipation" className="text-xs font-medium">% Coaseguro</Label>
+                <Input id="coinsuranceParticipation" name="coinsuranceParticipation" type="number" value={(formData as any).coinsuranceParticipation} onChange={handleInputChange} placeholder="0" className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="porcentajeRetencion" className="text-xs font-medium">% Retención</Label>
+                <Input id="porcentajeRetencion" name="porcentajeRetencion" type="number" value={(formData as any).porcentajeRetencion || ''} onChange={handleInputChange} placeholder="0" className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="porcentajeReteiva" className="text-xs font-medium">% Reteiva</Label>
+                <Input id="porcentajeReteiva" name="porcentajeReteiva" type="number" value={(formData as any).porcentajeReteiva || ''} onChange={handleInputChange} placeholder="0" className="mt-1" />
+              </div>
+            </div>
+          </details>
         </div>
 
-        {/* === FINANCIACIÓN === */}
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-          <SectionHeader title="Financiación" icon="solar:chart-bold" />
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <Label htmlFor="porcentajeFinanciacion" className="text-xs font-medium">% Financiación</Label>
-              <Input id="porcentajeFinanciacion" name="porcentajeFinanciacion" type="number" value={(formData as any).porcentajeFinanciacion} onChange={handleInputChange} placeholder="0" className="mt-1" />
-            </div>
-            <div>
-              <Label htmlFor="valorFinanciacion" className="text-xs font-medium">Valor</Label>
-              <Input id="valorFinanciacion" name="valorFinanciacion" value={formatCurrencyDisplay((formData as any).valorFinanciacion)} onChange={handleCurrencyChange('valorFinanciacion' as any)} placeholder="0" className="mt-1" />
-            </div>
-            <div>
-              <Label htmlFor="totalPolizaFinanciada" className="text-xs font-medium">Total Financiada</Label>
-              <Input id="totalPolizaFinanciada" name="totalPolizaFinanciada" value={formatCurrencyDisplay((formData as any).totalPolizaFinanciada)} onChange={handleCurrencyChange('totalPolizaFinanciada' as any)} placeholder="0" className="mt-1" />
+        {/* === FINANCIACIÓN === (solo si formaPago = financiado) */}
+        {formData.formaPago === 'financiado' && (
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <SectionHeader title="Financiación" icon="solar:chart-bold" />
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="porcentajeFinanciacion" className="text-xs font-medium">% Financiación</Label>
+                <Input id="porcentajeFinanciacion" name="porcentajeFinanciacion" type="number" value={(formData as any).porcentajeFinanciacion} onChange={handleInputChange} placeholder="0" className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="valorFinanciacion" className="text-xs font-medium">Valor</Label>
+                <Input id="valorFinanciacion" name="valorFinanciacion" value={formatCurrencyDisplay((formData as any).valorFinanciacion)} onChange={handleCurrencyChange('valorFinanciacion' as any)} placeholder="0" className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="totalPolizaFinanciada" className="text-xs font-medium">Total Financiada</Label>
+                <Input id="totalPolizaFinanciada" name="totalPolizaFinanciada" value={formatCurrencyDisplay((formData as any).totalPolizaFinanciada)} onChange={handleCurrencyChange('totalPolizaFinanciada' as any)} placeholder="0" className="mt-1" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* === CARTERA E IMPUESTOS === */}
+        {/* === CARTERA (estado read-only derivado) === */}
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-          <SectionHeader title="Cartera e Impuestos" icon="solar:bill-list-bold" />
+          <SectionHeader title="Cartera" icon="solar:bill-list-bold" />
+
+          {/* Banner cuando crea póliza Pagada al inicio */}
           {(formData as any).estadoCartera === 'Pagado' && carteraPagadoChoice && (
             <div className="mb-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-lg p-2 text-xs text-green-800 dark:text-green-300 flex items-center justify-between gap-2">
               <span className="flex items-center gap-2">
@@ -2105,39 +2142,76 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
               </button>
             </div>
           )}
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <FormField id="estadoCartera" name="estadoCartera" label="Cartera" value={(formData as any).estadoCartera || ''} onChange={(e: any) => {
+
+          {/* Estado actual derivado (solo edit) */}
+          {isEditMode && (
+            <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-3 flex items-center justify-between gap-3 mb-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 font-medium mb-0.5">Estado actual</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {(formData as any).estadoCartera || 'Sin pagos asignados'}
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  Calculado desde los pagos registrados. Edita en el módulo Cartera.
+                </p>
+              </div>
+              <a
+                href={`/apps/cartera?poliza=${encodeURIComponent(formData.numeroPoliza || '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-[#573CFF] hover:underline font-medium flex items-center gap-1"
+              >
+                Ver en Cartera
+                <Icon icon="solar:arrow-right-up-linear" width={12} />
+              </a>
+            </div>
+          )}
+
+          {/* Solo en CREACIÓN: permitir marcar póliza como ya pagada */}
+          {!isEditMode && (
+            <FormField id="estadoCartera" name="estadoCartera" label="¿La póliza ya está pagada?" value={(formData as any).estadoCartera || ''} onChange={(e: any) => {
               const newVal = e.target.value;
               const prevVal = (formData as any).estadoCartera || '';
               handleInputChange(e);
               if (newVal === 'Pagado' && prevVal !== 'Pagado') {
-                // Abrir modal para preguntar tipo de recaudo
                 setEstadoCarteraPrev(prevVal);
                 setCarteraPagadoTipo('oficina');
                 setShowCarteraPagadoModal(true);
               } else if (newVal !== 'Pagado') {
-                // Si cambia a otro valor, limpiar la elección
                 setCarteraPagadoChoice(null);
               }
             }} type="select" options={[
-              { value: '', label: 'Seleccionar' }, { value: 'Sin pagos Asignados', label: 'Sin pagos' }, { value: 'Al día', label: 'Al día' }, { value: 'En mora', label: 'En mora' }, { value: 'Pagado', label: 'Pagado' },
+              { value: '', label: 'No, generar plan de pagos normal' },
+              { value: 'Pagado', label: 'Sí, ya fue pagada (genera recaudo)' },
             ]} />
-            <div>
-              <Label htmlFor="porcentajeImpuestoBomberos" className="text-xs font-medium">% Imp. Bomberos</Label>
-              <Input id="porcentajeImpuestoBomberos" name="porcentajeImpuestoBomberos" type="number" value={(formData as any).porcentajeImpuestoBomberos} onChange={handleInputChange} placeholder="0" className="mt-1" />
+          )}
+
+          {/* Avanzado: bomberos / moneda extranjera */}
+          <details className="mt-3 group">
+            <summary className="cursor-pointer list-none flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 select-none">
+              <Icon icon="solar:alt-arrow-right-linear" className="group-open:rotate-90 transition-transform" width={12} />
+              Avanzado: impuestos especiales y moneda
+            </summary>
+            <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <Label htmlFor="porcentajeImpuestoBomberos" className="text-xs font-medium">% Imp. Bomberos</Label>
+                <Input id="porcentajeImpuestoBomberos" name="porcentajeImpuestoBomberos" type="number" value={(formData as any).porcentajeImpuestoBomberos} onChange={handleInputChange} placeholder="0" className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="impuestoBomberos" className="text-xs font-medium text-gray-500">Imp. Bomberos</Label>
+                <Input id="impuestoBomberos" name="impuestoBomberos" value={formatCurrencyDisplay((formData as any).impuestoBomberos)} readOnly className="mt-1 bg-gray-50 dark:bg-gray-800 cursor-not-allowed" />
+              </div>
+              <FormField id="tipoMoneda" name="tipoMoneda" label="Moneda" value={(formData as any).tipoMoneda || ''} onChange={handleInputChange} type="select" options={[
+                { value: '', label: 'COP' }, { value: 'USD', label: 'USD' }, { value: 'EUR', label: 'EUR' },
+              ]} />
+              {(formData as any).tipoMoneda && (formData as any).tipoMoneda !== '' && (
+                <div>
+                  <Label htmlFor="tasaCambio" className="text-xs font-medium">Tasa Cambio</Label>
+                  <Input id="tasaCambio" name="tasaCambio" type="number" step="0.0001" value={(formData as any).tasaCambio} onChange={handleInputChange} placeholder="0.0000" className="mt-1" />
+                </div>
+              )}
             </div>
-            <div>
-              <Label htmlFor="impuestoBomberos" className="text-xs font-medium">Imp. Bomberos</Label>
-              <Input id="impuestoBomberos" name="impuestoBomberos" value={formatCurrencyDisplay((formData as any).impuestoBomberos)} onChange={handleCurrencyChange('impuestoBomberos' as any)} placeholder="0" className="mt-1" />
-            </div>
-            <FormField id="tipoMoneda" name="tipoMoneda" label="Moneda" value={(formData as any).tipoMoneda || ''} onChange={handleInputChange} type="select" options={[
-              { value: '', label: 'COP' }, { value: 'USD', label: 'USD' }, { value: 'EUR', label: 'EUR' },
-            ]} />
-            <div>
-              <Label htmlFor="tasaCambio" className="text-xs font-medium">Tasa Cambio</Label>
-              <Input id="tasaCambio" name="tasaCambio" type="number" step="0.0001" value={(formData as any).tasaCambio} onChange={handleInputChange} placeholder="0.0000" className="mt-1" />
-            </div>
-          </div>
+          </details>
         </div>
 
         {/* PDF Preview when active */}
