@@ -2525,7 +2525,7 @@ class PagoPolizaController extends Controller
         $currentRenovacion = (int) ($poliza->numero_renovacion ?? 0);
         $query = CobroComision::where('poliza_id', $poliza->id)
             ->where('numero_renovacion', $currentRenovacion)
-            ->where('estado', '!=', 'pagado');
+            ->where('estado', '!=', 'cobrado');
 
         if ($carteraItemId) {
             $query->where('cartera_item_id', $carteraItemId);
@@ -2537,7 +2537,7 @@ class PagoPolizaController extends Controller
             $cobro->update([
                 'monto_cobrado' => $monto,
                 'monto_pendiente' => 0,
-                'estado' => 'pagado',
+                'estado' => 'cobrado',
                 'fecha_cobro' => now()->toDateString(),
                 'observaciones' => trim(($cobro->observaciones ?? '') . ' [Auto-cobrada]'),
             ]);
