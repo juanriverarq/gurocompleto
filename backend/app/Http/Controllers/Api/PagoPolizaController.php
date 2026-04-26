@@ -2605,6 +2605,48 @@ class PagoPolizaController extends Controller
         } catch (\Throwable $e) {
             Log::warning("syncCarteraItems failed for poliza {$polizaId}: " . $e->getMessage());
         }
+
+        // Después de sincronizar items, refrescar polizas.payment_due_date
+        // con la fecha de la próxima cuota pendiente. Esto mantiene en sync
+        // el campo legacy que algunos reportes/UI todavía consultan.
+        $this->refreshPolizaPaymentDueDate($polizaId);
+    }
+
+    /**
+     * Actualiza polizas.payment_due_date con la fecha_limite_pago más temprana
+     * de los cartera_items pendientes (no recaudados, no anulados, no anticipos).
+     * Si no hay pendientes, deja el campo en null.
+     */
+    private function refreshPolizaPaymentDueDate(int $polizaId): void
+    {
+        try {
+            $proxima = DB::table('cartera_items')
+                ->where('poliza_id', $polizaId)
+                ->where('recaudado_en_oficina', false)
+                ->where('recaudado_aseguradora', false)
+                ->where('recibo_pago_directo', false)
+                ->where('es_anticipo', false)
+                ->where('recibo_anulado', false)
+                ->whereNotNull('fecha_limite_pago')
+                ->min('fecha_limite_pago');
+
+            $payload = ['payment_due_date' => $proxima];
+
+            // Estado de pago derivado simple
+            if ($proxima === null) {
+                // No hay cuotas pendientes → marcar como pagado si existían items
+                $tieneItems = DB::table('cartera_items')->where('poliza_id', $polizaId)->exists();
+                if ($tieneItems) {
+                    $payload['payment_status'] = 'paid';
+                }
+            } else {
+                $payload['payment_status'] = strtotime($proxima) < strtotime(date('Y-m-d')) ? 'overdue' : 'pending';
+            }
+
+            DB::table('polizas')->where('id', $polizaId)->update($payload);
+        } catch (\Throwable $e) {
+            Log::warning("refreshPolizaPaymentDueDate failed for poliza {$polizaId}: " . $e->getMessage());
+        }
     }
 
     /**
