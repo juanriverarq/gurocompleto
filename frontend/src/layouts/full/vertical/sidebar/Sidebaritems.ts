@@ -165,57 +165,19 @@ const BaseMenuitems: MenuitemsType[] = [
     id: uniqueId(),
     title: 'Cartera',
     icon: 'solar:wallet-bold-duotone',
-    children: [
-      {
-        id: uniqueId(),
-        title: 'Cartera Manual',
-        href: '/apps/cartera/clientes',
-      },
-      {
-        id: uniqueId(),
-        title: 'Cartera Aseguradoras',
-        href: '/apps/cartera/aseguradoras',
-      },
-    ],
+    href: '/apps/cartera',
   },
   {
     id: uniqueId(),
-    title: 'Recibos y Cuadre de Caja',
-    icon: 'solar:bill-list-bold-duotone',
-    href: '/apps/cartera/recibos-caja',
+    title: 'Cartera Aseguradoras',
+    icon: 'solar:buildings-3-bold-duotone',
+    href: '/apps/cartera/aseguradoras',
   },
   {
     id: uniqueId(),
-    title: 'Comisiones',
+    title: 'Comisiones Aseguradoras',
     icon: 'solar:dollar-minimalistic-bold-duotone',
-    children: [
-      {
-        id: uniqueId(),
-        title: 'Aseguradoras',
-        href: '/apps/comisiones/aseguradoras',
-      },
-      {
-        id: uniqueId(),
-        title: 'Por Póliza',
-        href: '/apps/comisiones/por-poliza',
-      },
-      {
-        id: uniqueId(),
-        title: 'Anticipos y Ajustes',
-        href: '/apps/comisiones/anticipos-ajustes',
-      },
-      {
-        id: uniqueId(),
-        title: 'Liquidar Vendedor / Asesor',
-        href: '/apps/cartera/liquidar-vendedores',
-      },
-    ],
-  },
-  {
-    id: uniqueId(),
-    title: 'Reportes Financieros',
-    icon: 'solar:chart-square-bold-duotone',
-    href: '/apps/cartera/reportes-financieros',
+    href: '/apps/comisiones/aseguradoras',
   },
 
   // ═══════════════════════════════════════════════════════════════

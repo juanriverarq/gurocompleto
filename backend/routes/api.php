@@ -2404,6 +2404,18 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
     Route::delete('/pagos/aseguradora/{pagoId}', [\App\Http\Controllers\Api\PagoPolizaController::class, 'revertirPagoAseguradora'])->whereNumber('pagoId');
 });
 
+// ═══════════════════════════════════════════════════════════════
+// CARTERA SIMPLE — API unificada para la nueva pantalla /apps/cartera
+// ═══════════════════════════════════════════════════════════════
+Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas/cartera-simple')->group(function () {
+    Route::get('/timeline', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'timeline']);
+    Route::get('/cuota/{itemId}', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'detalle'])->whereNumber('itemId');
+    Route::post('/cuota/{itemId}/pagar', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'pagar'])->whereNumber('itemId');
+    Route::post('/cuota/{itemId}/avisar', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'avisar'])->whereNumber('itemId');
+    Route::post('/cuota/{itemId}/anular', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'anular'])->whereNumber('itemId');
+    Route::post('/cuota/{itemId}/reactivar', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'reactivar'])->whereNumber('itemId');
+});
+
 // Siniestros - Documentos (alineado con siniestroDocumentsService)
 Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas')->group(function () {
     Route::prefix('siniestros')->group(function () {

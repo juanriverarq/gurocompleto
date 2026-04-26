@@ -5,7 +5,7 @@ import Dashboard3 from '../dashboard/Dashboard3';
 import VoiceAIDashboard from '../voice-ai/VoiceAIDashboard';
 import ConfiguracionMasiva from '../saas/configuracion-masiva/ConfiguracionMasiva';
 import Plantillas from '../apps/marketing/plantillas/Plantillas';
-import CarteraClientes from '../apps/cartera/CarteraClientes';
+import Cartera from '../apps/cartera/Cartera';
 import DashboardConfigModal from '../../components/modals/DashboardConfigModal';
 import { useWelcomeModal } from '../../hooks/useWelcomeModal';
 import type { TutorialSection } from '../../components/modals/OnboardingTutorialModal';
@@ -81,7 +81,7 @@ const CombinedDashboard = () => {
       id: 'cartera',
       name: 'Dashboard Cartera',
       icon: 'solar:wallet-bold-duotone',
-      component: CarteraClientes,
+      component: Cartera,
       enabled: false
     }
   ]);

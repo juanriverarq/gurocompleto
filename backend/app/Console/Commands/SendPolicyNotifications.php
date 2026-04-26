@@ -359,16 +359,30 @@ class SendPolicyNotifications extends Command
                     break;
 
                 case 'payment_due':
-                    $query->whereIn('payment_status', ['pending', 'overdue'])
-                        ->whereNotNull('payment_due_date')
-                        ->whereDate('payment_due_date', '=', $targetDate)
-                        // Excluir pólizas marcadas como Pagado en Cartera e Impuestos
-                        ->where(function($q) {
-                            $q->whereNull('estado_cartera')
-                              ->orWhereRaw('LOWER(TRIM(estado_cartera)) != ?', ['pagado']);
-                        });
-                    
-                    $this->line("  🔍 Buscando pólizas con pago venciendo el: {$targetDate->format('Y-m-d')} (en {$days} días, excluyendo cartera Pagada)");
+                    // NUEVO: leer de cartera_items (fuente de verdad por cuota)
+                    // en lugar del campo legacy polizas.payment_due_date.
+                    $polizaIdsConCuotaVencible = \DB::table('cartera_items')
+                        ->where('broker_id', $config->broker_id)
+                        ->whereDate('fecha_limite_pago', '=', $targetDate)
+                        ->where('recaudado_en_oficina', false)
+                        ->where('recaudado_aseguradora', false)
+                        ->where('recibo_pago_directo', false)
+                        ->where('es_anticipo', false)
+                        ->where('recibo_anulado', false)
+                        ->whereNotNull('poliza_id')
+                        ->pluck('poliza_id')
+                        ->unique()
+                        ->values()
+                        ->all();
+
+                    if (empty($polizaIdsConCuotaVencible)) {
+                        $this->line("  🔍 Sin cuotas en cartera_items con fecha_limite_pago = {$targetDate->format('Y-m-d')}");
+                        // Forzar query vacío
+                        $query->whereRaw('1 = 0');
+                    } else {
+                        $query->whereIn('id', $polizaIdsConCuotaVencible);
+                        $this->line("  🔍 " . count($polizaIdsConCuotaVencible) . " pólizas con cuota venciendo el {$targetDate->format('Y-m-d')} (en {$days} días)");
+                    }
                     break;
             }
 

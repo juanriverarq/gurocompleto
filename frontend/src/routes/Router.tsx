@@ -209,20 +209,11 @@ const SeguridadDosFactores = Loadable(
 );
 const CopiasSeguridad = Loadable(lazyRetry(() => import('../views/apps/admin/backup/CopiasSeguridad')));
 
-// Comisiones y Cartera Apps
-const ComisionesPorPoliza = Loadable(
-  lazyRetry(() => import('../views/apps/comisiones/ComisionesPorPoliza')),
-);
-const AnticiposAjustes = Loadable(lazyRetry(() => import('../views/apps/comisiones/AnticiposAjustes')));
-const CarteraClientes = Loadable(lazyRetry(() => import('../views/apps/cartera/CarteraClientes')));
+// Cartera unificada (nueva, reemplaza CarteraClientes/ComisionesPorPoliza/RecibosCuadreCaja)
+const Cartera = Loadable(lazyRetry(() => import('../views/apps/cartera/Cartera')));
+// Pilotos — NO TOCAR
 const CarteraAseguradoras = Loadable(lazyRetry(() => import('../views/apps/cartera-aseguradoras/CarteraAseguradoras')));
 const ComisionesAseguradoras = Loadable(lazyRetry(() => import('../views/apps/comisiones-aseguradoras/ComisionesAseguradoras')));
-const ReciboCaja = Loadable(lazyRetry(() => import('../views/apps/cartera/ReciboCaja')));
-const RecibosCuadreCaja = Loadable(lazyRetry(() => import('../views/apps/cartera/RecibosCuadreCaja')));
-const ReportesFinancieros = Loadable(
-  lazyRetry(() => import('../views/apps/cartera/ReportesFinancieros')),
-);
-const LiquidarVendedores = Loadable(lazyRetry(() => import('../views/apps/cartera/LiquidarVendedores')));
 
 // Billing Apps
 const MisFacturas = Loadable(lazyRetry(() => import('../views/apps/billing/MisFacturas')));
@@ -402,15 +393,15 @@ const Router = [
       { path: '/apps/admin/backup', element: <CopiasSeguridad /> },
       { path: '/apps/admin/importacion-masiva', element: <ImportacionMasiva /> },
       { path: '/apps/admin/importacion-multiple', element: <ImportacionMultiple /> },
-      // Comisiones y Cartera Routes
-      { path: '/apps/comisiones/por-poliza', element: <ComisionesPorPoliza /> },
-      { path: '/apps/comisiones/aseguradoras', element: <ComisionesAseguradoras /> },
-      { path: '/apps/comisiones/anticipos-ajustes', element: <AnticiposAjustes /> },
-      { path: '/apps/cartera/clientes', element: <CarteraClientes /> },
+      // Cartera unificada (nueva)
+      { path: '/apps/cartera', element: <Cartera /> },
+      // Pilotos (NO tocar)
       { path: '/apps/cartera/aseguradoras', element: <CarteraAseguradoras /> },
-      { path: '/apps/cartera/recibos-caja', element: <RecibosCuadreCaja /> },
-      { path: '/apps/cartera/liquidar-vendedores', element: <LiquidarVendedores /> },
-      { path: '/apps/cartera/reportes-financieros', element: <ReportesFinancieros /> },
+      { path: '/apps/comisiones/aseguradoras', element: <ComisionesAseguradoras /> },
+      // Redirects para URLs viejas
+      { path: '/apps/cartera/clientes', element: <Cartera /> },
+      { path: '/apps/cartera/recibos-caja', element: <Cartera /> },
+      { path: '/apps/comisiones/por-poliza', element: <Cartera /> },
 
       // Billing Routes
       { path: '/apps/billing/facturas', element: <MisFacturas /> },
@@ -487,8 +478,6 @@ const Router = [
     children: [
       // Flow Editor - Full screen sin header
       { path: '/apps/whatsapp/chatbots/flujos', element: <ChatbotFlowEditor /> },
-      // Recibo de Caja - Sin header para impresión
-      { path: '/apps/cartera/recibo-caja/:id', element: <ReciboCaja /> },
       // Redirect público a la ubicación en dashboard
       { path: '/ayuda/faq', element: <Navigate to="/apps/ayuda/faq" /> },
       {
