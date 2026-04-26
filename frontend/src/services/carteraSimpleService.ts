@@ -130,4 +130,27 @@ export const carteraSimpleService = {
     const res = await api.post(`/saas/cartera-simple/cuota/${itemId}/revertir-paso`);
     return res.data;
   },
+
+  /**
+   * Marcar TODA la póliza (todas sus cuotas) como pagada al 100%.
+   * Modo:
+   *  - 'oficina'    → solo crea recaudos de oficina (queda "por pagar a aseguradora")
+   *  - 'aseguradora_directo' → solo pago directo a aseguradora (sin pasar por oficina)
+   *  - 'completo'   → recaudo oficina + pago aseguradora + cobro comisión (cerrada)
+   */
+  async marcarPolizaPagada(polizaId: number | string, modo: 'oficina' | 'aseguradora_directo' | 'completo' = 'completo') {
+    const body: any = {};
+    if (modo === 'oficina') {
+      body.oficina = true;
+      body.aseguradora = false;
+    } else if (modo === 'aseguradora_directo') {
+      body.oficina = false;
+      body.aseguradora = true;
+    } else {
+      body.oficina = true;
+      body.aseguradora = true;
+    }
+    const res = await api.post(`/saas/polizas/${polizaId}/marcar-pagada`, body);
+    return res.data;
+  },
 };

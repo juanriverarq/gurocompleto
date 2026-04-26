@@ -20,6 +20,7 @@ import CardBox from 'src/components/shared/CardBox';
 import FormField from 'src/components/shared/FormField';
 import { testPdfJs } from 'src/utils/pdfSetup';
 import { polizaService, type Poliza } from 'src/services/polizaService';
+import { carteraSimpleService } from 'src/services/carteraSimpleService';
 import { useToast } from 'src/hooks/use-toast';
 import usePolizaValidation, { type PolizaFormData } from 'src/hooks/usePolizaValidation';
 import saasApi from 'src/services/saasApi';
@@ -477,6 +478,42 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   // Choice persistida para enviarse en el payload de guardado.
   // null = el usuario aún no confirmó / no aplica.
   const [carteraPagadoChoice, setCarteraPagadoChoice] = useState<'oficina' | 'aseguradora' | null>(null);
+
+  // Quick-action: marcar póliza como pagada (modo edición)
+  const [marcandoPagada, setMarcandoPagada] = useState(false);
+  const [showQuickPagada, setShowQuickPagada] = useState(false);
+
+  const handleMarcarPolizaPagada = async (modo: 'oficina' | 'aseguradora_directo' | 'completo') => {
+    if (!polizaToEdit?.id) return;
+    const labels = {
+      oficina: 'recaudo en oficina (queda por pagar a aseguradora)',
+      aseguradora_directo: 'pago directo a la aseguradora',
+      completo: 'pago al 100% (oficina + aseguradora + comisión)',
+    };
+    if (!window.confirm(`¿Marcar la póliza como pagada con ${labels[modo]}?\n\nEsto afectará todas las cuotas activas.`)) return;
+    setMarcandoPagada(true);
+    try {
+      const res = await carteraSimpleService.marcarPolizaPagada(polizaToEdit.id, modo);
+      if (res.success) {
+        toast({
+          title: 'Póliza marcada como pagada',
+          description: res.message || `Se procesaron ${res.data?.items_procesados || 0} cuota(s)`,
+        });
+        setShowQuickPagada(false);
+        if (onSaveSuccess) onSaveSuccess();
+      } else {
+        toast({ title: 'Error', description: res.message || 'No se pudo procesar', variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e?.response?.data?.message || e?.message || 'No se pudo procesar',
+        variant: 'destructive',
+      });
+    } finally {
+      setMarcandoPagada(false);
+    }
+  };
 
   // Beneficiarios dinámicos
   type Beneficiario = { nombre: string; documento: string; parentesco: string; porcentaje: string };
@@ -2145,25 +2182,82 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
 
           {/* Estado actual derivado (solo edit) */}
           {isEditMode && (
-            <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-3 flex items-center justify-between gap-3 mb-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 font-medium mb-0.5">Estado actual</p>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {(formData as any).estadoCartera || 'Sin pagos asignados'}
-                </p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                  Calculado desde los pagos registrados. Edita en el módulo Cartera.
-                </p>
+            <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-3 mb-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 font-medium mb-0.5">Estado actual</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {(formData as any).estadoCartera || 'Sin pagos asignados'}
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    Calculado desde los pagos registrados.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickPagada((v) => !v)}
+                    disabled={marcandoPagada}
+                    className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-60 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400 font-medium transition-colors"
+                    title="Marcar todas las cuotas como pagadas"
+                  >
+                    <Icon icon={marcandoPagada ? 'svg-spinners:ring-resize' : 'solar:check-circle-bold'} width={14} />
+                    {marcandoPagada ? 'Procesando...' : 'Marcar pagada'}
+                    {!marcandoPagada && <Icon icon={showQuickPagada ? 'solar:alt-arrow-up-linear' : 'solar:alt-arrow-down-linear'} width={12} />}
+                  </button>
+                  <a
+                    href={`/apps/cartera?poliza=${encodeURIComponent(formData.numeroPoliza || '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-[#573CFF] hover:underline font-medium flex items-center gap-1"
+                  >
+                    Ver en Cartera
+                    <Icon icon="solar:arrow-right-up-linear" width={12} />
+                  </a>
+                </div>
               </div>
-              <a
-                href={`/apps/cartera?poliza=${encodeURIComponent(formData.numeroPoliza || '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-[#573CFF] hover:underline font-medium flex items-center gap-1"
-              >
-                Ver en Cartera
-                <Icon icon="solar:arrow-right-up-linear" width={12} />
-              </a>
+
+              {/* Pop-out de opciones de marcar pagada */}
+              {showQuickPagada && !marcandoPagada && (
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">Selecciona el escenario que aplica:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleMarcarPolizaPagada('completo')}
+                      className="flex flex-col items-start gap-0.5 rounded-lg border border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10 px-3 py-2 text-left transition-colors"
+                    >
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                        <Icon icon="solar:check-square-bold" width={14} />
+                        100% pagada
+                      </span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400">Recaudo + pago aseguradora + comisión cobrada</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMarcarPolizaPagada('oficina')}
+                      className="flex flex-col items-start gap-0.5 rounded-lg border border-blue-500/40 bg-blue-500/5 hover:bg-blue-500/10 px-3 py-2 text-left transition-colors"
+                    >
+                      <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
+                        <Icon icon="solar:buildings-bold" width={14} />
+                        Solo oficina
+                      </span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400">Cliente pagó. Queda por transferir a aseguradora.</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMarcarPolizaPagada('aseguradora_directo')}
+                      className="flex flex-col items-start gap-0.5 rounded-lg border border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 px-3 py-2 text-left transition-colors"
+                    >
+                      <span className="text-xs font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1.5">
+                        <Icon icon="solar:card-send-bold" width={14} />
+                        Pago directo
+                      </span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400">Cliente pagó directo a la aseguradora.</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
