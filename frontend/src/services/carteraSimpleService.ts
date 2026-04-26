@@ -125,4 +125,9 @@ export const carteraSimpleService = {
     const res = await api.post(`/saas/cartera-simple/cuota/${itemId}/reactivar`);
     return res.data;
   },
+
+  async revertirPaso(itemId: number) {
+    const res = await api.post(`/saas/cartera-simple/cuota/${itemId}/revertir-paso`);
+    return res.data;
+  },
 };

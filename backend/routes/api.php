@@ -2416,6 +2416,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
     Route::post('/cuota/{itemId}/avisar', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'avisar'])->whereNumber('itemId');
     Route::post('/cuota/{itemId}/anular', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'anular'])->whereNumber('itemId');
     Route::post('/cuota/{itemId}/reactivar', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'reactivar'])->whereNumber('itemId');
+    Route::post('/cuota/{itemId}/revertir-paso', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'revertirPaso'])->whereNumber('itemId');
 });
 
 // Siniestros - Documentos (alineado con siniestroDocumentsService)

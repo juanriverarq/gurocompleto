@@ -300,7 +300,7 @@ const Cartera: React.FC = () => {
 
   const anular = async (cuota: Cuota, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!confirm(`¿Anular cuota ${cuota.poliza_numero}?`)) return;
+    if (!confirm(`¿Anular cuota ${cuota.poliza_numero}?\n\nEsto la marcará como anulada permanentemente.`)) return;
     try {
       const res = await carteraSimpleService.anular(cuota.id);
       if (res.success) {
@@ -315,6 +315,54 @@ const Cartera: React.FC = () => {
       });
     }
   };
+
+  // Revertir el último paso del flujo
+  const revertir = async (cuota: Cuota, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const pasoLabel = cuota.comisionada
+      ? 'devolver la comisión a "por cobrar"'
+      : cuota.recaudado_aseguradora
+      ? 'revertir el pago a aseguradora'
+      : cuota.recaudado_en_oficina
+      ? 'revertir el recaudo de oficina'
+      : null;
+    if (!pasoLabel) {
+      toast({
+        title: 'Sin paso para revertir',
+        description: 'Esta cuota está pendiente. Usa "Anular" desde el detalle.',
+      });
+      return;
+    }
+    if (!confirm(`¿${pasoLabel.charAt(0).toUpperCase() + pasoLabel.slice(1)}?`)) return;
+    try {
+      const res = await carteraSimpleService.revertirPaso(cuota.id);
+      if (res.success) {
+        toast({ title: 'Listo', description: res.message });
+        await cargar(search, activeTab);
+      } else {
+        toast({ title: 'Error', description: res.message || 'No se pudo revertir', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err?.response?.data?.message || 'No se pudo revertir',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // ¿La cuota tiene paso para revertir?
+  const tieneRevertible = (c: Cuota) =>
+    !c.recibo_anulado && (c.comisionada || c.recaudado_aseguradora || c.recaudado_en_oficina);
+
+  const labelRevertir = (c: Cuota) =>
+    c.comisionada
+      ? 'Descomisionar'
+      : c.recaudado_aseguradora
+      ? 'Revertir pago aseg.'
+      : c.recaudado_en_oficina
+      ? 'Revertir recaudo'
+      : 'Revertir';
 
   // Stats por tab
   const tabCounts = useMemo(() => {
@@ -447,43 +495,68 @@ const Cartera: React.FC = () => {
           </div>
 
           {/* Footer actions */}
-          <div className="px-6 py-4 border-t border-gray-200 dark:border-neutral-800/60 flex items-center justify-end gap-2 flex-wrap">
-            {r.cliente_id && (
-              <button
-                onClick={() => { setDetailRow(null); nav(`/apps/seguros/clientes?search=${encodeURIComponent(r.cliente_documento || '')}`); }}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
-              >
-                <Icon icon="solar:user-linear" width={14} />
-                Ver cliente
-              </button>
-            )}
-            {r.poliza_id && (
-              <button
-                onClick={() => { setDetailRow(null); nav(`/apps/seguros/polizas/editar/${r.poliza_id}`); }}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
-              >
-                <Icon icon="solar:shield-check-linear" width={14} />
-                Ver póliza
-              </button>
-            )}
-            {!r.recaudado_en_oficina && !r.recibo_anulado && r.poliza_id && (
-              <button
-                onClick={(e) => avisar(r, e)}
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium transition-colors"
-              >
-                <Icon icon="solar:chat-round-call-bold" width={14} />
-                WhatsApp
-              </button>
-            )}
-            {primary && (
-              <button
-                onClick={(e) => openPayModal(r, primary.action, e)}
-                className="flex items-center gap-1.5 rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] px-4 py-2 text-xs text-white font-medium transition-colors"
-              >
-                <Icon icon={primary.icon} width={14} />
-                {primary.label}
-              </button>
-            )}
+          <div className="px-6 py-4 border-t border-gray-200 dark:border-neutral-800/60 flex items-center justify-between gap-2 flex-wrap">
+            {/* Acciones secundarias a la izquierda */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {tieneRevertible(r) && (
+                <button
+                  onClick={(e) => { revertir(r, e); setDetailRow(null); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 font-medium transition-colors"
+                  title={labelRevertir(r)}
+                >
+                  <Icon icon="solar:undo-left-bold" width={14} />
+                  {labelRevertir(r)}
+                </button>
+              )}
+              {!r.recaudado_en_oficina && !r.recaudado_aseguradora && !r.comisionada && !r.recibo_anulado && (
+                <button
+                  onClick={(e) => { anular(r, e); setDetailRow(null); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 px-3 py-2 text-xs text-red-600 dark:text-red-400 font-medium transition-colors"
+                >
+                  <Icon icon="solar:close-circle-bold" width={14} />
+                  Anular
+                </button>
+              )}
+            </div>
+            {/* Acciones primarias a la derecha */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {r.cliente_id && (
+                <button
+                  onClick={() => { setDetailRow(null); nav(`/apps/seguros/clientes?search=${encodeURIComponent(r.cliente_documento || '')}`); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
+                >
+                  <Icon icon="solar:user-linear" width={14} />
+                  Cliente
+                </button>
+              )}
+              {r.poliza_id && (
+                <button
+                  onClick={() => { setDetailRow(null); nav(`/apps/seguros/polizas/editar/${r.poliza_id}`); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
+                >
+                  <Icon icon="solar:shield-check-linear" width={14} />
+                  Póliza
+                </button>
+              )}
+              {!r.recaudado_en_oficina && !r.recibo_anulado && r.poliza_id && (
+                <button
+                  onClick={(e) => avisar(r, e)}
+                  className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium transition-colors"
+                >
+                  <Icon icon="solar:chat-round-call-bold" width={14} />
+                  WhatsApp
+                </button>
+              )}
+              {primary && (
+                <button
+                  onClick={(e) => openPayModal(r, primary.action, e)}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] px-4 py-2 text-xs text-white font-medium transition-colors"
+                >
+                  <Icon icon={primary.icon} width={14} />
+                  {primary.label}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>,
@@ -698,13 +771,13 @@ const Cartera: React.FC = () => {
                               <Icon icon="solar:chat-round-call-bold" width={12} />
                             </button>
                           )}
-                          {!row.recibo_anulado && (
+                          {tieneRevertible(row) && (
                             <button
-                              onClick={(e) => anular(row, e)}
-                              className="w-7 h-7 rounded-md border border-gray-200 dark:border-neutral-800 hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-600 dark:hover:text-red-400 text-gray-400 dark:text-neutral-500 flex items-center justify-center transition-colors"
-                              title="Anular"
+                              onClick={(e) => revertir(row, e)}
+                              className="w-7 h-7 rounded-md border border-gray-200 dark:border-neutral-800 hover:bg-amber-500/10 hover:border-amber-500/40 hover:text-amber-600 dark:hover:text-amber-400 text-gray-400 dark:text-neutral-500 flex items-center justify-center transition-colors"
+                              title={labelRevertir(row)}
                             >
-                              <Icon icon="solar:close-circle-bold" width={12} />
+                              <Icon icon="solar:undo-left-bold" width={12} />
                             </button>
                           )}
                         </div>

@@ -417,6 +417,184 @@ class CarteraSimpleController extends Controller
     }
 
     /**
+     * Revertir el último paso del flujo de la cuota (un nivel atrás).
+     * POST /api/saas/cartera-simple/cuota/{itemId}/revertir-paso
+     *
+     * Lógica:
+     *  - comisionada=true → revierte el cobro de comisión (vuelve a "comisión por cobrar")
+     *  - recaudado_aseguradora=true → revierte el pago a aseguradora (vuelve a "por pagar aseg")
+     *  - recaudado_en_oficina=true → revierte el recaudo de oficina (vuelve a "pendiente")
+     *  - sin estado → no hay nada que revertir (devuelve 422)
+     */
+    public function revertirPaso(Request $request, int $itemId)
+    {
+        $brokerId = Auth::user()->broker_id ?? null;
+        if (!$brokerId) {
+            return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
+        }
+
+        $ci = DB::table('cartera_items')->where('id', $itemId)->where('broker_id', $brokerId)->first();
+        if (!$ci) {
+            return response()->json(['success' => false, 'message' => 'Cuota no encontrada'], 404);
+        }
+
+        if (!$ci->poliza_id) {
+            return response()->json(['success' => false, 'message' => 'Cuota sin póliza vinculada'], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $polizaId = $ci->poliza_id;
+            $pasoRevertido = null;
+
+            // ── Caso 1: comisionada → revertir cobro de comisión ──
+            if ($ci->comisionada) {
+                $cobros = \App\Models\CobroComision::where('poliza_id', $polizaId)
+                    ->where(function ($q) use ($itemId) {
+                        $q->where('cartera_item_id', $itemId)
+                          ->orWhereNull('cartera_item_id');
+                    })
+                    ->where('estado', 'cobrado')
+                    ->get();
+
+                foreach ($cobros as $c) {
+                    $c->update([
+                        'monto_cobrado' => 0,
+                        'monto_pendiente' => $c->monto_comision,
+                        'estado' => 'pendiente',
+                        'fecha_cobro' => null,
+                        'observaciones' => trim(($c->observaciones ?? '') . ' [Revertido manualmente]'),
+                    ]);
+                }
+                $pasoRevertido = 'comision';
+            }
+            // ── Caso 2: recaudado_aseguradora → revertir pago aseg ──
+            elseif ($ci->recaudado_aseguradora) {
+                // Borrar pagos a aseguradora de este cartera_item con estado pagado
+                $pagosAseg = \App\Models\PagoPoliza::where('poliza_id', $polizaId)
+                    ->where(function ($q) use ($itemId) {
+                        $q->where('cartera_item_id', $itemId)
+                          ->orWhereNull('cartera_item_id');
+                    })
+                    ->where('tipo_recaudo', 'aseguradora')
+                    ->where('estado', 'pagado')
+                    ->get();
+
+                foreach ($pagosAseg as $p) {
+                    $p->delete();
+                }
+
+                // Eliminar también los cobros de comisión asociados (no debería haber pagados aquí, ya bloqueamos)
+                \App\Models\CobroComision::where('poliza_id', $polizaId)
+                    ->where(function ($q) use ($itemId) {
+                        $q->where('cartera_item_id', $itemId)
+                          ->orWhereNull('cartera_item_id');
+                    })
+                    ->where('estado', '!=', 'cobrado')
+                    ->delete();
+
+                // Re-crear el pago pendiente a aseguradora si la oficina aún tiene recaudo
+                if ($ci->recaudado_en_oficina) {
+                    $primaNeta = (float) ($ci->valor_neto_a_pagar ?: $ci->prima_total_pago);
+                    if ($primaNeta > 0) {
+                        \App\Models\PagoPoliza::create([
+                            'broker_id' => $brokerId,
+                            'poliza_id' => $polizaId,
+                            'cliente_id' => $ci->cliente_id,
+                            'cartera_item_id' => $itemId,
+                            'monto_total' => $primaNeta,
+                            'monto_pagado' => 0,
+                            'monto_pendiente' => $primaNeta,
+                            'tipo_recaudo' => 'aseguradora',
+                            'estado' => 'pendiente',
+                            'fecha_pago' => now(),
+                            'observaciones' => 'Pago a aseguradora pendiente (revertido)',
+                        ]);
+                    }
+                }
+
+                $pasoRevertido = 'aseguradora';
+            }
+            // ── Caso 3: recaudado_en_oficina → revertir recaudo oficina ──
+            elseif ($ci->recaudado_en_oficina) {
+                // Borrar pagos de oficina + pagos aseg pendientes + cobros comisión pendientes
+                $pagosIds = \App\Models\PagoPoliza::where('poliza_id', $polizaId)
+                    ->where(function ($q) use ($itemId) {
+                        $q->where('cartera_item_id', $itemId)
+                          ->orWhereNull('cartera_item_id');
+                    })
+                    ->pluck('id')
+                    ->all();
+
+                // Anular recibos asociados
+                if (!empty($pagosIds)) {
+                    \App\Models\ReciboCaja::whereIn('pago_poliza_id', $pagosIds)
+                        ->update([
+                            'recibo_anulado' => true,
+                            'activo' => false,
+                            'observaciones' => DB::raw("CONCAT(COALESCE(observaciones, ''), ' [Anulado por revertir recaudo]')"),
+                        ]);
+                }
+
+                \App\Models\PagoPoliza::where('poliza_id', $polizaId)
+                    ->where(function ($q) use ($itemId) {
+                        $q->where('cartera_item_id', $itemId)
+                          ->orWhereNull('cartera_item_id');
+                    })
+                    ->delete();
+
+                \App\Models\CobroComision::where('poliza_id', $polizaId)
+                    ->where(function ($q) use ($itemId) {
+                        $q->where('cartera_item_id', $itemId)
+                          ->orWhereNull('cartera_item_id');
+                    })
+                    ->where('estado', '!=', 'cobrado')
+                    ->delete();
+
+                $pasoRevertido = 'oficina';
+            } else {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Esta cuota está pendiente — no hay paso que revertir. Usa "Anular" si deseas anularla.',
+                ], 422);
+            }
+
+            DB::commit();
+
+            // Sync para reflejar el nuevo estado
+            $pagoCtrl = app(PagoPolizaController::class);
+            $sync = new \ReflectionMethod($pagoCtrl, 'syncCarteraItems');
+            $sync->setAccessible(true);
+            $sync->invoke($pagoCtrl, (int) $polizaId, null, $itemId);
+
+            $ciAfter = DB::table('cartera_items')->where('id', $itemId)->first();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Paso revertido: ' . match ($pasoRevertido) {
+                    'comision' => 'comisión devuelta a "por cobrar"',
+                    'aseguradora' => 'pago a aseguradora revertido',
+                    'oficina' => 'recaudo de oficina revertido',
+                    default => 'paso anterior',
+                },
+                'paso' => $pasoRevertido,
+                'cuota' => $ciAfter,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('CarteraSimple::revertirPaso failed', [
+                'item' => $itemId, 'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al revertir: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Reactivar cuota.
      * POST /api/saas/cartera-simple/cuota/{itemId}/reactivar
      */
