@@ -9,6 +9,7 @@ import {
   type GroupKey,
   type TimelineStats,
   type Accion,
+  type CarteraSettings,
 } from 'src/services/carteraSimpleService';
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -287,6 +288,10 @@ const Cartera: React.FC = () => {
 
   // Modal de pago
   const [payModal, setPayModal] = useState<{ cuota: Cuota; action: ActionKey } | null>(null);
+  // Settings
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<CarteraSettings>({ auto_cobrar_comision: false });
+  const [savingSettings, setSavingSettings] = useState(false);
   const [paying, setPaying] = useState(false);
   const [payForm, setPayForm] = useState({
     monto: '',
@@ -318,7 +323,26 @@ const Cartera: React.FC = () => {
 
   useEffect(() => {
     cargar(search);
+    // Cargar settings al montar
+    carteraSimpleService.getSettings().then((res) => {
+      if (res.success) setSettings(res.data);
+    }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const guardarSettings = async (next: Partial<CarteraSettings>) => {
+    setSavingSettings(true);
+    try {
+      const res = await carteraSimpleService.updateSettings(next);
+      if (res.success) {
+        setSettings(res.data);
+        toast({ title: 'Preferencia guardada' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: 'No se pudo guardar', variant: 'destructive' });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // Debounce search
   useEffect(() => {
@@ -485,7 +509,7 @@ const Cartera: React.FC = () => {
             Todas tus cuotas pendientes en un solo lugar
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Link
             to="/apps/cartera/aseguradoras"
             className="text-xs text-blue-600 hover:underline flex items-center gap-1"
@@ -493,6 +517,14 @@ const Cartera: React.FC = () => {
             <Icon icon="solar:buildings-bold" width={14} />
             Cartera Aseguradoras
           </Link>
+          <Button
+            color="light"
+            size="xs"
+            onClick={() => setSettingsOpen(true)}
+            title="Preferencias de cartera"
+          >
+            <Icon icon="solar:settings-bold-duotone" width={16} />
+          </Button>
         </div>
       </div>
 
@@ -733,6 +765,51 @@ const Cartera: React.FC = () => {
           )}
           <Button color="gray" onClick={() => setPayModal(null)} disabled={paying}>
             Cancelar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal de Settings */}
+      <Modal show={settingsOpen} onClose={() => setSettingsOpen(false)} size="md">
+        <Modal.Header>
+          <div className="flex items-center gap-2">
+            <Icon icon="solar:settings-bold-duotone" className="text-primary" width={22} />
+            Preferencias de cartera
+          </div>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+              <input
+                type="checkbox"
+                checked={settings.auto_cobrar_comision}
+                disabled={savingSettings}
+                onChange={(e) => guardarSettings({ auto_cobrar_comision: e.target.checked })}
+                className="mt-1 w-5 h-5 rounded text-primary focus:ring-primary"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900 dark:text-white">
+                  Cobrar comisión automáticamente
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  Cuando registres un pago a la aseguradora, la comisión se marca como cobrada
+                  inmediatamente. Te ahorra un click extra por cada póliza.
+                </div>
+              </div>
+            </label>
+
+            <div className="text-xs text-gray-500 bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg flex items-start gap-2">
+              <Icon icon="solar:info-circle-bold" className="text-blue-500 shrink-0 mt-0.5" width={16} />
+              <span>
+                Las preferencias se aplican a partir del próximo registro. Los pagos anteriores
+                no se modifican.
+              </span>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="primary" onClick={() => setSettingsOpen(false)} className="!bg-primary hover:!bg-primaryemphasis">
+            Listo
           </Button>
         </Modal.Footer>
       </Modal>

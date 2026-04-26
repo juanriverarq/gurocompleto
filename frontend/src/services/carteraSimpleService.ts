@@ -81,9 +81,23 @@ export interface PagarPayload {
   observaciones?: string;
 }
 
+export interface CarteraSettings {
+  auto_cobrar_comision: boolean;
+}
+
 export const carteraSimpleService = {
   async timeline(params?: { search?: string; group?: GroupKey; limit?: number }): Promise<TimelineResponse> {
     const res = await api.get('/saas/cartera-simple/timeline', { params });
+    return res.data;
+  },
+
+  async getSettings(): Promise<{ success: boolean; data: CarteraSettings }> {
+    const res = await api.get('/saas/cartera-simple/settings');
+    return res.data;
+  },
+
+  async updateSettings(settings: Partial<CarteraSettings>): Promise<{ success: boolean; data: CarteraSettings }> {
+    const res = await api.post('/saas/cartera-simple/settings', settings);
     return res.data;
   },
 

@@ -2409,6 +2409,8 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
 // ═══════════════════════════════════════════════════════════════
 Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas/cartera-simple')->group(function () {
     Route::get('/timeline', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'timeline']);
+    Route::get('/settings', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'getSettings']);
+    Route::post('/settings', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'updateSettings']);
     Route::get('/cuota/{itemId}', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'detalle'])->whereNumber('itemId');
     Route::post('/cuota/{itemId}/pagar', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'pagar'])->whereNumber('itemId');
     Route::post('/cuota/{itemId}/avisar', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'avisar'])->whereNumber('itemId');

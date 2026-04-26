@@ -426,6 +426,58 @@ class CarteraSimpleController extends Controller
     }
 
     /**
+     * Leer configuración de cartera del broker.
+     * GET /api/saas/cartera-simple/settings
+     */
+    public function getSettings()
+    {
+        $brokerId = Auth::user()->broker_id ?? null;
+        if (!$brokerId) {
+            return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
+        }
+        $broker = \App\Models\Broker::find($brokerId);
+        $settings = $broker?->settings ?? [];
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'auto_cobrar_comision' => (bool) data_get($settings, 'auto_cobrar_comision', false),
+            ],
+        ]);
+    }
+
+    /**
+     * Actualizar configuración de cartera del broker.
+     * POST /api/saas/cartera-simple/settings
+     * Body: { auto_cobrar_comision: bool }
+     */
+    public function updateSettings(Request $request)
+    {
+        $brokerId = Auth::user()->broker_id ?? null;
+        if (!$brokerId) {
+            return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
+        }
+        $broker = \App\Models\Broker::find($brokerId);
+        if (!$broker) {
+            return response()->json(['success' => false, 'message' => 'Broker no encontrado'], 404);
+        }
+
+        $settings = $broker->settings ?? [];
+        if ($request->has('auto_cobrar_comision')) {
+            $settings['auto_cobrar_comision'] = (bool) $request->input('auto_cobrar_comision');
+        }
+        $broker->settings = $settings;
+        $broker->save();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'auto_cobrar_comision' => (bool) data_get($settings, 'auto_cobrar_comision', false),
+            ],
+        ]);
+    }
+
+    /**
      * Detalle de una cuota con sus pagos y recibos asociados.
      * GET /api/saas/cartera-simple/cuota/{itemId}
      */

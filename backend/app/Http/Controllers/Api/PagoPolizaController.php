@@ -350,6 +350,14 @@ class PagoPolizaController extends Controller
             // (la aseguradora ya cobró, el broker necesita cobrar su comisión)
             if (in_array($request->tipo_recaudo, ['aseguradora_directo', 'aseguradora']) && $pago->exists) {
                 $this->ensureCobroComisionExists($poliza, $pago->id, $requestCarteraItemId);
+
+                // Auto-cobro de comisión: si el broker tiene activado settings.auto_cobrar_comision,
+                // marcar la comisión como cobrada inmediatamente. Ahorra un click al broker.
+                $broker = \App\Models\Broker::find($poliza->broker_id);
+                $autoCobrar = (bool) data_get($broker?->settings ?? [], 'auto_cobrar_comision', false);
+                if ($autoCobrar) {
+                    $this->autoMarcarComisionCobrada($poliza, $requestCarteraItemId);
+                }
             }
             
             // Si es pago a aseguradora, actualizar el registro pendiente existente
@@ -2506,6 +2514,34 @@ class PagoPolizaController extends Controller
             $cobroData['cartera_item_id'] = $carteraItemId;
         }
         CobroComision::create($cobroData);
+    }
+
+    /**
+     * Marca como cobradas todas las comisiones pendientes de la póliza/cuota.
+     * Usado por la opción broker.settings.auto_cobrar_comision.
+     */
+    private function autoMarcarComisionCobrada(Poliza $poliza, ?int $carteraItemId = null): void
+    {
+        $currentRenovacion = (int) ($poliza->numero_renovacion ?? 0);
+        $query = CobroComision::where('poliza_id', $poliza->id)
+            ->where('numero_renovacion', $currentRenovacion)
+            ->where('estado', '!=', 'pagado');
+
+        if ($carteraItemId) {
+            $query->where('cartera_item_id', $carteraItemId);
+        }
+
+        $cobros = $query->get();
+        foreach ($cobros as $cobro) {
+            $monto = (float) ($cobro->monto_pendiente ?: $cobro->monto_comision);
+            $cobro->update([
+                'monto_cobrado' => $monto,
+                'monto_pendiente' => 0,
+                'estado' => 'pagado',
+                'fecha_cobro' => now()->toDateString(),
+                'observaciones' => trim(($cobro->observaciones ?? '') . ' [Auto-cobrada]'),
+            ]);
+        }
     }
 
     /**
