@@ -149,17 +149,32 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
     let lastName = '';
     let email = '';
     let phone = '';
+    let documentType = '';
+    let documentNumber = '';
+    let city = '';
+    let department = '';
+    let address = '';
 
     if (tipo === 'EMPRESA') {
       firstName = c.empresa?.representante_legal || c.empresa?.razon_social || '';
       lastName = '';
       email = c.email || c.email_principal || '';
       phone = c.celular || c.celular_principal || '';
+      documentType = 'NIT';
+      documentNumber = c.empresa?.nit || c.cuit || '';
+      city = c.ciudad || c.empresa?.ciudad || '';
+      department = c.departamento || c.empresa?.departamento || '';
+      address = c.direccion || c.empresa?.direccion || '';
     } else {
       firstName = c.persona?.nombres || c.nombre || '';
       lastName = c.persona?.apellidos || c.apellidos || '';
       email = c.email || c.email_principal || '';
       phone = c.celular || c.celular_principal || '';
+      documentType = c.persona?.tipo_documento || c.tipo_documento || 'CC';
+      documentNumber = c.persona?.documento || c.document_number || c.cuit || '';
+      city = c.ciudad || c.persona?.ciudad || '';
+      department = c.departamento || c.persona?.departamento || '';
+      address = c.direccion || c.persona?.direccion || '';
     }
 
     setForm((prev) => ({
@@ -168,6 +183,11 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
       last_name: lastName,
       email: email,
       phone: phone,
+      document_type: documentType,
+      document_number: documentNumber,
+      city: city,
+      department: department,
+      address: address,
     }));
   };
 
@@ -400,6 +420,21 @@ const NuevoNegocioModal: React.FC<NuevoNegocioModalProps> = ({ show, onClose, on
                     required
                     options={Object.entries(LEAD_SOURCES).map(([k, v]) => ({ value: k, label: v }))}
                   />
+                  {(form.insurance_type === 'auto' || form.insurance_type === 'motorcycle') && (
+                    <div className="md:col-span-1">
+                      <Label className="text-sm font-medium text-gray-900 dark:text-white mb-1 block">
+                        Placa del vehículo
+                      </Label>
+                      <Input
+                        id="placa"
+                        name="placa"
+                        value={(form as any).placa || ''}
+                        onChange={onChange}
+                        placeholder="Ej: ABC123"
+                        className="mt-1 rounded-[10px]"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">

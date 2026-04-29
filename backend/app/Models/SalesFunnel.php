@@ -38,6 +38,7 @@ class SalesFunnel extends Model
         'business_state',
         'lead_source',
         'insurance_type',
+        'placa',
         'potential_value',
         'close_probability',
         'expected_close_date',
@@ -473,10 +474,38 @@ class SalesFunnel extends Model
         $this->addActivity('contact_made', $contactRecord);
     }
 
+    public function calculateLeadScore(): int
+    {
+        // Mapeo de calidad a valores numéricos
+        $qualityValues = [
+            'hot' => 100,
+            'warm' => 75,
+            'cold' => 50
+        ];
+
+        $qualityValue = $qualityValues[$this->quality_rating] ?? 75; // Default a warm
+        $probability = $this->close_probability ?? 0;
+
+        // Fórmula: 50 + (probabilidad * 0.3) + ((calidad - 50) * 0.4)
+        // Esto da un rango de 50 a 100
+        $score = 50 + ($probability * 0.3) + (($qualityValue - 50) * 0.4);
+
+        \Log::info('calculateLeadScore', [
+            'lead_id' => $this->id,
+            'quality_rating' => $this->quality_rating,
+            'quality_value' => $qualityValue,
+            'probability' => $probability,
+            'calculated_score' => $score,
+            'final_score' => (int) min(100, max(50, $score))
+        ]);
+
+        return (int) min(100, max(50, $score));
+    }
+
     public function updateScore(int $newScore, string $reason = null): void
     {
         $oldScore = $this->lead_score;
-        
+
         $this->update(['lead_score' => $newScore]);
 
         $this->addActivity('score_updated', [

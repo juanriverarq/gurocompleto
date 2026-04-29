@@ -298,7 +298,7 @@ const DetalleNegocioModal: React.FC<DetalleNegocioModalProps> = ({
                   </div>
                 </TitleCard>
 
-                {/* Detalles del negocio */}
+                {/* Detalles del Negocio */}
                 <TitleCard title="Detalles del Negocio">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center gap-3">
@@ -333,9 +333,9 @@ const DetalleNegocioModal: React.FC<DetalleNegocioModalProps> = ({
                         className="w-5 h-5 text-gray-400"
                       />
                       <div>
-                        <p className="text-xs text-gray-500">Fecha de Cierre Esperada</p>
+                        <p className="text-xs text-gray-500">Próximo Seguimiento</p>
                         <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {formatDate(lead.expected_close_date)}
+                          {lead.next_follow_up_at ? formatDate(lead.next_follow_up_at) : '-'}
                         </p>
                       </div>
                     </div>
@@ -351,6 +351,20 @@ const DetalleNegocioModal: React.FC<DetalleNegocioModalProps> = ({
                         </p>
                       </div>
                     </div>
+                    {(lead.insurance_type === 'auto' || lead.insurance_type === 'motorcycle') && lead.placa && (
+                      <div className="flex items-center gap-3">
+                        <IconifyIcon
+                          icon="solar:car-bold-duotone"
+                          className="w-5 h-5 text-gray-400"
+                        />
+                        <div>
+                          <p className="text-xs text-gray-500">Placa del Vehículo</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            {lead.placa}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </TitleCard>
 

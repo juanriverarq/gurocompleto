@@ -49,12 +49,15 @@ class SaasSalesFunnelController extends Controller
 
             if ($request->filled('search')) {
                 $search = $request->search;
-                $query->where(function ($q) use ($search) {
+                $upperSearch = strtoupper($search);
+                $query->where(function ($q) use ($search, $upperSearch) {
                     $q->where('first_name', 'like', "%{$search}%")
                       ->orWhere('last_name', 'like', "%{$search}%")
                       ->orWhere('email', 'like', "%{$search}%")
                       ->orWhere('phone', 'like', "%{$search}%")
-                      ->orWhere('company_name', 'like', "%{$search}%");
+                      ->orWhere('company_name', 'like', "%{$search}%")
+                      ->orWhere('placa', 'like', "%{$upperSearch}%")
+                      ->orWhere('document_number', 'like', "%{$search}%");
                 });
             }
 
@@ -139,19 +142,19 @@ class SaasSalesFunnelController extends Controller
         try {
             $brokerId = \App\Http\Middleware\UnifiedAuthMiddleware::getBrokerId($request)
                 ?? optional($request->user())->broker_id;
+            $emailRules = ['nullable', 'email'];
+            if (!$request->filled('client_id')) {
+                $emailRules[] = Rule::unique('sales_funnel', 'email')->where(function ($q) use ($brokerId) {
+                    if ($brokerId) {
+                        $q->where('broker_id', $brokerId);
+                    }
+                    return $q;
+                });
+            }
             $validated = $request->validate([
                 'first_name' => 'required|string|max:255',
                 'last_name' => 'required|string|max:255',
-                'email' => [
-                    'nullable',
-                    'email',
-                    Rule::unique('sales_funnel', 'email')->where(function ($q) use ($brokerId) {
-                        if ($brokerId) {
-                            $q->where('broker_id', $brokerId);
-                        }
-                        return $q;
-                    }),
-                ],
+                'email' => $emailRules,
                 'phone' => 'nullable|string|max:20',
                 'secondary_phone' => 'nullable|string|max:20',
                 'document_type' => 'nullable|string|max:10',
@@ -175,6 +178,7 @@ class SaasSalesFunnelController extends Controller
                 'preferred_contact_method' => 'required|in:' . implode(',', array_keys(SalesFunnel::CONTACT_METHODS)),
                 'preferred_contact_time' => 'nullable|in:' . implode(',', array_keys(SalesFunnel::CONTACT_TIMES)),
                 'notes' => 'nullable|string|max:2000',
+                'placa' => 'nullable|string|max:20',
                 'insurance_details' => 'nullable|array',
                 'custom_fields' => 'nullable|array',
                 'quality_rating' => 'required|in:' . implode(',', array_keys(SalesFunnel::QUALITY_RATINGS)),
@@ -189,9 +193,12 @@ class SaasSalesFunnelController extends Controller
             $validated['broker_id'] = $brokerId;
             $validated['created_by'] = $actor ? $actor->id : (optional($request->user())->id);
             $validated['stage_changed_at'] = now();
-            $validated['lead_score'] = $validated['lead_score'] ?? 50;
 
             $lead = SalesFunnel::create($validated);
+
+            // Calcular automáticamente el score basado en probabilidad y calidad
+            $calculatedScore = $lead->calculateLeadScore();
+            $lead->update(['lead_score' => $calculatedScore]);
 
             $lead->addActivity('lead_created', [
                 'source' => $validated['lead_source'],
@@ -269,15 +276,15 @@ class SaasSalesFunnelController extends Controller
                 ?? optional($request->user())->broker_id;
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
+            $emailRules = ['nullable', 'email'];
+            if (!$request->filled('client_id')) {
+                $emailRules[] = Rule::unique('sales_funnel', 'email')->ignore($lead->id);
+            }
 
             $validated = $request->validate([
                 'first_name' => 'sometimes|required|string|max:255',
                 'last_name' => 'sometimes|required|string|max:255',
-                'email' => [
-                    'nullable',
-                    'email',
-                    Rule::unique('sales_funnel', 'email')->ignore($lead->id)
-                ],
+                'email' => $emailRules,
                 'phone' => 'nullable|string|max:20',
                 'secondary_phone' => 'nullable|string|max:20',
                 'document_type' => 'nullable|string|max:10',
@@ -303,6 +310,7 @@ class SaasSalesFunnelController extends Controller
                 'qualifying_notes' => 'nullable|string|max:2000',
                 'presentation_notes' => 'nullable|string|max:2000',
                 'negotiation_notes' => 'nullable|string|max:2000',
+                'placa' => 'nullable|string|max:20',
                 'insurance_details' => 'nullable|array',
                 'custom_fields' => 'nullable|array',
                 'quality_rating' => 'sometimes|required|in:' . implode(',', array_keys(SalesFunnel::QUALITY_RATINGS)),
@@ -336,7 +344,17 @@ class SaasSalesFunnelController extends Controller
                 && $validated['business_state'] === 'cerrado'
                 && $lead->business_state !== 'cerrado';
 
+            // Recalcular score automáticamente si cambia probabilidad o calidad
+            // y no se proporciona un score manual explícito
+            $recalcularScore = (isset($validated['close_probability']) || isset($validated['quality_rating']))
+                && !isset($validated['lead_score']);
+
             $lead->update($validated);
+
+            if ($recalcularScore) {
+                $calculatedScore = $lead->calculateLeadScore();
+                $lead->update(['lead_score' => $calculatedScore]);
+            }
 
             if ($followUpChanged) {
                 $this->createFollowUpTaskForLead($lead->fresh(), $validated['next_follow_up_at']);
@@ -394,8 +412,9 @@ class SaasSalesFunnelController extends Controller
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
 
+            $actor = \App\Http\Middleware\UnifiedAuthMiddleware::getAuthenticatedUser($request);
             $lead->addActivity('lead_deleted', [
-                'deleted_by' => $request->user()->id,
+                'deleted_by' => $actor ? $actor->id : (optional($request->user())->id),
                 'reason' => $request->deletion_reason
             ]);
 
@@ -611,7 +630,9 @@ class SaasSalesFunnelController extends Controller
                 'notes' => 'nullable|string|max:2000'
             ]);
 
-            $lead->scheduleFollowUp(Carbon::parse($request->follow_up_date), $request->notes);
+            $followUpAt = Carbon::parse($request->follow_up_date);
+            $lead->scheduleFollowUp($followUpAt, $request->notes);
+            $this->createFollowUpTaskForLead($lead->fresh(), $followUpAt);
 
             return response()->json([
                 'message' => 'Seguimiento programado exitosamente',
