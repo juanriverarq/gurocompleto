@@ -35,6 +35,7 @@ class InsurerSyncService
         'axa-colpatria' => 'axa',
         'seguros-del-estado' => 'estado',
         'la-equidad' => 'equidad',
+        'allianz' => 'allianz',
     ];
 
     private const DOC_TYPE_MAP = [
@@ -2329,7 +2330,7 @@ class InsurerSyncService
                     $allItems = $this->fetchCarteraSura($sessionId);
                     break;
                 case 'bolivar':
-                    $allItems = $this->fetchCarteraBolivar($sessionId);
+                    $allItems = $this->fetchCarteraBolivar($conn);
                     break;
                 case 'hdi':
                     $allItems = $this->fetchCarteraHdi($sessionId);
@@ -2339,6 +2340,9 @@ class InsurerSyncService
                     break;
                 case 'equidad':
                     $allItems = $this->fetchCarteraEquidad($sessionId);
+                    break;
+                case 'allianz':
+                    $allItems = $this->fetchCarteraAllianz($sessionId);
                     break;
                 default:
                     return ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'total_fetched' => 0,
@@ -2394,11 +2398,63 @@ class InsurerSyncService
     }
 
     /**
-     * Cartera Bolívar: obtiene lista de clientes en mora y luego el detalle
-     * por póliza de cada uno via /bolivar/cartera/{doc}/productos.
+     * Cartera Bolívar.
+     * Estrategia: primero intentar /bolivar/carterav2 (portal SISEBOL legacy: una fila
+     * por póliza pendiente, con días de mora reales). Fallback a /bolivar/cartera v1.
      */
-    private function fetchCarteraBolivar(string $sessionId): array
+    private function fetchCarteraBolivar(InsurerConnection $conn): array
     {
+        $sessionId = $conn->microservice_session_id;
+
+        // ── PRIMARY: carterav2 (SISEBOL) ──────────────────────────
+        try {
+            $creds = $conn->credentials ?? [];
+            $docNumber = (string) ($creds['doc_number'] ?? '');
+            $password = (string) ($creds['password'] ?? '');
+            if ($docNumber !== '' && $password !== '') {
+                $loginResp = Http::acceptJson()
+                    ->timeout(90)->connectTimeout(15)
+                    ->post($this->baseUrl() . '/bolivar/carterav2/login', [
+                        'session_id' => $sessionId,
+                        'doc_number' => $docNumber,
+                        'password' => $password,
+                    ]);
+                if ($loginResp->ok() && ($loginResp->json('success') === true)) {
+                    $v2Sid = (string) $loginResp->json('session_id');
+                    $resp = Http::acceptJson()
+                        ->timeout(180)->connectTimeout(15)
+                        ->withHeaders(['X-Session-Id' => $v2Sid])
+                        ->get($this->baseUrl() . '/bolivar/carterav2');
+                    if ($resp->ok()) {
+                        $items = $resp->json('items') ?? [];
+                        if (is_array($items) && !empty($items)) {
+                            $mapped = [];
+                            foreach ($items as $it) {
+                                $row = $this->mapBolivarCarteraV2Row($it);
+                                if ($row !== null) {
+                                    $mapped[] = $row;
+                                }
+                            }
+                            Log::info('[INSURER SYNC] Bolívar carterav2 OK', ['rows' => count($mapped)]);
+                            return $mapped;
+                        }
+                    } else {
+                        Log::warning('[INSURER SYNC] carterav2 fetch falló, fallback v1', [
+                            'status' => $resp->status(),
+                        ]);
+                    }
+                } else {
+                    Log::warning('[INSURER SYNC] carterav2 login falló, fallback v1', [
+                        'status' => $loginResp->status(),
+                        'body' => mb_substr((string) $loginResp->body(), 0, 200),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[INSURER SYNC] carterav2 excepción, fallback v1', ['error' => $e->getMessage()]);
+        }
+
+        // ── FALLBACK: /bolivar/cartera v1 ─────────────────────────
         $response = $this->apiGetLong('/bolivar/cartera', $sessionId, 180);
         if (!$response->ok()) {
             if (in_array($response->status(), [404, 422, 405])) {
@@ -2580,6 +2636,88 @@ class InsurerSyncService
         ];
     }
 
+    /**
+     * Mapea una fila de /bolivar/carterav2 (formato SISEBOL parseado) al schema
+     * de cartera_aseguradoras.
+     *
+     * Campos esperados (string salvo donde se indique):
+     *   poliza, ramo, numero_factura, valor_pendiente (float), valor_pagado_hoy (float),
+     *   valor_neto (float), tomador, identificacion, fecha_vigencia (DD-MMM-YY),
+     *   fecha_facturacion (DD-MM-YYYY), coaseguro, dias_mora (int), direccion,
+     *   telefono, email
+     */
+    private function mapBolivarCarteraV2Row(array $row): ?array
+    {
+        $valorPendiente = (float) ($row['valor_pendiente'] ?? 0);
+        $diasMora = (int) ($row['dias_mora'] ?? 0);
+        if ($valorPendiente <= 0 && $diasMora <= 0) {
+            return null;
+        }
+
+        $valorPagado = (float) ($row['valor_pagado_hoy'] ?? 0);
+        $valorNeto = (float) ($row['valor_neto'] ?? $valorPendiente);
+
+        $clientName = trim((string) ($row['tomador'] ?? ''));
+        $clientDoc = trim((string) ($row['identificacion'] ?? ''));
+        $policyNumber = trim((string) ($row['poliza'] ?? ''));
+        $ramo = trim((string) ($row['ramo'] ?? ''));
+        $numeroFactura = trim((string) ($row['numero_factura'] ?? ''));
+
+        // Tipo de doc: SISEBOL no lo discrimina explícitamente.
+        // Heurística: NIT si empieza con 8 o 9 y tiene 9-10 dígitos; si no, CC.
+        $clientDocType = (preg_match('/^[89]\d{8,9}$/', $clientDoc)) ? 'NIT' : 'CC';
+
+        $fechaVig = $this->parseBolivarV2Date((string) ($row['fecha_vigencia'] ?? ''));
+        $fechaFact = $this->parseBolivarV2Date((string) ($row['fecha_facturacion'] ?? ''));
+
+        return [
+            'client_name' => $clientName,
+            'client_document' => $clientDoc,
+            'client_doc_type' => $clientDocType,
+            'policy_number' => $policyNumber,
+            'ramo' => $ramo !== '' ? $ramo : null,
+            'product_name' => null,
+            'prima_total' => $valorNeto > 0 ? $valorNeto : $valorPendiente,
+            'valor_pendiente' => $valorPendiente,
+            'valor_pagado' => $valorPagado,
+            'bonificacion' => 0,
+            'dias_mora' => $diasMora,
+            'rango_mora' => CarteraAseguradora::calcRangoMora($diasMora),
+            'fecha_inicio_vigencia' => $fechaVig,
+            'fecha_expedicion' => $fechaFact,
+            'fecha_vencimiento' => null,
+            'numero_recibo' => $numeroFactura !== '' ? $numeroFactura : null,
+            'numero_pagare' => null,
+            'cuotas_pagadas' => null,
+            'cuotas_mora' => null,
+            'total_cuotas' => null,
+            'source_endpoint' => '/bolivar/carterav2',
+            'raw_data' => $row,
+        ];
+    }
+
+    /**
+     * Parsea fechas de SISEBOL: "11-APR-26" o "11-04-2026".
+     */
+    private function parseBolivarV2Date(string $s): ?string
+    {
+        $s = trim($s);
+        if ($s === '') {
+            return null;
+        }
+        foreach (['d-M-y', 'd-m-Y', 'd-m-y', 'd/m/Y'] as $fmt) {
+            try {
+                $d = \Carbon\Carbon::createFromFormat($fmt, $s);
+                if ($d) {
+                    return $d->format('Y-m-d');
+                }
+            } catch (\Throwable $e) {
+                // siguiente formato
+            }
+        }
+        return null;
+    }
+
     private function bolivarPickScalar(array $row, array $keys): string
     {
         foreach ($keys as $k) {
@@ -2667,11 +2805,37 @@ class InsurerSyncService
     {
         $items = [];
 
-        $response = $this->apiGetLong('/hdi/cartera', $sessionId, 180);
-        if ($response->ok()) {
-            $data = $response->json();
-            $rows = $data['cartera'] ?? [];
-            foreach ($rows as $row) {
+        // /hdi/cartera pagina con start/end (default 1-50). Iteramos en bloques de
+        // 200 hasta que el microservicio devuelva una página corta.
+        $pageSize = 200;
+        $start = 1;
+        $allRows = [];
+        $maxPages = 50; // tope defensivo
+        for ($p = 0; $p < $maxPages; $p++) {
+            $end = $start + $pageSize - 1;
+            $response = $this->apiGetWithQuery('/hdi/cartera', $sessionId, [
+                'start' => $start,
+                'end' => $end,
+            ]);
+            if (!$response->ok()) {
+                if ($response->status() === 401) {
+                    throw new \RuntimeException('Sesión expirada', 401);
+                }
+                break;
+            }
+            $rows = $response->json('cartera') ?? [];
+            if (empty($rows)) {
+                break;
+            }
+            $allRows = array_merge($allRows, $rows);
+            if (count($rows) < $pageSize) {
+                break;
+            }
+            $start += $pageSize;
+        }
+        Log::info('[INSURER SYNC] HDI cartera paginada', ['total_rows' => count($allRows)]);
+
+        foreach ($allRows as $row) {
                 if (!is_array($row)) {
                     continue;
                 }
@@ -2753,16 +2917,36 @@ class InsurerSyncService
                     'source_endpoint' => '/hdi/cartera',
                     'raw_data' => $row,
                 ];
-            }
-        } elseif ($response->status() === 401) {
-            throw new \RuntimeException('Sesión expirada', 401);
         }
 
-        $finResponse = $this->apiGetLong('/hdi/cartera/financiada', $sessionId, 180);
-        if ($finResponse->ok()) {
-            $finData = $finResponse->json();
-            $pagares = $finData['pagares'] ?? [];
-            foreach ($pagares as $p) {
+        // /hdi/cartera/financiada también pagina (registro_inicial/registro_final, default 1-50).
+        $finPageSize = 200;
+        $finStart = 1;
+        $allPagares = [];
+        for ($pp = 0; $pp < 50; $pp++) {
+            $finResponse = $this->apiGetWithQuery('/hdi/cartera/financiada', $sessionId, [
+                'registro_inicial' => $finStart,
+                'registro_final' => $finStart + $finPageSize - 1,
+            ]);
+            if (!$finResponse->ok()) {
+                if ($finResponse->status() === 401) {
+                    throw new \RuntimeException('Sesión expirada', 401);
+                }
+                break;
+            }
+            $batch = $finResponse->json('pagares') ?? [];
+            if (empty($batch)) {
+                break;
+            }
+            $allPagares = array_merge($allPagares, $batch);
+            if (count($batch) < $finPageSize) {
+                break;
+            }
+            $finStart += $finPageSize;
+        }
+        Log::info('[INSURER SYNC] HDI cartera financiada paginada', ['total_pagares' => count($allPagares)]);
+
+        foreach ($allPagares as $p) {
                 if (!is_array($p)) {
                     continue;
                 }
@@ -2808,7 +2992,6 @@ class InsurerSyncService
                     'source_endpoint' => '/hdi/cartera/financiada',
                     'raw_data' => $p,
                 ];
-            }
         }
 
         return $items;
@@ -3014,39 +3197,124 @@ class InsurerSyncService
      * }, ... ] }
      */
     /**
-     * Cartera SURA: el microservicio usa un perfil Chromium persistente para
-     * hacer el flujo SAML del portal asistenteserviciosfinancieros y capturar
-     * la respuesta de /carteraedades. Ver routers/sura.py::sura_cartera.
+     * Habla con el flujo async del microservicio:
+     *   1. POST /sura/cartera/iniciar       → report_id
+     *   2. GET  /sura/cartera/estado/{id}   → poll hasta status=ready
+     *   3. GET  /sura/cartera/resultado/{id} → payload (success/total/cartera[])
      *
-     * Puede tardar 30-90s (Playwright + SAML + Angular). Usamos timeout 240s.
+     * Devuelve el array `data` con clave `cartera`, igual que el endpoint legacy.
+     * Lanza RuntimeException con el mismo formato de errores que antes para que
+     * `fetchCarteraSura` siga funcionando.
+     */
+    private function fetchCarteraSuraAsync(string $sessionId): array
+    {
+        // Paso 1 — iniciar (corto)
+        $startResp = $this->apiPost('/sura/cartera/iniciar', $sessionId, [], 60);
+        if (!$startResp->ok()) {
+            $this->throwSuraCarteraError($startResp);
+        }
+        $reportId = (string) ($startResp->json('report_id') ?? '');
+        if ($reportId === '') {
+            throw new \RuntimeException('Microservicio SURA no devolvió report_id al iniciar');
+        }
+
+        Log::info("[SURA-CARTERA-ASYNC] Iniciado report_id={$reportId}");
+
+        // Paso 2 — polling
+        // Total worst-case ≈ 580s (38 polls * 15s). El queue worker tolera 600s.
+        $maxPolls = 38;
+        $pollIntervalS = 15;
+        $finalEstado = null;
+        for ($i = 1; $i <= $maxPolls; $i++) {
+            sleep($pollIntervalS);
+            $estadoResp = $this->apiGet("/sura/cartera/estado/{$reportId}", $sessionId);
+            if (!$estadoResp->ok()) {
+                // 404 = job purgado (timeout interno o restart), 401 = sesión muerta
+                if ($estadoResp->status() === 404) {
+                    throw new \RuntimeException(
+                        "Job SURA {$reportId} expiró o el microservicio fue reiniciado. Reintenta la sincronización."
+                    );
+                }
+                $this->throwSuraCarteraError($estadoResp);
+            }
+            $estado = $estadoResp->json();
+            $status = (string) ($estado['status'] ?? '');
+            Log::info("[SURA-CARTERA-ASYNC] poll {$i}/{$maxPolls} report_id={$reportId} status={$status} elapsed=" . ($estado['elapsed_s'] ?? '?') . 's');
+            if ($status === 'ready') {
+                $finalEstado = $estado;
+                break;
+            }
+            if ($status === 'error') {
+                throw new \RuntimeException(
+                    'SURA cartera falló: ' . ($estado['error'] ?? 'error desconocido'),
+                    (int) ($estado['http_status'] ?? 500)
+                );
+            }
+            // status=running → seguir polleando
+        }
+        if ($finalEstado === null) {
+            throw new \RuntimeException(
+                "Cartera SURA no estuvo lista en " . ($maxPolls * $pollIntervalS) . "s. "
+                . "Reporte muy grande o portal SURA lento."
+            );
+        }
+
+        // Paso 3 — descargar payload
+        $resultResp = $this->apiGetLong("/sura/cartera/resultado/{$reportId}", $sessionId, 120);
+        if (!$resultResp->ok()) {
+            $this->throwSuraCarteraError($resultResp);
+        }
+        $total = $resultResp->json('total') ?? 0;
+        Log::info("[SURA-CARTERA-ASYNC] Descargado report_id={$reportId} total={$total} items");
+        return $resultResp->json() ?: [];
+    }
+
+    /**
+     * Mapea errores HTTP del flujo SURA cartera a RuntimeException con mensajes
+     * útiles para el usuario. Comparte la misma lógica que tenía fetchCarteraSura.
+     */
+    private function throwSuraCarteraError(\Illuminate\Http\Client\Response $response): void
+    {
+        if (in_array($response->status(), [404, 422, 405], true)) {
+            throw new \RuntimeException('Endpoint SURA cartera no disponible: ' . $this->extractErrorMessage($response));
+        }
+        if ($response->status() === 401) {
+            $msg = $this->extractErrorMessage($response);
+            if (str_contains((string) $msg, 'perfil') || str_contains((string) $msg, 'Perfil')) {
+                throw new \RuntimeException(
+                    'Perfil de cartera SURA no inicializado. '
+                    . 'El broker debe hacer login una vez en el portal de cartera.',
+                    401
+                );
+            }
+            throw new \RuntimeException('Sesión SURA expirada', 401);
+        }
+        if ($response->status() === 502) {
+            throw new \RuntimeException(
+                'El portal de cartera SURA no respondió a tiempo. Intenta de nuevo en un minuto.'
+            );
+        }
+        throw new \RuntimeException($this->extractErrorMessage($response));
+    }
+
+    /**
+     * Cartera SURA: el microservicio usa Playwright (SAML + Angular del portal
+     * asistenteserviciosfinancieros) para capturar /carteraedades. Para brokers
+     * grandes (>10k pólizas) SURA exige generar un informe Excel que puede
+     * tardar 3-9 minutos, lo cual excede el límite de Cloudflare de 100s.
+     *
+     * Por eso usamos el flujo async (3 endpoints cortos):
+     *   POST /sura/cartera/iniciar    → devuelve report_id en ~5s
+     *   GET  /sura/cartera/estado/{id} → polling cada 15s, cada llamada <30s
+     *   GET  /sura/cartera/resultado/{id} → descarga payload final
+     *
+     * El job de Laravel corre en queue worker (timeout 600s), así que tolera
+     * todo el polling. Cada request HTTP individual se mantiene bajo CF.
      */
     private function fetchCarteraSura(string $sessionId): array
     {
-        $response = $this->apiGetLong('/sura/cartera', $sessionId, 240);
-        if (!$response->ok()) {
-            if (in_array($response->status(), [404, 422, 405], true)) {
-                return [];
-            }
-            if ($response->status() === 401) {
-                $msg = $this->extractErrorMessage($response);
-                if (str_contains((string) $msg, 'perfil') || str_contains((string) $msg, 'Perfil')) {
-                    throw new \RuntimeException(
-                        'Perfil de cartera SURA no inicializado. '
-                        . 'El broker debe hacer login una vez en el portal de cartera.',
-                        401
-                    );
-                }
-                throw new \RuntimeException('Sesión SURA expirada', 401);
-            }
-            if ($response->status() === 502) {
-                throw new \RuntimeException(
-                    'El portal de cartera SURA no respondió a tiempo. Intenta de nuevo en un minuto.'
-                );
-            }
-            throw new \RuntimeException($this->extractErrorMessage($response));
-        }
-
-        $data = $response->json();
+        $response = $this->fetchCarteraSuraAsync($sessionId);
+        $data = $response;
         $rows = $data['cartera'] ?? [];
         if (!is_array($rows)) {
             return [];
@@ -3212,6 +3480,115 @@ class InsurerSyncService
         return $items;
     }
 
+    /**
+     * Cartera Allianz vía microservicio GET /allianz/cartera.
+     *
+     * NOTA: Allianz ePAC no expone una "cartera de cobro" tradicional en /api/bookings/paginar
+     * sino el listado de Recibos Bancarios (RCB) con saldos de comisión pendientes del
+     * periodo en curso. Cada recibo = una fila en CarteraAseguradora con:
+     *   policy_number  ← policyExt (sin el sufijo /0)
+     *   client_name    ← name / completeName
+     *   prima_total    ← amount  (prima recibida por el cliente)
+     *   valor_pendiente← balance (saldo de comisión a favor del mediador)
+     *
+     * Respuesta esperada:
+     *   { "periodo":"YYYYMM", "tipo":"RCB", "items":[{bookingReferenceId, paidDate, amount,
+     *     balance, comission, name, completeName, policyExt, retentionExt, ...}] }
+     */
+    private function fetchCarteraAllianz(string $sessionId): array
+    {
+        $response = $this->apiGetLong('/allianz/cartera', $sessionId, 120);
+        if (!$response->ok()) {
+            if (in_array($response->status(), [404, 422, 405], true)) {
+                return [];
+            }
+            if ($response->status() === 401) {
+                throw new \RuntimeException('Sesión expirada', 401);
+            }
+            return [];
+        }
+
+        $data = $response->json();
+        $rows = $data['items'] ?? $data['cartera'] ?? $data['data'] ?? [];
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $periodo = (string) ($data['periodo'] ?? '');
+
+        $parseMoney = static function ($v): float {
+            if ($v === null || $v === '') return 0.0;
+            $s = preg_replace('/[^0-9\-.,]/', '', (string) $v) ?? '';
+            // Allianz usa formato "1,234,567.89" (coma miles, punto decimales)
+            $s = str_replace(',', '', $s);
+            return is_numeric($s) ? (float) $s : 0.0;
+        };
+
+        $parseDate = function ($v) {
+            if (!$v) return null;
+            $s = trim((string) $v);
+            // Allianz: "01/05/2026" (DD/MM/YYYY)
+            if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $s, $m)) {
+                return "{$m[3]}-{$m[2]}-{$m[1]}";
+            }
+            return $this->parseDate($s);
+        };
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            // policyExt formato "23819062/0" → extraer número de póliza
+            $policyRaw = trim((string) ($row['policyExt'] ?? $row['policy_number'] ?? ''));
+            $policyNumber = $policyRaw;
+            if (str_contains($policyRaw, '/')) {
+                $policyNumber = trim(explode('/', $policyRaw, 2)[0]);
+            }
+
+            $amount = $parseMoney($row['amount'] ?? $row['commisionExt'] ?? 0);
+            $balance = $parseMoney($row['balance'] ?? 0);
+            $retencion = $parseMoney($row['retentionExt'] ?? 0);
+
+            // Si tanto balance como amount son 0, saltar (sin datos útiles)
+            if ($amount <= 0 && $balance <= 0) {
+                continue;
+            }
+
+            $clientName = trim((string) ($row['completeName'] ?? $row['name'] ?? ''));
+            $items[] = [
+                'policy_number'        => $policyNumber,
+                'client_name'          => $clientName,
+                'client_document'      => '', // Allianz RCB no lo expone
+                'client_doc_type'      => null,
+                'ramo'                 => $row['branchAgrupationExt'] ?? null,
+                'product_name'         => null,
+                'prima_total'          => $amount,
+                'valor_pendiente'      => $balance > 0 ? $balance : $amount,
+                'valor_pagado'         => max(0.0, $amount - $balance),
+                'bonificacion'         => 0,
+                'dias_mora'            => 0, // RCB son recibos del periodo actual
+                'rango_mora'           => CarteraAseguradora::calcRangoMora(0),
+                'fecha_inicio_vigencia'=> null,
+                'fecha_expedicion'     => null,
+                'fecha_vencimiento'    => $parseDate($row['paidDate'] ?? null),
+                'numero_recibo'        => (string) ($row['bookingReferenceId'] ?? ''),
+                'numero_pagare'        => null,
+                'cuotas_pagadas'       => null,
+                'cuotas_mora'          => null,
+                'total_cuotas'         => null,
+                'source_endpoint'      => '/allianz/cartera',
+                'raw_data'             => array_merge($row, [
+                    '_periodo'    => $periodo,
+                    '_retencion'  => $retencion,
+                ]),
+            ];
+        }
+
+        return $items;
+    }
+
     // ──────────────────────────────────────────────────────
     //  COMISIONES
     // ──────────────────────────────────────────────────────
@@ -3237,6 +3614,11 @@ class InsurerSyncService
             switch ($slug) {
                 case 'sura':
                     $allItems = $this->fetchComisionesSura($sessionId, $anio, $mes, $ramo);
+                    break;
+                case 'hdi':
+                    // HDI: mes corriente trae detalle por póliza, mes histórico
+                    // trae 1 fila resumen del período (totales reales del mes).
+                    $allItems = $this->fetchComisionesHdi($sessionId, $anio, $mes);
                     break;
                 default:
                     return [
@@ -3368,6 +3750,82 @@ class InsurerSyncService
                 'concepto' => null,
                 'subramo' => null,
                 'source_endpoint' => '/sura/comisiones',
+                'raw_data' => $row,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Llama al endpoint del microservicio /hdi/comisiones y normaliza al schema
+     * de recibos_comisiones_aseguradoras.
+     *
+     * Nota: HDI sólo expone la liquidación CORRIENTE (no permite filtrar histórico
+     * por anio/mes). Los parámetros se usan como etiqueta para agrupar el snapshot
+     * en la tabla. El primer día del mes seleccionado se usa como `fecha_recaudo`
+     * sintética para que la UI pueda ordenar/agrupar.
+     */
+    private function fetchComisionesHdi(string $sessionId, string $anio, string $mes): array
+    {
+        $response = Http::acceptJson()
+            ->timeout(60)
+            ->connectTimeout(15)
+            ->withHeaders(['X-Session-Id' => $sessionId])
+            ->get($this->baseUrl() . '/hdi/comisiones', [
+                'anio' => $anio,
+                'mes' => $mes,
+            ]);
+
+        if (!$response->ok()) {
+            if ($response->status() === 401) {
+                throw new \RuntimeException('Sesión HDI expirada', 401);
+            }
+            if (in_array($response->status(), [404, 422], true)) {
+                return [];
+            }
+            throw new \RuntimeException($this->extractErrorMessage($response));
+        }
+
+        $data = $response->json() ?? [];
+        $rows = $data['comisiones'] ?? [];
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        // Fecha sintética: primer día del mes/año declarados (HDI no entrega
+        // fecha de recaudo por póliza en este endpoint).
+        $fechaSyn = null;
+        if ($anio && $mes) {
+            $fechaSyn = $this->parseDate("{$anio}-{$mes}-01");
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $premium = (float) ($row['premium_value'] ?? 0);
+            $commission = (float) ($row['commission_value'] ?? 0);
+            $items[] = [
+                'ramo_codigo' => null,
+                'producto' => (string) ($row['product_type'] ?? ''),
+                'policy_number' => (string) ($row['policy_number'] ?? ''),
+                'numero_recibo' => null,
+                'client_name' => (string) ($row['client_name'] ?? ''),
+                'client_document' => null,
+                'client_doc_type' => null,
+                'oficina' => null,
+                'fecha_recaudo' => $fechaSyn,
+                'fecha_pago_asesor' => null,
+                'prima_neta' => $premium,
+                'valor_pagado_tomador' => $premium,
+                'porcentaje_comision' => (float) ($row['commission_percentage'] ?? 0),
+                'valor_comision' => $commission,
+                'estado' => 'legalizada',
+                'concepto' => null,
+                'subramo' => null,
+                'source_endpoint' => '/hdi/comisiones',
                 'raw_data' => $row,
             ];
         }
@@ -3674,6 +4132,7 @@ class InsurerSyncService
             'axa-colpatria' => 'Axa Colpatria',
             'seguros-del-estado' => 'Seguros del Estado',
             'la-equidad' => 'La Equidad',
+            'allianz' => 'Allianz',
             default => $code,
         };
     }
@@ -3725,5 +4184,16 @@ class InsurerSyncService
             ->connectTimeout(15)
             ->withHeaders(['X-Session-Id' => $sessionId])
             ->get($url, $query);
+    }
+
+    private function apiPost(string $endpoint, string $sessionId, array $body = [], int $timeout = 60)
+    {
+        $url = $this->baseUrl() . $endpoint;
+
+        return Http::acceptJson()
+            ->timeout($timeout)
+            ->connectTimeout(15)
+            ->withHeaders(['X-Session-Id' => $sessionId])
+            ->post($url, $body);
     }
 }
