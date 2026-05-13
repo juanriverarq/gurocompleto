@@ -7,7 +7,9 @@ export type ModuleKey =
   | 'crm'
   | 'seguimiento'
   | 'cartera'
+  | 'cartera_aseguradoras'
   | 'comisiones'
+  | 'comisiones_aseguradoras'
   | 'reportes'
   | 'whatsapp'
   | 'email'
@@ -131,6 +133,16 @@ export const MODULES: ModuleItem[] = [
       'Control de recaudos, estados de cuenta, conciliaciones, reportes de morosidad y notificaciones automáticas de cobro.',
   },
   {
+    key: 'cartera_aseguradoras',
+    name: 'Cartera Aseguradoras',
+    description: 'Cartera consolidada por aseguradora',
+    icon: 'solar:buildings-3-bold-duotone',
+    color: 'bg-lightprimary',
+    pricePerUser: 12000,
+    longDescription:
+      'Cartera unificada sincronizada desde portales de aseguradoras (Sura, Bolívar, HDI, Equidad, AXA). Detalle por póliza, cuotas pendientes, mora y avance de pago.',
+  },
+  {
     key: 'comisiones',
     name: 'Comisiones',
     description: 'Cálculo y liquidación de vendedores',
@@ -139,6 +151,16 @@ export const MODULES: ModuleItem[] = [
     pricePerUser: 23400,
     longDescription:
       'Cálculo automático de comisiones por póliza, liquidación de vendedores, anticipos, ajustes y reportes detallados.',
+  },
+  {
+    key: 'comisiones_aseguradoras',
+    name: 'Comisiones Aseguradoras',
+    description: 'Comisiones reportadas por aseguradoras',
+    icon: 'solar:hand-money-bold-duotone',
+    color: 'bg-lightwarning',
+    pricePerUser: 12000,
+    longDescription:
+      'Comisiones consolidadas obtenidas directamente desde los portales de las aseguradoras. Conciliación contra recibos, validación y reportes por período.',
   },
   {
     key: 'reportes',

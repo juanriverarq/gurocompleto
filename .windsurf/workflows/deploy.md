@@ -140,55 +140,6 @@ curl -sI https://hub.guro.co/ | head -3 && curl -s https://hub.guro.co/api/conne
 
 ---
 
-# Deploy Microservicio Aseguradoras (FastAPI + Playwright)
+# Microservicio Aseguradoras
 
-Microservicio **diferente** del HUB — es el que usa `app.guro.co` (Laravel) para conectarse con aseguradoras en tiempo real.
-
-Ubicación local: **`~/Documents/microservicio/`** (NO está dentro de GUROFINAL)
-Ubicación en servidor: `/opt/guro-microservicio/`
-Puerto: **8002** (interno, accedido por app.guro.co vía `MICROSERVICIO_API_URL=http://127.0.0.1:8002`)
-Rutas: `/sura/login`, `/hdi/login`, `/bolivar/login`, `/axa/login`, `/estado/login`, `/equidad/login` + `/cotizador/*`
-Stack: FastAPI + uvicorn + Playwright (Python) + Chrome (canal real, no Chromium headless)
-Proceso: PM2 `guro-microservicio` con **1 worker** (Playwright no soporta fork de workers)
-
-## MS 1. Preparar ZIP (excluir sessions/ y carpetas pesadas)
-// turbo
-```bash
-cd ~/Documents/microservicio && rm -f /tmp/guro-microservicio.zip && zip -rq /tmp/guro-microservicio.zip app.py session_store.py sura_cookie_parse.py requirements.txt routers cotizadores static -x "*/__pycache__/*" "*.pyc" && ls -lh /tmp/guro-microservicio.zip
-```
-
-## MS 2. Subir y desplegar código (preservando sessions/ existentes)
-```bash
-scp -i ~/.ssh/guro_deploy /tmp/guro-microservicio.zip root@178.18.246.209:/tmp/ && ssh -i ~/.ssh/guro_deploy root@178.18.246.209 "unzip -qo /tmp/guro-microservicio.zip -d /opt/guro-microservicio && rm -f /tmp/guro-microservicio.zip && echo 'Microservicio deployed OK'"
-```
-
-## MS 3. Instalar/actualizar dependencias Python (si requirements.txt cambió)
-```bash
-ssh -i ~/.ssh/guro_deploy root@178.18.246.209 "cd /opt/guro-microservicio && source .venv/bin/activate && pip install -r requirements.txt lxml 2>&1 | tail -5"
-```
-
-## MS 4. Reiniciar con PM2
-```bash
-ssh -i ~/.ssh/guro_deploy root@178.18.246.209 "pm2 restart guro-microservicio 2>&1 | tail -3 && sleep 3 && curl -s http://127.0.0.1:8002/openapi.json -o /dev/null -w 'HTTP %{http_code}\n'"
-```
-
-## MS 5. Verificar logs del microservicio
-```bash
-ssh -i ~/.ssh/guro_deploy root@178.18.246.209 "pm2 logs guro-microservicio --lines 30 --nostream 2>&1 | tail -30"
-```
-
-## Notas importantes del microservicio Aseguradoras
-- **PM2 name:** `guro-microservicio` (NO confundir con `guro-hub-scraper`)
-- **Arranque inicial** (primera vez en servidor nuevo):
-  ```bash
-  cd /opt/guro-microservicio && python3.12 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt lxml && playwright install chromium
-  # Chrome real (requerido por SURA con channel='chrome'):
-  # Ver memoria 'Microservicio Aseguradoras Deploy' para yum install de Google Chrome + symlink
-  pm2 start .venv/bin/uvicorn --name guro-microservicio --interpreter none -- app:app --host 127.0.0.1 --port 8002 --workers 1
-  pm2 save
-  ```
-- **Workers debe ser 1** (Playwright singleton no soporta fork de workers uvicorn)
-- **Chrome real** en `/usr/bin/google-chrome` con symlink a `/opt/google/chrome/chrome` (SURA usa `channel='chrome'`)
-- **sessions/** y **captures/** son datos persistentes locales del servidor (no sobrescribir en deploy)
-- **Relación con app.guro.co:** El backend Laravel lo consume vía `MICROSERVICIO_API_URL=http://127.0.0.1:8002` en `.env` (ya configurado en producción)
-- **NO requiere** ningún subdominio ni docroot — es solo interno en `127.0.0.1:8002`
+El deploy del **Microservicio Aseguradoras** (Playwright + FastAPI) vive ahora en su propio servidor Colombia (`200.7.105.114`) — el IP de `app.guro.co` está geo-localizado en EE.UU. y las aseguradoras lo bloqueaban. Ver workflow dedicado: **`.windsurf/workflows/deploymicroservicio.md`**.

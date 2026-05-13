@@ -121,6 +121,31 @@ const FramerLanding = () => {
           filter: blur(90px);
           z-index: 0;
         }
+
+        /* ── Optimización móvil (Safari iOS sufre con blur grande + animaciones infinitas) ── */
+        @media (max-width: 768px) {
+          .landing-grad-text {
+            animation: none !important;
+            background-position: 0% 50% !important;
+          }
+          .hero-sync-spin-track,
+          .hero-sync-halo,
+          .hero-sync-spark { animation: none !important; }
+          .hero-sync-shell { filter: drop-shadow(0 0 10px rgba(87, 60, 255, 0.35)) !important; }
+          .landing-noise { display: none !important; }
+          .landing-aurora-accent {
+            filter: blur(40px) !important;
+            opacity: 0.6 !important;
+          }
+        }
+
+        /* Respetar preferencia de reducción de movimiento (iOS y otros) */
+        @media (prefers-reduced-motion: reduce) {
+          .landing-grad-text,
+          .hero-sync-spin-track,
+          .hero-sync-halo,
+          .hero-sync-spark { animation: none !important; }
+        }
       `}</style>
       <Navbar />
       <Hero />

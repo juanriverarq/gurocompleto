@@ -99,6 +99,7 @@ export interface Poliza {
   fecha_fin: string;
   estado?: 'ACTIVA' | 'VENCIDA' | 'CANCELADA' | 'SUSPENDIDA';
   cancellation_reason?: string;
+  non_renewal_reason?: string;
   cancelled_at?: string;
   cancelled_by?: number | null;
   sede?: string;
@@ -202,12 +203,18 @@ export interface PolizaFilters {
   renovable?: boolean | string;
   fecha_recepcion_desde?: string;
   fecha_recepcion_hasta?: string;
+  forma_pago?: string;
   // Motivo de cancelación (aplicable cuando estado=CANCELADA)
   cancellation_reason?: string;
+  // Rango de fecha de cancelación (cancelled_at) - aplicable cuando estado=CANCELADA
+  cancelled_desde?: string;
+  cancelled_hasta?: string;
   sort_field?: string;
   sort_direction?: 'asc' | 'desc';
   per_page?: number;
   page?: number;
+  // Papelera: 'only' devuelve únicamente registros soft-deleted
+  trashed?: 'only' | 'none';
 }
 
 export interface ApiResponse<T> {
@@ -1449,6 +1456,26 @@ export const polizaService = {
   },
 
   /**
+   * Regenerar cuotas de cartera de una póliza desde periodicidad/vigencia.
+   * Solo funciona si no hay pagos activos no anulados.
+   */
+  async regenerarCarteraCuotas(id: string, params?: { forma_pago?: string; cuotas?: number }): Promise<ApiResponse<any>> {
+    try {
+      return await makeRequest<any>(`${API_PREFIX}/${id}/regenerar-cartera-cuotas`, {
+        method: 'POST',
+        body: JSON.stringify(params || {}),
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error al regenerar cuotas",
+        description: error instanceof Error ? error.message : "Error desconocido",
+      });
+      throw error;
+    }
+  },
+
+  /**
    * Eliminar una póliza
    */
   async deletePoliza(id: string): Promise<ApiResponse<void>> {
@@ -1517,6 +1544,18 @@ export const polizaService = {
     try {
       const r = await makeRequest<Array<{ key: string; label: string }>>(
         `${API_PREFIX}/cancellation-reasons`,
+        { method: 'GET' },
+      );
+      return (r as any)?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getNonRenewalReasons(): Promise<Array<{ key: string; label: string }>> {
+    try {
+      const r = await makeRequest<Array<{ key: string; label: string }>>(
+        `${API_PREFIX}/non-renewal-reasons`,
         { method: 'GET' },
       );
       return (r as any)?.data || [];

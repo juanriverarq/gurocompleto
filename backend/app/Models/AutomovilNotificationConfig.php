@@ -327,9 +327,12 @@ class AutomovilNotificationConfig extends Model
             $query->whereDate($dateField, '>=', $dateFrom)
                   ->whereDate($dateField, '<=', $dateTo);
 
-            // Excluir los ya notificados hoy para este tipo
+            // Excluir los que YA SE ENVIARON exitosamente hoy para este tipo.
+            // Los intentos fallidos NO bloquean — el auto debe reaparecer
+            // para que el operador pueda reintentar tras corregir la plantilla.
             $query->whereDoesntHave('notificationLogs', function($q) use ($type) {
                 $q->where('notification_type', $type)
+                  ->where('status', 'sent')
                   ->where('created_at', '>=', now()->startOfDay());
             });
 
@@ -352,14 +355,33 @@ class AutomovilNotificationConfig extends Model
 
                 $sendDate = $this->calculateSendDateForAuto($eventDate, $daysArray);
 
+                $clientName = $client
+                    ? ($client->full_name ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: '-')
+                    : '-';
+                $clientDoc = $client?->document_number ?? '';
+                $clientPhone = $client?->mobile_phone ?? $client?->phone ?? '';
+
                 $scheduled[] = [
+                    // Campos esperados por el frontend (ScheduledAutomovilNotification)
                     'automovil_id' => $auto->id,
                     'placa' => $auto->placa ?? '-',
+                    'marca' => $auto->marca ?? '',
+                    'linea' => $auto->linea ?? '',
+                    'modelo' => $auto->anio ?? '',
+                    'color' => $auto->color ?? '',
+                    'cliente' => $client ? [
+                        'id' => $client->id,
+                        'nombre' => $clientName,
+                        'documento' => $clientDoc,
+                        'celular' => $clientPhone,
+                    ] : null,
+                    'notification_type' => $type === 'rtm' ? 'tecnomecanica' : $type,
+                    'scheduled_date' => $sendDate?->format('Y-m-d H:i:s') ?? $eventDate->format('Y-m-d H:i:s'),
+                    'days_until' => $daysUntilEvent,
+                    'template_name' => $type === 'soat' ? $this->soat_template : $this->rtm_template,
+                    // Campos legacy (compat)
                     'vehiculo' => trim(($auto->marca ?? '') . ' ' . ($auto->linea ?? '') . ' ' . ($auto->anio ?? '')),
-                    'client_name' => $client
-                        ? ($client->full_name ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: '-')
-                        : '-',
-                    'notification_type' => $type,
+                    'client_name' => $clientName,
                     'notification_type_label' => $type === 'soat' ? 'SOAT' : 'Técnico-mecánica',
                     'event_date' => $eventDate->format('Y-m-d'),
                     'days_until_event' => $daysUntilEvent,

@@ -494,7 +494,19 @@ const ComisionesAseguradoras: React.FC = () => {
               <p className="text-xs mt-1">Sincroniza el período seleccionado para ver recibos aquí.</p>
             </div>
           ) : (
-            <table className="w-full text-left">
+            <table className="w-full min-w-[1280px] table-fixed text-left">
+              <colgroup>
+                <col className="w-[180px]" />
+                <col className="w-[240px]" />
+                <col className="w-[145px]" />
+                <col className="w-[145px]" />
+                <col className="w-[130px]" />
+                <col className="w-[155px]" />
+                <col className="w-[115px]" />
+                <col className="w-[125px]" />
+                <col className="w-[80px]" />
+                <col className="w-[130px]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-gray-200 dark:border-neutral-800 text-[11px] uppercase tracking-wider text-gray-500 dark:text-neutral-500">
                   <th className="px-4 py-3 font-medium">Aseguradora</th>
@@ -517,22 +529,32 @@ const ComisionesAseguradoras: React.FC = () => {
                     className="hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors cursor-pointer"
                   >
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-md bg-white flex items-center justify-center overflow-hidden border border-gray-200">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="w-7 h-7 shrink-0 rounded-md bg-white flex items-center justify-center overflow-hidden border border-gray-200">
                           {INSURER_LOGOS[row.insurer_code] ? (
                             <img src={INSURER_LOGOS[row.insurer_code]} alt="" className="w-5 h-5 object-contain" />
                           ) : (
                             <span className="text-[9px] font-bold text-[#111]">{row.insurer_name.charAt(0)}</span>
                           )}
                         </div>
-                        <span className="text-xs text-gray-700 dark:text-neutral-300 hidden md:inline">{row.insurer_name}</span>
+                        <span className="min-w-0 truncate text-xs text-gray-700 dark:text-neutral-300 hidden md:inline" title={row.insurer_name}>{row.insurer_name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white max-w-[200px] truncate" title={row.client_name || ''}>{row.client_name || '—'}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-neutral-500">{row.client_document || '—'}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-gray-600 dark:text-neutral-400">{row.policy_number || '—'}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-gray-600 dark:text-neutral-400">{row.numero_recibo || '—'}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 dark:text-neutral-400" title={row.ramo_codigo || ''}>{getRamoLabel(row.ramo_codigo, row.insurer_code)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                      <div className="truncate" title={row.client_name || undefined}>{row.client_name || '—'}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-neutral-500">
+                      <div className="truncate" title={row.client_document || undefined}>{row.client_document || '—'}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs font-mono text-gray-600 dark:text-neutral-400">
+                      <div className="truncate" title={row.policy_number || undefined}>{row.policy_number || '—'}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs font-mono text-gray-600 dark:text-neutral-400">
+                      <div className="truncate" title={row.numero_recibo || undefined}>{row.numero_recibo || '—'}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600 dark:text-neutral-400">
+                      <div className="truncate" title={row.ramo_codigo || undefined}>{getRamoLabel(row.ramo_codigo, row.insurer_code)}</div>
+                    </td>
                     <td className="px-4 py-3 text-xs text-gray-500 dark:text-neutral-500 whitespace-nowrap">{fmtDate(row.fecha_recaudo)}</td>
                     <td className="px-4 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-neutral-300">{fmt(row.valor_pagado_tomador)}</td>
                     <td className="px-4 py-3 text-xs text-right tabular-nums text-gray-500 dark:text-neutral-500">{Number(row.porcentaje_comision).toFixed(1)}%</td>

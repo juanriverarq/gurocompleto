@@ -56,6 +56,8 @@ const EXPORT_COLUMNS = [
   { id: 'telefono_cliente', label: 'Teléfono Cliente', default: false },
   { id: 'email_cliente', label: 'Email Cliente', default: false },
   { id: 'observaciones', label: 'Observaciones', default: true },
+  { id: 'fecha_cancelacion', label: 'Fecha Cancelación', default: false },
+  { id: 'motivo_cancelacion', label: 'Motivo Cancelación', default: false },
 ];
 
 interface CatalogItem { id: number | string; nombre: string; subramo?: any }
@@ -89,6 +91,10 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
 
   // Subramo filter
   const [subramoFilter, setSubramoFilter] = useState('');
+
+  // Multi-ramo filter (supports include/exclude mode)
+  const [ramoIds, setRamoIds] = useState<string[]>([]);
+  const [ramoMode, setRamoMode] = useState<'include' | 'exclude'>('include');
 
   // Load catalogs when modal opens
   useEffect(() => {
@@ -135,14 +141,15 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
       setExportFilters(currentFilters);
       setUseCurrentFilters(true);
       setSubramoFilter('');
+      setRamoIds(currentFilters.ramo_id ? [String(currentFilters.ramo_id)] : []);
+      setRamoMode('include');
     }
   }, [isOpen, currentFilters]);
 
-  // Get subramos for selected ramo
+  // Subramo only available when exactly 1 ramo is selected in include mode
   const subramoOptions = useMemo(() => {
-    const ramoId = exportFilters.ramo_id;
-    if (!ramoId) return [];
-    const ramo = ramosList.find(r => String(r.id) === String(ramoId));
+    if (ramoMode !== 'include' || ramoIds.length !== 1) return [];
+    const ramo = ramosList.find(r => String(r.id) === ramoIds[0]);
     if (!ramo || !ramo.subramo) return [];
     let raw = ramo.subramo;
     if (typeof raw === 'string') {
@@ -150,7 +157,12 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
     }
     if (Array.isArray(raw)) return raw.filter((s: any) => typeof s === 'string' && s.trim());
     return [];
-  }, [exportFilters.ramo_id, ramosList]);
+  }, [ramoIds, ramoMode, ramosList]);
+
+  const toggleRamoId = (id: string) => {
+    setRamoIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setSubramoFilter('');
+  };
 
   const toggleColumn = (columnId: string) => {
     setSelectedColumns(prev =>
@@ -168,7 +180,11 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
     let count = 0;
     if (f.search) count++;
     if (f.aseguradora || f.aseguradora_id) count++;
-    if (f.ramo || f.ramo_id) count++;
+    if (useCurrentFilters) {
+      if (f.ramo || f.ramo_id) count++;
+    } else if (ramoIds.length > 0) {
+      count++;
+    }
     if (f.estado) count++;
     if (f.vendedor) count++;
     if (f.fecha_inicio) count++;
@@ -176,9 +192,12 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
     if (f.renovable !== undefined && f.renovable !== '') count++;
     if (f.fecha_recepcion_desde) count++;
     if (f.fecha_recepcion_hasta) count++;
+    if (f.cancelled_desde) count++;
+    if (f.cancelled_hasta) count++;
     if (subramoFilter) count++;
+    if (f.forma_pago) count++;
     return count;
-  }, [useCurrentFilters, currentFilters, exportFilters, subramoFilter]);
+  }, [useCurrentFilters, currentFilters, exportFilters, subramoFilter, ramoIds]);
 
   const handleExport = async () => {
     try {
@@ -199,6 +218,17 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
           exportFiltersClean[key] = value;
         }
       });
+
+      // Multi-ramo include/exclude (overrides single ramo_id)
+      if (!useCurrentFilters && ramoIds.length > 0) {
+        delete exportFiltersClean.ramo_id;
+        delete exportFiltersClean.ramo;
+        if (ramoMode === 'include') {
+          exportFiltersClean.ramo_ids = ramoIds.join(',');
+        } else {
+          exportFiltersClean.exclude_ramo_ids = ramoIds.join(',');
+        }
+      }
 
       // Add subramo filter if set
       if (!useCurrentFilters && subramoFilter) {
@@ -241,8 +271,10 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
   };
 
   const resetFilters = () => {
-    setExportFilters({ search: '', aseguradora: '', aseguradora_id: '', ramo: '', ramo_id: '', estado: '', vendedor: '', fecha_inicio: '', fecha_fin: '', fecha_recepcion_desde: '', fecha_recepcion_hasta: '', renovable: '' });
+    setExportFilters({ search: '', aseguradora: '', aseguradora_id: '', ramo: '', ramo_id: '', estado: '', vendedor: '', fecha_inicio: '', fecha_fin: '', fecha_recepcion_desde: '', fecha_recepcion_hasta: '', cancelled_desde: '', cancelled_hasta: '', renovable: '', forma_pago: '' });
     setSubramoFilter('');
+    setRamoIds([]);
+    setRamoMode('include');
   };
 
   // Helper to get display name
@@ -357,14 +389,46 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
                   </Popover>
                 </div>
 
-                {/* Ramo - searchable */}
+                {/* Ramo - multi-select with include/exclude */}
                 <div className="space-y-1">
-                  <Label className="text-xs">Ramo</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Ramo</Label>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setRamoMode('include')}
+                        className={cn(
+                          'text-[10px] px-2 py-0.5 rounded border transition-all',
+                          ramoMode === 'include'
+                            ? 'bg-green-100 dark:bg-green-900/30 border-green-400 text-green-700 dark:text-green-300'
+                            : 'border-gray-300 text-gray-500 hover:border-gray-400'
+                        )}
+                      >
+                        Incluir
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRamoMode('exclude')}
+                        className={cn(
+                          'text-[10px] px-2 py-0.5 rounded border transition-all',
+                          ramoMode === 'exclude'
+                            ? 'bg-red-100 dark:bg-red-900/30 border-red-400 text-red-700 dark:text-red-300'
+                            : 'border-gray-300 text-gray-500 hover:border-gray-400'
+                        )}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
                   <Popover open={ramoOpen} onOpenChange={setRamoOpen}>
                     <PopoverTrigger asChild>
                       <button className="flex items-center justify-between w-full h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-darkgray text-sm">
-                        <span className={exportFilters.ramo_id ? 'text-gray-900 dark:text-white' : 'text-gray-500'}>
-                          {exportFilters.ramo_id ? getRamoName(exportFilters.ramo_id) : 'Buscar ramo...'}
+                        <span className={ramoIds.length > 0 ? 'text-gray-900 dark:text-white' : 'text-gray-500'}>
+                          {ramoIds.length === 0
+                            ? 'Buscar ramos...'
+                            : ramoIds.length === 1
+                              ? getRamoName(ramoIds[0])
+                              : `${ramoIds.length} ramos ${ramoMode === 'include' ? 'incluidos' : 'excluidos'}`}
                         </span>
                         <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
                       </button>
@@ -375,21 +439,30 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
                         <CommandList>
                           <CommandEmpty>No encontrado</CommandEmpty>
                           <CommandGroup>
-                            <CommandItem onSelect={() => { setFilter('ramo_id', ''); setFilter('ramo', ''); setSubramoFilter(''); setRamoOpen(false); }}>
-                              <Check className={cn("mr-2 h-3 w-3", !exportFilters.ramo_id ? "opacity-100" : "opacity-0")} />
-                              Todos
+                            <CommandItem onSelect={() => { setRamoIds([]); setSubramoFilter(''); }}>
+                              <Check className={cn("mr-2 h-3 w-3", ramoIds.length === 0 ? "opacity-100" : "opacity-0")} />
+                              Limpiar selección
                             </CommandItem>
-                            {ramosList.map(r => (
-                              <CommandItem key={r.id} value={r.nombre} onSelect={() => { setFilter('ramo_id', r.id); setFilter('ramo', ''); setSubramoFilter(''); setRamoOpen(false); }}>
-                                <Check className={cn("mr-2 h-3 w-3", String(exportFilters.ramo_id) === String(r.id) ? "opacity-100" : "opacity-0")} />
-                                {r.nombre}
-                              </CommandItem>
-                            ))}
+                            {ramosList.map(r => {
+                              const id = String(r.id);
+                              const checked = ramoIds.includes(id);
+                              return (
+                                <CommandItem key={r.id} value={r.nombre} onSelect={() => toggleRamoId(id)}>
+                                  <Check className={cn("mr-2 h-3 w-3", checked ? "opacity-100" : "opacity-0")} />
+                                  {r.nombre}
+                                </CommandItem>
+                              );
+                            })}
                           </CommandGroup>
                         </CommandList>
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  {ramoIds.length > 1 && (
+                    <p className="text-[10px] text-gray-500">
+                      {ramoMode === 'include' ? 'Solo se exportarán pólizas de estos ramos' : 'Se excluirán pólizas de estos ramos'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Subramo - only shows when ramo selected and has subramos */}
@@ -458,6 +531,21 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
                   </Select>
                 </div>
 
+                {/* Forma de pago */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Forma de pago</Label>
+                  <Select value={(exportFilters.forma_pago as string) || 'all'} onValueChange={(v) => setFilter('forma_pago', v === 'all' ? '' : v)}>
+                    <SelectTrigger className="w-full h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="contado">Contado</SelectItem>
+                      <SelectItem value="fraccionado">Fraccionado</SelectItem>
+                      <SelectItem value="financiado">Financiado</SelectItem>
+                      <SelectItem value="credito">Crédito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Vendedor - searchable */}
                 <div className="space-y-1 md:col-span-2">
                   <Label className="text-xs">Vendedor</Label>
@@ -522,6 +610,22 @@ const PolizasExportModal: React.FC<Props> = ({ isOpen, onClose, currentFilters }
                     <Input type="date" value={exportFilters.fecha_recepcion_hasta || ''} onChange={(e) => setFilter('fecha_recepcion_hasta', e.target.value)} className="h-9" />
                   </div>
                 </div>
+              </div>
+
+              {/* Fechas de cancelación - aplica para cualquier estado (filtra por cancelled_at) */}
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <Label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 block">Fechas de Cancelación</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Desde</Label>
+                    <Input type="date" value={exportFilters.cancelled_desde || ''} onChange={(e) => setFilter('cancelled_desde', e.target.value)} className="h-9" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Hasta</Label>
+                    <Input type="date" value={exportFilters.cancelled_hasta || ''} onChange={(e) => setFilter('cancelled_hasta', e.target.value)} className="h-9" />
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">Filtra por la fecha en que la póliza fue cancelada (cancelled_at). Funciona con cualquier estado seleccionado.</p>
               </div>
             </div>
           )}

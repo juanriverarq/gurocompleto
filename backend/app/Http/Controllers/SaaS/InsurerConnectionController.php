@@ -30,6 +30,7 @@ class InsurerConnectionController extends Controller
                 'axa-colpatria' => 'Axa Colpatria',
                 'seguros-del-estado' => 'Seguros del Estado',
                 'la-equidad' => 'La Equidad',
+                'allianz' => 'Allianz',
             ];
 
             $rows = [];
@@ -309,13 +310,19 @@ class InsurerConnectionController extends Controller
             $mfaCode = $request->input('mfa_code');
             $challengeId = $request->input('challenge_id');
 
+            // Si el usuario está enviando el código MFA (paso 2 del flujo),
+            // ejecutar el job de forma síncrona para que llegue al microservicio
+            // en segundos (no minutos via queue). El código SURA expira en ~15s.
+            $isSyncMfaSubmit = !empty($mfaCode) && !empty($challengeId);
+
             return $this->dispatchConnectJob(
                 $brokerId,
                 $insurer,
                 'connect_auto',
                 $challengeId ? null : $credentials,
                 $mfaCode,
-                $challengeId
+                $challengeId,
+                $isSyncMfaSubmit
             );
         } catch (\Throwable $e) {
             return response()->json([
@@ -391,6 +398,8 @@ class InsurerConnectionController extends Controller
 
     /**
      * Encola ConnectInsurerJob, marca la conexión como `queued` y devuelve 202.
+     * Si $sync = true, ejecuta el job inline (sin esperar al worker) — usado
+     * para submission de MFA donde el código expira en segundos.
      */
     private function dispatchConnectJob(
         int $brokerId,
@@ -399,6 +408,7 @@ class InsurerConnectionController extends Controller
         ?array $credentials = null,
         ?string $mfaCode = null,
         ?string $challengeId = null,
+        bool $sync = false,
     ) {
         $connection = InsurerConnection::firstOrNew([
             'broker_id' => $brokerId,
@@ -411,24 +421,58 @@ class InsurerConnectionController extends Controller
 
         $jobId = (string) Str::uuid();
         $connection->update([
-            'connect_job_status'      => 'queued',
+            'connect_job_status'      => $sync ? 'processing' : 'queued',
             'connect_job_id'          => $jobId,
             'connect_job_mode'        => $mode,
-            'connect_job_message'     => 'Conexión en cola…',
+            'connect_job_message'     => $sync ? 'Procesando código MFA…' : 'Conexión en cola…',
             'connect_job_error'       => null,
             'connect_job_challenge_id'=> $challengeId,
-            'connect_job_started_at'  => null,
+            'connect_job_started_at'  => $sync ? now() : null,
             'connect_job_finished_at' => null,
         ]);
 
-        ConnectInsurerJob::dispatch(
-            $connection->id,
-            $insurer,
-            $mode,
-            $credentials,
-            $mfaCode,
-            $challengeId,
-        );
+        if ($sync) {
+            // Ejecución síncrona (inline) para que el código MFA llegue al
+            // microservicio en segundos, antes de que expire (SURA ~15s).
+            ConnectInsurerJob::dispatchSync(
+                $connection->id,
+                $insurer,
+                $mode,
+                $credentials,
+                $mfaCode,
+                $challengeId,
+            );
+        } else {
+            ConnectInsurerJob::dispatch(
+                $connection->id,
+                $insurer,
+                $mode,
+                $credentials,
+                $mfaCode,
+                $challengeId,
+            );
+        }
+
+        // Si fue sync, el job ya terminó. Refresh y devolver el estado real
+        // para que el frontend no tenga que esperar el primer poll.
+        if ($sync) {
+            $connection->refresh();
+            $finalStatus = $connection->connect_job_status ?? 'unknown';
+            $okStatus = in_array($finalStatus, ['success', 'requires_mfa'], true);
+            return response()->json([
+                'success' => $okStatus,
+                'queued'  => false,
+                'message' => $connection->connect_job_message ?? ($okStatus ? 'Conexión exitosa' : 'Error en la conexión'),
+                'data' => [
+                    'insurer_code'           => $insurer,
+                    'connect_job_id'         => $jobId,
+                    'connect_job_status'     => $finalStatus,
+                    'connect_job_mode'       => $mode,
+                    'connect_job_error'      => $connection->connect_job_error,
+                    'connect_job_challenge_id' => $connection->connect_job_challenge_id,
+                ],
+            ], $okStatus ? 200 : 422);
+        }
 
         return response()->json([
             'success' => true,

@@ -19,6 +19,9 @@ class CarteraConsolidadaController extends Controller
         $tab = $request->input('tab', 'todos');
         $search = $request->input('search', '');
         $insurer = $request->input('insurer');
+        // link_filter: 'all' | 'linked' | 'unlinked' — filtra por vínculo con
+        // cliente Y póliza en Guro (LEFT JOIN). Por defecto no filtra.
+        $linkFilter = $request->input('link_filter', 'all');
 
         // IMPORTANTE: cada fila de `cartera_aseguradoras` es UNA cuota/recibo
         // pendiente. Varias cuotas de la misma póliza se consolidan aquí para
@@ -86,9 +89,14 @@ class CarteraConsolidadaController extends Controller
                 COALESCE(p.premium_amount, 0) as prima_poliza,
                 COALESCE(p.total_amount, 0) as total_poliza,
                 p.id as poliza_id,
-                -- prima_total: prioridad a la prima real de la póliza; si es 0 usar suma de cuotas
-                CASE WHEN p.premium_amount > 0 THEN p.premium_amount ELSE agg.prima_cuotas END as prima_total,
-                -- valor_pagado_total: si hay prima real de póliza, derivar lo pagado como prima - pendiente
+                p.client_id as client_id,
+                -- prima_total: el mayor entre prima del contrato y suma de cuotas facturadas.
+                -- En planes con cobro mensual recurrente (ej. SURA Plan Complementario), las cuotas
+                -- acumuladas pueden superar la prima anual contratada — en ese caso prima_cuotas
+                -- representa mejor el monto facturado y evita que prima < pendiente.
+                GREATEST(COALESCE(p.premium_amount, 0), COALESCE(agg.prima_cuotas, 0)) as prima_total,
+                -- valor_pagado_total: si hay prima real de póliza Y cubre las cuotas, derivar
+                -- lo pagado como prima - pendiente; sino usar lo pagado registrado en cuotas.
                 CASE
                     WHEN p.premium_amount > 0 AND p.premium_amount >= agg.valor_pendiente
                         THEN p.premium_amount - agg.valor_pendiente
@@ -98,6 +106,15 @@ class CarteraConsolidadaController extends Controller
 
         if ($tab !== 'todos') {
             $query->where('rango_mora', $tab);
+        }
+
+        // Filtro por vínculo: 'linked' = ambos (cliente y póliza); 'unlinked' = falta alguno.
+        if ($linkFilter === 'linked') {
+            $query->whereNotNull('p.id')->whereNotNull('p.client_id');
+        } elseif ($linkFilter === 'unlinked') {
+            $query->where(function ($q) {
+                $q->whereNull('p.id')->orWhereNull('p.client_id');
+            });
         }
 
         $query->orderByDesc('dias_mora')->orderByDesc('valor_pendiente');
@@ -157,6 +174,7 @@ class CarteraConsolidadaController extends Controller
     {
         $brokerId = $this->resolveBrokerId($request);
         $insurer = $request->input('insurer');
+        $linkFilter = $request->input('link_filter', 'all');
 
         // Stats también se calculan sobre pólizas consolidadas, no sobre filas
         // individuales. Para ello usamos una subquery agrupada por póliza y el
@@ -170,6 +188,10 @@ class CarteraConsolidadaController extends Controller
             })
             ->where('ca.broker_id', $brokerId)
             ->when($insurer, fn ($q) => $q->where('ca.insurer_code', $insurer))
+            ->when($linkFilter === 'linked', fn ($q) => $q->whereNotNull('p.id')->whereNotNull('p.client_id'))
+            ->when($linkFilter === 'unlinked', fn ($q) => $q->where(function ($qq) {
+                $qq->whereNull('p.id')->orWhereNull('p.client_id');
+            }))
             ->groupBy('ca.broker_id', 'ca.insurer_code', 'ca.insurer_name', 'ca.policy_number', 'p.premium_amount')
             ->selectRaw("
                 ca.insurer_code, ca.insurer_name, ca.policy_number,
@@ -209,10 +231,20 @@ class CarteraConsolidadaController extends Controller
             ->selectRaw('MAX(synced_at) as last_sync')
             ->first();
 
-        // Total de cuotas individuales (para mostrar "X pólizas · Y cuotas")
-        $cuotasCount = DB::table('cartera_aseguradoras')
-            ->where('broker_id', $brokerId)
-            ->when($insurer, fn ($q) => $q->where('insurer_code', $insurer))
+        // Total de cuotas individuales (para mostrar "X pólizas · Y cuotas").
+        // Si hay link_filter activo, contar solo las cuotas de pólizas que matchean.
+        $cuotasCount = DB::table('cartera_aseguradoras as ca')
+            ->leftJoin('polizas as p', function ($join) {
+                $join->on('p.broker_id', '=', 'ca.broker_id')
+                     ->on('p.policy_number', '=', 'ca.policy_number')
+                     ->whereNull('p.deleted_at');
+            })
+            ->where('ca.broker_id', $brokerId)
+            ->when($insurer, fn ($q) => $q->where('ca.insurer_code', $insurer))
+            ->when($linkFilter === 'linked', fn ($q) => $q->whereNotNull('p.id')->whereNotNull('p.client_id'))
+            ->when($linkFilter === 'unlinked', fn ($q) => $q->where(function ($qq) {
+                $qq->whereNull('p.id')->orWhereNull('p.client_id');
+            }))
             ->count();
 
         $tabCounts = [

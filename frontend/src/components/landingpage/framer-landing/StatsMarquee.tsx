@@ -4,7 +4,7 @@ import { useRef } from 'react';
 const stats = [
   { value: '+$500MM', label: 'En pólizas administradas desde Guro' },
   { value: '500+', label: 'Agencias en Latinoamérica' },
-  { value: '1M+', label: 'Pólizas administradas' },
+  { value: '97K+', label: 'Pólizas administradas' },
   { value: '3x', label: 'Más rápido procesando pólizas' },
   { value: '97%', label: 'Retención de clientes' },
   { value: '45%', label: 'Más conversión de leads' },

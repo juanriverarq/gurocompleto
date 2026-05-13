@@ -1034,6 +1034,7 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::post('/cancel-detail-sync', [SaasPolizasController::class, 'cancelDetailSync']);
             Route::get('/detail-sync-progress', [SaasPolizasController::class, 'detailSyncProgress']);
             Route::post('/{id}/sync-detail', [SaasPolizasController::class, 'syncPolizaDetail'])->whereNumber('id');
+            Route::post('/{id}/regenerar-cartera-cuotas', [SaasPolizasController::class, 'regenerarCarteraCuotas'])->whereNumber('id');
             Route::get('/{id}/caratula-pdf', [SaasPolizasController::class, 'downloadCaratulaPdf'])->whereNumber('id');
             Route::get('/{id}', [SaasPolizasController::class, 'show'])->whereNumber('id');
             Route::put('/{id}', [SaasPolizasController::class, 'update'])->whereNumber('id');
@@ -1046,6 +1047,7 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/{id}/documents/stream', [PolizaDocumentsController::class, 'stream'])->whereNumber('id');
             Route::post('/{id}/cambiar-estado', [SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
             Route::get('/cancellation-reasons', [SaasPolizasController::class, 'cancellationReasons']);
+            Route::get('/non-renewal-reasons', [SaasPolizasController::class, 'nonRenewalReasons']);
 
             // Renovaciones
             Route::get('/renovaciones', [SaasPolizasController::class, 'renovacionesDev']);
@@ -1069,12 +1071,16 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
         Route::get('automoviles/catalogos', [AutomovilesController::class, 'catalogos']);
         Route::prefix('automoviles')->group(function () {
             Route::get('/', [AutomovilesController::class, 'index']);
+            Route::get('/tab-counts', [AutomovilesController::class, 'tabCounts']);
             Route::post('/', [AutomovilesController::class, 'store']);
             Route::get('/{id}', [AutomovilesController::class, 'show'])->whereNumber('id');
             Route::put('/{id}', [AutomovilesController::class, 'update'])->whereNumber('id');
             Route::delete('/{id}', [AutomovilesController::class, 'destroy'])->whereNumber('id');
             Route::post('/{id}/consultar-runt', [AutomovilesController::class, 'consultarRunt'])->whereNumber('id');
             Route::post('/sync-runt', [AutomovilesController::class, 'syncRuntMasivo']);
+            // Versión JSON (no streaming) — recomendada en producción detrás de
+            // Apache/Cloudflare donde SSE se buffereaba. El frontend encadena batches.
+            Route::post('/sync-runt-json', [AutomovilesController::class, 'syncRuntMasivoJson']);
         });
 
         // Comisiones Manuales de Pólizas
@@ -1251,6 +1257,15 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'index']);
             Route::get('/stats', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'stats']);
             Route::get('/cuotas/{policyNumber}', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'cuotas']);
+        });
+
+        // Papelera (registros soft-deleted) — listar / restaurar / eliminar definitivo / exportar
+        Route::prefix('papelera')->group(function () {
+            Route::get('/entidades', [App\Http\Controllers\SaaS\PapeleraController::class, 'entidades']);
+            Route::get('/{entidad}', [App\Http\Controllers\SaaS\PapeleraController::class, 'index']);
+            Route::get('/{entidad}/exportar', [App\Http\Controllers\SaaS\PapeleraController::class, 'exportar']);
+            Route::post('/{entidad}/restaurar', [App\Http\Controllers\SaaS\PapeleraController::class, 'restaurar']);
+            Route::post('/{entidad}/eliminar', [App\Http\Controllers\SaaS\PapeleraController::class, 'eliminarDefinitivo']);
         });
 
         // Recibos con comisiones sincronizados desde aseguradoras (Sura por ahora)
@@ -2409,6 +2424,7 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
 // ═══════════════════════════════════════════════════════════════
 Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('saas/cartera-simple')->group(function () {
     Route::get('/timeline', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'timeline']);
+    Route::get('/exportar', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'exportar']);
     Route::get('/settings', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'getSettings']);
     Route::post('/settings', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'updateSettings']);
     Route::get('/cuota/{itemId}', [\App\Http\Controllers\Api\CarteraSimpleController::class, 'detalle'])->whereNumber('itemId');

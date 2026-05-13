@@ -41,8 +41,8 @@ class SendCommercialTaskNotifications extends Command
                     ->first();
             }
 
-            // Fecha de referencia: scheduled_for o due_date
-            $referenceDate = $task->scheduled_for ?? $task->due_date;
+            // Fecha de referencia: due_date (límite explícito) o scheduled_for como fallback
+            $referenceDate = $task->due_date ?? $task->scheduled_for;
             if (!$referenceDate) continue;
 
             // ¿Ya pasó la fecha límite?

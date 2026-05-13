@@ -101,6 +101,10 @@ export interface PolicyNotificationLog {
   error_message?: string;
   sent_at?: string;
   failed_at?: string;
+  delivered_at?: string | null;
+  read_at?: string | null;
+  delivery_failed_at?: string | null;
+  delivery_error?: string | null;
   policy_data?: any;
   metadata?: any;
   created_at: string;

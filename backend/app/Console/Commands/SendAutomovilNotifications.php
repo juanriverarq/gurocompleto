@@ -109,11 +109,12 @@ class SendAutomovilNotifications extends Command
                 continue;
             }
 
-            // Verificar si ya se envió notificación hoy
+            // Verificar si ya se intentó hoy (incluye failed para evitar
+            // reintentos en bucle dentro de la misma hora). Mismo criterio
+            // que SendPolicyNotifications.
             $alreadySent = AutomovilNotificationLog::where('automovil_id', $auto->id)
                 ->where('notification_type', $type)
                 ->where('created_at', '>=', now()->startOfDay())
-                ->whereIn('status', ['sent', 'skipped'])
                 ->exists();
 
             if ($alreadySent) {
@@ -180,7 +181,18 @@ class SendAutomovilNotifications extends Command
             }
 
             $targetDate = now()->addDays($days)->startOfDay();
-            $query->whereDate($dateField, '=', $targetDate);
+
+            // Si skip_weekends está activo y hoy es viernes, el viernes absorbe
+            // el trabajo del sábado (`Fri+N+1` = `Sat+N`) y del domingo
+            // (`Fri+N+2` = `Sun+N`). Sin esto se pierden los avisos cuyo cron-day
+            // calculado caería en sábado o domingo.
+            $datesToCover = [$targetDate->copy()];
+            if (now()->isFriday() && (int) ($config->skip_weekends ?? 0) === 1) {
+                $datesToCover[] = $targetDate->copy()->addDay();    // trabajo del sábado
+                $datesToCover[] = $targetDate->copy()->addDays(2);  // trabajo del domingo
+            }
+            $datesISO = array_map(fn($d) => $d->format('Y-m-d'), $datesToCover);
+            $query->whereIn(\DB::raw("DATE($dateField)"), $datesISO);
 
             foreach ($query->get() as $auto) {
                 if (!in_array($auto->id, $unique)) {
@@ -223,6 +235,38 @@ class SendAutomovilNotifications extends Command
         if (strlen($phone) === 12 && substr($phone, 0, 2) === '57') return '+' . $phone;
         if (strlen($phone) === 10 && substr($phone, 0, 1) === '3') return '+57' . $phone;
         return '+' . $phone;
+    }
+
+    /** Cache de param count por instancia+template para evitar llamadas repetidas. */
+    private array $templateParamCache = [];
+
+    /**
+     * Devuelve el número de parámetros que espera la plantilla en el body,
+     * consultando la lista de plantillas APPROVED de la instancia. Cachea por run.
+     * Devuelve null si no se puede determinar.
+     */
+    private function getTemplateParamCount(WhatsAppCloudApiService $cloudApi, $instance, string $templateName): ?int
+    {
+        $key = $instance->id . ':' . $templateName;
+        if (array_key_exists($key, $this->templateParamCache)) {
+            return $this->templateParamCache[$key];
+        }
+        try {
+            $result = $cloudApi->getMessageTemplates($instance, 'APPROVED', 100);
+            if (!($result['success'] ?? false)) {
+                return $this->templateParamCache[$key] = null;
+            }
+            foreach (($result['data'] ?? []) as $t) {
+                if (($t['name'] ?? '') === $templateName) {
+                    $body = collect($t['components'] ?? [])->firstWhere('type', 'BODY');
+                    $count = preg_match_all('/\{\{\d+\}\}/', $body['text'] ?? '');
+                    return $this->templateParamCache[$key] = $count;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silencioso — el envío seguirá adelante con los params originales.
+        }
+        return $this->templateParamCache[$key] = null;
     }
 
     private function sendNotification(
@@ -271,23 +315,41 @@ class SendAutomovilNotifications extends Command
                     ? ($client->full_name ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? '')) ?: 'Cliente')
                     : 'Cliente';
 
+                // Orden de variables expuesto en la UI (modal de notificaciones):
+                //   {{1}} nombre  · {{2}} placa  · {{3}} fecha vencimiento  · {{4}} marca+linea  · {{5}} aseguradora/CDA
+                // Plantillas con menos variables se truncan abajo (array_slice), así que
+                // las primeras 3 deben ser siempre nombre / placa / fecha.
                 $templateParams = match($type) {
                     'soat' => [
                         $clientName,
                         $auto->placa ?? '-',
-                        trim(($auto->marca ?? '') . ' ' . ($auto->linea ?? '')) ?: '-',
                         $auto->fecha_vencimiento_soat ? $auto->fecha_vencimiento_soat->format('d/m/Y') : 'N/A',
+                        trim(($auto->marca ?? '') . ' ' . ($auto->linea ?? '')) ?: '-',
                         $auto->aseguradora_soat ?? '-',
                     ],
                     'rtm' => [
                         $clientName,
                         $auto->placa ?? '-',
-                        trim(($auto->marca ?? '') . ' ' . ($auto->linea ?? '')) ?: '-',
                         $auto->fecha_vencimiento_rtm ? $auto->fecha_vencimiento_rtm->format('d/m/Y') : 'N/A',
+                        trim(($auto->marca ?? '') . ' ' . ($auto->linea ?? '')) ?: '-',
                         $auto->nombre_cda_rtm ?? '-',
                     ],
                     default => [],
                 };
+
+                // Ajustar el número de parámetros al que espera la plantilla.
+                // Si el usuario eligió una plantilla genérica (e.g. de pagos) que
+                // espera 6 params pero el cron de autos envía 5, padeamos con
+                // strings vacíos. Si la plantilla espera menos, truncamos.
+                $expectedCount = $this->getTemplateParamCount($cloudApi, $config->whatsappInstance, $templateName);
+                if ($expectedCount !== null) {
+                    $current = count($templateParams);
+                    if ($current < $expectedCount) {
+                        $templateParams = array_pad($templateParams, $expectedCount, '-');
+                    } elseif ($current > $expectedCount) {
+                        $templateParams = array_slice($templateParams, 0, $expectedCount);
+                    }
+                }
 
                 $components = [];
                 if (!empty($templateParams)) {

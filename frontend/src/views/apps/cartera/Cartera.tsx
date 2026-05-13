@@ -11,15 +11,17 @@ import {
   type Accion,
   type CarteraSettings,
 } from 'src/services/carteraSimpleService';
+import { printRecibo } from './printRecibo';
+import CarteraExportModal from './CarteraExportModal';
 
 // ─── Helpers ────────────────────────────────────────────────────────
-const fmt = (n: number | null | undefined) =>
+const fmt = (n: number | string | null | undefined) =>
   new Intl.NumberFormat('es-CO', {
     style: 'currency',
     currency: 'COP',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(n || 0);
+  }).format(Number(n || 0));
 
 const fmtDate = (d: string | null) => {
   if (!d) return '—';
@@ -132,6 +134,8 @@ const Cartera: React.FC = () => {
 
   // Modals
   const [detailRow, setDetailRow] = useState<Cuota | null>(null);
+  const [detailData, setDetailData] = useState<any | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [payModal, setPayModal] = useState<{ cuota: Cuota; action: ActionKey } | null>(null);
   const [paying, setPaying] = useState(false);
   const [payForm, setPayForm] = useState({
@@ -144,6 +148,7 @@ const Cartera: React.FC = () => {
 
   // Settings
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [settings, setSettings] = useState<CarteraSettings>({ auto_cobrar_comision: false });
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -211,6 +216,55 @@ const Cartera: React.FC = () => {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const openDetail = async (row: Cuota) => {
+    setDetailRow(row);
+    setDetailData(null);
+    setDetailLoading(true);
+    try {
+      const res = await carteraSimpleService.detalle(row.id);
+      if (res.success) setDetailData(res);
+    } catch {
+      setDetailData(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const imprimirRecibo = (recibo: any, cuota: Cuota, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    printRecibo({
+      numero_recibo: recibo.numero_recibo || String(recibo.id || ''),
+      fecha: recibo.fecha_recibo || recibo.fecha_pago || recibo.created_at?.slice?.(0, 10) || null,
+      cliente_nombre: recibo.cliente_nombre || cuota.cliente_nombre,
+      cliente_documento: recibo.cliente_documento || cuota.cliente_documento,
+      cliente_direccion: recibo.cliente_direccion || null,
+      cliente_telefono: recibo.cliente_telefono || null,
+      poliza_numero: recibo.poliza_numero || cuota.poliza_numero,
+      poliza_objeto_asegurado: recibo.poliza_objeto_asegurado || cuota.riesgo,
+      aseguradora_nombre: recibo.aseguradora_nombre || cuota.aseguradora_nombre,
+      ramo_nombre: recibo.ramo_nombre || cuota.ramo_principal,
+      numero_pago: recibo.numero_pago || cuota.numero_pago,
+      pago_poliza_consecutivo: recibo.pago_poliza_consecutivo || null,
+      forma_pago: recibo.forma_pago || cuota.forma_pago,
+      medio_de_pago: recibo.medio_de_pago || recibo.metodo_pago || null,
+      moneda: recibo.moneda || 'COP',
+      valor_recaudado_en_oficina: Number(recibo.valor_recaudado_en_oficina || recibo.valor_total || recibo.monto || cuota.valor_recaudado_oficina || 0),
+      saldo_pendiente: Number(recibo.saldo_pendiente || 0),
+      es_anticipo: !!recibo.es_anticipo,
+      recibo_anulado: !!recibo.recibo_anulado,
+      observaciones: recibo.observaciones || null,
+      numero_anexo: recibo.numero_anexo || cuota.anexo_numero || null,
+    }, {
+      nombre: recibo.broker_nombre || 'Guro',
+      nit: recibo.broker_nit || '',
+      direccion: recibo.broker_direccion || '',
+      ciudad: recibo.broker_ciudad || '',
+      telefono: recibo.broker_telefono || '',
+      email: recibo.broker_email || '',
+      logo_url: recibo.broker_logo_url || undefined,
+    });
   };
 
   const openPayModal = (cuota: Cuota, action: ActionKey, e?: React.MouseEvent) => {
@@ -398,7 +452,7 @@ const Cartera: React.FC = () => {
     return createPortal(
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-sm" onClick={() => setDetailRow(null)}>
         <div
-          className="relative w-full max-w-xl mx-4 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#111112] shadow-2xl overflow-hidden"
+          className="relative w-full max-w-2xl mx-4 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#111112] shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="h-1" style={{ background: `linear-gradient(90deg, ${mc}, ${mc}66)` }} />
@@ -492,6 +546,47 @@ const Cartera: React.FC = () => {
                 </div>
               </div>
             )}
+
+            <div>
+              <p className="text-[11px] text-gray-400 dark:text-neutral-500 font-medium uppercase tracking-wider mb-3">Recibos de pago</p>
+              {detailLoading ? (
+                <div className="rounded-xl border border-gray-200 dark:border-neutral-800 p-4 text-sm text-gray-500 dark:text-neutral-400">
+                  Cargando recibos...
+                </div>
+              ) : detailData?.recibos?.length ? (
+                <div className="rounded-xl border border-gray-200 dark:border-neutral-800 overflow-hidden">
+                  {detailData.recibos.map((recibo: any) => (
+                    <div key={recibo.id} className="flex items-center justify-between gap-3 px-4 py-3 border-b last:border-b-0 border-gray-200 dark:border-neutral-800">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                          Recibo #{recibo.numero_recibo || recibo.id}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-neutral-500 truncate">
+                          {fmtDate(recibo.fecha_recibo || recibo.fecha_pago || recibo.created_at?.slice?.(0, 10) || null)} · {fmt(recibo.valor_recaudado_en_oficina || recibo.valor_total || recibo.monto || 0)}
+                        </p>
+                      </div>
+                      {recibo.recibo_anulado && (
+                        <span className="shrink-0 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:text-red-400">
+                          Anulado
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => imprimirRecibo(recibo, r, e)}
+                        className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-gray-200 dark:border-neutral-800 px-2.5 py-1.5 text-xs text-gray-600 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                      >
+                        <Icon icon="solar:printer-bold-duotone" width={14} />
+                        Imprimir
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-gray-200 dark:border-neutral-800 p-4 text-sm text-gray-500 dark:text-neutral-400">
+                  No hay recibos asociados a esta cuota.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Footer actions */}
@@ -583,6 +678,14 @@ const Cartera: React.FC = () => {
             <Icon icon="solar:buildings-bold-duotone" width={14} />
             Aseguradoras
           </Link>
+          <button
+            onClick={() => setExportOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
+            title="Exportar cartera"
+          >
+            <Icon icon="solar:download-bold-duotone" width={14} />
+            Exportar
+          </button>
           <button
             onClick={() => setSettingsOpen(true)}
             className="flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 px-3 py-2 text-xs text-gray-600 dark:text-neutral-300 transition-colors"
@@ -695,7 +798,17 @@ const Cartera: React.FC = () => {
               <p className="text-xs mt-1">No hay cuotas en este filtro.</p>
             </div>
           ) : (
-            <table className="w-full text-left">
+            <table className="w-full min-w-[1120px] table-fixed text-left">
+              <colgroup>
+                <col className="w-[260px]" />
+                <col className="w-[150px]" />
+                <col className="w-[150px]" />
+                <col className="w-[220px]" />
+                <col className="w-[120px]" />
+                <col className="w-[130px]" />
+                <col className="w-[120px]" />
+                <col className="w-[170px]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-gray-200 dark:border-neutral-800 text-[11px] uppercase tracking-wider text-gray-500 dark:text-neutral-500">
                   <th className="px-4 py-3 font-medium">Cliente</th>
@@ -717,27 +830,35 @@ const Cartera: React.FC = () => {
                   return (
                     <tr
                       key={row.id}
-                      onClick={() => setDetailRow(row)}
+                      onClick={() => void openDetail(row)}
                       className="hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors cursor-pointer"
                     >
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium max-w-[180px] truncate">
-                        {row.cliente_nombre || '—'}
-                        {row.numero_renovacion > 0 && (
-                          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-semibold">
-                            R{row.numero_renovacion}
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate" title={row.cliente_nombre || undefined}>
+                            {row.cliente_nombre || '—'}
                           </span>
-                        )}
+                          {row.numero_renovacion > 0 && (
+                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-semibold">
+                              R{row.numero_renovacion}
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 font-mono">{row.cliente_documento || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 font-mono">
+                        <div className="truncate" title={row.cliente_documento || undefined}>{row.cliente_documento || '—'}</div>
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300 font-mono">
-                        {row.poliza_numero || '—'}
-                        {row.numero_pago && (
-                          <span className="ml-1.5 text-[10px] text-gray-400 dark:text-neutral-600">·{row.numero_pago}</span>
-                        )}
+                        <div className="truncate" title={row.poliza_numero || undefined}>
+                          {row.poliza_numero || '—'}
+                          {row.numero_pago && (
+                            <span className="ml-1.5 text-[10px] text-gray-400 dark:text-neutral-600">·{row.numero_pago}</span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm max-w-[180px] truncate">
-                        <div className="text-gray-700 dark:text-neutral-300">{row.aseguradora_nombre || '—'}</div>
-                        <div className="text-[11px] text-gray-400 dark:text-neutral-500">{row.ramo_principal || '—'}</div>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="truncate text-gray-700 dark:text-neutral-300" title={row.aseguradora_nombre || undefined}>{row.aseguradora_nombre || '—'}</div>
+                        <div className="truncate text-[11px] text-gray-400 dark:text-neutral-500" title={row.ramo_principal || undefined}>{row.ramo_principal || '—'}</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 whitespace-nowrap">
                         {fmtDate(row.fecha_limite_pago)}
@@ -755,7 +876,7 @@ const Cartera: React.FC = () => {
                           {primary && (
                             <button
                               onClick={(e) => openPayModal(row, primary.action, e)}
-                              className="flex items-center gap-1 rounded-md bg-[#573CFF] hover:bg-[#4b31e6] px-2 py-1 text-[11px] text-white font-medium transition-colors"
+                              className="inline-flex items-center gap-1 rounded-md bg-[#573CFF] hover:bg-[#4b31e6] px-2 py-1 text-[11px] text-white font-medium transition-colors whitespace-nowrap"
                               title={primary.label}
                             >
                               <Icon icon={primary.icon} width={12} />
@@ -947,6 +1068,24 @@ const Cartera: React.FC = () => {
         </div>,
         document.body,
       )}
+
+      <CarteraExportModal
+        isOpen={exportOpen}
+        onClose={() => setExportOpen(false)}
+        initialSearch={search}
+        initialGroup={(() => {
+          const map: Record<string, string> = {
+            todos: 'all',
+            vencidas: 'vencidas',
+            hoy: 'hoy',
+            proximos_7: 'proximos_7',
+            por_pagar: 'por_pagar_aseguradora',
+            comision: 'comision_por_cobrar',
+            cerradas: 'cerradas',
+          };
+          return map[activeTab] || 'all';
+        })()}
+      />
     </div>
   );
 };

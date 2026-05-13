@@ -247,7 +247,9 @@ const WhatsAppInboxPro: React.FC = () => {
     }
   };
 
-  // Polling cada 5 segundos para actualizar mensajes y conversaciones
+  // Polling cada 10 segundos para actualizar mensajes y conversaciones.
+  // Los mensajes nuevos llegan en tiempo real por WebSocket; este polling
+  // es solo respaldo / consistencia. 10s reduce 50% del tráfico vs 5s.
   // IMPORTANT: filter & searchTerm must be in deps so the interval captures the current values
   useEffect(() => {
     pollIntervalRef.current = setInterval(() => {
@@ -255,7 +257,7 @@ const WhatsAppInboxPro: React.FC = () => {
         loadMessages(selectedConversation.id, true);
       }
       loadConversations(true);
-    }, 5000); // 5 segundos
+    }, 10000); // 10 segundos
 
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);

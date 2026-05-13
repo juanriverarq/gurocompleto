@@ -80,7 +80,10 @@ class CommercialTask extends Model
         'llamada' => 'Llamada',
         'reunion' => 'Reunión',
         'email' => 'Email',
-        'visita' => 'Visita'
+        'visita' => 'Visita',
+        'aceptacion_banco' => 'Aceptación banco',
+        'pendiente_certificado_pago' => 'Pendiente certificado de pago',
+        'pendiente_pago_cliente' => 'Pendiente pago cliente'
     ];
 
     const STATUSES = [

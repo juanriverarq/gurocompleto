@@ -94,10 +94,25 @@ const defaultModulosDisponibles = {
   },
 
   // ── Finanzas ──
+  cartera: {
+    label: 'Cartera (Resumen)',
+    icon: 'solar:wallet-money-bold-duotone',
+    permisos: ['ver', 'exportar'],
+  },
+  cartera_aseguradoras: {
+    label: 'Cartera Aseguradoras',
+    icon: 'solar:case-round-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar'],
+  },
   cartera_clientes: {
-    label: 'Cartera',
+    label: 'Cartera Clientes',
     icon: 'solar:wallet-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'importar', 'exportar'],
+  },
+  estados_cuenta: {
+    label: 'Estados de Cuenta',
+    icon: 'solar:document-text-bold-duotone',
+    permisos: ['ver', 'crear', 'editar', 'eliminar', 'exportar'],
   },
   recibos_caja: {
     label: 'Recibos de Caja',
@@ -224,6 +239,11 @@ const defaultModulosDisponibles = {
     icon: 'solar:shield-user-bold-duotone',
     permisos: ['ver', 'crear', 'editar', 'eliminar', 'asignar'],
   },
+  papelera: {
+    label: 'Papelera',
+    icon: 'solar:trash-bin-trash-bold-duotone',
+    permisos: ['ver', 'restaurar', 'eliminar_definitivo', 'exportar'],
+  },
 
   // ── Configuración: Catálogos ──
   vendedores: {
@@ -288,12 +308,12 @@ const buildCategorias = (
     ['Inicio', ['dashboard']],
     ['Seguros', ['clientes', 'polizas', 'renovaciones', 'automoviles', 'siniestros']],
     ['Comercial', ['embudo_ventas', 'seguimiento_comercial', 'metas_objetivos', 'analisis_rendimiento']],
-    ['Finanzas', ['cartera_clientes', 'recibos_caja', 'comisiones', 'liquidar_vendedores', 'reportes_financieros']],
+    ['Finanzas', ['cartera', 'cartera_aseguradoras', 'cartera_clientes', 'estados_cuenta', 'recibos_caja', 'comisiones', 'liquidar_vendedores', 'reportes_financieros']],
     ['Comunicaciones', ['whatsapp_business', 'email_marketing', 'enlaces_cotizacion', 'mini_web', 'pagina_web', 'creador_contenido']],
     ['Inteligencia Artificial', ['asistentes_ia', 'voice_ai', 'analytics_predictivo']],
     ['Documentos', ['documentos_clientes', 'documentos_poliza', 'documentos_siniestro', 'cumplimiento_legal']],
     ['Mi Agencia', ['informacion_agencia', 'sedes', 'aseguradoras', 'ramos']],
-    ['Usuarios y Roles', ['gestion_usuarios', 'roles_permisos']],
+    ['Usuarios y Roles', ['gestion_usuarios', 'roles_permisos', 'papelera']],
     ['Catálogos', ['vendedores', 'coberturas', 'tipos_afiliacion', 'estados_siniestros', 'motivos_estados_poliza', 'mensajeros']],
     ['Integraciones', ['integraciones_externas', 'sincronizacion']],
     ['Sistema', ['configuracion_sistema']],

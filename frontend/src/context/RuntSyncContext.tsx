@@ -57,74 +57,100 @@ export const RuntSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const stopRequestedRef = useRef(false);
   const optsRef = useRef<{ onlyPending: boolean; limit: number } | null>(null);
 
-  const runBatch = useCallback(() => {
+  const runBatch = useCallback(async () => {
     const opts = optsRef.current;
     if (!opts) return;
     abortCtrlRef.current = new AbortController();
-    saasApi.syncRuntMasivoStream(
-      { ...opts, signal: abortCtrlRef.current.signal },
-      (data) => {
-        const c = cumulativeRef.current;
-        // Show cumulative counts in the progress widget
+
+    // Mostrar progreso "indeterminado" mientras se procesa el batch (el modo
+    // JSON no envía actualizaciones por-vehículo; sólo contadores al final).
+    const c = cumulativeRef.current;
+    setProgress({
+      index: 0,
+      total: opts.limit,
+      placa: '',
+      status: 'processing',
+      success: c.success,
+      failed: c.failed,
+      skipped: c.skipped,
+      message: 'Procesando lote...',
+    });
+
+    try {
+      const data = await saasApi.syncRuntMasivoJson({ ...opts, signal: abortCtrlRef.current.signal });
+      abortCtrlRef.current = null;
+
+      const batchTotal = data.total || 0;
+      const batchSuccess = data.success_count || 0;
+      const batchFailed = data.failed || 0;
+      const batchSkipped = data.skipped || 0;
+
+      c.total += batchTotal;
+      c.success += batchSuccess;
+      c.failed += batchFailed;
+      c.skipped += batchSkipped;
+      c.batches += 1;
+
+      const batchProcessedAll = batchTotal >= opts.limit;
+      const userCancelled = stopRequestedRef.current;
+
+      if (!userCancelled && batchProcessedAll) {
+        // Mostrar progreso acumulado entre lotes
         setProgress({
-          ...data,
-          success: c.success + (data.success || 0),
-          failed: c.failed + (data.failed || 0),
-          skipped: c.skipped + (data.skipped || 0),
+          index: c.total,
+          total: c.total + opts.limit, // approx — siguiente lote
+          placa: '',
+          status: 'processing',
+          success: c.success,
+          failed: c.failed,
+          skipped: c.skipped,
         });
-      },
-      (data) => {
-        const c = cumulativeRef.current;
-        c.total += data.total || 0;
-        c.success += data.success || 0;
-        c.failed += data.failed || 0;
-        c.skipped += data.skipped || 0;
-        c.batches += 1;
-        abortCtrlRef.current = null;
-
-        const batchSize = opts.limit;
-        const batchProcessedAll = (data.total || 0) >= batchSize;
-        const userCancelled = data.cancelled || stopRequestedRef.current;
-
-        // Auto-chain: if this batch was full AND not cancelled AND there might be more
-        if (!userCancelled && batchProcessedAll) {
-          // Continue with next batch
-          setTimeout(() => runBatch(), 150);
-        } else {
-          // Done for real — no more pending OR user cancelled
-          setDone({
-            total: c.total,
-            success: c.success,
-            failed: c.failed,
-            skipped: c.skipped,
-            cancelled: userCancelled,
-            batches: c.batches,
-          });
-          setProgress(null);
-          setLoading(false);
-          setStopping(false);
-          stopRequestedRef.current = false;
-          onDoneCallbacksRef.current.forEach((cb) => cb());
-          onDoneCallbacksRef.current = [];
-        }
-      },
-      (err) => {
-        const c = cumulativeRef.current;
+        setTimeout(() => { runBatch(); }, 150);
+      } else {
         setDone({
           total: c.total,
           success: c.success,
-          failed: c.failed + 1,
+          failed: c.failed,
           skipped: c.skipped,
+          cancelled: userCancelled,
           batches: c.batches,
         });
         setProgress(null);
         setLoading(false);
         setStopping(false);
         stopRequestedRef.current = false;
-        abortCtrlRef.current = null;
+        onDoneCallbacksRef.current.forEach((cb) => cb());
+        onDoneCallbacksRef.current = [];
+      }
+    } catch (err: any) {
+      abortCtrlRef.current = null;
+      // Cancelación explícita por el usuario
+      if (err?.name === 'AbortError' || stopRequestedRef.current) {
+        const c2 = cumulativeRef.current;
+        setDone({
+          total: c2.total,
+          success: c2.success,
+          failed: c2.failed,
+          skipped: c2.skipped,
+          cancelled: true,
+          batches: c2.batches,
+        });
+      } else {
+        const c2 = cumulativeRef.current;
+        setDone({
+          total: c2.total,
+          success: c2.success,
+          failed: c2.failed + 1,
+          skipped: c2.skipped,
+          batches: c2.batches,
+        });
         console.error('RUNT sync error:', err);
-      },
-    );
+      }
+      setProgress(null);
+      setLoading(false);
+      setStopping(false);
+      stopRequestedRef.current = false;
+    }
   }, []);
 
   const start = useCallback((opts: { onlyPending: boolean; limit: number }) => {

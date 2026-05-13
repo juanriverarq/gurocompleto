@@ -335,29 +335,96 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
+  // Mensajes en español para errores conocidos de Meta WhatsApp Cloud API.
+  // Más detalle del raw error en el tooltip (`title`) del span donde se muestra.
+  const META_ERROR_CODES: Record<string, string> = {
+    '100': 'Parámetro inválido en el envío',
+    '131000': 'Error general de Meta',
+    '131005': 'Número no registrado en WhatsApp',
+    '131008': 'Falta un parámetro requerido',
+    '131009': 'Valor de parámetro inválido (revisa nombre/teléfono)',
+    '131016': 'Servicio temporalmente caído',
+    '131021': 'No puedes enviarte mensaje a ti mismo',
+    '131026': 'Mensaje no entregable (cliente bloqueó/no abierto)',
+    '131031': 'Cuenta restringida temporalmente por Meta',
+    '131042': 'Cuenta de WhatsApp Business no verificada',
+    '131047': 'Ventana de 24h cerrada (usa plantilla)',
+    '131048': 'Límite de spam alcanzado por este número',
+    '131051': 'Tipo de mensaje no soportado',
+    '131052': 'Error descargando el media (archivo)',
+    '131056': 'Conversación con el destinatario aún no permitida',
+    '132000': 'Cantidad de parámetros no coincide con la plantilla',
+    '132001': 'Plantilla no existe en este idioma',
+    '132005': 'Texto traducido demasiado largo',
+    '132007': 'Política de caracteres de la plantilla violada',
+    '132012': 'Formato de parámetro no coincide con la plantilla',
+    '132015': 'Plantilla pausada por Meta',
+    '132016': 'Plantilla deshabilitada por Meta',
+    '132068': 'Plantilla en revisión, aún no aprobada',
+    '133000': 'Demasiados intentos de PIN',
+    '135000': 'Error genérico del usuario',
+    '136025': 'Permiso revocado por la cuenta de Meta',
+    '80007': 'Límite de envío alcanzado (rate limit)',
+    '190': 'Token de Meta expirado o inválido',
+    '200': 'Permisos insuficientes en el token de Meta',
+    '368': 'Cuenta bloqueada por Meta temporalmente',
+  };
+
   const translateError = (error: string): string => {
-    const translations: Record<string, string> = {
+    if (!error) return 'Error al enviar';
+    const exact: Record<string, string> = {
       'Error desconocido': 'Error al enviar',
       'Instance not connected': 'WhatsApp desconectado',
       'instance not connected': 'WhatsApp desconectado',
       'Connection closed': 'Conexión cerrada',
       'Phone number not registered': 'Número no registrado',
       'Invalid phone number': 'Número inválido',
-      'Rate limit exceeded': 'Límite excedido',
+      'Rate limit exceeded': 'Límite de envíos excedido',
       'Timeout': 'Tiempo agotado',
       'Omitido manualmente': 'Omitido por usuario',
     };
-    if (translations[error]) return translations[error];
-    if (error.includes('[HTTP')) {
-      const match = error.match(/\[HTTP (\d+)\]/);
-      if (match) {
-        const code = match[1];
-        if (code === '500') return 'Error del servidor';
-        if (code === '502' || code === '503') return 'Servicio no disponible';
-        return `Error (${code})`;
-      }
+    if (exact[error]) return exact[error];
+
+    // Códigos #N de Meta WhatsApp Cloud API (más comunes: #100, #131009, #132000…)
+    const metaMatch = error.match(/\(#(\d+)\)/);
+    if (metaMatch) {
+      const code = metaMatch[1];
+      const translated = META_ERROR_CODES[code];
+      if (translated) return `${translated} (Meta #${code})`;
+      return `Error de Meta #${code}`;
     }
-    return error.length > 30 ? error.substring(0, 30) + '...' : error;
+
+    // HTTP genéricos
+    const httpMatch = error.match(/\[HTTP (\d+)\]/);
+    if (httpMatch) {
+      const code = httpMatch[1];
+      if (code === '500') return 'Error del servidor';
+      if (code === '502' || code === '503') return 'Servicio no disponible';
+      if (code === '401') return 'Token inválido o expirado';
+      if (code === '403') return 'Sin permiso para enviar';
+      if (code === '429') return 'Demasiadas peticiones';
+      return `Error HTTP ${code}`;
+    }
+
+    // Errores de cURL (red/conectividad al ir a Meta)
+    const curlMatch = error.match(/cURL error (\d+)/i);
+    if (curlMatch) {
+      const code = curlMatch[1];
+      if (code === '6' || /resolving timed out|could not resolve host/i.test(error)) {
+        return 'No se pudo conectar a WhatsApp (DNS / red caída)';
+      }
+      if (code === '7') return 'No se pudo conectar al servidor de WhatsApp';
+      if (code === '28' || /timed out/i.test(error)) return 'Tiempo agotado al conectar con WhatsApp';
+      if (code === '35' || code === '60') return 'Error SSL al conectar con WhatsApp';
+      return `Error de red (cURL ${code})`;
+    }
+
+    // Frases comunes en inglés que llegan como texto libre
+    if (/template name does not exist/i.test(error)) return 'Plantilla no existe en ese idioma (Meta)';
+    if (/parameter value is not valid/i.test(error)) return 'Valor de parámetro inválido';
+    if (/number of parameters does not match/i.test(error)) return 'Cantidad de parámetros no coincide con la plantilla';
+
+    return error.length > 60 ? error.substring(0, 60) + '…' : error;
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -366,6 +433,25 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     });
+  };
+
+  // Indicador simple: chulo verde si fue leído, chulo gris si no.
+  // Tooltip nativo (atributo title) para evitar conflictos de portales que crashean el modal.
+  const DeliveryStatus = ({ log }: { log: any }) => {
+    const wasRead = !!log.read_at;
+    const tooltipLines: string[] = [];
+    if (log.read_at) tooltipLines.push(`Leído: ${formatDateTime(log.read_at)}`);
+    if (log.delivered_at) tooltipLines.push(`Entregado: ${formatDateTime(log.delivered_at)}`);
+    if (log.sent_at) tooltipLines.push(`Enviado: ${formatDateTime(log.sent_at)}`);
+    if (!wasRead && !log.delivered_at && !log.sent_at) tooltipLines.push('Sin entrega aún');
+    return (
+      <span
+        title={tooltipLines.join('\n')}
+        className={`inline-flex items-center cursor-help ${wasRead ? 'text-green-500' : 'text-gray-400'}`}
+      >
+        <Icon icon="solar:check-read-bold" className="w-5 h-5" />
+      </span>
+    );
   };
 
   const toggleSection = (section: keyof typeof openSections) => {
@@ -444,7 +530,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Spinner size="lg" />
-            <span className="ml-3 text-gray-500">Cargando...</span>
+            <span className="ml-3 text-gray-500">Cargando configuración...</span>
           </div>
         ) : !config ? (
           <div className="text-center py-16">
@@ -453,62 +539,68 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
             <Button color="blue" size="sm" className="mt-4" onClick={loadConfig}>Reintentar</Button>
           </div>
         ) : (
-          <div className="flex h-[600px]">
-            {/* Sidebar con tabs */}
-            <div className="w-48 bg-gray-50 dark:bg-gray-800/50 border-r p-3 space-y-1">
-              {/* Estado del sistema */}
-              <div className="p-3 mb-4 rounded-lg bg-white dark:bg-gray-800 border">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-gray-500">Sistema</span>
-                  <Switch
-                    checked={config.is_active}
-                    onChange={(checked) => updateConfig({ is_active: checked })}
-                    className="group inline-flex h-5 w-9 items-center rounded-full bg-gray-200 transition data-[checked]:bg-green-500"
-                  >
-                    <span className="size-3 translate-x-1 rounded-full bg-white transition group-data-[checked]:translate-x-5" />
-                  </Switch>
-                </div>
+          <div className="p-6 space-y-6">
+            {/* Estado del sistema (banner superior) */}
+            <div className="flex items-center justify-between gap-4 p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${config.is_active ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                  <span className={`text-sm font-medium ${config.is_active ? 'text-green-600' : 'text-gray-500'}`}>
-                    {config.is_active ? 'Activo' : 'Inactivo'}
+                  <div className={`w-2.5 h-2.5 rounded-full ${config.is_active ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                  <span className={`text-sm font-semibold ${config.is_active ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                    Sistema {config.is_active ? 'Activo' : 'Inactivo'}
                   </span>
                 </div>
                 {config.whatsapp_status && (
-                  <div className="mt-2 pt-2 border-t">
-                    <div className="flex items-center gap-2">
-                      <Icon icon="logos:whatsapp-icon" className="w-4 h-4" />
-                      <span className={`text-xs ${config.whatsapp_status.connected ? 'text-green-600' : 'text-red-500'}`}>
-                        {config.whatsapp_status.connected ? 'Conectado' : 'Desconectado'}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-1.5 pl-4 border-l border-gray-300 dark:border-gray-600">
+                    <Icon icon="logos:whatsapp-icon" className="w-4 h-4" />
+                    <span className={`text-xs ${config.whatsapp_status.connected ? 'text-green-600' : 'text-red-500'}`}>
+                      {config.whatsapp_status.connected ? 'WhatsApp conectado' : 'WhatsApp desconectado'}
+                    </span>
+                  </div>
+                )}
+                {config.stats?.next_execution_formatted && (
+                  <div className="flex items-center gap-1.5 pl-4 border-l border-gray-300 dark:border-gray-600 text-xs text-gray-500">
+                    <Icon icon="solar:calendar-bold-duotone" className="w-4 h-4" />
+                    Próximo: {config.stats.next_execution_formatted}
                   </div>
                 )}
               </div>
+              <Switch
+                checked={config.is_active}
+                onChange={(checked) => updateConfig({ is_active: checked })}
+                className="group inline-flex h-6 w-11 items-center rounded-full bg-gray-300 transition data-[checked]:bg-green-500"
+              >
+                <span className="size-4 translate-x-1 rounded-full bg-white transition group-data-[checked]:translate-x-6" />
+              </Switch>
+            </div>
 
-              {/* Tabs */}
-              {[
-                { id: 'dashboard' as TabType, icon: 'solar:chart-2-bold-duotone', label: 'Dashboard' },
-                { id: 'config' as TabType, icon: 'solar:settings-bold-duotone', label: 'Configuración' },
-                { id: 'history' as TabType, icon: 'solar:history-bold-duotone', label: 'Historial' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-primary text-white shadow-md'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <Icon icon={tab.icon} className="w-5 h-5" />
-                  {tab.label}
-                </button>
-              ))}
+            {/* Tabs horizontales (estilo AutomovilNotificationsModal) */}
+            <div className="border-b border-gray-200 dark:border-gray-700">
+              <nav className="-mb-px flex space-x-8">
+                {[
+                  { id: 'dashboard' as TabType, icon: 'solar:dashboard-bold-duotone', label: 'Dashboard' },
+                  { id: 'config' as TabType, icon: 'solar:settings-bold-duotone', label: 'Configuración' },
+                  { id: 'history' as TabType, icon: 'solar:clock-circle-bold-duotone', label: 'Historial' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon icon={tab.icon} className="w-4 h-4" />
+                      {tab.label}
+                    </div>
+                  </button>
+                ))}
+              </nav>
             </div>
 
             {/* Contenido principal */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div>
               {/* TAB: Dashboard */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-6">
@@ -523,39 +615,54 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                     </Alert>
                   )}
 
-                  {/* Estadísticas rápidas */}
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-200 dark:border-green-800">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon icon="solar:check-circle-bold" className="w-5 h-5 text-green-600" />
-                        <span className="text-sm text-green-700 dark:text-green-400">Enviados</span>
+                  {/* Estadísticas rápidas (estilo AutomovilNotificationsModal) */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+                          <Icon icon="solar:calendar-bold-duotone" className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{scheduledNotifications.length}</p>
+                          <p className="text-sm text-gray-500">Próximas notificaciones</p>
+                        </div>
                       </div>
-                      <p className="text-2xl font-bold text-green-700 dark:text-green-300">{config.stats?.total_sent || 0}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-xl p-4 border border-red-200 dark:border-red-800">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon icon="solar:close-circle-bold" className="w-5 h-5 text-red-600" />
-                        <span className="text-sm text-red-700 dark:text-red-400">Fallidos</span>
+
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+                          <Icon icon="solar:check-circle-bold-duotone" className="w-6 h-6 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{config.stats?.total_sent || 0}</p>
+                          <p className="text-sm text-gray-500">Enviadas exitosas</p>
+                        </div>
                       </div>
-                      <p className="text-2xl font-bold text-red-700 dark:text-red-300">{config.stats?.total_failed || 0}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon icon="solar:calendar-bold" className="w-5 h-5 text-blue-600" />
-                        <span className="text-sm text-blue-700 dark:text-blue-400">Próximo envío</span>
+
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
+                          <Icon icon="solar:close-circle-bold-duotone" className="w-6 h-6 text-red-600" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{config.stats?.total_failed || 0}</p>
+                          <p className="text-sm text-gray-500">Fallidos</p>
+                        </div>
                       </div>
-                      <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                        {config.stats?.next_execution_formatted || 'No programado'}
-                      </p>
                     </div>
-                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon icon="solar:clock-circle-bold" className="w-5 h-5 text-purple-600" />
-                        <span className="text-sm text-purple-700 dark:text-purple-400">Hora de envío</span>
+
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg flex items-center justify-center">
+                          <Icon icon="solar:danger-triangle-bold-duotone" className="w-6 h-6 text-yellow-600" />
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold">{config.stats?.total_skipped || 0}</p>
+                          <p className="text-sm text-gray-500">Omitidas</p>
+                        </div>
                       </div>
-                      <p className="text-xl font-bold text-purple-700 dark:text-purple-300">
-                        {config.send_time?.substring(0, 5) || '09:00'}
-                      </p>
                     </div>
                   </div>
 
@@ -584,8 +691,9 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                       </div>
                     ) : (
                       <div className="border rounded-lg overflow-hidden">
+                        <div className="max-h-[480px] overflow-y-auto">
                         <Table>
-                          <Table.Head>
+                          <Table.Head className="sticky top-0 z-10 bg-white dark:bg-gray-800">
                             <Table.HeadCell>Póliza</Table.HeadCell>
                             <Table.HeadCell>Cliente</Table.HeadCell>
                             <Table.HeadCell>Tipo</Table.HeadCell>
@@ -594,7 +702,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                             <Table.HeadCell></Table.HeadCell>
                           </Table.Head>
                           <Table.Body>
-                            {scheduledNotifications.slice(0, 10).map((item: any) => (
+                            {scheduledNotifications.map((item: any) => (
                               <Table.Row key={`${item.policy_id}-${item.notification_type}`}>
                                 <Table.Cell className="font-medium">{item.policy_number}</Table.Cell>
                                 <Table.Cell>{item.client_name}</Table.Cell>
@@ -625,6 +733,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                             ))}
                           </Table.Body>
                         </Table>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -817,7 +926,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                             <Icon icon="solar:wallet-money-bold" className="w-5 h-5 text-green-500" />
                             <div>
                               <p className="font-medium text-sm">Pago Pendiente</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">Días: {(config.payment_days_before_multiple || [config.payment_days_before]).join(', ')}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Recordatorios por cada cuota próxima a vencer · Días: {(config.payment_days_before_multiple || [config.payment_days_before]).join(', ')}</p>
                             </div>
                           </div>
                           <Switch
@@ -831,6 +940,14 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
 
                         {config.notify_payment_due && (
                           <div className="pl-8 space-y-3">
+                            {/* Aviso sobre pólizas ya pagadas */}
+                            <div className="flex items-start gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                              <Icon icon="solar:info-circle-bold" className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                              <div className="text-[11px] text-blue-700 dark:text-blue-300 leading-snug">
+                                <p className="font-medium">Las pólizas con cartera pagada no se notifican.</p>
+                                <p className="mt-0.5">Solo se envían recordatorios por cuotas pendientes (no recaudadas, no anuladas, no anticipos). Cuando todas las cuotas están al día, esa póliza se omite automáticamente.</p>
+                              </div>
+                            </div>
                             <div>
                               <Label className="text-xs">Días de anticipación</Label>
                               <div className="flex flex-wrap gap-2 mt-1">
@@ -1050,7 +1167,14 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                                 .filter(r => {
                                   if (!ramoSearch) return true;
                                   const s = ramoSearch.toLowerCase();
-                                  return r.nombre.toLowerCase().includes(s) || (r.subramo && r.subramo.toLowerCase().includes(s));
+                                  if (r.nombre?.toLowerCase().includes(s)) return true;
+                                  // subramo puede venir como string o array (accessor del backend lo retorna como array)
+                                  const subList = Array.isArray(r.subramo)
+                                    ? r.subramo
+                                    : typeof r.subramo === 'string' && r.subramo
+                                      ? [r.subramo]
+                                      : [];
+                                  return subList.some((sub: string) => typeof sub === 'string' && sub.toLowerCase().includes(s));
                                 })
                                 .slice(0, 30)
                                 .map((r) => {
@@ -1356,6 +1480,7 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                           <Table.HeadCell>Cliente</Table.HeadCell>
                           <Table.HeadCell>Tipo</Table.HeadCell>
                           <Table.HeadCell>Estado</Table.HeadCell>
+                          <Table.HeadCell>Entrega</Table.HeadCell>
                           <Table.HeadCell>Teléfono</Table.HeadCell>
                         </Table.Head>
                         <Table.Body>
@@ -1376,9 +1501,17 @@ const PolicyNotificationsModalV2: React.FC<Props> = ({ isOpen, onClose }) => {
                                     {log.status === 'sent' ? 'Enviado' : log.status === 'failed' ? 'Fallido' : 'Omitido'}
                                   </Badge>
                                   {log.error_message && log.status !== 'sent' && (
-                                    <span className="text-xs text-red-500">{translateError(log.error_message)}</span>
+                                    <span
+                                      className="text-xs text-red-500 cursor-help"
+                                      title={`Detalle Meta:\n${log.error_message}`}
+                                    >
+                                      {translateError(log.error_message)}
+                                    </span>
                                   )}
                                 </div>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <DeliveryStatus log={log} />
                               </Table.Cell>
                               <Table.Cell className="text-xs text-gray-500">{log.phone_number || '-'}</Table.Cell>
                             </Table.Row>

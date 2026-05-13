@@ -249,6 +249,34 @@ html.dark .page-wrapper tbody > tr.border-b {
   border-color: #2a2a2a;
 }
 
+/* Modo claro: bordes de filas de tablas */
+html:not(.dark) .page-wrapper table tbody > tr,
+html:not(.dark) .page-wrapper table tbody > tr.border-b,
+html:not(.dark) .page-wrapper table tbody > tr > td,
+html:not(.dark) .page-wrapper table tbody > tr > th {
+  border-color: #e5e5e5;
+}
+
+html:not(.dark) .page-wrapper .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e5e5e5;
+}
+
+/* Evitar que campos largos de tablas se monten sobre columnas vecinas */
+.page-wrapper table td,
+.page-wrapper table th {
+  min-width: 0;
+}
+
+.page-wrapper table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-wrapper table td > .truncate,
+.page-wrapper table td .cell-truncate {
+  max-width: 100%;
+}
+
 /* Filas con border-b sin dark: par */
 html.dark .page-wrapper .border-b {
   border-bottom-color: #2a2a2a;

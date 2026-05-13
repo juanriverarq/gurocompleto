@@ -703,6 +703,18 @@ class PagoPolizaController extends Controller
                 ->where('numero_renovacion', $renovacion)
                 ->get();
 
+            // Fallback: pólizas migradas desde SS pueden tener numero_renovacion en
+            // la póliza distinto al de sus cartera_items (típicamente 0 en items vs N
+            // en póliza). Si el filtro estricto no devuelve nada, tomar todos los items
+            // no anulados de la póliza para no dejar al usuario sin poder marcarla.
+            if ($items->isEmpty()) {
+                $items = DB::table('cartera_items')
+                    ->where('poliza_id', $polizaId)
+                    ->where('broker_id', $brokerId)
+                    ->where('recibo_anulado', false)
+                    ->get();
+            }
+
             if ($items->isEmpty()) {
                 // Sin cartera_items: trabajar a nivel de póliza
                 $montoTotal = ((float) ($poliza->total_amount ?? 0) > 0)
@@ -742,6 +754,8 @@ class PagoPolizaController extends Controller
                     $this->syncCarteraItems((int) $polizaId, null, (int) $ci->id);
                 }
             }
+
+            $this->refreshPolizaPaymentDueDate((int) $polizaId);
 
             DB::commit();
 
@@ -2596,6 +2610,7 @@ class PagoPolizaController extends Controller
             // ─── CASE A: Specific cartera_item_id provided (single-cuota payment) ───
             if ($carteraItemId) {
                 $this->syncSingleCarteraItem($poliza, $carteraItemId, $currentRenovacion);
+                $this->refreshPolizaPaymentDueDate($polizaId);
                 return;
             }
 
@@ -2649,34 +2664,59 @@ class PagoPolizaController extends Controller
     }
 
     /**
-     * Actualiza polizas.payment_due_date con la fecha_limite_pago más temprana
-     * de los cartera_items pendientes (no recaudados, no anulados, no anticipos).
-     * Si no hay pendientes, deja el campo en null.
+     * Actualiza polizas.payment_due_date, payment_status y estado_cartera
+     * derivándolos de los cartera_items.
+     *
+     *  - payment_due_date = MIN(fecha_limite_pago) de cuotas pendientes
+     *  - payment_status   = paid | overdue | pending
+     *  - estado_cartera   = Pagado | En mora | Sin pagos Asignados
+     *
+     * Una cuota es "pendiente" si: !recaudado_oficina && !recaudado_aseg
+     *   && !recibo_pago_directo && !es_anticipo && !recibo_anulado
      */
     private function refreshPolizaPaymentDueDate(int $polizaId): void
     {
         try {
-            $proxima = DB::table('cartera_items')
-                ->where('poliza_id', $polizaId)
-                ->where('recaudado_en_oficina', false)
-                ->where('recaudado_aseguradora', false)
-                ->where('recibo_pago_directo', false)
-                ->where('es_anticipo', false)
-                ->where('recibo_anulado', false)
+            $pendientesQuery = function () use ($polizaId) {
+                return DB::table('cartera_items')
+                    ->where('poliza_id', $polizaId)
+                    ->where('recaudado_en_oficina', false)
+                    ->where('recaudado_aseguradora', false)
+                    ->where('recibo_pago_directo', false)
+                    ->where('es_anticipo', false)
+                    ->where('recibo_anulado', false);
+            };
+
+            $proxima = (clone $pendientesQuery())
                 ->whereNotNull('fecha_limite_pago')
                 ->min('fecha_limite_pago');
 
+            $tieneItems = DB::table('cartera_items')->where('poliza_id', $polizaId)->exists();
+            $tienePendientes = $pendientesQuery()->exists();
+
             $payload = ['payment_due_date' => $proxima];
 
-            // Estado de pago derivado simple
-            if ($proxima === null) {
-                // No hay cuotas pendientes → marcar como pagado si existían items
-                $tieneItems = DB::table('cartera_items')->where('poliza_id', $polizaId)->exists();
-                if ($tieneItems) {
-                    $payload['payment_status'] = 'paid';
+            // ── payment_status (legacy) ──
+            if (!$tienePendientes && $tieneItems) {
+                $payload['payment_status'] = 'paid';
+            } elseif ($proxima !== null) {
+                $payload['payment_status'] = strtotime($proxima) < strtotime(date('Y-m-d'))
+                    ? 'overdue'
+                    : 'pending';
+            }
+
+            // ── estado_cartera (legacy desnormalizado, usado por UI/notificaciones) ──
+            if ($tieneItems) {
+                if (!$tienePendientes) {
+                    $payload['estado_cartera'] = 'Pagado';
+                } else {
+                    // Hay pendientes: ver si alguna está vencida
+                    $hayVencidas = (clone $pendientesQuery())
+                        ->whereNotNull('fecha_limite_pago')
+                        ->whereDate('fecha_limite_pago', '<', date('Y-m-d'))
+                        ->exists();
+                    $payload['estado_cartera'] = $hayVencidas ? 'En mora' : 'Sin pagos Asignados';
                 }
-            } else {
-                $payload['payment_status'] = strtotime($proxima) < strtotime(date('Y-m-d')) ? 'overdue' : 'pending';
             }
 
             DB::table('polizas')->where('id', $polizaId)->update($payload);

@@ -11,12 +11,39 @@ class InformacionAgenciaController extends Controller
 {
     private function currentBroker(Request $request): Broker
     {
-        $user = $request->user();
-        $broker = $user?->getPrimaryBroker();
-        if (!$broker) {
-            throw new \Exception('Broker no encontrado para el usuario');
+        // 1. Intentar leer broker_id del middleware (empleados o usuarios Firebase)
+        $brokerId = $request->get('authenticated_broker_id')
+            ?? $request->get('broker_id');
+
+        // 2. Empleado autenticado por middleware
+        if (!$brokerId) {
+            $empleado = $request->get('authenticated_empleado');
+            if ($empleado && isset($empleado->broker_id)) {
+                $brokerId = $empleado->broker_id;
+            }
         }
-        return $broker;
+
+        // 3. Usuario tradicional
+        if (!$brokerId) {
+            $user = $request->user();
+            if ($user && isset($user->broker_id) && $user->broker_id) {
+                $brokerId = $user->broker_id;
+            } else {
+                $broker = $user?->getPrimaryBroker();
+                if ($broker) {
+                    return $broker;
+                }
+            }
+        }
+
+        if ($brokerId) {
+            $broker = Broker::find($brokerId);
+            if ($broker) {
+                return $broker;
+            }
+        }
+
+        throw new \Exception('Broker no encontrado para el usuario');
     }
 
     public function show(Request $request)

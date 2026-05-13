@@ -196,6 +196,16 @@ const NuevaPolizaColectiva: React.FC = () => {
     return (s || '').toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9-]/g, '');
   }, []);
 
+  const isVehicleRamo = useCallback((value: string): boolean => {
+    const normalized = String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return normalized.includes('auto')
+      || normalized.includes('soat')
+      || normalized.includes('moto')
+      || normalized.includes('motocicleta')
+      || normalized.includes('motocarro')
+      || normalized.includes('vehiculo');
+  }, []);
+
   const addPlate = useCallback((raw: string) => {
     const value = normalizePlate(raw);
     if (!value) return;
@@ -241,7 +251,7 @@ const NuevaPolizaColectiva: React.FC = () => {
     return () => { aborted = true; clearTimeout(t); };
   }, [placaInput, normalizePlate]);
 
-  const isAutoRamo = (s => s.includes('auto') || s.includes('soat'))(String(ramo || '').toLowerCase());
+  const isAutoRamo = isVehicleRamo(String(ramo || ''));
 
   // PDF functionality
   useEffect(() => { testPdfJs(); }, []);

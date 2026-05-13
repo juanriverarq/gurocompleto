@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\BrokerScoped;
 use App\Events\ClienteCreated;
+use App\Models\SalesFunnel;
 
 class Cliente extends Model
 {
@@ -166,6 +167,11 @@ class Cliente extends Model
     public function policies(): HasMany
     {
         return $this->hasMany(Poliza::class, 'client_id');
+    }
+
+    public function leads(): HasMany
+    {
+        return $this->hasMany(SalesFunnel::class, 'client_id');
     }
 
     // ===== SCOPES =====

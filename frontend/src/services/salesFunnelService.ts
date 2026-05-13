@@ -35,6 +35,7 @@ export interface SalesFunnelLead {
   stage: string;
   lead_source: string;
   insurance_type: string;
+  placa?: string;
   potential_value: number;
   close_probability: number;
   expected_close_date?: string;
@@ -198,6 +199,7 @@ export interface CreateLeadData {
   stage: string;
   lead_source: string;
   insurance_type: string;
+  placa?: string;
   potential_value: number;
   close_probability: number;
   expected_close_date?: string;

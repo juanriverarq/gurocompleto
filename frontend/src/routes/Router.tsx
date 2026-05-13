@@ -198,6 +198,7 @@ const Mensajeros = Loadable(lazyRetry(() => import('../views/apps/admin/mensajer
 const Coberturas = Loadable(lazyRetry(() => import('../views/apps/admin/coberturas/Coberturas')));
 const ImportacionMasiva = Loadable(lazyRetry(() => import('../views/apps/admin/ImportacionMasiva')));
 const ImportacionMultiple = Loadable(lazyRetry(() => import('../views/apps/admin/ImportacionMultiple')));
+const Papelera = Loadable(lazyRetry(() => import('../views/apps/admin/papelera/Papelera')));
 
 // Configuración del Sistema Apps
 const AuditoriaAccesos = Loadable(
@@ -273,6 +274,9 @@ const MasterPanelLogin = Loadable(lazyRetry(() => import('../views/master-panel/
 const MasterPanelLayout = Loadable(lazyRetry(() => import('../views/master-panel/MasterPanelLayout')));
 const MasterDashboardContent = Loadable(lazyRetry(() => import('../views/master-panel/MasterDashboardContent')));
 const MasterBrokersPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterBrokersPage')));
+const MasterDashboardNueva = Loadable(lazyRetry(() => import('../views/master-panel/MasterDashboardNueva')));
+const MasterBrokersNueva = Loadable(lazyRetry(() => import('../views/master-panel/MasterBrokersNueva')));
+const MasterSoportePage = Loadable(lazyRetry(() => import('../views/master-panel/MasterSoportePage')));
 const MasterBrokerEditPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterBrokerEditPage')));
 const MasterUsuariosPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterUsuariosPage')));
 const MasterFinanzasPage = Loadable(lazyRetry(() => import('../views/master-panel/MasterFinanzasPage')));
@@ -373,6 +377,7 @@ const Router = [
       { path: '/apps/admin/usuarios', element: <Usuarios /> },
       { path: '/apps/admin/usuarios/reportes', element: <ReportesUsuarios /> },
       { path: '/apps/admin/roles', element: <Roles /> },
+      { path: '/apps/admin/papelera', element: <Papelera /> },
       { path: '/apps/admin/demo-permisos', element: <DemoPermisosLoadable /> },
       { path: '/apps/admin/informacion-agencia', element: <InformacionAgencia /> },
       { path: '/apps/admin/sedes', element: <Sedes /> },
@@ -543,8 +548,13 @@ const Router = [
     path: '/master-panel',
     element: <MasterPanelLayout />,
     children: [
-      { path: 'dashboard', element: <MasterDashboardContent /> },
+      { path: 'dashboard', element: <MasterDashboardNueva /> },
+      { path: 'dashboard-original', element: <MasterDashboardContent /> },
+      // /brokers usa el panel real (MasterBrokersPage) con datos del backend.
+      // MasterBrokersNueva (datos hardcodeados) queda accesible en /brokers-demo.
       { path: 'brokers', element: <MasterBrokersPage /> },
+      { path: 'brokers-demo', element: <MasterBrokersNueva /> },
+      { path: 'soporte', element: <MasterSoportePage /> },
       { path: 'brokers/:id/editar', element: <MasterBrokerEditPage /> },
       { path: 'usuarios', element: <MasterUsuariosPage /> },
       { path: 'finanzas', element: <MasterFinanzasPage /> },

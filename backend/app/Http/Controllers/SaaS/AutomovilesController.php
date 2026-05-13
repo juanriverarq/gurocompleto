@@ -37,7 +37,35 @@ class AutomovilesController extends Controller
 
         $query = Automovil::where('broker_id', $brokerId)->with(['client','poliza','brand','vehModel']);
         if (!empty($polizaId)) {
-            $query->where('poliza_id', (int)$polizaId);
+            // Cuando filtra por póliza, traer también los autos del mismo cliente cuya
+            // placa coincida con `polizas.vehicle_plates`. Esto cubre el caso donde el
+            // automóvil quedó vinculado a una póliza vieja (renovaciones de SOAT/RTM)
+            // pero la nueva tiene el cliente y la placa correctos.
+            $poliza = \App\Models\Poliza::where('broker_id', $brokerId)
+                ->where('id', (int)$polizaId)
+                ->first(['id', 'client_id', 'vehicle_plates']);
+
+            $polizaPlates = [];
+            if ($poliza) {
+                $vp = $poliza->vehicle_plates;
+                if (is_string($vp)) { $vp = json_decode($vp, true) ?: []; }
+                if (is_array($vp)) {
+                    $polizaPlates = array_values(array_filter(array_map(
+                        fn($p) => strtoupper(trim((string)$p)),
+                        $vp
+                    )));
+                }
+            }
+
+            $query->where(function ($q) use ($polizaId, $poliza, $polizaPlates) {
+                $q->where('poliza_id', (int)$polizaId);
+                if ($poliza && $poliza->client_id && !empty($polizaPlates)) {
+                    $q->orWhere(function ($q2) use ($poliza, $polizaPlates) {
+                        $q2->where('client_id', $poliza->client_id)
+                           ->whereIn(\DB::raw('UPPER(placa)'), $polizaPlates);
+                    });
+                }
+            });
         }
         if (!empty($placaExact)) {
             $query->where('placa', strtoupper(trim((string)$placaExact)));
@@ -50,6 +78,38 @@ class AutomovilesController extends Controller
                   ->orWhere('vin', 'like', "%{$search}%");
             });
         }
+
+        // Filtro por tab (estado de vencimiento / sincronización)
+        $tab = (string) $request->get('tab', '');
+        $today = now()->toDateString();
+        $in30 = now()->addDays(30)->toDateString();
+        switch ($tab) {
+            case 'proximos':
+                // SOAT o RTM con vencimiento entre HOY y HOY+30
+                $query->where(function ($q) use ($today, $in30) {
+                    $q->whereBetween('fecha_vencimiento_soat', [$today, $in30])
+                      ->orWhereBetween('fecha_vencimiento_rtm', [$today, $in30]);
+                });
+                break;
+            case 'vencidos':
+                // SOAT o RTM ya vencido
+                $query->where(function ($q) use ($today) {
+                    $q->where('fecha_vencimiento_soat', '<', $today)
+                      ->orWhere('fecha_vencimiento_rtm', '<', $today);
+                });
+                break;
+            case 'sin_datos_runt':
+                // Ya se consultó al RUNT pero no llegaron SOAT ni RTM (mismatch propietario)
+                $query->whereNotNull('runt_consulted_at')
+                      ->whereNull('fecha_vencimiento_soat')
+                      ->whereNull('fecha_vencimiento_rtm');
+                break;
+            case 'no_sincronizados':
+                // Nunca se ha consultado al RUNT
+                $query->whereNull('runt_consulted_at');
+                break;
+        }
+
         $query->orderBy('placa');
         $autos = $query->paginate($perPage);
 
@@ -149,6 +209,38 @@ class AutomovilesController extends Controller
         return response()->json([
             'success' => true,
             'data' => $transformed,
+        ]);
+    }
+
+    /**
+     * Contadores por tab para el listado de automoviles.
+     */
+    public function tabCounts(Request $request)
+    {
+        $brokerId = $this->getBrokerId($request);
+        $today = now()->toDateString();
+        $in30 = now()->addDays(30)->toDateString();
+
+        $base = fn() => Automovil::where('broker_id', $brokerId);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'todos' => $base()->count(),
+                'proximos' => $base()->where(function ($q) use ($today, $in30) {
+                    $q->whereBetween('fecha_vencimiento_soat', [$today, $in30])
+                      ->orWhereBetween('fecha_vencimiento_rtm', [$today, $in30]);
+                })->count(),
+                'vencidos' => $base()->where(function ($q) use ($today) {
+                    $q->where('fecha_vencimiento_soat', '<', $today)
+                      ->orWhere('fecha_vencimiento_rtm', '<', $today);
+                })->count(),
+                'sin_datos_runt' => $base()->whereNotNull('runt_consulted_at')
+                                            ->whereNull('fecha_vencimiento_soat')
+                                            ->whereNull('fecha_vencimiento_rtm')
+                                            ->count(),
+                'no_sincronizados' => $base()->whereNull('runt_consulted_at')->count(),
+            ],
         ]);
     }
 
@@ -291,6 +383,26 @@ class AutomovilesController extends Controller
             'brand_id' => 'nullable|integer|exists:veh_brands,id',
             'model_id' => 'nullable|integer|exists:veh_models,id',
             'line_id' => 'nullable|integer|exists:veh_lines,id',
+            // SOAT
+            'numero_soat' => 'nullable|string|max:64',
+            'fecha_inicio_soat' => 'nullable|date',
+            'fecha_vencimiento_soat' => 'nullable|date',
+            'aseguradora_soat' => 'nullable|string|max:150',
+            'estado_soat' => 'nullable|string|max:50',
+            // RTM
+            'numero_certificado_rtm' => 'nullable|string|max:64',
+            'fecha_expedicion_rtm' => 'nullable|date',
+            'fecha_vencimiento_rtm' => 'nullable|date',
+            'nombre_cda_rtm' => 'nullable|string|max:200',
+            'estado_rtm' => 'nullable|string|max:50',
+            // Estado legal / RUNT
+            'estado_automotor' => 'nullable|string|max:100',
+            'gravamenes' => 'nullable|string|max:200',
+            'prendas' => 'nullable|string|max:200',
+            'organismo_transito' => 'nullable|string|max:200',
+            'fecha_registro_runt' => 'nullable|date',
+            'propietario_nombre' => 'nullable|string|max:200',
+            'propietario_documento' => 'nullable|string|max:50',
         ]);
 
         if (isset($validated['placa'])) {
@@ -302,7 +414,7 @@ class AutomovilesController extends Controller
             if ($dup) return response()->json(['success'=>false,'message'=>'La placa ya existe para este broker'],409);
             $auto->placa = $newPlaca;
         }
-        foreach (['marca','modelo','anio','vin','color','tipo_servicio','clase','referencia1','referencia2','referencia3','linea','tipo_carroceria','numero_motor','numero_chasis','numero_serie','cilindraje','combustible','capacidad_pasajeros','capacidad_carga_kg','tipo_transmision','traccion','pais_origen','custom_fields','brand_id','model_id','line_id'] as $f) {
+        foreach (['marca','modelo','anio','vin','color','tipo_servicio','clase','referencia1','referencia2','referencia3','linea','tipo_carroceria','numero_motor','numero_chasis','numero_serie','cilindraje','combustible','capacidad_pasajeros','capacidad_carga_kg','tipo_transmision','traccion','pais_origen','custom_fields','brand_id','model_id','line_id','numero_soat','fecha_inicio_soat','fecha_vencimiento_soat','aseguradora_soat','estado_soat','numero_certificado_rtm','fecha_expedicion_rtm','fecha_vencimiento_rtm','nombre_cda_rtm','estado_rtm','estado_automotor','gravamenes','prendas','organismo_transito','fecha_registro_runt','propietario_nombre','propietario_documento'] as $f) {
             if (array_key_exists($f, $validated)) $auto->{$f} = $validated[$f];
         }
         if (array_key_exists('client_id', $validated)) {
@@ -343,10 +455,19 @@ class AutomovilesController extends Controller
             ->whereNotNull('client_id');
 
         if ($onlyPending) {
+            // Solo procesar autos que NUNCA se han consultado, O que se consultaron
+            // hace más de 7 días Y todavía les faltan datos (SOAT/RTM). Sin la
+            // condición temporal, los autos donde RUNT no devolvió datos serían
+            // re-consultados infinitamente en cada batch sin avanzar el cursor.
             $query->where(function ($q) {
                 $q->whereNull('runt_consulted_at')
-                  ->orWhereNull('fecha_vencimiento_soat')
-                  ->orWhereNull('fecha_vencimiento_rtm');
+                  ->orWhere(function ($q2) {
+                      $q2->where('runt_consulted_at', '<', now()->subDays(7))
+                         ->where(function ($q3) {
+                             $q3->whereNull('fecha_vencimiento_soat')
+                                ->orWhereNull('fecha_vencimiento_rtm');
+                         });
+                  });
             });
         }
 
@@ -411,6 +532,14 @@ class AutomovilesController extends Controller
                     if (!$response->ok() || empty($body['success'])) {
                         $failed++;
                         $msg = $body['error'] ?? $body['mensaje'] ?? $body['message'] ?? ('HTTP ' . $response->status());
+                        // Marcar como consultado si la respuesta llegó (no fue timeout/error de red)
+                        // para que el cursor avance en próximas pasadas.
+                        if ($response->ok()) {
+                            try {
+                                $auto->runt_consulted_at = now();
+                                $auto->save();
+                            } catch (\Throwable $ignored) {}
+                        }
                         $send('progress', [
                             'index' => $index, 'total' => $total,
                             'placa' => $auto->placa, 'status' => 'failed',
@@ -421,6 +550,29 @@ class AutomovilesController extends Controller
                     }
 
                     $this->applyRuntData($auto, $body);
+                    // Detectar si la respuesta RUNT trajo info real útil. Si vino con
+                    // success:true pero todo vacío, lo marcamos como failed para que
+                    // el usuario vea el conteo real de actualizaciones.
+                    $hasUsefulData = !empty($body['soat']['fechaVencimSoat'])
+                        || !empty($body['rtm']['fechaVencimientoRvt'])
+                        || !empty($body['vehiculo']['marca'])
+                        || !empty($body['vehiculo']['linea']);
+
+                    if (!$hasUsefulData && !$auto->isDirty()) {
+                        // No cambió nada; reportar como fallido informativo.
+                        $failed++;
+                        $send('progress', [
+                            'index' => $index, 'total' => $total,
+                            'placa' => $auto->placa, 'status' => 'failed',
+                            'message' => 'RUNT respondió OK pero sin datos de SOAT/RTM/vehículo',
+                            'success' => $success, 'failed' => $failed, 'skipped' => $skipped,
+                        ]);
+                        // Igual guardamos runt_consulted_at para no reintentar a ciegas.
+                        $auto->runt_consulted_at = now();
+                        $auto->save();
+                        continue;
+                    }
+
                     $auto->save();
                     $success++;
 
@@ -456,6 +608,138 @@ class AutomovilesController extends Controller
             'Cache-Control' => 'no-cache',
             'Connection' => 'keep-alive',
             'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
+    /**
+     * Versión JSON (no streaming) del sync masivo. Recomendada en producción
+     * detrás de Apache/Cloudflare donde SSE se buffereaba por mod_deflate /
+     * output_buffering. Procesa una tanda corta sincrónicamente y retorna
+     * los contadores. El frontend encadena batches sucesivos.
+     */
+    public function syncRuntMasivoJson(Request $request)
+    {
+        $brokerId = $this->getBrokerId($request);
+        $onlyPending = $request->boolean('only_pending', true);
+
+        $query = Automovil::where('broker_id', $brokerId)
+            ->whereNotNull('placa')
+            ->where('placa', '!=', '')
+            ->whereNotNull('client_id');
+
+        if ($onlyPending) {
+            // Mismo fix que syncRuntMasivo: si ya se consultó, no re-consultar a menos
+            // que haya pasado 1 semana Y todavía falten SOAT/RTM. Evita el loop infinito
+            // sobre autos donde RUNT no devuelve datos por mismatch de propietario.
+            $query->where(function ($q) {
+                $q->whereNull('runt_consulted_at')
+                  ->orWhere(function ($q2) {
+                      $q2->where('runt_consulted_at', '<', now()->subDays(7))
+                         ->where(function ($q3) {
+                             $q3->whereNull('fecha_vencimiento_soat')
+                                ->orWhereNull('fecha_vencimiento_rtm');
+                         });
+                  });
+            });
+        }
+
+        // Lotes pequeños para caber dentro del timeout de ~100s de Cloudflare.
+        // 10 vehículos × ~7s c/u ≈ 70s.
+        $limit = (int) $request->get('limit', 10);
+        if ($limit < 1) $limit = 10;
+        if ($limit > 30) $limit = 30;
+
+        $autos = $query->with('client')->limit($limit)->get();
+        $total = $autos->count();
+        $success = 0;
+        $failed = 0;
+        $skipped = 0;
+        $items = [];
+
+        @set_time_limit(120);
+        @ini_set('max_execution_time', '120');
+
+        foreach ($autos as $auto) {
+            $documento = $auto->client->document_number ?? null;
+            if (!$documento) {
+                $skipped++;
+                $items[] = [
+                    'placa' => $auto->placa,
+                    'status' => 'skipped',
+                    'message' => 'Sin documento de cliente',
+                ];
+                continue;
+            }
+            try {
+                $response = Http::timeout(10)->get('https://historialrunt.org/api/consultar.php', [
+                    'placa' => strtoupper($auto->placa),
+                    'documento' => $documento,
+                ]);
+                $body = $response->json() ?? [];
+                if (!$response->ok() || empty($body['success'])) {
+                    $failed++;
+                    $msg = $body['error'] ?? $body['mensaje'] ?? $body['message'] ?? ('HTTP ' . $response->status());
+                    // Marcar como consultado incluso si el RUNT respondió "no coincide"
+                    // para que el cursor avance y el sync masivo no se quede en loop
+                    // sobre los mismos vehículos. Solo evitamos marcar en errores
+                    // transitorios (timeout, HTTP 5xx) que sí deben reintentarse.
+                    $shouldMark = $response->ok();
+                    if ($shouldMark) {
+                        try {
+                            $auto->runt_consulted_at = now();
+                            $auto->save();
+                        } catch (\Throwable $ignored) {}
+                    }
+                    $items[] = [
+                        'placa' => $auto->placa,
+                        'status' => 'failed',
+                        'message' => mb_substr((string) $msg, 0, 160),
+                    ];
+                    continue;
+                }
+                $this->applyRuntData($auto, $body);
+                $hasUsefulData = !empty($body['soat']['fechaVencimSoat'])
+                    || !empty($body['rtm']['fechaVencimientoRvt'])
+                    || !empty($body['vehiculo']['marca'])
+                    || !empty($body['vehiculo']['linea']);
+                if (!$hasUsefulData && !$auto->isDirty()) {
+                    $failed++;
+                    $auto->runt_consulted_at = now();
+                    $auto->save();
+                    $items[] = [
+                        'placa' => $auto->placa,
+                        'status' => 'failed',
+                        'message' => 'RUNT respondió OK pero sin datos de SOAT/RTM/vehículo',
+                    ];
+                    continue;
+                }
+                $auto->save();
+                $success++;
+                $items[] = [
+                    'placa' => $auto->placa,
+                    'status' => 'success',
+                    'soat_venc' => $auto->fecha_vencimiento_soat?->format('Y-m-d'),
+                    'rtm_venc' => $auto->fecha_vencimiento_rtm?->format('Y-m-d'),
+                ];
+            } catch (\Throwable $e) {
+                $failed++;
+                $items[] = [
+                    'placa' => $auto->placa,
+                    'status' => 'failed',
+                    'message' => mb_substr($e->getMessage(), 0, 160),
+                ];
+            }
+            usleep(50000); // 50ms entre llamadas
+        }
+
+        return response()->json([
+            'success' => true,
+            'total' => $total,
+            'success_count' => $success,
+            'failed' => $failed,
+            'skipped' => $skipped,
+            'cancelled' => false,
+            'items' => $items,
         ]);
     }
 

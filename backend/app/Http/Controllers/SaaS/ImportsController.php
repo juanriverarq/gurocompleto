@@ -1564,10 +1564,12 @@ class ImportsController extends Controller
                 $highestCol = $sheet->getHighestColumn();
                 $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
                 $rows = [];
+                // PhpSpreadsheet 4.x removed getCellByColumnAndRow().
+                // El reemplazo es getCell([colIndex, rowIndex]) con notación de array.
                 for ($r = 1; $r <= $highestRow; $r++) {
                     $row = [];
                     for ($c = 1; $c <= $highestColIndex; $c++) {
-                        $row[] = (string)($sheet->getCellByColumnAndRow($c, $r)->getValue());
+                        $row[] = (string)($sheet->getCell([$c, $r])->getValue());
                     }
                     $rows[] = $row;
                 }
@@ -1625,7 +1627,8 @@ class ImportsController extends Controller
                 $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
                 $sheet = $spreadsheet->getActiveSheet();
                 foreach ($headers as $idx => $h) {
-                    $sheet->setCellValueByColumnAndRow($idx + 1, 1, $h);
+                    // PhpSpreadsheet 4.x: setCellValue acepta [col,row] como array
+                    $sheet->setCellValue([$idx + 1, 1], $h);
                 }
                 $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xlsx');
                 return new StreamedResponse(function () use ($writer) {

@@ -93,11 +93,13 @@ const Automoviles: React.FC = () => {
   const [items, setItems] = useState<Automovil[]>([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState<any>(null);
-  const [filters, setFilters] = useState<{ search?: string; page?: number; per_page?: number }>({
+  const [filters, setFilters] = useState<{ search?: string; page?: number; per_page?: number; tab?: string }>({
     per_page: 15,
     page: 1,
     search: '',
+    tab: '',
   });
+  const [tabCounts, setTabCounts] = useState<{ todos: number; proximos: number; vencidos: number; sin_datos_runt: number; no_sincronizados: number } | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<Partial<Automovil>>({
     placa: '',
@@ -181,7 +183,18 @@ const Automoviles: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [filters.page, filters.per_page, filters.search]);
+  }, [filters.page, filters.per_page, filters.search, filters.tab]);
+
+  // Cargar contadores de tabs
+  const loadTabCounts = async () => {
+    try {
+      const res = await saasApi.getAutomovilesTabCounts();
+      if (res?.data) setTabCounts(res.data as any);
+    } catch {}
+  };
+  useEffect(() => { loadTabCounts(); }, []);
+  // Refrescar contadores cuando termina un sync masivo
+  useEffect(() => { if (massRuntDone) loadTabCounts(); }, [massRuntDone]);
 
   // Abrir modal de edición por param open_auto_id desde el buscador global
   useEffect(() => {
@@ -648,14 +661,14 @@ const Automoviles: React.FC = () => {
                     <p className="text-[11px] text-neutral-500 mb-4">Solo los pendientes es más rápido. Todos fuerza la consulta de cada placa al RUNT.</p>
                     <div className="space-y-2">
                       <button
-                        onClick={() => { setShowRuntResync(false); startRuntSync({ onlyPending: true, limit: 50 }); }}
+                        onClick={() => { setShowRuntResync(false); startRuntSync({ onlyPending: true, limit: 15 }); }}
                         className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors"
                       >
                         Solo pendientes
                         <span className="block text-[10px] text-neutral-600 mt-0.5">Vehículos sin datos del RUNT</span>
                       </button>
                       <button
-                        onClick={() => { setShowRuntResync(false); startRuntSync({ onlyPending: false, limit: 200 }); }}
+                        onClick={() => { setShowRuntResync(false); startRuntSync({ onlyPending: false, limit: 15 }); }}
                         className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors"
                       >
                         Todos los vehículos
@@ -684,6 +697,47 @@ const Automoviles: React.FC = () => {
           </div>
         </Card>
 
+        {/* Tabs por estado de vencimiento / sincronización RUNT */}
+        <div className="bg-white dark:bg-darkgray shadow-md dark:shadow-none rounded-[10px]">
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <nav className="flex flex-wrap gap-1 px-4 pt-3" aria-label="Tabs">
+              {[
+                { key: '', label: 'Todos', icon: 'solar:list-bold-duotone', activeColor: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-500', count: tabCounts?.todos ?? 0, badgeOn: 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200', desc: 'Todos los automóviles registrados' },
+                { key: 'proximos', label: 'Próximos a vencer', icon: 'solar:clock-circle-bold-duotone', activeColor: 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border-orange-500', count: tabCounts?.proximos ?? 0, badgeOn: 'bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200', desc: 'SOAT o RTM con vencimiento en los próximos 30 días' },
+                { key: 'vencidos', label: 'Vencidos', icon: 'solar:close-circle-bold-duotone', activeColor: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-500', count: tabCounts?.vencidos ?? 0, badgeOn: 'bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200', desc: 'SOAT o RTM ya vencido' },
+                { key: 'sin_datos_runt', label: 'Sin datos RUNT', icon: 'solar:question-circle-bold-duotone', activeColor: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-500', count: tabCounts?.sin_datos_runt ?? 0, badgeOn: 'bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200', desc: 'Consultados al RUNT pero sin SOAT/RTM (probable mismatch de propietario — requiere fechas manuales)' },
+                { key: 'no_sincronizados', label: 'No sincronizados', icon: 'solar:refresh-bold-duotone', activeColor: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-500', count: tabCounts?.no_sincronizados ?? 0, badgeOn: 'bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200', desc: 'Aún no consultados al RUNT' },
+              ].map(t => {
+                const active = (filters.tab || '') === t.key;
+                return (
+                  <button
+                    key={t.key || 'todos'}
+                    onClick={() => setFilters(prev => ({ ...prev, page: 1, tab: t.key }))}
+                    title={t.desc}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors border-b-2 ${active ? t.activeColor : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon icon={t.icon} className="w-4 h-4" />
+                      <span>{t.label}</span>
+                      <span className={`px-2 py-0.5 text-xs rounded-full ${active ? t.badgeOn : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                        {t.count}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+          {/* Hint contextual cuando hay tab activa */}
+          {filters.tab && (
+            <div className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
+              {filters.tab === 'proximos' && 'Vence en menos de 30 días — coordine renovación o agende notificación al cliente.'}
+              {filters.tab === 'vencidos' && 'SOAT/RTM vencido. Si la fecha en Guro está desactualizada, edite el automóvil o vuelva a sincronizar.'}
+              {filters.tab === 'sin_datos_runt' && 'El RUNT no devolvió SOAT/RTM porque el documento del cliente no coincide con el propietario real. Edite el auto y agregue las fechas manualmente.'}
+              {filters.tab === 'no_sincronizados' && 'Aún no consultados — use el botón "Consultar RUNT" para iniciar la sincronización masiva.'}
+            </div>
+          )}
+        </div>
 
         <div className="overflow-hidden">
           {loading ? (
@@ -1689,36 +1743,53 @@ const Automoviles: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 <div>
                   <Label className="mb-1 block text-xs">Número SOAT</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.numero_soat || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.numero_soat || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, numero_soat: e.target.value }))}
+                    placeholder="Ej: 123456789"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Aseguradora</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.aseguradora_soat || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.aseguradora_soat || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, aseguradora_soat: e.target.value }))}
+                    placeholder="Nombre aseguradora"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Estado</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.estado_soat || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.estado_soat || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, estado_soat: e.target.value }))}
+                    placeholder="Ej: VIGENTE"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Inicio póliza</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.fecha_inicio_soat || '-'}
-                  </div>
+                  <input
+                    type="date"
+                    className="w-full h-9 px-3 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark/30 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+                    value={editForm.fecha_inicio_soat || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, fecha_inicio_soat: e.target.value }))}
+                  />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-xs">Vencimiento</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {(() => {
-                      const b = getVencimientoBadge(editForm.fecha_vencimiento_soat);
-                      return <span className={`text-xs px-2 py-0.5 rounded-full ${b.color}`}>{b.text}</span>;
-                    })()}
-                  </div>
+                  <Label className="mb-1 block text-xs">Vencimiento SOAT</Label>
+                  <input
+                    type="date"
+                    className="w-full h-9 px-3 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark/30 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+                    value={editForm.fecha_vencimiento_soat || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, fecha_vencimiento_soat: e.target.value }))}
+                  />
+                  {editForm.fecha_vencimiento_soat && (
+                    <span className={`text-xs mt-1 inline-block px-2 py-0.5 rounded-full ${getVencimientoBadge(editForm.fecha_vencimiento_soat).color}`}>
+                      {getVencimientoBadge(editForm.fecha_vencimiento_soat).text}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1727,36 +1798,53 @@ const Automoviles: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 <div>
                   <Label className="mb-1 block text-xs">Certificado</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.numero_certificado_rtm || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.numero_certificado_rtm || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, numero_certificado_rtm: e.target.value }))}
+                    placeholder="Número certificado RTM"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">CDA</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.nombre_cda_rtm || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.nombre_cda_rtm || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, nombre_cda_rtm: e.target.value }))}
+                    placeholder="Centro de diagnóstico"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Estado</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.estado_rtm || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.estado_rtm || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, estado_rtm: e.target.value }))}
+                    placeholder="Ej: APROBADO"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Expedición</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.fecha_expedicion_rtm || '-'}
-                  </div>
+                  <input
+                    type="date"
+                    className="w-full h-9 px-3 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark/30 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+                    value={editForm.fecha_expedicion_rtm || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, fecha_expedicion_rtm: e.target.value }))}
+                  />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-xs">Vencimiento</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {(() => {
-                      const b = getVencimientoBadge(editForm.fecha_vencimiento_rtm);
-                      return <span className={`text-xs px-2 py-0.5 rounded-full ${b.color}`}>{b.text}</span>;
-                    })()}
-                  </div>
+                  <Label className="mb-1 block text-xs">Vencimiento RTM</Label>
+                  <input
+                    type="date"
+                    className="w-full h-9 px-3 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark/30 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+                    value={editForm.fecha_vencimiento_rtm || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, fecha_vencimiento_rtm: e.target.value }))}
+                  />
+                  {editForm.fecha_vencimiento_rtm && (
+                    <span className={`text-xs mt-1 inline-block px-2 py-0.5 rounded-full ${getVencimientoBadge(editForm.fecha_vencimiento_rtm).color}`}>
+                      {getVencimientoBadge(editForm.fecha_vencimiento_rtm).text}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1765,39 +1853,66 @@ const Automoviles: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <Label className="mb-1 block text-xs">Estado automotor</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.estado_automotor || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.estado_automotor || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, estado_automotor: e.target.value }))}
+                    placeholder="Ej: ACTIVO"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Organismo de tránsito</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.organismo_transito || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.organismo_transito || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, organismo_transito: e.target.value }))}
+                    placeholder="Secretaría de tránsito"
+                  />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-xs">Propietario</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.propietario_nombre || '-'}{editForm.propietario_documento ? ` (${editForm.propietario_documento})` : ''}
-                  </div>
+                  <Label className="mb-1 block text-xs">Propietario (nombre)</Label>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.propietario_nombre || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, propietario_nombre: e.target.value }))}
+                    placeholder="Nombre completo"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1 block text-xs">Propietario (documento)</Label>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.propietario_documento || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, propietario_documento: e.target.value }))}
+                    placeholder="Número de documento"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Gravámenes</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.gravamenes || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.gravamenes || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, gravamenes: e.target.value }))}
+                    placeholder="Ej: SIN GRAVAMEN"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs">Prendas</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.prendas || '-'}
-                  </div>
+                  <TextInput
+                    sizing="sm"
+                    value={editForm.prendas || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, prendas: e.target.value }))}
+                    placeholder="Ej: SIN PRENDA"
+                  />
                 </div>
                 <div>
-                  <Label className="mb-1 block text-xs">Fecha registro</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-dark/30 border border-gray-200 dark:border-dark/40 text-sm">
-                    {editForm.fecha_registro_runt || '-'}
-                  </div>
+                  <Label className="mb-1 block text-xs">Fecha registro RUNT</Label>
+                  <input
+                    type="date"
+                    className="w-full h-9 px-3 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark/30 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+                    value={editForm.fecha_registro_runt || ''}
+                    onChange={(e) => setEditForm((p) => ({ ...p, fecha_registro_runt: e.target.value }))}
+                  />
                 </div>
               </div>
             </div>

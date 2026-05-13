@@ -85,9 +85,8 @@ const insurers: InsurerCard[] = [
   {
     id: 'allianz',
     name: 'Allianz',
-    description: 'Integración con Allianz para gestionar pólizas y cartera. Disponible próximamente.',
+    description: 'Conecta Allianz para sincronizar recibos y cartera del mediador.',
     logo: allianzLogo,
-    comingSoon: true,
   },
 ];
 
@@ -95,6 +94,9 @@ const ApisAseguradoras: React.FC = () => {
   const [connections, setConnections] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [busyByInsurer, setBusyByInsurer] = useState<Record<string, boolean>>({});
+  const [syncingByInsurer, setSyncingByInsurer] = useState<Record<string, boolean>>({});
+  const [syncResultByInsurer, setSyncResultByInsurer] = useState<Record<string, 'ok' | 'error' | null>>({});
+  const syncPollRefs = useRef<Record<string, number>>({});
 
   const [modalOpen, setModalOpen] = useState(false);
   const [activeInsurer, setActiveInsurer] = useState<InsurerCard | null>(null);
@@ -106,13 +108,14 @@ const ApisAseguradoras: React.FC = () => {
   const [connectingMessage, setConnectingMessage] = useState<string>('');
   const pollIntervalRef = useRef<number | null>(null);
 
-  // Limpia el interval de polling al desmontar
+  // Limpia intervalos al desmontar
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) {
         window.clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
+      Object.values(syncPollRefs.current).forEach(window.clearInterval);
     };
   }, []);
 
@@ -158,28 +161,13 @@ const ApisAseguradoras: React.FC = () => {
     setChallengeId(null);
     setModalOpen(true);
 
+    // Default vacío: el broker ingresa sus propias credenciales por seguridad.
+    // AXA Colpatria mantiene el tipo de documento y perfil por defecto que la
+    // mayoría de brokers usan, pero sin doc_number ni password.
     const defaults: Record<string, string> = {};
-    if (insurer.id === 'bolivar') {
-      defaults.doc_number = '43824597';
-      defaults.password = 'Chseg27++ch';
-    }
-    if (insurer.id === 'hdi') {
-      defaults.doc_number = '43435248';
-      defaults.password = 'Ingreso26Martes++';
-    }
-    if (insurer.id === 'seguros-del-estado') {
-      defaults.user_name = '900709309';
-      defaults.password = 'Estado26**';
-    }
     if (insurer.id === 'axa-colpatria') {
       defaults.doc_type = 'CC';
-      defaults.doc_number = '43435248';
-      defaults.password = 'NTPvNZ658933@@';
       defaults.profile = 'ADM';
-    }
-    if (insurer.id === 'la-equidad') {
-      defaults.email = 'ddiez@proaseguros.com.co';
-      defaults.password = 'mEDELLIN2025*';
     }
     setFormData(defaults);
   };
@@ -272,6 +260,42 @@ const ApisAseguradoras: React.FC = () => {
       await loadConnections();
     } finally {
       setBusy(insurerId, false);
+    }
+  };
+
+  const triggerSync = async (insurer: InsurerCard) => {
+    const id = insurer.id;
+    if (syncPollRefs.current[id]) window.clearInterval(syncPollRefs.current[id]);
+    setSyncingByInsurer((p) => ({ ...p, [id]: true }));
+    setSyncResultByInsurer((p) => ({ ...p, [id]: null }));
+
+    const finishSync = (result: 'ok' | 'error') => {
+      if (syncPollRefs.current[id]) window.clearInterval(syncPollRefs.current[id]);
+      setSyncingByInsurer((p) => ({ ...p, [id]: false }));
+      setSyncResultByInsurer((p) => ({ ...p, [id]: result }));
+      setTimeout(() => setSyncResultByInsurer((p) => ({ ...p, [id]: null })), 5000);
+      if (result === 'ok') loadConnections();
+    };
+
+    try {
+      const types = id === 'seguros-del-estado' ? ['clientes', 'polizas'] : ['clientes', 'polizas', 'cartera'];
+      const res: any = await saasApi.syncInsurers([id], types);
+      const batchId = res?.data?.batch_id;
+      if (!batchId) throw new Error('Sin batch_id');
+
+      let attempts = 0;
+      syncPollRefs.current[id] = window.setInterval(async () => {
+        attempts++;
+        if (attempts > 120) { finishSync('error'); return; }
+        try {
+          const sr: any = await saasApi.getSyncStatus(batchId);
+          const overall = sr?.data?.overall_status;
+          if (overall === 'completed') finishSync('ok');
+          else if (overall === 'failed' || overall === 'cancelled') finishSync('error');
+        } catch { /* tolerar errores transitorios */ }
+      }, 3000);
+    } catch {
+      finishSync('error');
     }
   };
 
@@ -550,6 +574,44 @@ const ApisAseguradoras: React.FC = () => {
       );
     }
 
+    if (activeInsurer.id === 'allianz') {
+      return (
+        <>
+          <div className="rounded-xl bg-[#573CFF]/8 dark:bg-[#573CFF]/15 border border-[#573CFF]/20 px-4 py-3 flex gap-3 items-start">
+            <div className="mt-0.5 text-[#573CFF] shrink-0">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            </div>
+            <div className="text-xs text-gray-700 dark:text-neutral-300 space-y-1">
+              <p className="font-semibold text-gray-900 dark:text-white">Portal Allianz ePAC</p>
+              <p>Ingresa con tu usuario del portal <strong>allia2net.com.co</strong>. La sesión se renueva automáticamente (TTL ~1h).</p>
+            </div>
+          </div>
+          <label className="block">
+            <span className="text-xs text-gray-500 dark:text-neutral-400 mb-1 block">Usuario</span>
+            <input
+              type="text"
+              value={formData.username || ''}
+              onChange={(e) => setFormData((p) => ({ ...p, username: e.target.value }))}
+              className="w-full rounded-lg bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-[#573CFF]"
+              placeholder="CA014200"
+              autoComplete="username"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-gray-500 dark:text-neutral-400 mb-1 block">Contraseña</span>
+            <input
+              type="password"
+              value={formData.password || ''}
+              onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
+              className="w-full rounded-lg bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-[#573CFF]"
+              placeholder="Contraseña del portal"
+              autoComplete="current-password"
+            />
+          </label>
+        </>
+      );
+    }
+
     if (activeInsurer.id === 'axa-colpatria') {
       return (
         <>
@@ -714,16 +776,22 @@ const ApisAseguradoras: React.FC = () => {
                     <>
                       <button
                         type="button"
-                        onClick={() => runHealthCheck(insurer.id)}
-                        disabled={busy}
-                        className="w-fit rounded-lg border border-[#573CFF]/40 bg-[#573CFF]/15 hover:bg-[#573CFF]/25 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 transition-colors"
+                        onClick={() => triggerSync(insurer)}
+                        disabled={busy || !!syncingByInsurer[insurer.id]}
+                        className="w-fit rounded-lg border border-[#573CFF]/40 bg-[#573CFF]/15 hover:bg-[#573CFF]/25 disabled:opacity-50 text-white text-sm font-medium px-3 py-2 transition-colors flex items-center gap-1.5"
+                        title="Importar clientes, pólizas y cartera desde la aseguradora"
                       >
-                        {busy ? 'Verificando...' : 'Verificar'}
+                        <Icon
+                          icon={syncingByInsurer[insurer.id] ? 'solar:refresh-bold' : syncResultByInsurer[insurer.id] === 'ok' ? 'solar:check-circle-bold' : syncResultByInsurer[insurer.id] === 'error' ? 'solar:close-circle-bold' : 'solar:refresh-linear'}
+                          width={14}
+                          className={syncingByInsurer[insurer.id] ? 'animate-spin' : syncResultByInsurer[insurer.id] === 'error' ? 'text-red-400' : ''}
+                        />
+                        {syncingByInsurer[insurer.id] ? 'Sincronizando...' : 'Sincronizar'}
                       </button>
                       <button
                         type="button"
                         onClick={() => disconnect(insurer.id)}
-                        disabled={busy}
+                        disabled={busy || !!syncingByInsurer[insurer.id]}
                         className="w-fit rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50 text-gray-600 dark:text-neutral-300 text-sm font-medium px-4 py-2 transition-colors"
                       >
                         Desconectar
@@ -753,7 +821,19 @@ const ApisAseguradoras: React.FC = () => {
                   )}
                 </div>
 
-                {insurer.connection?.last_error && (
+                {syncResultByInsurer[insurer.id] === 'ok' && (
+                  <p className="mt-3 text-[11px] text-emerald-600 dark:text-emerald-400 leading-snug flex items-center gap-1">
+                    <Icon icon="solar:check-circle-bold" width={12} />
+                    Sincronización completada
+                  </p>
+                )}
+                {syncResultByInsurer[insurer.id] === 'error' && (
+                  <p className="mt-3 text-[11px] text-red-500 dark:text-red-400 leading-snug flex items-center gap-1">
+                    <Icon icon="solar:close-circle-bold" width={12} />
+                    Error al sincronizar. Verifica la conexión.
+                  </p>
+                )}
+                {!syncResultByInsurer[insurer.id] && insurer.connection?.last_error && (
                   <p className="mt-3 text-[11px] text-amber-600 dark:text-amber-300/85 leading-snug">
                     {insurer.connection.last_error}
                   </p>

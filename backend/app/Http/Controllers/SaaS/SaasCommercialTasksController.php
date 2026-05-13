@@ -34,13 +34,13 @@ class SaasCommercialTasksController extends Controller
                         $q->select('id', 'policy_number', 'type', 'status');
                     },
                     'assignedUser' => function($q) {
-                        $q->select('id', 'name', 'email');
+                        $q->select('id', 'name', 'email', 'broker_id');
                     },
                     'assignedEmpleado' => function($q) {
-                        $q->select('id', 'nombres', 'apellidos', 'email');
+                        $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                     },
                     'creator' => function($q) {
-                        $q->select('id', 'name', 'email');
+                        $q->select('id', 'name', 'email', 'broker_id');
                     }
                 ]);
 
@@ -163,13 +163,13 @@ class SaasCommercialTasksController extends Controller
                     $q->select('id', 'policy_number', 'type', 'status');
                 },
                 'assignedUser' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 },
                 'assignedEmpleado' => function($q) {
-                    $q->select('id', 'nombres', 'apellidos', 'email');
+                    $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                 },
                 'creator' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 }
             ]);
 
@@ -212,13 +212,13 @@ class SaasCommercialTasksController extends Controller
                     $q->select('id', 'policy_number', 'type', 'status');
                 },
                 'assignedUser' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 },
                 'assignedEmpleado' => function($q) {
-                    $q->select('id', 'nombres', 'apellidos', 'email');
+                    $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                 },
                 'creator' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 }
             ]);
 
@@ -294,13 +294,13 @@ class SaasCommercialTasksController extends Controller
                     $q->select('id', 'policy_number', 'type', 'status');
                 },
                 'assignedUser' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 },
                 'assignedEmpleado' => function($q) {
-                    $q->select('id', 'nombres', 'apellidos', 'email');
+                    $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                 },
                 'creator' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 }
             ]);
 
@@ -386,10 +386,10 @@ class SaasCommercialTasksController extends Controller
                     $q->select('id', 'numero_poliza', 'tipo_seguro', 'estado');
                 },
                 'assignedUser' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 },
                 'assignedEmpleado' => function($q) {
-                    $q->select('id', 'nombres', 'apellidos', 'email');
+                    $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                 }
             ]);
 
@@ -449,10 +449,10 @@ class SaasCommercialTasksController extends Controller
                     $q->select('id', 'policy_number', 'type', 'status');
                 },
                 'assignedUser' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 },
                 'assignedEmpleado' => function($q) {
-                    $q->select('id', 'nombres', 'apellidos', 'email');
+                    $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                 }
             ]);
 
@@ -509,10 +509,10 @@ class SaasCommercialTasksController extends Controller
                     $q->select('id', 'policy_number', 'type', 'status');
                 },
                 'assignedUser' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 },
                 'assignedEmpleado' => function($q) {
-                    $q->select('id', 'nombres', 'apellidos', 'email');
+                    $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                 }
             ]);
 
@@ -570,10 +570,10 @@ class SaasCommercialTasksController extends Controller
                     $q->select('id', 'policy_number', 'type', 'status');
                 },
                 'assignedUser' => function($q) {
-                    $q->select('id', 'name', 'email');
+                    $q->select('id', 'name', 'email', 'broker_id');
                 },
                 'assignedEmpleado' => function($q) {
-                    $q->select('id', 'nombres', 'apellidos', 'email');
+                    $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                 }
             ]);
 
@@ -607,10 +607,10 @@ class SaasCommercialTasksController extends Controller
                         $q->select('id', 'numero_poliza', 'tipo_seguro', 'estado');
                     },
                     'assignedUser' => function($q) {
-                        $q->select('id', 'name', 'email');
+                        $q->select('id', 'name', 'email', 'broker_id');
                     },
                     'assignedEmpleado' => function($q) {
-                        $q->select('id', 'nombres', 'apellidos', 'email');
+                        $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id');
                     }
                 ])
                 ->get();
@@ -661,8 +661,8 @@ class SaasCommercialTasksController extends Controller
                 'poliza' => function($q) {
                     $q->select('id', 'policy_number', 'type', 'status');
                 },
-                'assignedUser' => function($q) { $q->select('id', 'name', 'email'); },
-                'assignedEmpleado' => function($q) { $q->select('id', 'nombres', 'apellidos', 'email'); },
+                'assignedUser' => function($q) { $q->select('id', 'name', 'email', 'broker_id'); },
+                'assignedEmpleado' => function($q) { $q->select('id', 'nombres', 'apellidos', 'email', 'broker_id'); },
             ]);
 
             return response()->json([
@@ -804,13 +804,72 @@ class SaasCommercialTasksController extends Controller
     {
         try {
             $brokerId = $this->getBrokerId($request);
-            
-            $users = User::where('broker_id', $brokerId)
-                ->select('id', 'name', 'email')
-                ->orderBy('name')
-                ->get();
 
-            return response()->json(['data' => $users]);
+            // Pre-cargar empleados del broker indexados por id para resolución rápida
+            $empleadosById = \App\Models\EmpleadoBroker::where('broker_id', $brokerId)
+                ->where('acceso_activo', true)
+                ->get()
+                ->keyBy('id');
+
+            $resolvedEmpleadoIds = collect(); // IDs de empleados ya resueltos via shadow user
+
+            $users = User::where('broker_id', $brokerId)
+                ->select('id', 'name', 'email', 'user_type', 'firebase_uid')
+                ->orderBy('name')
+                ->get()
+                ->map(function ($u) use ($empleadosById, &$resolvedEmpleadoIds) {
+                    $rawName = trim((string) ($u->name ?? ''));
+                    $rawEmail = (string) ($u->email ?? '');
+
+                    // Detectar email sintético "empleado.<id>.broker.<n>@empleado.local"
+                    $empleadoMatch = null;
+                    if (str_ends_with($rawEmail, '@empleado.local')) {
+                        if (preg_match('/empleado\.(\d+)/i', $rawEmail, $m)) {
+                            $empleadoId = (int) $m[1];
+                            $empleadoMatch = $empleadosById->get($empleadoId);
+                        }
+                    }
+                    // Fallback: firebase_uid con patrón "empleado:<id>:..."
+                    if (!$empleadoMatch && $u->firebase_uid && preg_match('/empleado:(\d+)/i', (string) $u->firebase_uid, $m2)) {
+                        $empleadoMatch = $empleadosById->get((int) $m2[1]);
+                    }
+
+                    if ($empleadoMatch) {
+                        $resolvedEmpleadoIds->push($empleadoMatch->id);
+                        $fullName = trim(($empleadoMatch->nombres ?? '') . ' ' . ($empleadoMatch->apellidos ?? ''));
+                        $realEmail = $empleadoMatch->email ?: $rawEmail;
+                        return [
+                            'id' => $u->id,
+                            'name' => $fullName !== '' ? $fullName : ($realEmail ?: ('Empleado ' . $empleadoMatch->id)),
+                            'email' => $realEmail,
+                            'type' => 'empleado',
+                        ];
+                    }
+
+                    $isPlaceholder = $rawName === ''
+                        || in_array(strtolower($rawName), ['usuario', 'user', 'admin', 'administrador', 'empleado'], true);
+                    $displayName = $isPlaceholder ? ($rawEmail ?: ('Usuario ' . $u->id)) : $rawName;
+                    return [
+                        'id' => $u->id,
+                        'name' => $displayName,
+                        'email' => $rawEmail,
+                        'type' => 'user',
+                    ];
+                });
+
+            // Agregar empleados que NO tienen shadow user (usando su empleado_brokers.id directamente)
+            $empleadosSinShadow = $empleadosById->reject(fn($e) => $resolvedEmpleadoIds->contains($e->id));
+            foreach ($empleadosSinShadow as $emp) {
+                $fullName = trim(($emp->nombres ?? '') . ' ' . ($emp->apellidos ?? ''));
+                $users->push([
+                    'id' => $emp->id,
+                    'name' => $fullName !== '' ? $fullName : ($emp->email ?: ('Empleado ' . $emp->id)),
+                    'email' => $emp->email,
+                    'type' => 'empleado',
+                ]);
+            }
+
+            return response()->json(['data' => $users->values()]);
 
         } catch (\Exception $e) {
             return response()->json([

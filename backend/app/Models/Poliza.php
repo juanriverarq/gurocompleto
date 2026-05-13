@@ -103,6 +103,7 @@ class Poliza extends Model
         'cancelled_at',
         'cancelled_by',
         'cancellation_reason',
+        'non_renewal_reason',
         // Nuevos campos agregados por migración 2025_08_11
         'reception_date',
         
@@ -721,15 +722,42 @@ class Poliza extends Model
      * como texto en `cancellation_reason` (no hay constraint enum en BD).
      */
     const CANCELLATION_REASONS = [
-        'no_pago' => 'Falta de pago',
-        'cambio_aseguradora' => 'Cambió de aseguradora',
-        'venta_vehiculo' => 'Venta del vehículo / activo',
-        'falta_documentacion' => 'Falta de documentación',
-        'cliente_inactivo' => 'Cliente inactivo',
-        'siniestro' => 'Siniestro',
-        'duplicada' => 'Póliza duplicada',
-        'solicitud_cliente' => 'Solicitud del cliente',
-        'fraude' => 'Sospecha de fraude',
+        'motivo_economico' => 'Motivo económico',
+        'no_confirmo' => 'No confirmó',
+        'pago_credito' => 'Pago crédito',
+        'perdida_total' => 'Pérdida total',
+        'politicas_compania' => 'Políticas compañía',
+        'por_no_pago' => 'Por no pago',
+        'vendio_objeto' => 'Vendió el objeto',
+        'viaje' => 'Viaje',
+        'cambio_a_colectiva' => 'Cambio a colectiva',
+        'cambio_poliza_salud' => 'Cambio a póliza salud',
+        'cambio_asesor' => 'Cambio asesor',
+        'cambio_compania' => 'Cambio de compañía',
+        'cambio_plan' => 'Cambio de plan',
+        'cambio_plan_autos' => 'Cambio de plan autos',
+        'cambio_propietario' => 'Cambio propietario',
+        'fallecio_asegurado' => 'Falleció asegurado',
+        'otro' => 'Otro',
+    ];
+
+    const NON_RENEWAL_REASONS = [
+        'motivo_economico' => 'Motivo económico',
+        'no_confirmo' => 'No confirmó',
+        'pago_credito' => 'Pago crédito',
+        'perdida_total' => 'Pérdida total',
+        'politicas_compania' => 'Políticas compañía',
+        'por_no_pago' => 'Por no pago',
+        'vendio_objeto' => 'Vendió el objeto',
+        'viaje' => 'Viaje',
+        'cambio_a_colectiva' => 'Cambio a colectiva',
+        'cambio_poliza_salud' => 'Cambio a póliza salud',
+        'cambio_asesor' => 'Cambio asesor',
+        'cambio_compania' => 'Cambio de compañía',
+        'cambio_plan' => 'Cambio de plan',
+        'cambio_plan_autos' => 'Cambio de plan autos',
+        'cambio_propietario' => 'Cambio propietario',
+        'fallecio_asegurado' => 'Falleció asegurado',
         'otro' => 'Otro',
     ];
 

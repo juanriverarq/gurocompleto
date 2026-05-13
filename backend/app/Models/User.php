@@ -474,7 +474,24 @@ class User extends Authenticatable implements MustVerifyEmail
                 'sistema' => false,
                 'integraciones' => false,
                 'facturacion' => false
-            ]
+            ],
+            // Cartera (gestión financiera) — empleado puede ver por defecto
+            'cartera' => [
+                'ver' => true,
+                'crear' => false,
+                'editar' => false,
+                'eliminar' => false,
+                'exportar' => false
+            ],
+            'cartera_aseguradoras' => [ 'ver' => true, 'crear' => false, 'editar' => false ],
+            'cartera_clientes'     => [ 'ver' => true, 'crear' => false, 'editar' => false ],
+            'recibos_caja'         => [ 'ver' => true, 'crear' => false, 'editar' => false ],
+            'estados_cuenta'       => [ 'ver' => true, 'crear' => false, 'editar' => false ],
+            'reportes_financieros' => [ 'ver' => true, 'generar' => false, 'exportar' => false ],
+            // Vehículos (SOAT/RTM)
+            'automoviles' => [ 'ver' => true, 'crear' => false, 'editar' => false, 'eliminar' => false ],
+            // Papelera (registros soft-deleted) — admins pueden restaurar/borrar permanente
+            'papelera' => [ 'ver' => false, 'restaurar' => false, 'eliminar_definitivo' => false, 'exportar' => false ],
         ];
 
         switch ($this->role) {

@@ -24,6 +24,10 @@ interface CarteraRow {
   client_name: string;
   client_document: string;
   client_doc_type: string | null;
+  // IDs internos de Guro — se llenan vía LEFT JOIN, pueden ser null si la cartera
+  // del importador no tiene cliente/póliza vinculados en Guro todavía.
+  poliza_id: number | null;
+  client_id: number | null;
   ramo: string | null;
   product_name: string | null;
 
@@ -129,6 +133,9 @@ const CarteraAseguradoras: React.FC = () => {
   const [activeTab, setActiveTab] = useState('todos');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  // Filtro de vinculación con Guro: 'all' (default), 'linked' (con cliente Y póliza
+  // vinculados), 'unlinked' (alguno de los dos falta).
+  const [linkFilter, setLinkFilter] = useState<'all' | 'linked' | 'unlinked'>('all');
   const [insurerFilter, setInsurerFilter] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0, per_page: 25 });
@@ -184,16 +191,16 @@ const CarteraAseguradoras: React.FC = () => {
 
   const loadStats = useCallback(async () => {
     try {
-      const res = await saasApi.getCarteraAseguradorasStats(insurerFilter || undefined);
+      const res = await saasApi.getCarteraAseguradorasStats(insurerFilter || undefined, linkFilter);
       if (res.success && res.data) setStats(res.data);
     } catch { /* ignore */ }
-  }, [insurerFilter]);
+  }, [insurerFilter, linkFilter]);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
     try {
       const res = await saasApi.getCarteraAseguradoras({
-        page, per_page: 25, tab: activeTab, search, insurer: insurerFilter || undefined,
+        page, per_page: 25, tab: activeTab, search, insurer: insurerFilter || undefined, link_filter: linkFilter,
       });
       if (res.success && res.data) {
         setItems(res.data.items || []);
@@ -201,7 +208,7 @@ const CarteraAseguradoras: React.FC = () => {
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [page, activeTab, search, insurerFilter]);
+  }, [page, activeTab, search, insurerFilter, linkFilter]);
 
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadItems(); }, [loadItems]);
@@ -364,8 +371,13 @@ const CarteraAseguradoras: React.FC = () => {
               const hasPrimaReal = primaReal > 0;
               const pendiente = Number(r.valor_pendiente);
               const primaMostrar = hasPrimaReal ? primaReal : Number(r.prima_total);
-              const pctAvance = hasPrimaReal && primaReal > 0
-                ? Math.min(100, Math.round((pagadoTotal / primaReal) * 100))
+              // Avance = pagado / facturado (pagado + pendiente). Es el % de lo
+              // efectivamente facturado que ya está cobrado, sin depender de la
+              // prima del contrato (que en planes mensuales recurrentes puede
+              // ser menor que las cuotas acumuladas).
+              const facturado = pagadoTotal + pendiente;
+              const pctAvance = facturado > 0
+                ? Math.min(100, Math.round((pagadoTotal / facturado) * 100))
                 : 0;
 
               return (
@@ -668,16 +680,6 @@ const CarteraAseguradoras: React.FC = () => {
             </button>
           )}
           <button
-            type="button"
-            onClick={runMicroserviceDiag}
-            disabled={msDiagLoading}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-gray-100 dark:bg-neutral-800/80 hover:bg-gray-200 dark:hover:bg-neutral-800 disabled:opacity-60 px-3 py-2.5 text-xs font-medium text-gray-700 dark:text-neutral-300 transition-colors"
-            title="Comprueba si el backend puede conectar a MICROSERVICIO_API_URL"
-          >
-            <Icon icon={msDiagLoading ? 'svg-spinners:ring-resize' : 'solar:server-path-bold-duotone'} width={16} />
-            Diagnóstico microservicio
-          </button>
-          <button
             onClick={startSync}
             disabled={syncing}
             className="flex items-center gap-2 rounded-lg border border-[#573CFF]/40 bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-60 px-4 py-2.5 text-sm font-medium text-white transition-colors"
@@ -769,6 +771,27 @@ const CarteraAseguradoras: React.FC = () => {
           <button onClick={() => { loadStats(); loadItems(); }} className="rounded-lg bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 border border-gray-300 dark:border-neutral-700 px-2.5 py-2 text-gray-600 dark:text-neutral-400 transition-colors" title="Refrescar">
             <Icon icon="solar:refresh-linear" width={18} />
           </button>
+
+          {/* Filtro sutil vínculo con Guro */}
+          <div className="ml-auto inline-flex items-center gap-0 rounded-lg border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 overflow-hidden" title="Filtrar por vínculo con clientes/pólizas en Guro">
+            {([
+              { v: 'all', label: 'Todos' },
+              { v: 'linked', label: 'Vinculados' },
+              { v: 'unlinked', label: 'Sin vincular' },
+            ] as const).map((opt, idx) => (
+              <button
+                key={opt.v}
+                onClick={() => { setLinkFilter(opt.v); setPage(1); }}
+                className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors ${idx > 0 ? 'border-l border-gray-300 dark:border-neutral-700' : ''} ${
+                  linkFilter === opt.v
+                    ? 'bg-[#573CFF] text-white'
+                    : 'text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Table */}
@@ -784,7 +807,19 @@ const CarteraAseguradoras: React.FC = () => {
               <p className="text-xs mt-1">Sincroniza con tus aseguradoras para ver la cartera aquí.</p>
             </div>
           ) : (
-            <table className="w-full text-left">
+            <table className="w-full min-w-[1380px] table-fixed text-left">
+              <colgroup>
+                <col className="w-[180px]" />
+                <col className="w-[240px]" />
+                <col className="w-[145px]" />
+                <col className="w-[150px]" />
+                <col className="w-[170px]" />
+                <col className="w-[130px]" />
+                <col className="w-[135px]" />
+                <col className="w-[105px]" />
+                <col className="w-[230px]" />
+                <col className="w-[125px]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-gray-200 dark:border-neutral-800 text-[11px] uppercase tracking-wider text-gray-500 dark:text-neutral-500">
                   <th className="px-4 py-3 font-medium">Aseguradora</th>
@@ -809,23 +844,71 @@ const CarteraAseguradoras: React.FC = () => {
                       className="hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors cursor-pointer"
                     >
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           {INSURER_LOGOS[row.insurer_code] ? (
-                            <div className="w-5 h-5 rounded-md bg-white flex items-center justify-center overflow-hidden border border-gray-200">
+                            <div className="w-5 h-5 shrink-0 rounded-md bg-white flex items-center justify-center overflow-hidden border border-gray-200">
                               <img src={INSURER_LOGOS[row.insurer_code]} alt="" className="w-4 h-4 object-contain" />
                             </div>
                           ) : (
-                            <div className="w-5 h-5 rounded-md bg-gray-200 dark:bg-neutral-700 flex items-center justify-center">
+                            <div className="w-5 h-5 shrink-0 rounded-md bg-gray-200 dark:bg-neutral-700 flex items-center justify-center">
                               <span className="text-[8px] font-bold text-gray-600 dark:text-neutral-300">{row.insurer_name.charAt(0)}</span>
                             </div>
                           )}
-                          <span className="text-sm text-gray-700 dark:text-neutral-300">{row.insurer_name}</span>
+                          <span className="min-w-0 truncate text-sm text-gray-700 dark:text-neutral-300" title={row.insurer_name}>{row.insurer_name}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-medium max-w-[180px] truncate">{row.client_name || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 font-mono">{row.client_document || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300 font-mono">{row.policy_number || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 max-w-[140px] truncate">{row.ramo || row.product_name || '—'}</td>
+                      <td className="px-4 py-3 text-sm font-medium">
+                        {row.client_name ? (
+                          row.client_id ? (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); nav(`/apps/seguros/clientes?open_client_id=${row.client_id}`); }}
+                              className="truncate block max-w-full text-left text-[#573CFF] dark:text-[#8a76ff] hover:underline focus:outline-none focus:underline"
+                              title={`Abrir ${row.client_name}`}
+                            >
+                              {row.client_name}
+                            </button>
+                          ) : (
+                            <div
+                              className="truncate text-gray-500 dark:text-neutral-400 italic"
+                              title="Cliente no vinculado en Guro (existe en cartera de aseguradora pero no en tu CRM)"
+                            >
+                              {row.client_name} <span className="text-[10px] not-italic">⚠</span>
+                            </div>
+                          )
+                        ) : (
+                          <div className="text-gray-400">—</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 font-mono">
+                        <div className="truncate" title={row.client_document || undefined}>{row.client_document || '—'}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono">
+                        {row.policy_number ? (
+                          row.poliza_id ? (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); nav(`/apps/seguros/polizas?open_poliza_id=${row.poliza_id}`); }}
+                              className="truncate block max-w-full text-left text-[#573CFF] dark:text-[#8a76ff] hover:underline focus:outline-none focus:underline"
+                              title={`Abrir póliza ${row.policy_number}`}
+                            >
+                              {row.policy_number}
+                            </button>
+                          ) : (
+                            <div
+                              className="truncate text-gray-500 dark:text-neutral-400 italic"
+                              title="Póliza no vinculada en Guro (existe en cartera de aseguradora pero no en tus pólizas)"
+                            >
+                              {row.policy_number} <span className="text-[10px] not-italic">⚠</span>
+                            </div>
+                          )
+                        ) : (
+                          <div className="text-gray-400">—</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
+                        <div className="truncate" title={row.ramo || row.product_name || undefined}>{row.ramo || row.product_name || '—'}</div>
+                      </td>
                       <td
                         className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300 text-right tabular-nums"
                         title={Number(row.prima_poliza ?? 0) > 0
@@ -845,7 +928,7 @@ const CarteraAseguradoras: React.FC = () => {
                         {!row.fecha_inicio_vigencia && !row.fecha_vencimiento ? (
                           '—'
                         ) : (
-                          <span className="whitespace-nowrap">
+                          <span className="block truncate whitespace-nowrap" title={`${fmtDate(row.fecha_inicio_vigencia)}${row.fecha_vencimiento ? ` → ${fmtDate(row.fecha_vencimiento)}` : ''}`}>
                             {fmtDate(row.fecha_inicio_vigencia)}
                             {row.fecha_vencimiento ? (
                               <>
@@ -858,7 +941,7 @@ const CarteraAseguradoras: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
                         {(row.cuotas_pendientes ?? 0) > 0 ? (
-                          <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                             <span className={`inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-semibold ${(row.cuotas_pendientes ?? 0) > 1 ? 'bg-[#573CFF]/15 text-[#573CFF]' : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400'}`}>
                               {row.cuotas_pendientes}
                             </span>

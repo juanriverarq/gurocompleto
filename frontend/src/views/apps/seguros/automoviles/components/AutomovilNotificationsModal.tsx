@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Button, Spinner, Badge, Alert, Table, TextInput, Tooltip } from 'flowbite-react';
+import { Modal, Button, Spinner, Badge, Alert, Table, TextInput } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { Switch } from '@headlessui/react';
 import { Label } from 'src/components/shadcn-ui/Default-Ui/label';
@@ -270,11 +270,11 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   }, []);
 
-  // Cargar plantillas
-  const loadWhatsAppTemplates = useCallback(async () => {
+  // Cargar plantillas — pasa la instancia seleccionada (en memoria, antes de guardar)
+  const loadWhatsAppTemplates = useCallback(async (instanceId?: number | null) => {
     try {
       setLoadingTemplates(true);
-      const data = await automovilNotificationService.getWhatsAppTemplates();
+      const data = await automovilNotificationService.getWhatsAppTemplates(instanceId ?? null);
       setTemplates(Array.isArray(data) ? data : []);
     } catch (error: any) {
       console.error('Error loading templates:', error);
@@ -307,10 +307,11 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
           loadAutomoviles();
           loadClasesVehiculo();
         }
-        if (openSections.templates) loadWhatsAppTemplates();
+        // Recargar plantillas cuando cambia la instancia de WhatsApp seleccionada
+        if (openSections.templates) loadWhatsAppTemplates(config?.whatsapp_instance_id);
       }
     }
-  }, [isOpen, config, activeTab, openSections.exclusions, openSections.templates, loadScheduledNotifications, loadLogs, loadClientes, loadAutomoviles, loadClasesVehiculo, loadWhatsAppTemplates]);
+  }, [isOpen, config, activeTab, openSections.exclusions, openSections.templates, config?.whatsapp_instance_id, loadScheduledNotifications, loadLogs, loadClientes, loadAutomoviles, loadClasesVehiculo, loadWhatsAppTemplates]);
 
   const updateConfig = (updates: Partial<AutomovilNotificationConfig>) => {
     if (config) {
@@ -352,6 +353,36 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const getClientDocument = (cliente: any) => {
     return cliente.documento || cliente.numero_documento || '';
+  };
+
+  const formatDateTime = (dateStr?: string | null) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleString('es-CO', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  // Indicador simple: chulo verde si fue leído, chulo gris si no.
+  // Tooltip nativo (atributo title) para evitar conflictos de portales que crashean el modal.
+  const DeliveryStatus = ({ log }: { log: any }) => {
+    const wasRead = !!log.read_at;
+    const tooltipLines: string[] = [];
+    if (log.read_at) tooltipLines.push(`Leído: ${formatDateTime(log.read_at)}`);
+    if (log.delivered_at) tooltipLines.push(`Entregado: ${formatDateTime(log.delivered_at)}`);
+    if (log.sent_at) tooltipLines.push(`Enviado: ${formatDateTime(log.sent_at)}`);
+    if (log.status === 'failed' || log.delivery_failed_at) {
+      tooltipLines.push(`Falló entrega: ${log.delivery_error || log.error_message || ''}`.trim());
+    }
+    if (!tooltipLines.length) tooltipLines.push('Sin entrega aún');
+    return (
+      <span
+        title={tooltipLines.join('\n')}
+        className={`inline-flex items-center cursor-help ${wasRead ? 'text-green-500' : 'text-gray-400'}`}
+      >
+        <Icon icon="solar:check-read-bold" className="w-5 h-5" />
+      </span>
+    );
   };
 
   const getAutomovilName = (automovil: any) => {
@@ -512,7 +543,10 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                 </Badge>
                               </Table.Cell>
                               <Table.Cell>
-                                {new Date(notif.scheduled_date).toLocaleDateString('es-CO')}
+                                {notif.scheduled_date ? new Date(notif.scheduled_date).toLocaleString('es-CO', {
+                                  day: '2-digit', month: '2-digit', year: 'numeric',
+                                  hour: '2-digit', minute: '2-digit'
+                                }) : '-'}
                               </Table.Cell>
                               <Table.Cell>
                                 <Badge
@@ -547,6 +581,30 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
             {/* Tab: Configuración */}
             {activeTab === 'config' && (
               <div className="space-y-4">
+                {/* Master Activo / Inactivo */}
+                <div className={`p-4 rounded-lg border-2 transition-colors ${config.active ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Icon icon={config.active ? 'solar:bell-bing-bold-duotone' : 'solar:bell-off-bold-duotone'} className={`w-6 h-6 ${config.active ? 'text-green-600' : 'text-amber-600'}`} />
+                      <div>
+                        <p className="font-semibold text-sm">{config.active ? 'Notificaciones activas' : 'Notificaciones desactivadas'}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {config.active
+                            ? 'El cron procesará SOAT y RTM según los días configurados.'
+                            : 'Activa este toggle para que el sistema empiece a programar y enviar.'}
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={!!config.active}
+                      onChange={(checked) => updateConfig({ active: checked })}
+                      className="group inline-flex h-6 w-11 items-center rounded-full bg-gray-300 transition data-[checked]:bg-green-500"
+                    >
+                      <span className="size-4 translate-x-1 rounded-full bg-white transition group-data-[checked]:translate-x-6" />
+                    </Switch>
+                  </div>
+                </div>
+
                 {/* WhatsApp Instance */}
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                   <Label className="text-sm font-medium">Instancia de WhatsApp</Label>
@@ -930,12 +988,85 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         </div>
                       )}
                       
-                      {!loadingTemplates && templates.length === 0 && (
+                      {!loadingTemplates && templates.length === 0 && !config.whatsapp_instance_id && (
+                        <Alert color="warning" className="text-xs">
+                          Primero selecciona una <strong>instancia de WhatsApp</strong> en la sección "WhatsApp" de arriba para poder ver las plantillas disponibles.
+                        </Alert>
+                      )}
+
+                      {!loadingTemplates && templates.length === 0 && config.whatsapp_instance_id && (
                         <Alert color="warning" className="text-xs">
                           No se encontraron plantillas aprobadas en la instancia de WhatsApp seleccionada.
                           Asegúrate de tener plantillas con estado <strong>APPROVED</strong> en Meta Business Manager.
                         </Alert>
                       )}
+
+                      {/* Guía de variables a usar al crear la plantilla en Meta */}
+                      <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-900/10 p-3 space-y-2">
+                        <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
+                          📌 Variables disponibles en la plantilla
+                        </p>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <code className="px-1.5 py-0.5 rounded bg-white dark:bg-neutral-800 border border-blue-200 dark:border-blue-800 font-mono text-blue-700 dark:text-blue-300">{'{{1}}'}</code>
+                            <span className="text-gray-700 dark:text-neutral-300">Nombre cliente</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <code className="px-1.5 py-0.5 rounded bg-white dark:bg-neutral-800 border border-blue-200 dark:border-blue-800 font-mono text-blue-700 dark:text-blue-300">{'{{2}}'}</code>
+                            <span className="text-gray-700 dark:text-neutral-300">Placa</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <code className="px-1.5 py-0.5 rounded bg-white dark:bg-neutral-800 border border-blue-200 dark:border-blue-800 font-mono text-blue-700 dark:text-blue-300">{'{{3}}'}</code>
+                            <span className="text-gray-700 dark:text-neutral-300">Fecha vencimiento</span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
+                          Crea la plantilla en Meta Business Manager con esas tres variables en el cuerpo, en ese orden. Ejemplos abajo.
+                        </p>
+                      </div>
+
+                      {/* Ejemplos de plantilla */}
+                      <details className="rounded-lg border border-gray-200 dark:border-neutral-800 group">
+                        <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-gray-700 dark:text-neutral-300 select-none hover:bg-gray-50 dark:hover:bg-neutral-900/50 rounded-lg">
+                          Ver ejemplos de plantilla SOAT y Técnico Mecánica
+                        </summary>
+                        <div className="px-3 py-3 space-y-3 border-t border-gray-200 dark:border-neutral-800">
+                          <div>
+                            <p className="text-[11px] font-semibold text-gray-600 dark:text-neutral-400 mb-1">Ejemplo SOAT</p>
+                            <pre className="text-[11px] whitespace-pre-wrap bg-gray-50 dark:bg-neutral-900/60 p-2 rounded font-sans text-gray-800 dark:text-neutral-200">
+{`¡Cordial saludo! 😊 {{1}},
+
+En *Seguros Celeste* queremos que siempre estés protegido 💚💙
+
+Te recordamos que tu *SOAT del vehículo con placa {{2}}* está próximo a vencer:
+
+📅 *Fecha de vencimiento:* {{3}}
+
+Evita sanciones y contratiempos renovándolo a tiempo, y sigue circulando con total tranquilidad y respaldo. 🚗✨
+
+Si deseas, podemos ayudarte con la renovación de forma rápida y sencilla.
+
+¡Estamos para acompañarte! 🤝`}
+                            </pre>
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold text-gray-600 dark:text-neutral-400 mb-1">Ejemplo Técnico Mecánica</p>
+                            <pre className="text-[11px] whitespace-pre-wrap bg-gray-50 dark:bg-neutral-900/60 p-2 rounded font-sans text-gray-800 dark:text-neutral-200">
+{`¡Cordial saludo! 😊 {{1}},
+
+¡Seguros Celeste, más que un seguro, es Tranquilidad! 💚💙
+
+Desde SEGUROS CELESTE queremos recordarte que la revisión tecnicomecánica de tu vehículo, Placa {{2}}, está próxima a vencerse. 🚗🔧
+
+Fecha de vencimiento: {{3}}
+
+Recuerda realizarla a tiempo para evitar inconvenientes y circular con total seguridad.
+
+¡Estamos para acompañarte! ✨`}
+                            </pre>
+                          </div>
+                        </div>
+                      </details>
 
                       {/* Plantilla SOAT */}
                       <div>
@@ -1028,6 +1159,7 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                           <Table.HeadCell>Cliente</Table.HeadCell>
                           <Table.HeadCell>Tipo</Table.HeadCell>
                           <Table.HeadCell>Estado</Table.HeadCell>
+                          <Table.HeadCell>Entrega</Table.HeadCell>
                           <Table.HeadCell>Error</Table.HeadCell>
                         </Table.Head>
                         <Table.Body>
@@ -1037,19 +1169,25 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                 {new Date(log.created_at).toLocaleString('es-CO')}
                               </Table.Cell>
                               <Table.Cell>
-                                {log.automovil && (
+                                {(log.placa || log.vehiculo) ? (
                                   <div>
-                                    <p className="font-medium">{log.automovil.placa}</p>
-                                    <p className="text-sm text-gray-500">{log.automovil.marca} {log.automovil.linea}</p>
+                                    <p className="font-medium">{log.placa || '-'}</p>
+                                    {log.vehiculo && log.vehiculo !== '-' && (
+                                      <p className="text-sm text-gray-500">{log.vehiculo}</p>
+                                    )}
                                   </div>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
                                 )}
                               </Table.Cell>
                               <Table.Cell>
-                                {log.automovil?.cliente && (
-                                  <div>
-                                    <p className="font-medium">{getClientName(log.automovil.cliente)}</p>
-                                    <p className="text-sm text-gray-500">{getClientDocument(log.automovil.cliente)}</p>
-                                  </div>
+                                {log.client_name && log.client_name !== '-' ? (
+                                  <p className="font-medium">{log.client_name}</p>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                                {log.recipient_phone && (
+                                  <p className="text-xs text-gray-500 font-mono">{log.recipient_phone}</p>
                                 )}
                               </Table.Cell>
                               <Table.Cell>
@@ -1074,10 +1212,13 @@ const AutomovilNotificationsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                 </Badge>
                               </Table.Cell>
                               <Table.Cell>
+                                <DeliveryStatus log={log} />
+                              </Table.Cell>
+                              <Table.Cell>
                                 {log.error_message && (
-                                  <Tooltip content={log.error_message}>
+                                  <span title={log.error_message} className="cursor-help inline-flex">
                                     <Icon icon="solar:danger-triangle-bold" className="w-4 h-4 text-red-500" />
-                                  </Tooltip>
+                                  </span>
                                 )}
                               </Table.Cell>
                             </Table.Row>

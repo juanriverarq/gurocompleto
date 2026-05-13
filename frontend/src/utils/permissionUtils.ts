@@ -21,6 +21,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/seguros/renovaciones': 'polizas',
   '/apps/seguros/automoviles': 'automoviles',
 
+  '/apps/seguros/cumplimiento': 'polizas',
+
   '/apps/seguros/siniestros': 'siniestros',
   '/apps/seguros/siniestros/nuevo': 'siniestros',
   '/apps/seguros/documentos-siniestro': 'documentos_siniestro',
@@ -38,6 +40,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/whatsapp/dashboard': 'whatsapp_business',
   '/apps/whatsapp/inbox': 'whatsapp_business',
   '/apps/whatsapp/contacts': 'whatsapp_business',
+  '/apps/whatsapp/contactos': 'whatsapp_business',
   '/apps/whatsapp/conexiones': 'whatsapp_business',
   '/apps/whatsapp/campanas': 'whatsapp_business',
   '/apps/whatsapp/campanas/nueva': 'whatsapp_business',
@@ -56,6 +59,8 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/marketing/mini-web': 'mini_web',
   '/apps/marketing/mi-web': 'pagina_web',
   '/apps/marketing/comparador-seguros': 'comparador_autos',
+  '/apps/cotizadores/autos/comparador': 'comparador_autos',
+  '/apps/cotizadores/autos/bolivar': 'comparador_autos',
   '/apps/marketing/creador-contenido': 'creador_contenido',
   '/apps/saas/configuracion-masiva': 'whatsapp_business',
 
@@ -70,6 +75,9 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   // Gestión Financiera
   '/apps/comisiones/por-poliza': 'comisiones',
   '/apps/comisiones/anticipos-ajustes': 'comisiones',
+  '/apps/comisiones/aseguradoras': 'comisiones_aseguradoras',
+  '/apps/cartera': 'cartera',
+  '/apps/cartera/aseguradoras': 'cartera_aseguradoras',
   '/apps/cartera/clientes': 'cartera_clientes',
   '/apps/cartera/recibos-caja': 'recibos_caja',
   '/apps/cartera/estados-cuenta': 'estados_cuenta',
@@ -102,6 +110,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, string> = {
   '/apps/admin/usuarios': 'gestion_usuarios',
   '/apps/admin/usuarios/reportes': 'reporte_actividades',
   '/apps/admin/roles': 'roles_permisos',
+  '/apps/admin/papelera': 'papelera',
   '/apps/admin/demo-permisos': 'roles_permisos',
   '/apps/admin/auditoria': 'auditoria_accesos',
 

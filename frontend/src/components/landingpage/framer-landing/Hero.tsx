@@ -1,5 +1,5 @@
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Icon } from '@iconify/react';
 import SyncButton from './SyncButton';
 
@@ -16,9 +16,27 @@ const heroSeals = [
 
 const Hero = () => {
   const sectionRef = useRef(null);
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 768px)');
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else mq.addListener(onChange); // Safari < 14 fallback
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+      else mq.removeListener(onChange);
+    };
+  }, []);
+
+  // En móvil: desactivar parallax driven-by-scroll para evitar repaints continuos
+  // de capas con blur (que es lo que tilda Safari en iPhone).
   const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start start', 'end start'] });
-  const bgScale = useTransform(scrollYProgress, [0, 1], [1, 1.15]);
-  const bgOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0.3]);
+  const bgScale = useTransform(scrollYProgress, [0, 1], isMobile ? [1, 1] : [1, 1.15]);
+  const bgOpacity = useTransform(scrollYProgress, [0, 0.8], isMobile ? [1, 1] : [1, 0.3]);
 
   return (
     <section ref={sectionRef} className="relative overflow-hidden min-h-screen flex flex-col bg-[#000000]">
@@ -40,6 +58,23 @@ const Hero = () => {
           0% { background-position: 0 0; }
           100% { background-position: 60px 60px; }
         }
+
+        /* ── Optimización móvil — Safari iOS no maneja >5 capas con blur+animación ── */
+        @media (max-width: 768px) {
+          .hero-aurora-blob {
+            animation: none !important;
+            filter: blur(40px) !important;
+          }
+          /* Quitar 2 de los 5 blobs en móvil para reducir capas compuestas */
+          .hero-aurora-blob.is-extra { display: none !important; }
+          .hero-noise-layer { display: none !important; }
+          .hero-grid-overlay { animation: none !important; opacity: 0.06 !important; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .hero-aurora-blob,
+          .hero-grid-overlay { animation: none !important; }
+        }
       `}</style>
 
       {/* Deep-space base + aurora blobs */}
@@ -49,7 +84,7 @@ const Hero = () => {
       >
         {/* Aurora blob 1 — top-left purple */}
         <div
-          className="absolute"
+          className="absolute hero-aurora-blob"
           style={{
             top: '-20%', left: '-15%', width: '75%', height: '85%',
             background: 'radial-gradient(closest-side, rgba(87,60,255,0.95), rgba(87,60,255,0.35) 45%, transparent 70%)',
@@ -59,7 +94,7 @@ const Hero = () => {
         />
         {/* Aurora blob 2 — right orange */}
         <div
-          className="absolute"
+          className="absolute hero-aurora-blob"
           style={{
             top: '5%', right: '-20%', width: '80%', height: '90%',
             background: 'radial-gradient(closest-side, rgba(249,115,22,0.75), rgba(251,146,60,0.3) 45%, transparent 70%)',
@@ -69,7 +104,7 @@ const Hero = () => {
         />
         {/* Aurora blob 3 — center-bottom violet */}
         <div
-          className="absolute"
+          className="absolute hero-aurora-blob"
           style={{
             bottom: '-25%', left: '15%', width: '70%', height: '75%',
             background: 'radial-gradient(closest-side, rgba(167,139,250,0.75), rgba(167,139,250,0.3) 45%, transparent 70%)',
@@ -79,7 +114,7 @@ const Hero = () => {
         />
         {/* Top-right magenta accent */}
         <div
-          className="absolute"
+          className="absolute hero-aurora-blob is-extra"
           style={{
             top: '-10%', right: '10%', width: '50%', height: '60%',
             background: 'radial-gradient(closest-side, rgba(123,97,255,0.7), transparent 70%)',
@@ -89,7 +124,7 @@ const Hero = () => {
         />
         {/* Extra purple core behind text for punch */}
         <div
-          className="absolute"
+          className="absolute hero-aurora-blob is-extra"
           style={{
             top: '25%', left: '25%', width: '50%', height: '50%',
             background: 'radial-gradient(closest-side, rgba(87,60,255,0.45), transparent 75%)',
@@ -101,7 +136,7 @@ const Hero = () => {
 
       {/* Futuristic grid overlay */}
       <div
-        className="pointer-events-none absolute inset-0 z-[2] opacity-[0.12]"
+        className="pointer-events-none absolute inset-0 z-[2] opacity-[0.12] hero-grid-overlay"
         style={{
           backgroundImage: 'linear-gradient(rgba(167,139,250,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(167,139,250,0.35) 1px, transparent 1px)',
           backgroundSize: '60px 60px',
@@ -121,7 +156,7 @@ const Hero = () => {
 
       {/* Grain noise overlay — always-on, normal blend so it stays visible over colors */}
       <div
-        className="pointer-events-none absolute inset-0 z-[4]"
+        className="pointer-events-none absolute inset-0 z-[4] hero-noise-layer"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
           backgroundRepeat: 'repeat',
@@ -132,7 +167,7 @@ const Hero = () => {
       />
       {/* Second noise layer — finer grain, always visible */}
       <div
-        className="pointer-events-none absolute inset-0 z-[4]"
+        className="pointer-events-none absolute inset-0 z-[4] hero-noise-layer"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n2'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n2)' opacity='1'/%3E%3C/svg%3E")`,
           backgroundRepeat: 'repeat',

@@ -45,8 +45,8 @@ const defaultValue: TaskNotificationContextType = {
 
 export const useTaskNotifications = () => useContext(TaskNotificationContext) || defaultValue;
 
-const SHOWN_KEY = 'task_notifications_shown_v1';
-const READ_KEY = 'task_notifications_read_v1';
+const SHOWN_KEY = 'task_notifications_shown_v2';
+const READ_KEY = 'task_notifications_read_v2';
 
 interface ShownEntry {
   taskId: number;
@@ -157,7 +157,7 @@ export const TaskNotificationProvider: React.FC<Props> = ({ children }) => {
     now: Date,
   ): number => {
     if (!config.enabled) return -1;
-    const refStr = task.scheduled_for || task.due_date;
+    const refStr = task.due_date || task.scheduled_for;
     if (!refStr) return -1;
     const ref = new Date(refStr);
     if (isNaN(ref.getTime())) return -1;
@@ -203,7 +203,7 @@ export const TaskNotificationProvider: React.FC<Props> = ({ children }) => {
           if (exists) continue;
 
           const id = `task-${t.id}-${i}`;
-          const refDate = new Date((t.scheduled_for || t.due_date)!);
+          const refDate = new Date((t.due_date || t.scheduled_for)!);
           const minsToDue = Math.round((refDate.getTime() - now.getTime()) / 60_000);
           const dueText = minsToDue > 0
             ? minsToDue >= 1440 ? `en ${Math.round(minsToDue / 1440)}d`
@@ -217,7 +217,7 @@ export const TaskNotificationProvider: React.FC<Props> = ({ children }) => {
             title: i === 0 ? `🔔 ${cfg.label}: ${t.title}` : `🔁 Recordatorio (${cfg.label}): ${t.title}`,
             message: `${t.client?.name ? t.client.name + ' · ' : ''}${dueText}`,
             priority: t.priority,
-            dueDate: t.scheduled_for || t.due_date || '',
+            dueDate: t.due_date || t.scheduled_for || '',
             type: 'task',
             timestamp: now,
             read: readRef.current.has(id),

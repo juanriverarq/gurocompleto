@@ -20,7 +20,10 @@ export interface SeguimientoItem {
     | 'llamada'
     | 'reunion'
     | 'email'
-    | 'visita';
+    | 'visita'
+    | 'aceptacion_banco'
+    | 'pendiente_certificado_pago'
+    | 'pendiente_pago_cliente';
   status: 'pendiente' | 'en_progreso' | 'completada' | 'vencida' | 'cancelada' | 'pausada';
   priority: 'baja' | 'media' | 'alta' | 'critica';
   due_date?: string;
@@ -105,6 +108,7 @@ export interface SeguimientoFilters {
   priority?: string;
   assigned_to?: number;
   client_id?: number;
+  poliza_id?: number;
   due_date_from?: string;
   due_date_to?: string;
   overdue?: boolean;
@@ -471,7 +475,7 @@ export function getNextNotificationInfo(
     return { text: '-', due: false, minutesRemaining: null };
   }
 
-  const refDate = task.scheduled_for || task.due_date;
+  const refDate = task.due_date || task.scheduled_for;
   if (!refDate) return { text: '-', due: false, minutesRemaining: null };
 
   const ref = new Date(refDate);

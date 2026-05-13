@@ -47,6 +47,11 @@ const ListaLeads: React.FC = () => {
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
 
+  // Estados para eliminación
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [leadToDelete, setLeadToDelete] = useState<SalesFunnelLead | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const [filters, setFilters] = useState<SalesFunnelFilters>({
     search: '',
     stage: '',
@@ -135,6 +140,27 @@ const ListaLeads: React.FC = () => {
     setLeadToChangeState(lead);
     setNewState(lead.stage);
     setShowStateModal(true);
+  };
+
+  // Función para eliminar negocio
+  const handleDeleteClick = (lead: SalesFunnelLead) => {
+    setLeadToDelete(lead);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!leadToDelete) return;
+    try {
+      setDeleting(true);
+      await salesFunnelService.deleteLead(leadToDelete.id);
+      setShowDeleteModal(false);
+      setLeadToDelete(null);
+      setFilters(prev => ({ ...prev })); // Recargar la lista
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al eliminar negocio');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // Confirmar cambio de etapa
@@ -278,7 +304,7 @@ const ListaLeads: React.FC = () => {
               <div className="relative">
                 <IconifyIcon icon="solar:magnifer-bold-duotone" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <Input
-                  placeholder="Buscar por nombre, documento o email..."
+                  placeholder="Buscar por nombre, documento, email o placa..."
                   value={filters.search || ''}
                   onChange={(e) => handleFilter('search', e.target.value)}
                   className="pl-10 h-10 text-sm rounded-[10px]"
@@ -337,6 +363,7 @@ const ListaLeads: React.FC = () => {
                 </div>
               </Table.HeadCell>
               <Table.HeadCell>Contacto</Table.HeadCell>
+              <Table.HeadCell>Placa</Table.HeadCell>
               <Table.HeadCell>
                 <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => toggleSort('stage')}>
                   <span>Etapa</span>
@@ -361,7 +388,7 @@ const ListaLeads: React.FC = () => {
                 <Table.Body>
                   {loading ? (
                     <Table.Row>
-                      <Table.Cell colSpan={6} className="text-center">
+                      <Table.Cell colSpan={7} className="text-center">
                         <div className="flex items-center justify-center py-4">
                           <Spinner size="sm" className="mr-2" />
                           <span>Cargando negocios...</span>
@@ -381,6 +408,9 @@ const ListaLeads: React.FC = () => {
                           <Table.Cell className="whitespace-nowrap pr-8">
                             <div className="text-sm text-gray-900 dark:text-white">{lead.email || '-'}</div>
                             <div className="text-xs text-gray-500">{lead.phone || '-'}</div>
+                          </Table.Cell>
+                          <Table.Cell className="whitespace-nowrap pr-8">
+                            <span className="text-sm font-mono text-gray-900 dark:text-white">{lead.placa || '-'}</span>
                           </Table.Cell>
                           <Table.Cell className="whitespace-nowrap pr-8">
                             <span className="text-sm text-gray-900 dark:text-white">{STAGES[lead.stage as keyof typeof STAGES] || lead.stage}</span>
@@ -434,6 +464,14 @@ const ListaLeads: React.FC = () => {
                                 >
                                   <IconifyIcon icon="solar:refresh-circle-bold-duotone" height={18} />
                                   <span>Cambiar Estado</span>
+                                </Dropdown.Item>
+                                <Dropdown.Divider />
+                                <Dropdown.Item
+                                  className="flex gap-3 w-full justify-start text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                  onClick={() => handleDeleteClick(lead)}
+                                >
+                                  <IconifyIcon icon="solar:trash-bin-trash-bold-duotone" height={18} />
+                                  <span>Eliminar</span>
                                 </Dropdown.Item>
                               </Dropdown>
                             </div>
@@ -592,6 +630,38 @@ const ListaLeads: React.FC = () => {
           }}
         />
       )}
+
+      {/* Modal de confirmación de eliminación */}
+      <Modal show={showDeleteModal} onClose={() => setShowDeleteModal(false)} size="md">
+        <Modal.Header>Eliminar Negocio</Modal.Header>
+        <Modal.Body>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              ¿Estás seguro de que deseas eliminar el negocio{' '}
+              <strong>
+                {leadToDelete?.full_name || `${leadToDelete?.first_name} ${leadToDelete?.last_name}`}
+              </strong>
+              ?
+            </p>
+            <Alert color="warning">Esta acción no se puede deshacer.</Alert>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button color="light" onClick={() => setShowDeleteModal(false)} disabled={deleting}>
+            Cancelar
+          </Button>
+          <Button color="failure" onClick={confirmDelete} disabled={deleting}>
+            {deleting ? (
+              <>
+                <Spinner size="sm" className="mr-2" />
+                Eliminando...
+              </>
+            ) : (
+              'Eliminar'
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Modal para ver detalle del negocio */}
       {selectedLeadId && (

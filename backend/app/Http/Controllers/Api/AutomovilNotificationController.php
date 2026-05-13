@@ -268,6 +268,11 @@ class AutomovilNotificationController extends Controller
                     'error_message' => $log->error_message,
                     'sent_at' => $log->sent_at,
                     'failed_at' => $log->failed_at,
+                    'delivered_at' => $log->delivered_at,
+                    'read_at' => $log->read_at,
+                    'delivery_failed_at' => $log->delivery_failed_at,
+                    'delivery_error' => $log->delivery_error,
+                    'whatsapp_message_id' => $log->whatsapp_message_id,
                     'created_at' => $log->created_at,
                     'placa' => $auto?->placa ?? '-',
                     'automovil_id' => $log->automovil_id,
@@ -407,15 +412,19 @@ class AutomovilNotificationController extends Controller
             }
             $brokerId = (int)$brokerId;
 
+            // El listado "próximas notificaciones" emite tipo 'tecnomecanica' (alias de 'rtm').
+            // Aceptamos ambos y normalizamos a 'rtm' para coincidir con el resto del sistema.
             $validator = Validator::make($request->all(), [
                 'automovil_id' => 'required|integer|exists:automoviles,id',
-                'notification_type' => 'required|in:soat,rtm',
+                'notification_type' => 'required|in:soat,rtm,tecnomecanica',
                 'reason' => 'nullable|string|max:255',
             ]);
 
             if ($validator->fails()) {
                 return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
             }
+
+            $notificationType = $request->notification_type === 'tecnomecanica' ? 'rtm' : $request->notification_type;
 
             $config = AutomovilNotificationConfig::forBroker($brokerId)->first();
             if (!$config) {
@@ -433,7 +442,7 @@ class AutomovilNotificationController extends Controller
                 'automovil_id' => $auto->id,
                 'client_id' => $auto->client_id,
                 'whatsapp_instance_id' => $config->whatsapp_instance_id,
-                'notification_type' => $request->notification_type,
+                'notification_type' => $notificationType,
                 'recipient_phone' => '-',
                 'message_sent' => 'Omitido manualmente',
                 'status' => 'skipped',
@@ -452,7 +461,7 @@ class AutomovilNotificationController extends Controller
                 'data' => [
                     'log_id' => $log->id,
                     'automovil_id' => $auto->id,
-                    'notification_type' => $request->notification_type,
+                    'notification_type' => $notificationType,
                 ]
             ]);
         } catch (\Exception $e) {
@@ -476,12 +485,22 @@ class AutomovilNotificationController extends Controller
             }
             $brokerId = (int)$brokerId;
 
-            $config = AutomovilNotificationConfig::forBroker($brokerId)->first();
-            if (!$config || !$config->whatsapp_instance_id) {
-                return response()->json(['success' => true, 'data' => []]);
+            // Permitir pasar instance_id como query param (cuando el usuario aún no
+            // ha guardado la config). Si no viene, usar el guardado en la config.
+            $instanceId = $request->query('instance_id');
+            if (!$instanceId) {
+                $config = AutomovilNotificationConfig::forBroker($brokerId)->first();
+                $instanceId = $config?->whatsapp_instance_id;
             }
 
-            $instance = WhatsAppInstance::find($config->whatsapp_instance_id);
+            if (!$instanceId) {
+                return response()->json(['success' => true, 'data' => [], 'message' => 'no_instance_selected']);
+            }
+
+            // La instancia debe pertenecer al broker (multi-tenant safety)
+            $instance = WhatsAppInstance::where('id', $instanceId)
+                ->where('broker_id', $brokerId)
+                ->first();
             if (!$instance) {
                 return response()->json(['success' => true, 'data' => []]);
             }

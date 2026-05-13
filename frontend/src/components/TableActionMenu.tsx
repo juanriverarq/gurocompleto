@@ -24,19 +24,17 @@ const TableActionMenu: React.FC<TableActionMenuProps> = ({ children }) => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Default: place to the left of the trigger, aligned to its top
+    // Place to the right of the trigger, aligned to its top
     let top = btn.top;
-    let left = btn.left - menuRect.width - 4;
+    let right = vw - btn.right + 4;
 
-    // If it goes off-screen left, flip to the right of the trigger
-    if (left < 8) left = btn.right + 4;
     // If it goes off-screen bottom, shift up
     if (top + menuRect.height > vh - 8) top = vh - menuRect.height - 8;
     if (top < 8) top = 8;
-    // If it goes off-screen right
-    if (left + menuRect.width > vw - 8) left = vw - menuRect.width - 8;
+    // If it goes off-screen right, flip to the left
+    if (right < 8) right = vw - btn.left - menuRect.width - 4;
 
-    setPos({ top, left });
+    setPos({ top, right });
   }, []);
 
   useEffect(() => {
@@ -82,11 +80,12 @@ const TableActionMenu: React.FC<TableActionMenuProps> = ({ children }) => {
         createPortal(
           <div
             ref={menuRef}
-            className="fixed z-[99999] bg-white dark:bg-[#1e293b] rounded-lg shadow-xl border border-gray-200 dark:border-white/10 py-1"
+            className="fixed bg-white dark:bg-[#1e293b] rounded-lg shadow-xl border border-gray-200 dark:border-white/10 py-1"
             style={{
               top: pos.top,
-              left: pos.left,
+              right: pos.right,
               minWidth: 220,
+              zIndex: 2147483647,
             }}
             onClick={() => setOpen(false)}
           >

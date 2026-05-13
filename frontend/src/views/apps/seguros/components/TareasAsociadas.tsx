@@ -28,6 +28,9 @@ const TIPOS_LABEL: Record<string, string> = {
   reunion: 'Reunión',
   email: 'Email',
   visita: 'Visita',
+  aceptacion_banco: 'Aceptación banco',
+  pendiente_certificado_pago: 'Pendiente certificado de pago',
+  pendiente_pago_cliente: 'Pendiente pago cliente',
 };
 
 const ESTADOS_LABEL: Record<string, { label: string; color: string }> = {
@@ -50,7 +53,9 @@ const TareasAsociadas: React.FC<TareasAsociadasProps> = ({
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [priorityConfigs, setPriorityConfigs] = useState<Record<string, PriorityConfig>>({});
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
+  const [priorityConfigs] = useState<Record<string, PriorityConfig>>({});
 
   const [formData, setFormData] = useState<CreateSeguimientoData>({
     title: '',
@@ -91,13 +96,36 @@ const TareasAsociadas: React.FC<TareasAsociadasProps> = ({
     }));
   }, [clientId, polizaId]);
 
-  const handleCreate = async () => {
+  const resetForm = () => {
+    setEditingTaskId(null);
+    setShowForm(false);
+    setFormData({
+      title: '',
+      description: '',
+      type: 'seguimiento_cliente',
+      priority: 'media',
+      scheduled_for: '',
+      due_date: '',
+      client_id: clientId ? Number(clientId) : undefined,
+      poliza_id: polizaId ? Number(polizaId) : undefined,
+    });
+  };
+
+  const handleSave = async () => {
     if (!formData.title?.trim()) {
       toast({ title: 'Título requerido', variant: 'destructive' });
       return;
     }
     if (!formData.description?.trim()) {
       toast({ title: 'Descripción requerida', variant: 'destructive' });
+      return;
+    }
+    if (!formData.scheduled_for && !formData.due_date) {
+      toast({
+        title: 'Fecha requerida',
+        description: 'Define una fecha programada o una fecha máxima para verla en el calendario.',
+        variant: 'destructive',
+      });
       return;
     }
     try {
@@ -108,24 +136,59 @@ const TareasAsociadas: React.FC<TareasAsociadasProps> = ({
           dataToSend[key] = value;
         }
       });
-      await seguimientoService.createSeguimiento(dataToSend);
-      toast({ title: 'Tarea creada exitosamente' });
-      setShowForm(false);
-      setFormData({
-        title: '',
-        description: '',
-        type: 'seguimiento_cliente',
-        priority: 'media',
-        scheduled_for: '',
-        due_date: '',
-        client_id: clientId ? Number(clientId) : undefined,
-        poliza_id: polizaId ? Number(polizaId) : undefined,
-      });
+      if (dataToSend.scheduled_for && !dataToSend.due_date) {
+        dataToSend.due_date = dataToSend.scheduled_for;
+      }
+      if (dataToSend.due_date && !dataToSend.scheduled_for) {
+        dataToSend.scheduled_for = dataToSend.due_date;
+      }
+      if (editingTaskId) {
+        await seguimientoService.updateSeguimiento(editingTaskId, dataToSend);
+        toast({ title: 'Tarea actualizada' });
+      } else {
+        await seguimientoService.createSeguimiento(dataToSend);
+        toast({ title: 'Tarea creada exitosamente' });
+      }
+      resetForm();
       await loadTareas();
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const formatForInput = (value?: string) => (value ? String(value).slice(0, 16).replace(' ', 'T') : '');
+
+  const handleEdit = (task: SeguimientoItem) => {
+    setEditingTaskId(task.id);
+    setShowForm(true);
+    setFormData({
+      title: task.title,
+      description: task.description || '',
+      type: task.type,
+      priority: task.priority,
+      scheduled_for: formatForInput(task.scheduled_for),
+      due_date: formatForInput(task.due_date),
+      client_id: task.client_id || (clientId ? Number(clientId) : undefined),
+      poliza_id: task.poliza_id || (polizaId ? Number(polizaId) : undefined),
+    });
+  };
+
+  const handleStatusChange = async (task: SeguimientoItem, status: SeguimientoItem['status']) => {
+    try {
+      setUpdatingTaskId(task.id);
+      if (status === 'completada') {
+        await seguimientoService.completeSeguimiento(task.id, { result: 'completado' });
+      } else {
+        await seguimientoService.updateSeguimiento(task.id, { status });
+      }
+      toast({ title: 'Estado actualizado' });
+      await loadTareas();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setUpdatingTaskId(null);
     }
   };
 
@@ -170,7 +233,17 @@ const TareasAsociadas: React.FC<TareasAsociadasProps> = ({
             {polizaNumber && `Póliza: ${polizaNumber}`}
           </p>
         </div>
-        <Button size="sm" color="primary" onClick={() => setShowForm(!showForm)}>
+        <Button
+          size="sm"
+          color="primary"
+          onClick={() => {
+            if (showForm) {
+              resetForm();
+            } else {
+              setShowForm(true);
+            }
+          }}
+        >
           <Icon icon="solar:add-circle-bold-duotone" className="w-4 h-4 mr-1" />
           {showForm ? 'Cancelar' : 'Nueva Tarea'}
         </Button>
@@ -220,16 +293,16 @@ const TareasAsociadas: React.FC<TareasAsociadasProps> = ({
                 type="datetime-local"
                 className="w-full px-3 py-2 border rounded-lg text-sm dark:bg-gray-800 dark:border-gray-600"
                 value={formData.scheduled_for || ''}
-                onChange={(e) => setFormData((p) => ({ ...p, scheduled_for: e.target.value }))}
+                onChange={(e) => setFormData((p) => ({ ...p, scheduled_for: e.target.value, due_date: e.target.value }))}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Fecha Máxima (Límite)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Fecha Límite</label>
               <input
                 type="datetime-local"
                 className="w-full px-3 py-2 border rounded-lg text-sm dark:bg-gray-800 dark:border-gray-600"
                 value={formData.due_date || ''}
-                onChange={(e) => setFormData((p) => ({ ...p, due_date: e.target.value }))}
+                onChange={(e) => setFormData((p) => ({ ...p, due_date: e.target.value, scheduled_for: e.target.value }))}
               />
             </div>
           </div>
@@ -244,11 +317,11 @@ const TareasAsociadas: React.FC<TareasAsociadasProps> = ({
             />
           </div>
           <div className="flex gap-2">
-            <Button size="sm" color="primary" onClick={handleCreate} disabled={creating}>
+            <Button size="sm" color="primary" onClick={handleSave} disabled={creating}>
               {creating ? <Spinner size="sm" className="mr-1" /> : <Icon icon="solar:check-circle-bold-duotone" className="w-4 h-4 mr-1" />}
-              Crear Tarea
+              {editingTaskId ? 'Guardar Cambios' : 'Crear Tarea'}
             </Button>
-            <Button size="sm" color="gray" onClick={() => setShowForm(false)}>
+            <Button size="sm" color="gray" onClick={resetForm}>
               Cancelar
             </Button>
           </div>
@@ -297,14 +370,29 @@ const TareasAsociadas: React.FC<TareasAsociadasProps> = ({
                       {due}
                     </Table.Cell>
                     <Table.Cell className="text-right">
-                      <Button
-                        size="xs"
-                        color="light"
-                        className="text-red-600 hover:bg-red-50"
-                        onClick={() => handleDelete(t.id)}
-                      >
-                        <Icon icon="solar:trash-bin-trash-bold-duotone" className="w-4 h-4" />
-                      </Button>
+                      <div className="flex justify-end items-center gap-2">
+                        <select
+                          className="px-2 py-1 border rounded text-xs dark:bg-gray-800 dark:border-gray-600"
+                          value={t.status}
+                          disabled={updatingTaskId === t.id}
+                          onChange={(e) => handleStatusChange(t, e.target.value as SeguimientoItem['status'])}
+                        >
+                          {Object.entries(ESTADOS_LABEL).map(([key, value]) => (
+                            <option key={key} value={key}>{value.label}</option>
+                          ))}
+                        </select>
+                        <Button size="xs" color="light" onClick={() => handleEdit(t)}>
+                          <Icon icon="solar:pen-bold-duotone" className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="xs"
+                          color="light"
+                          className="text-red-600 hover:bg-red-50"
+                          onClick={() => handleDelete(t.id)}
+                        >
+                          <Icon icon="solar:trash-bin-trash-bold-duotone" className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </Table.Cell>
                   </Table.Row>
                 );

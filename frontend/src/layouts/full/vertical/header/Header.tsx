@@ -35,6 +35,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
     const {isMobileSidebarOpen,setIsMobileSidebarOpen} = useContext(DashboardContext);
 
   const [mobileMenu, setMobileMenu] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
   const { tenant, trialEndsAt } = useUnifiedAuth();
 
   const isTrialActive = () => {
@@ -91,6 +92,11 @@ const Header = ({ layoutType }: HeaderPropsType) => {
 
   // mobile-sidebar
   const handleClose = () => setIsMobileSidebarOpen(false);
+
+  const openAssistant = () => {
+    setHelpOpen(false);
+    document.getElementById('guro-open-assistant')?.click();
+  };
 
   // Función para manejar el botón de referidos (ya no se usa, pero se mantiene por compatibilidad)
   const handleReferralClick = () => {
@@ -246,8 +252,47 @@ const Header = ({ layoutType }: HeaderPropsType) => {
 
           <Navbar.Collapse className="xl:block hidden">
             <div className="flex gap-3 items-center">
-              {/* Floating Assistant (Octupus) - a la izquierda de Wallet */}
-              <FloatingAssistant variant="topbar" />
+              <div className="relative">
+                <Tooltip content="Ayuda" placement="bottom" className="flowbite-tooltip">
+                  <button
+                    type="button"
+                    onClick={() => setHelpOpen((v) => !v)}
+                    aria-label="Abrir ayuda"
+                    className="h-10 w-10 hover:text-[#573CFF] hover:bg-[#573CFF]/10 focus:ring-0 rounded-xl flex justify-center items-center cursor-pointer text-gray-500 dark:text-gray-300 transition-colors"
+                  >
+                    <Icon icon="solar:question-circle-bold-duotone" width="22" />
+                  </button>
+                </Tooltip>
+                {helpOpen && (
+                  <div className="absolute right-0 top-12 z-[1000] w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-[#111111]">
+                    <button
+                      type="button"
+                      onClick={openAssistant}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-neutral-800"
+                    >
+                      <Icon icon="solar:chat-round-dots-bold-duotone" width={18} className="text-[#573CFF]" />
+                      Asistente virtual
+                    </button>
+                    <a
+                      href="/apps/whatsapp"
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-neutral-800"
+                      onClick={() => setHelpOpen(false)}
+                    >
+                      <Icon icon="solar:phone-calling-rounded-bold-duotone" width={18} className="text-emerald-500" />
+                      WhatsApp
+                    </a>
+                    <a
+                      href="/tutoriales"
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-neutral-800"
+                      onClick={() => setHelpOpen(false)}
+                    >
+                      <Icon icon="solar:video-library-bold-duotone" width={18} className="text-orange-500" />
+                      Tutoriales
+                    </a>
+                  </div>
+                )}
+              </div>
+              <FloatingAssistant variant="topbar" trigger="none" />
 
                {/* Widget de Wallet */}
                <WalletWidget />

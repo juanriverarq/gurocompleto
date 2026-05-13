@@ -419,6 +419,12 @@ const BaseMenuitems: MenuitemsType[] = [
         title: 'Roles y Permisos',
         href: '/apps/admin/roles',
       },
+      {
+        id: uniqueId(),
+        title: 'Papelera',
+        href: '/apps/admin/papelera',
+        icon: 'solar:trash-bin-trash-bold-duotone',
+      },
     ],
   },
   {

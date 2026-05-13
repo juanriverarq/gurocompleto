@@ -277,9 +277,6 @@ class SaasSalesFunnelController extends Controller
             
             $lead = SalesFunnel::forBroker($brokerId)->findOrFail($id);
             $emailRules = ['nullable', 'email'];
-            if (!$request->filled('client_id')) {
-                $emailRules[] = Rule::unique('sales_funnel', 'email')->ignore($lead->id);
-            }
 
             $validated = $request->validate([
                 'first_name' => 'sometimes|required|string|max:255',
@@ -302,7 +299,7 @@ class SaasSalesFunnelController extends Controller
                 'insurance_type' => 'sometimes|required|in:' . implode(',', array_keys(SalesFunnel::INSURANCE_TYPES)),
                 'potential_value' => 'sometimes|required|numeric|min:0',
                 'close_probability' => 'sometimes|required|integer|min:0|max:100',
-                'expected_close_date' => 'nullable|date|after:today',
+                'expected_close_date' => 'nullable|date',
                 'assigned_agent_id' => 'nullable|exists:users,id',
                 'preferred_contact_method' => 'sometimes|required|in:' . implode(',', array_keys(SalesFunnel::CONTACT_METHODS)),
                 'preferred_contact_time' => 'nullable|in:' . implode(',', array_keys(SalesFunnel::CONTACT_TIMES)),
@@ -315,7 +312,7 @@ class SaasSalesFunnelController extends Controller
                 'custom_fields' => 'nullable|array',
                 'quality_rating' => 'sometimes|required|in:' . implode(',', array_keys(SalesFunnel::QUALITY_RATINGS)),
                 'lead_score' => 'nullable|integer|min:0|max:100',
-                'next_follow_up_at' => 'nullable|date|after:now',
+                'next_follow_up_at' => 'nullable|date',
                 'referrer_type' => 'nullable|in:vendedor,otro',
                 'referrer_vendedor_id' => 'nullable|integer',
                 'referrer_name' => 'nullable|string|max:255',

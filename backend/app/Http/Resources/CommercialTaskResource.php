@@ -119,17 +119,50 @@ class CommercialTaskResource extends JsonResource
             return null;
         }
 
-        // Intentar primero con User
-        if ($this->relationLoaded('assignedUser') && $this->assignedUser) {
+        \Log::info('🔍 [DEBUG] getAssignedUserData', [
+            'task_id' => $this->id,
+            'assigned_to' => $this->assigned_to,
+            'assignedUser_loaded' => $this->relationLoaded('assignedUser'),
+            'assignedUser_exists' => $this->assignedUser ? true : false,
+            'assignedEmpleado_loaded' => $this->relationLoaded('assignedEmpleado'),
+            'assignedEmpleado_exists' => $this->assignedEmpleado ? true : false,
+        ]);
+
+        // Intentar primero con User (solo si pertenece al mismo broker, para evitar colisión de IDs entre brokers)
+        if ($this->relationLoaded('assignedUser') && $this->assignedUser
+            && $this->assignedUser->broker_id === $this->broker_id) {
+            $rawName  = trim((string) ($this->assignedUser->name ?? ''));
+            $rawEmail = (string) ($this->assignedUser->email ?? '');
+
+            // Si es shadow user de empleado (email sintético), resolver nombre real
+            if (str_ends_with($rawEmail, '@empleado.local')
+                && preg_match('/empleado\.(\d+)/i', $rawEmail, $m)) {
+                $emp = \App\Models\EmpleadoBroker::where('broker_id', $this->broker_id)
+                    ->find((int) $m[1]);
+                if ($emp) {
+                    $fullName = trim(($emp->nombres ?? '') . ' ' . ($emp->apellidos ?? ''));
+                    return [
+                        'id'    => $this->assignedUser->id,
+                        'name'  => $fullName ?: ($emp->email ?: $rawEmail),
+                        'email' => $emp->email ?: $rawEmail,
+                    ];
+                }
+            }
+
+            // Si el nombre es un placeholder genérico, usar email
+            $isPlaceholder = $rawName === ''
+                || in_array(strtolower($rawName), ['usuario', 'user', 'admin', 'administrador', 'empleado'], true);
+
             return [
-                'id' => $this->assignedUser->id,
-                'name' => $this->assignedUser->name,
-                'email' => $this->assignedUser->email,
+                'id'    => $this->assignedUser->id,
+                'name'  => $isPlaceholder ? ($rawEmail ?: ('Usuario ' . $this->assignedUser->id)) : $rawName,
+                'email' => $rawEmail,
             ];
         }
 
-        // Intentar con EmpleadoBroker
-        if ($this->relationLoaded('assignedEmpleado') && $this->assignedEmpleado) {
+        // Intentar con EmpleadoBroker (solo si pertenece al mismo broker)
+        if ($this->relationLoaded('assignedEmpleado') && $this->assignedEmpleado
+            && $this->assignedEmpleado->broker_id === $this->broker_id) {
             return [
                 'id' => $this->assignedEmpleado->id,
                 'name' => trim($this->assignedEmpleado->nombres . ' ' . $this->assignedEmpleado->apellidos),
@@ -138,6 +171,9 @@ class CommercialTaskResource extends JsonResource
         }
 
         // Si no se encontró en ninguna tabla
+        \Log::warning('🔍 [DEBUG] Usuario asignado no encontrado', [
+            'assigned_to' => $this->assigned_to,
+        ]);
         return [
             'id' => $this->assigned_to,
             'name' => 'Usuario no encontrado (ID: ' . $this->assigned_to . ')',

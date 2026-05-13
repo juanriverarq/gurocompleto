@@ -1577,7 +1577,12 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config: _conf
           <div className="flex flex-col gap-1">
             <Badge color="failure">Fallido</Badge>
             {errorMessage && (
-              <span className="text-xs text-red-500">{translateError(errorMessage)}</span>
+              <span
+                className="text-xs text-red-500 cursor-help"
+                title={`Detalle:\n${errorMessage}`}
+              >
+                {translateError(errorMessage)}
+              </span>
             )}
           </div>
         );
@@ -1586,7 +1591,12 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config: _conf
           <div className="flex flex-col gap-1">
             <Badge color="warning">Omitido</Badge>
             {errorMessage && (
-              <span className="text-xs text-gray-500">{translateError(errorMessage)}</span>
+              <span
+                className="text-xs text-gray-500 cursor-help"
+                title={`Detalle:\n${errorMessage}`}
+              >
+                {translateError(errorMessage)}
+              </span>
             )}
           </div>
         );
@@ -1595,9 +1605,43 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config: _conf
     }
   };
 
+  // Códigos de error de Meta WhatsApp Cloud API → mensaje en español
+  const META_ERROR_CODES: Record<string, string> = {
+    '100': 'Parámetro inválido en el envío',
+    '131000': 'Error general de Meta',
+    '131005': 'Número no registrado en WhatsApp',
+    '131008': 'Falta un parámetro requerido',
+    '131009': 'Valor de parámetro inválido (revisa nombre/teléfono)',
+    '131016': 'Servicio de Meta temporalmente caído',
+    '131021': 'No puedes enviarte mensaje a ti mismo',
+    '131026': 'Mensaje no entregable (cliente bloqueó/no abierto)',
+    '131031': 'Cuenta restringida temporalmente por Meta',
+    '131042': 'Cuenta de WhatsApp Business no verificada',
+    '131047': 'Ventana de 24h cerrada (usa plantilla)',
+    '131048': 'Límite de spam alcanzado por este número',
+    '131051': 'Tipo de mensaje no soportado',
+    '131052': 'Error descargando el media (archivo)',
+    '131056': 'Conversación con el destinatario aún no permitida',
+    '132000': 'Cantidad de parámetros no coincide con la plantilla',
+    '132001': 'Plantilla no existe en este idioma',
+    '132005': 'Texto traducido demasiado largo',
+    '132007': 'Política de caracteres de la plantilla violada',
+    '132012': 'Formato de parámetro no coincide con la plantilla',
+    '132015': 'Plantilla pausada por Meta',
+    '132016': 'Plantilla deshabilitada por Meta',
+    '132068': 'Plantilla en revisión, aún no aprobada',
+    '133000': 'Demasiados intentos de PIN',
+    '135000': 'Error genérico del usuario',
+    '136025': 'Permiso revocado por la cuenta de Meta',
+    '80007': 'Límite de envío alcanzado (rate limit)',
+    '190': 'Token de Meta expirado o inválido',
+    '200': 'Permisos insuficientes en el token de Meta',
+    '368': 'Cuenta bloqueada por Meta temporalmente',
+  };
+
   const translateError = (error: string): string => {
-    // Traducciones de errores comunes
-    const translations: Record<string, string> = {
+    if (!error) return 'Error al enviar';
+    const exact: Record<string, string> = {
       'Error desconocido': 'Error desconocido al enviar',
       'Instance not connected': 'WhatsApp desconectado',
       'instance not connected': 'WhatsApp desconectado',
@@ -1612,13 +1656,18 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config: _conf
       'Omitido manualmente': 'Omitido por el usuario',
       'Omitido por el usuario': 'Omitido por el usuario',
     };
+    if (exact[error]) return exact[error];
 
-    // Buscar traducción exacta
-    if (translations[error]) {
-      return translations[error];
+    // Códigos #N de Meta WhatsApp Cloud API (más comunes: #100, #131009, #132000…)
+    const metaMatch = error.match(/\(#(\d+)\)/);
+    if (metaMatch) {
+      const code = metaMatch[1];
+      const translated = META_ERROR_CODES[code];
+      if (translated) return `${translated} (Meta #${code})`;
+      return `Error de Meta #${code}`;
     }
 
-    // Buscar patrones comunes
+    // HTTP genéricos
     if (error.includes('[HTTP 4') || error.includes('[HTTP 5')) {
       const match = error.match(/\[HTTP (\d+)\]/);
       if (match) {
@@ -1633,18 +1682,29 @@ const LogsTab: React.FC<{ config: PolicyNotificationConfig }> = ({ config: _conf
       }
     }
 
-    if (error.toLowerCase().includes('disconnect')) {
-      return 'WhatsApp desconectado';
-    }
-    if (error.toLowerCase().includes('not found')) {
-      return 'No encontrado';
-    }
-    if (error.toLowerCase().includes('invalid')) {
-      return 'Datos inválidos';
+    // Errores de cURL (red/conectividad al ir a Meta)
+    const curlMatch = error.match(/cURL error (\d+)/i);
+    if (curlMatch) {
+      const code = curlMatch[1];
+      if (code === '6' || /resolving timed out|could not resolve host/i.test(error)) {
+        return 'No se pudo conectar a WhatsApp (DNS / red caída)';
+      }
+      if (code === '7') return 'No se pudo conectar al servidor de WhatsApp';
+      if (code === '28' || /timed out/i.test(error)) return 'Tiempo agotado al conectar con WhatsApp';
+      if (code === '35' || code === '60') return 'Error SSL al conectar con WhatsApp';
+      return `Error de red (cURL ${code})`;
     }
 
+    // Frases comunes en inglés
+    if (/template name does not exist/i.test(error)) return 'Plantilla no existe en ese idioma (Meta)';
+    if (/parameter value is not valid/i.test(error)) return 'Valor de parámetro inválido';
+    if (/number of parameters does not match/i.test(error)) return 'Cantidad de parámetros no coincide con la plantilla';
+    if (error.toLowerCase().includes('disconnect')) return 'WhatsApp desconectado';
+    if (error.toLowerCase().includes('not found')) return 'No encontrado';
+    if (error.toLowerCase().includes('invalid')) return 'Datos inválidos';
+
     // Si no hay traducción, mostrar el error original truncado
-    return error.length > 40 ? error.substring(0, 40) + '...' : error;
+    return error.length > 60 ? error.substring(0, 60) + '…' : error;
   };
 
   const formatDateTime = (dateStr: string) => {

@@ -168,7 +168,10 @@ const Polizas: React.FC = () => {
 
   useEffect(() => {
     pollDetailSyncProgress();
-    detailSyncPollRef.current = setInterval(pollDetailSyncProgress, 4000);
+    // Polling más conservador (15s en vez de 4s). Cada call golpea MySQL y
+    // antes generaba ~130 req/min en pico. 15s es más que suficiente para
+    // mostrar progreso de un sync que tarda minutos.
+    detailSyncPollRef.current = setInterval(pollDetailSyncProgress, 15000);
     return () => { if (detailSyncPollRef.current) clearInterval(detailSyncPollRef.current); };
   }, [pollDetailSyncProgress]);
 
@@ -987,6 +990,36 @@ const Polizas: React.FC = () => {
 
           {/* Tabla de pólizas */}
           <div data-tour="polizas-table" className="rounded-2xl border border-neutral-800 bg-neutral-950/70 overflow-hidden">
+            {/* Tabs Activas / Papelera */}
+            <div className="flex items-center gap-1 px-4 pt-3 border-b border-neutral-800/60">
+              {([
+                { v: 'none' as const, label: 'Activas', icon: 'solar:document-bold-duotone', color: '#573CFF' },
+                { v: 'only' as const, label: 'Papelera', icon: 'solar:trash-bin-trash-bold-duotone', color: '#ef4444' },
+              ]).map(t => {
+                const isActive = (filters.trashed || 'none') === t.v;
+                const count = isActive ? (pagination?.total ?? null) : null;
+                return (
+                  <button
+                    key={t.v}
+                    onClick={() => { handleFilterChange('trashed', t.v); }}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+                      isActive
+                        ? ''
+                        : 'border-transparent text-neutral-400 hover:text-neutral-200'
+                    }`}
+                    style={isActive ? { borderColor: t.color, color: t.color } : {}}
+                  >
+                    <Icon icon={t.icon} width={16} />
+                    {t.label}
+                    {count !== null && (
+                      <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full" style={{ backgroundColor: t.color + '33', color: t.color }}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
             {/* Search bar + actions */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800/60">
               <div className="relative flex-1 max-w-sm">
@@ -1320,12 +1353,30 @@ const Polizas: React.FC = () => {
                                     </TableMenuItem>
                                   </Link>
                                 )}
-                                {canDeletePolicy && (
+                                {canDeletePolicy && (filters.trashed === 'only' ? (
+                                  <>
+                                    <TableMenuItem className="text-green-600 hover:text-green-700" onClick={async () => {
+                                      const res = await saasApi.restaurarPapelera('polizas', [Number(poliza.id)]);
+                                      if (res.success) { await loadPolizas(); await loadEstadisticas(); } else alert(res.message || 'Error');
+                                    }}>
+                                      <Icon icon="solar:refresh-circle-bold-duotone" height={18} />
+                                      <span>Restaurar</span>
+                                    </TableMenuItem>
+                                    <TableMenuItem className="text-red-600 hover:text-red-700" onClick={async () => {
+                                      if (!confirm(`¿Eliminar PERMANENTEMENTE la póliza ${poliza.policy_number}? Esta acción NO se puede deshacer.`)) return;
+                                      const res = await saasApi.eliminarDefinitivoPapelera('polizas', [Number(poliza.id)]);
+                                      if (res.success) { await loadPolizas(); await loadEstadisticas(); } else alert(res.message || 'Error');
+                                    }}>
+                                      <Icon icon="solar:trash-bin-2-bold-duotone" height={18} />
+                                      <span>Eliminar definitivo</span>
+                                    </TableMenuItem>
+                                  </>
+                                ) : (
                                   <TableMenuItem className="text-red-600 hover:text-red-700" onClick={() => handleDeletePoliza(poliza)}>
                                     <Icon icon="solar:trash-bin-minimalistic-bold-duotone" height={18} />
                                     <span>Eliminar</span>
                                   </TableMenuItem>
-                                )}
+                                ))}
                               </TableActionMenu>
                             </td>
                           </tr>

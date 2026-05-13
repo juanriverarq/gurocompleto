@@ -343,45 +343,59 @@ class SendPolicyNotifications extends Command
 
             $targetDate = now()->addDays($days)->startOfDay();
 
+            // Si skip_weekends está activo, el cron NO corre sábado ni domingo.
+            // Eso significa que los avisos que el sábado y el domingo *deberían*
+            // haber buscado (`Sat+N` y `Sun+N`) nunca se envían. Para no perderlos,
+            // cuando hoy es viernes absorbemos esos dos días: el viernes hace su
+            // propio trabajo (`Fri+N`) y también el del sábado (`Fri+N+1` = `Sat+N`)
+            // y el del domingo (`Fri+N+2` = `Sun+N`).
+            $datesToCover = [$targetDate->copy()];
+            if (now()->isFriday() && (int) ($config->skip_weekends ?? 0) === 1) {
+                $datesToCover[] = $targetDate->copy()->addDay();    // trabajo del sábado
+                $datesToCover[] = $targetDate->copy()->addDays(2);  // trabajo del domingo
+            }
+            $datesISO = array_map(fn($d) => $d->format('Y-m-d'), $datesToCover);
+
             switch ($type) {
                 case 'expiration':
                     $query->whereNotNull('end_date')
-                        ->whereDate('end_date', '=', $targetDate);
-                    
-                    $this->line("  🔍 Buscando pólizas que vencen el: {$targetDate->format('Y-m-d')} (en {$days} días)");
+                        ->whereIn(\DB::raw('DATE(end_date)'), $datesISO);
+
+                    $this->line("  🔍 Buscando pólizas que vencen en: " . implode(', ', $datesISO) . " (base: {$targetDate->format('Y-m-d')} en {$days} días)");
                     break;
 
                 case 'renewal':
                     $query->whereNotNull('renewal_date')
-                        ->whereDate('renewal_date', '=', $targetDate);
-                    
-                    $this->line("  🔍 Buscando pólizas con renovación el: {$targetDate->format('Y-m-d')} (en {$days} días)");
+                        ->whereIn(\DB::raw('DATE(renewal_date)'), $datesISO);
+
+                    $this->line("  🔍 Buscando pólizas con renovación en: " . implode(', ', $datesISO) . " (base: {$targetDate->format('Y-m-d')} en {$days} días)");
                     break;
 
                 case 'payment_due':
                     // NUEVO: leer de cartera_items (fuente de verdad por cuota)
                     // en lugar del campo legacy polizas.payment_due_date.
-                    $polizaIdsConCuotaVencible = \DB::table('cartera_items')
+                    $cuotasVencibles = \DB::table('cartera_items')
                         ->where('broker_id', $config->broker_id)
-                        ->whereDate('fecha_limite_pago', '=', $targetDate)
+                        ->whereIn(\DB::raw('DATE(fecha_limite_pago)'), $datesISO)
                         ->where('recaudado_en_oficina', false)
                         ->where('recaudado_aseguradora', false)
                         ->where('recibo_pago_directo', false)
                         ->where('es_anticipo', false)
                         ->where('recibo_anulado', false)
                         ->whereNotNull('poliza_id')
-                        ->pluck('poliza_id')
-                        ->unique()
-                        ->values()
-                        ->all();
+                        ->orderBy('fecha_limite_pago')
+                        ->orderBy('id')
+                        ->get(['id', 'poliza_id', 'numero_pago', 'fecha_limite_pago', 'prima_total_pago', 'saldo_pendiente_oficina']);
+
+                    $polizaIdsConCuotaVencible = $cuotasVencibles->pluck('poliza_id')->unique()->values()->all();
 
                     if (empty($polizaIdsConCuotaVencible)) {
-                        $this->line("  🔍 Sin cuotas en cartera_items con fecha_limite_pago = {$targetDate->format('Y-m-d')}");
+                        $this->line("  🔍 Sin cuotas en cartera_items con fecha_limite_pago en " . implode(', ', $datesISO));
                         // Forzar query vacío
                         $query->whereRaw('1 = 0');
                     } else {
                         $query->whereIn('id', $polizaIdsConCuotaVencible);
-                        $this->line("  🔍 " . count($polizaIdsConCuotaVencible) . " pólizas con cuota venciendo el {$targetDate->format('Y-m-d')} (en {$days} días)");
+                        $this->line("  🔍 " . count($polizaIdsConCuotaVencible) . " pólizas con cuota venciendo en " . implode(', ', $datesISO) . " (base: {$targetDate->format('Y-m-d')} en {$days} días)");
                     }
                     break;
             }
@@ -392,6 +406,15 @@ class SendPolicyNotifications extends Command
             // Agregar a la colección total (evitando duplicados por ID)
             foreach ($found as $policy) {
                 if (!in_array($policy->id, $uniquePolicyIds)) {
+                    if ($type === 'payment_due' && isset($cuotasVencibles)) {
+                        $cuota = $cuotasVencibles->firstWhere('poliza_id', $policy->id);
+                        if ($cuota) {
+                            $policy->payment_due_date = Carbon::parse($cuota->fecha_limite_pago);
+                            $policy->setAttribute('notification_cuota_id', $cuota->id);
+                            $policy->setAttribute('notification_cuota_numero', $cuota->numero_pago);
+                            $policy->setAttribute('notification_cuota_amount', (float) ($cuota->prima_total_pago ?? $cuota->saldo_pendiente_oficina ?? 0));
+                        }
+                    }
                     $uniquePolicyIds[] = $policy->id;
                     $allPolicies[] = $policy;
                 }
@@ -407,7 +430,7 @@ class SendPolicyNotifications extends Command
         }
 
         // Retornar como Collection de Eloquent
-        return Poliza::whereIn('id', $uniquePolicyIds)->with('client')->get();
+        return collect($allPolicies);
     }
 
     /**
@@ -570,11 +593,15 @@ class SendPolicyNotifications extends Command
                         $ramoName,
                         $riesgo,
                     ],
+                    // Variables expuestas en la plantilla:
+                    //   {{1}} nombre  · {{2}} póliza  · {{3}} compañía
+                    //   {{4}} fecha de pago (de la cuota pendiente en cartera_items)
+                    //   {{5}} ramo  · {{6}} riesgo
                     'payment_due' => [
                         $clientName,
                         $policy->policy_number ?? '-',
+                        $policy->insurance_company ?? '-',
                         $policy->payment_due_date ? $policy->payment_due_date->format('d/m/Y') : 'N/A',
-                        '$' . number_format($policy->premium_amount ?? 0, 0, ',', '.'),
                         $ramoName,
                         $riesgo,
                     ],

@@ -331,6 +331,8 @@ const Clientes: React.FC = () => {
     priority: '',
     page: 1,
     per_page: Number(localStorage.getItem('clientes_page_size') || '15'),
+    // Papelera: 'only' devuelve únicamente clientes soft-deleted
+    trashed: 'none' as 'none' | 'only',
   });
   // Borrador de filtros para el modal (no aplica hasta confirmar)
   const [modalFilters, setModalFilters] = useState({ ...filters });
@@ -547,6 +549,9 @@ const Clientes: React.FC = () => {
         // Ordenamiento: traducir sort_by/sort_dir (UI) a sort_field/sort_direction (API)
         if (ui.sort_by) params.sort_field = ui.sort_by;
         if (ui.sort_dir) params.sort_direction = ui.sort_dir;
+
+        // Tab Papelera
+        if (ui.trashed === 'only') params.trashed = 'only';
 
         // Ignorar filtros no soportados por el backend actual: agente (no soportado en index)
         return params;
@@ -1369,6 +1374,34 @@ const Clientes: React.FC = () => {
 
       {/* Tabla de clientes */}
       <div data-tour="clientes-table" className="rounded-2xl border border-neutral-800 bg-neutral-950/70 overflow-hidden">
+        {/* Tabs Activos / Papelera */}
+        <div className="flex items-center gap-1 px-4 pt-3 border-b border-neutral-800/60">
+          {([
+            { v: 'none' as const, label: 'Activos', icon: 'solar:users-group-rounded-bold-duotone', color: '#573CFF' },
+            { v: 'only' as const, label: 'Papelera', icon: 'solar:trash-bin-trash-bold-duotone', color: '#ef4444' },
+          ]).map(t => {
+            const isActive = (filters.trashed || 'none') === t.v;
+            const count = isActive ? (pagination?.total ?? null) : null;
+            return (
+              <button
+                key={t.v}
+                onClick={() => setFilters(prev => ({ ...prev, trashed: t.v, page: 1 }))}
+                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+                  isActive ? '' : 'border-transparent text-neutral-400 hover:text-neutral-200'
+                }`}
+                style={isActive ? { borderColor: t.color, color: t.color } : {}}
+              >
+                <Icon icon={t.icon} width={16} />
+                {t.label}
+                {count !== null && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full" style={{ backgroundColor: t.color + '33', color: t.color }}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
         {/* Search bar + actions */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-800/60">
           <div className="relative flex-1 max-w-sm">
@@ -1609,12 +1642,31 @@ const Clientes: React.FC = () => {
                               <span>Nueva Póliza</span>
                             </TableMenuItem>
                           )}
-                          {canDeleteClient && (
+                          {canDeleteClient && (filters.trashed === 'only' ? (
+                            <>
+                              <TableMenuItem className="text-green-600 hover:text-green-700" onClick={async () => {
+                                const res = await saasApi.restaurarPapelera('clientes', [Number(cliente.id)]);
+                                if (res.success) { await cargarClientes(); } else alert(res.message || 'Error');
+                              }}>
+                                <Icon icon="solar:refresh-circle-bold-duotone" height={18} />
+                                <span>Restaurar</span>
+                              </TableMenuItem>
+                              <TableMenuItem className="text-red-600 hover:text-red-700" onClick={async () => {
+                                const nombre = (cliente as any).first_name ? `${(cliente as any).first_name} ${(cliente as any).last_name||''}`.trim() : ((cliente as any).company || (cliente as any).name || `cliente ${cliente.id}`);
+                                if (!confirm(`¿Eliminar PERMANENTEMENTE a ${nombre}? Esta acción NO se puede deshacer.`)) return;
+                                const res = await saasApi.eliminarDefinitivoPapelera('clientes', [Number(cliente.id)]);
+                                if (res.success) { await cargarClientes(); } else alert(res.message || 'Error');
+                              }}>
+                                <Icon icon="solar:trash-bin-2-bold-duotone" height={18} />
+                                <span>Eliminar definitivo</span>
+                              </TableMenuItem>
+                            </>
+                          ) : (
                             <TableMenuItem className="text-red-600 hover:text-red-700" onClick={() => handleDeleteCliente(cliente)}>
                               <Icon icon="solar:trash-bin-minimalistic-bold-duotone" height={18} />
                               <span>Eliminar</span>
                             </TableMenuItem>
-                          )}
+                          ))}
                         </TableActionMenu>
                       </td>
                     </tr>

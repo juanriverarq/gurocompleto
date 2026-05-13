@@ -3,7 +3,12 @@ import { Cliente } from './clienteService';
 // Tipos para segmentos
 export interface SegmentFilter {
   field: string;
-  operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'between' | 'in' | 'not_in' | 'is_empty' | 'is_not_empty';
+  operator:
+    | 'equals' | 'not_equals' | 'contains' | 'not_contains'
+    | 'greater_than' | 'less_than' | 'between'
+    | 'in' | 'not_in'
+    | 'is_empty' | 'is_not_empty'
+    | 'has_tag' | 'not_has_tag';
   value: any;
   value2?: any; // Para operador 'between'
 }
@@ -22,9 +27,15 @@ export interface ClientSegment {
 export interface SegmentField {
   key: string;
   label: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'boolean';
+  type: 'text' | 'number' | 'date' | 'select' | 'boolean' | 'tags';
   options?: Array<{ value: any; label: string }>;
 }
+
+// Normalize tag for comparison (lowercase, trim, remove accents, replace _ with space)
+const normalizeTag = (t: string): string =>
+  String(t || '').toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/_/g, ' ');
 
 // Campos disponibles para segmentación
 const SEGMENT_FIELDS: SegmentField[] = [
@@ -46,9 +57,15 @@ const SEGMENT_FIELDS: SegmentField[] = [
     { value: 'premium', label: 'Premium' },
     { value: 'vip', label: 'VIP' }
   ]},
+  { key: 'genero', label: 'Género', type: 'select', options: [
+    { value: 'M', label: 'Masculino' },
+    { value: 'F', label: 'Femenino' },
+    { value: 'O', label: 'Otro' },
+  ]},
   { key: 'fecha_nacimiento', label: 'Fecha de Nacimiento', type: 'date' },
   { key: 'created_at', label: 'Fecha de Registro', type: 'date' },
-  { key: 'updated_at', label: 'Última Actualización', type: 'date' }
+  { key: 'updated_at', label: 'Última Actualización', type: 'date' },
+  { key: 'etiquetas', label: 'Etiquetas', type: 'tags' },
 ];
 
 // Operadores disponibles por tipo de campo
@@ -89,7 +106,13 @@ const OPERATORS_BY_TYPE = {
   ],
   boolean: [
     { value: 'equals', label: 'Es' }
-  ]
+  ],
+  tags: [
+    { value: 'has_tag', label: 'Tiene la etiqueta' },
+    { value: 'not_has_tag', label: 'No tiene la etiqueta' },
+    { value: 'is_empty', label: 'Sin etiquetas' },
+    { value: 'is_not_empty', label: 'Con al menos una etiqueta' },
+  ],
 };
 
 // Colores predefinidos para segmentos
@@ -207,11 +230,54 @@ class ClientSegmentService {
   }
 
   /**
+   * Normaliza valores de género para comparación tolerante.
+   * Acepta: 'M'/'F'/'O', 'masculino'/'femenino'/'otro', 'male'/'female', etc.
+   * Devuelve una sola letra en mayúscula: 'M' | 'F' | 'O' | '' (desconocido).
+   */
+  private normalizeGender(value: any): string {
+    const v = String(value || '').trim().toLowerCase();
+    if (!v) return '';
+    if (['m', 'masculino', 'male', 'hombre'].includes(v)) return 'M';
+    if (['f', 'femenino', 'female', 'mujer'].includes(v)) return 'F';
+    if (['o', 'otro', 'other', 'x', 'nb', 'no-binario'].includes(v)) return 'O';
+    return v.charAt(0).toUpperCase();
+  }
+
+  /**
    * Evalúa un filtro individual contra un cliente
    */
   private evaluateFilter(client: Cliente, filter: SegmentFilter): boolean {
     const fieldValue = this.getFieldValue(client, filter.field);
-    
+
+    // Compatibilidad legacy: segmentos guardados antes de soportar 'tags' usaban
+    // operadores text genéricos ('equals'/'contains'). Cuando el campo es 'etiquetas',
+    // los promovemos a 'has_tag' para que coincidan correctamente por etiqueta.
+    if (filter.field === 'etiquetas' && (filter.operator === 'equals' || filter.operator === 'contains')) {
+      const clientTags = String(fieldValue || '').split(',').map(normalizeTag).filter(Boolean);
+      const target = normalizeTag(filter.value);
+      return !!target && clientTags.includes(target);
+    }
+    if (filter.field === 'etiquetas' && (filter.operator === 'not_equals' || filter.operator === 'not_contains')) {
+      const clientTags = String(fieldValue || '').split(',').map(normalizeTag).filter(Boolean);
+      const target = normalizeTag(filter.value);
+      return !target || !clientTags.includes(target);
+    }
+
+    // Normalización especial para género (valores pueden venir como 'M', 'masculino', 'Male', etc.)
+    if (filter.field === 'genero' && (filter.operator === 'equals' || filter.operator === 'not_equals' || filter.operator === 'in' || filter.operator === 'not_in')) {
+      const a = this.normalizeGender(fieldValue);
+      if (filter.operator === 'in') {
+        const targets = (Array.isArray(filter.value) ? filter.value : [filter.value]).map((v) => this.normalizeGender(v));
+        return !!a && targets.includes(a);
+      }
+      if (filter.operator === 'not_in') {
+        const targets = (Array.isArray(filter.value) ? filter.value : [filter.value]).map((v) => this.normalizeGender(v));
+        return !targets.includes(a);
+      }
+      const b = this.normalizeGender(filter.value);
+      return filter.operator === 'equals' ? a === b : a !== b;
+    }
+
     switch (filter.operator) {
       case 'equals':
         return fieldValue === filter.value;
@@ -256,7 +322,20 @@ class ClientSegmentService {
       
       case 'is_not_empty':
         return fieldValue && fieldValue !== '' && fieldValue !== null && fieldValue !== undefined;
-      
+
+      case 'has_tag': {
+        // Tags viven en un string coma-separado (p.ej. "vip,premium,oro"). Matchea exacto por tag normalizada.
+        const clientTags = String(fieldValue || '').split(',').map(normalizeTag).filter(Boolean);
+        const target = normalizeTag(filter.value);
+        return !!target && clientTags.includes(target);
+      }
+
+      case 'not_has_tag': {
+        const clientTags = String(fieldValue || '').split(',').map(normalizeTag).filter(Boolean);
+        const target = normalizeTag(filter.value);
+        return !target || !clientTags.includes(target);
+      }
+
       default:
         return true;
     }

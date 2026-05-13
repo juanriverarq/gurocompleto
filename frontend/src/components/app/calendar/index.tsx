@@ -362,19 +362,19 @@ const CalendarApp = () => {
                 return true;
               })
               .map((task) => {
-                // Preferir scheduled_for (fecha/hora específica) sobre due_date (solo fecha límite)
-                const taskDate = task.scheduled_for || task.due_date;
+                // due_date es la fecha límite explícita (prioritaria); scheduled_for es la fecha de planificación
+                const taskDate = task.due_date || task.scheduled_for;
                 const taskDateObj = new Date(taskDate!);
-                
-                const fechaLocal = taskDateObj.toLocaleDateString('es-ES', { 
-                  day: '2-digit', 
-                  month: '2-digit', 
+
+                const fechaLocal = taskDateObj.toLocaleDateString('es-ES', {
+                  day: '2-digit',
+                  month: '2-digit',
                   year: 'numeric',
-                  ...(task.scheduled_for && { hour: '2-digit', minute: '2-digit' })
+                  ...((task.due_date || task.scheduled_for) && { hour: '2-digit', minute: '2-digit' })
                 });
-                
+
                 console.log(`[TAREAS] ${task.title} - Tipo: ${task.type} - Fecha: ${fechaLocal} - Prioridad: ${task.priority}`);
-                
+
                 // Determinar color según prioridad
                 let colorEvento = 'primary'; // Default azul
                 if (task.priority === 'critica') {
@@ -386,7 +386,7 @@ const CalendarApp = () => {
                 } else {
                   colorEvento = 'green'; // Baja
                 }
-                
+
                 // Icono según tipo de tarea
                 const iconoMap: Record<string, string> = {
                   'seguimiento_cliente': 'solar:user-check-bold-duotone',
@@ -401,19 +401,19 @@ const CalendarApp = () => {
                   'visita': 'solar:map-point-bold-duotone',
                 };
                 const icono = iconoMap[task.type] || 'solar:checklist-minimalistic-bold-duotone';
-                
-                // Crear título descriptivo con hora si existe
+
+                // Crear título descriptivo con hora si tiene fecha con tiempo explícito
                 let titulo = task.title;
-                if (task.scheduled_for) {
+                if (task.due_date || task.scheduled_for) {
                   const hora = taskDateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-                  titulo = `${hora} - ${task.title}`;
+                  if (hora !== '00:00') titulo = `${hora} - ${task.title}`;
                 }
-                
+
                 return {
                   title: titulo,
                   start: taskDateObj,
                   end: taskDateObj,
-                  allDay: !task.scheduled_for, // Si tiene hora programada, no es todo el día
+                  allDay: !task.due_date && !task.scheduled_for,
                   color: colorEvento,
                   eventType: 'task',
                   eventId: `task-${task.id}`,

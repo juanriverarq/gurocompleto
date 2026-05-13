@@ -63,6 +63,9 @@ class SaasClientesController extends Controller
                     'policies as active_policies_count' => function ($q) {
                         $q->where('status', 'active')->whereNull('deleted_at');
                     },
+                    'leads as active_leads_count' => function ($q) {
+                        $q->whereNotIn('stage', ['closed_won', 'closed_lost'])->whereNull('deleted_at');
+                    },
                 ])
                 ->select([
                     'id',
@@ -74,22 +77,28 @@ class SaasClientesController extends Controller
                     'mobile_phone',
                     'phone',
                     'city',
+                    'department',
                     'status',
                     'client_type',
-                    'company'
+                    'company',
+                    'gender',
+                    'birth_date',
+                    'marital_status',
+                    'priority',
+                    'tags',
                 ])
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->limit(50000)
                 ->get();
-            
+
             // Transform data with minimal fields (no heavy processing)
             $transformedClientes = $clientes->map(function ($cliente) {
-                $estado = $cliente->status;
-                $activePolicies = $cliente->active_policies_count ?? null;
-                if ($estado !== 'blocked' && $activePolicies !== null) {
-                    $estado = $activePolicies > 0 ? 'active' : 'inactive';
-                }
+                $estado = $this->calcularEstadoCliente(
+                    $cliente->status,
+                    $cliente->active_policies_count ?? 0,
+                    $cliente->active_leads_count ?? 0
+                );
 
                 return [
                     'id' => $cliente->id,
@@ -101,9 +110,15 @@ class SaasClientesController extends Controller
                     'celular_principal' => $cliente->mobile_phone,
                     'telefono' => $cliente->phone,
                     'ciudad' => $cliente->city,
+                    'departamento' => $cliente->department,
                     'estado' => $estado,
                     'client_type' => $cliente->client_type ?? (($cliente->document_type === 'NIT' || !empty($cliente->company)) ? 'empresa' : 'persona'),
                     'empresa' => $cliente->company,
+                    'genero' => $cliente->gender,
+                    'fecha_nacimiento' => $cliente->birth_date,
+                    'estado_civil' => $cliente->marital_status,
+                    'prioridad' => $cliente->priority,
+                    'etiquetas' => is_array($cliente->tags) ? implode(',', $cliente->tags) : ($cliente->tags ?? ''),
                 ];
             });
             
@@ -154,13 +169,21 @@ class SaasClientesController extends Controller
                 'pagination' => $request->only(['per_page', 'page'])
             ]);
             
-            // Construir la query base con aislamiento multi-tenant
-            $query = Cliente::where('broker_id', $brokerId)
-                ->withCount([
-                    'policies as active_policies_count' => function ($q) {
-                        $q->where('status', 'active')->whereNull('deleted_at');
-                    },
-                ]);
+            // Tab "Papelera": cuando trashed=only, devolver únicamente soft-deleted.
+            $trashedMode = (string) $request->input('trashed', 'none');
+            if ($trashedMode === 'only') {
+                $query = Cliente::onlyTrashed()->where('broker_id', $brokerId);
+            } else {
+                $query = Cliente::where('broker_id', $brokerId)->whereNull('deleted_at');
+            }
+            $query->withCount([
+                'policies as active_policies_count' => function ($q) {
+                    $q->where('status', 'active')->whereNull('deleted_at');
+                },
+                'leads as active_leads_count' => function ($q) {
+                    $q->whereNotIn('stage', ['closed_won', 'closed_lost'])->whereNull('deleted_at');
+                },
+            ]);
             
             // Log para verificar cuántos clientes hay en total para este broker
             $totalClientesParaBroker = Cliente::where('broker_id', $brokerId)->count();
@@ -237,13 +260,25 @@ class SaasClientesController extends Controller
                               $q->where('status', 'active')->whereNull('deleted_at');
                           });
                 } elseif ($estadoFilter === 'inactive') {
-                    // Inactivo = no tiene pólizas activas y no está bloqueado
+                    // Inactivo = no tiene pólizas activas, no está bloqueado y no tiene leads activos
                     $query->where('status', '!=', 'blocked')
                           ->whereDoesntHave('policies', function ($q) {
                               $q->where('status', 'active')->whereNull('deleted_at');
+                          })
+                          ->whereDoesntHave('leads', function ($q) {
+                              $q->whereNotIn('stage', ['closed_won', 'closed_lost'])->whereNull('deleted_at');
+                          });
+                } elseif ($estadoFilter === 'prospect') {
+                    // Prospecto = tiene lead activo en el embudo y no tiene pólizas activas
+                    $query->where('status', '!=', 'blocked')
+                          ->whereDoesntHave('policies', function ($q) {
+                              $q->where('status', 'active')->whereNull('deleted_at');
+                          })
+                          ->whereHas('leads', function ($q) {
+                              $q->whereNotIn('stage', ['closed_won', 'closed_lost'])->whereNull('deleted_at');
                           });
                 } else {
-                    // prospect, blocked, etc. → filtrar directo por status
+                    // blocked → filtrar directo por status
                     $query->where('status', $estadoFilter);
                 }
                 \Log::info('🔍 [DEBUG] Filtro de estado aplicado', ['estado' => $estadoFilter]);
@@ -594,12 +629,15 @@ class SaasClientesController extends Controller
             // Agregar el broker_id
             $validatedData['broker_id'] = $brokerId;
 
-            // Prevenir duplicados por (broker_id, document_number)
-            $existing = Cliente::where('broker_id', $brokerId)
+            // Prevenir duplicados por (broker_id, document_number).
+            // El índice MySQL `clientes_broker_id_document_number_unique` no considera deleted_at,
+            // así que cualquier coincidencia (activa o soft-deleted) bloquea el INSERT.
+            $existing = Cliente::withTrashed()
+                ->where('broker_id', $brokerId)
                 ->where('document_number', $validatedData['document_number'])
                 ->first();
 
-            if ($existing) {
+            if ($existing && $existing->deleted_at === null) {
                 \Log::warning('⚠️ [CLIENTES] Intento de crear cliente duplicado por documento', [
                     'broker_id' => $brokerId,
                     'document_number' => $validatedData['document_number'],
@@ -612,6 +650,25 @@ class SaasClientesController extends Controller
                     'message' => 'Ya existe un cliente con este documento para este broker',
                     'data' => $this->transformClienteToFrontend($existing)
                 ], 409);
+            }
+
+            if ($existing && $existing->deleted_at !== null) {
+                \Log::info('♻️ [CLIENTES] Restaurando cliente soft-deleted con mismo documento', [
+                    'broker_id' => $brokerId,
+                    'document_number' => $validatedData['document_number'],
+                    'existing_id' => $existing->id,
+                    'deleted_at' => $existing->deleted_at,
+                ]);
+
+                $existing->restore();
+                $existing->fill($validatedData)->save();
+
+                return response()->json([
+                    'success' => true,
+                    'restored' => true,
+                    'message' => 'Cliente restaurado exitosamente (estaba eliminado y se reactivó con los nuevos datos)',
+                    'data' => $this->transformClienteToFrontend($existing->fresh())
+                ], 200);
             }
 
             // Crear el cliente
@@ -650,6 +707,9 @@ class SaasClientesController extends Controller
                 ->withCount([
                     'policies as active_policies_count' => function ($q) {
                         $q->where('status', 'active')->whereNull('deleted_at');
+                    },
+                    'leads as active_leads_count' => function ($q) {
+                        $q->whereNotIn('stage', ['closed_won', 'closed_lost'])->whereNull('deleted_at');
                     },
                 ])
                 ->findOrFail($id);
@@ -907,7 +967,7 @@ class SaasClientesController extends Controller
                 'broker_id' => $cliente->broker_id
             ]);
             
-            $cliente->delete();
+            $cliente->forceDelete();
             
             \Log::info('✅ [DEBUG] Cliente eliminado exitosamente', [
                 'cliente_id' => $id
@@ -957,25 +1017,25 @@ class SaasClientesController extends Controller
             
             try {
                 if ($deleteAll) {
-                    // Eliminar TODOS los clientes del broker
+                    // Eliminar TODOS los clientes del broker (hard delete)
                     $deletedCount = Cliente::where('broker_id', $brokerId)->count();
-                    Cliente::where('broker_id', $brokerId)->delete();
+                    Cliente::where('broker_id', $brokerId)->forceDelete();
                     
-                    \Log::info('✅ [BULK DELETE] Todos los clientes eliminados', [
+                    \Log::info('✅ [BULK DELETE] Todos los clientes eliminados permanentemente', [
                         'broker_id' => $brokerId,
                         'deleted_count' => $deletedCount,
                     ]);
                 } elseif (!empty($clienteIds)) {
-                    // Eliminar solo los clientes seleccionados
+                    // Eliminar solo los clientes seleccionados (hard delete)
                     $deletedCount = Cliente::where('broker_id', $brokerId)
                         ->whereIn('id', $clienteIds)
                         ->count();
                     
                     Cliente::where('broker_id', $brokerId)
                         ->whereIn('id', $clienteIds)
-                        ->delete();
+                        ->forceDelete();
                     
-                    \Log::info('✅ [BULK DELETE] Clientes seleccionados eliminados', [
+                    \Log::info('✅ [BULK DELETE] Clientes seleccionados eliminados permanentemente', [
                         'broker_id' => $brokerId,
                         'requested_ids' => count($clienteIds),
                         'deleted_count' => $deletedCount,
@@ -1072,19 +1132,30 @@ class SaasClientesController extends Controller
             // Obtener broker_id dinámicamente
             $brokerId = $this->getBrokerId($request);
             
-            // Estadísticas básicas de clientes (activo/inactivo basado en pólizas activas)
-            $totalClientes = Cliente::where('broker_id', $brokerId)->count();
-            $clientesBloqueados = Cliente::where('broker_id', $brokerId)->where('status', 'blocked')->count();
-            $clientesProspectos = Cliente::where('broker_id', $brokerId)->where('status', 'prospect')->count();
-            $clientesActivos = Cliente::where('broker_id', $brokerId)
+            // Estadísticas básicas de clientes
+            $totalClientes = Cliente::where('broker_id', $brokerId)->whereNull('deleted_at')->count();
+            $clientesBloqueados = Cliente::where('broker_id', $brokerId)->whereNull('deleted_at')->where('status', 'blocked')->count();
+            // Prospecto = tiene lead activo en el embudo de ventas y no tiene pólizas activas
+            $clientesProspectos = Cliente::where('broker_id', $brokerId)->whereNull('deleted_at')
+                ->where('status', '!=', 'blocked')
+                ->whereDoesntHave('policies', function ($q) {
+                    $q->where('status', 'active')->whereNull('deleted_at');
+                })
+                ->whereHas('leads', function ($q) {
+                    $q->whereNotIn('stage', ['closed_won', 'closed_lost'])->whereNull('deleted_at');
+                })->count();
+            $clientesActivos = Cliente::where('broker_id', $brokerId)->whereNull('deleted_at')
                 ->where('status', '!=', 'blocked')
                 ->whereHas('policies', function ($q) {
                     $q->where('status', 'active')->whereNull('deleted_at');
                 })->count();
-            $clientesInactivos = Cliente::where('broker_id', $brokerId)
+            $clientesInactivos = Cliente::where('broker_id', $brokerId)->whereNull('deleted_at')
                 ->where('status', '!=', 'blocked')
                 ->whereDoesntHave('policies', function ($q) {
                     $q->where('status', 'active')->whereNull('deleted_at');
+                })
+                ->whereDoesntHave('leads', function ($q) {
+                    $q->whereNotIn('stage', ['closed_won', 'closed_lost'])->whereNull('deleted_at');
                 })->count();
 
             // Si no hay clientes, devolver ceros reales
@@ -1145,20 +1216,24 @@ class SaasClientesController extends Controller
             // Usar el método getBrokerId que maneja correctamente empleados y Firebase
             $brokerId = $this->getBrokerId($request);
 
-            // Estadísticas básicas: activo/inactivo basado en pólizas activas (no en campo status)
+            // Estadísticas básicas: activo/inactivo/prospecto basado en pólizas y embudo de ventas
             $basicStats = DB::table('clientes')
                 ->where('clientes.broker_id', $brokerId)
                 ->whereNull('clientes.deleted_at')
                 ->selectRaw('
                     COUNT(*) as total_clientes,
                     COUNT(CASE WHEN clientes.status = "blocked" THEN 1 END) as clientes_bloqueados,
-                    COUNT(CASE WHEN clientes.status = "prospect" THEN 1 END) as clientes_prospectos,
+                    COUNT(CASE WHEN clientes.status != "blocked"
+                        AND NOT EXISTS (SELECT 1 FROM polizas WHERE polizas.client_id = clientes.id AND polizas.status = "active" AND polizas.deleted_at IS NULL)
+                        AND EXISTS (SELECT 1 FROM sales_funnel WHERE sales_funnel.client_id = clientes.id AND sales_funnel.stage NOT IN ("closed_won","closed_lost") AND sales_funnel.deleted_at IS NULL)
+                    THEN 1 END) as clientes_prospectos,
                     COUNT(CASE WHEN clientes.status != "blocked" AND EXISTS (
                         SELECT 1 FROM polizas WHERE polizas.client_id = clientes.id AND polizas.status = "active" AND polizas.deleted_at IS NULL
                     ) THEN 1 END) as clientes_activos,
-                    COUNT(CASE WHEN clientes.status != "blocked" AND NOT EXISTS (
-                        SELECT 1 FROM polizas WHERE polizas.client_id = clientes.id AND polizas.status = "active" AND polizas.deleted_at IS NULL
-                    ) THEN 1 END) as clientes_inactivos,
+                    COUNT(CASE WHEN clientes.status != "blocked"
+                        AND NOT EXISTS (SELECT 1 FROM polizas WHERE polizas.client_id = clientes.id AND polizas.status = "active" AND polizas.deleted_at IS NULL)
+                        AND NOT EXISTS (SELECT 1 FROM sales_funnel WHERE sales_funnel.client_id = clientes.id AND sales_funnel.stage NOT IN ("closed_won","closed_lost") AND sales_funnel.deleted_at IS NULL)
+                    THEN 1 END) as clientes_inactivos,
                     COUNT(CASE WHEN client_type = "persona" THEN 1 END) as clientes_personas,
                     COUNT(CASE WHEN client_type = "empresa" THEN 1 END) as clientes_empresas,
                     COUNT(CASE WHEN MONTH(clientes.created_at) = MONTH(CURDATE()) AND YEAR(clientes.created_at) = YEAR(CURDATE()) THEN 1 END) as nuevos_este_mes
@@ -1253,13 +1328,21 @@ class SaasClientesController extends Controller
     /**
      * Transform cliente model to frontend format
      */
+    private function calcularEstadoCliente(string $status, int $activePolicies, int $activeLeads): string
+    {
+        if ($status === 'blocked') return 'blocked';
+        if ($activePolicies > 0) return 'active';
+        if ($activeLeads > 0) return 'prospect';
+        return 'inactive';
+    }
+
     private function transformClienteToFrontend($cliente)
     {
-        $estado = $cliente->status;
-        $activePolicies = $cliente->active_policies_count ?? null;
-        if ($estado !== 'blocked' && $activePolicies !== null) {
-            $estado = $activePolicies > 0 ? 'active' : 'inactive';
-        }
+        $estado = $this->calcularEstadoCliente(
+            $cliente->status ?? 'inactive',
+            $cliente->active_policies_count ?? 0,
+            $cliente->active_leads_count ?? 0
+        );
 
         return [
             'id' => $cliente->id,

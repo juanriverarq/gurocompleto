@@ -1453,39 +1453,41 @@ class SaasSiniestroController extends Controller
             'Fecha Creación',
         ];
 
+        // PhpSpreadsheet 4.x removed *ByColumnAndRow methods.
+        // Reemplazo: setCellValue([$col,$row], $value) y getStyle([$col,$row]).
         foreach ($headers as $col => $header) {
-            $sheet->setCellValueByColumnAndRow($col + 1, 1, $header);
-            $sheet->getStyleByColumnAndRow($col + 1, 1)->getFont()->setBold(true);
+            $sheet->setCellValue([$col + 1, 1], $header);
+            $sheet->getStyle([$col + 1, 1])->getFont()->setBold(true);
         }
 
         // Datos
         $row = 2;
         foreach ($siniestros as $siniestro) {
-            $sheet->setCellValueByColumnAndRow(1, $row, $siniestro->numero_siniestro);
-            $sheet->setCellValueByColumnAndRow(2, $row, $siniestro->numero_poliza);
-            $sheet->setCellValueByColumnAndRow(3, $row, $siniestro->cliente ? trim(($siniestro->cliente->first_name ?? '') . ' ' . ($siniestro->cliente->last_name ?? '')) : '');
-            $sheet->setCellValueByColumnAndRow(4, $row, $siniestro->cliente ? $siniestro->cliente->document_number : '');
-            $sheet->setCellValueByColumnAndRow(5, $row, $siniestro->aseguradora);
-            $sheet->setCellValueByColumnAndRow(6, $row, $siniestro->tipo_seguro_name ?? $siniestro->tipo_seguro);
-            $sheet->setCellValueByColumnAndRow(7, $row, $siniestro->tipo_siniestro_name ?? $siniestro->tipo_siniestro);
-            $sheet->setCellValueByColumnAndRow(8, $row, $siniestro->fecha_ocurrencia ? Carbon::parse($siniestro->fecha_ocurrencia)->format('Y-m-d') : '');
-            $sheet->setCellValueByColumnAndRow(9, $row, $siniestro->fecha_reporte ? Carbon::parse($siniestro->fecha_reporte)->format('Y-m-d H:i:s') : '');
-            $sheet->setCellValueByColumnAndRow(10, $row, $siniestro->estado_name ?? $siniestro->estado);
-            $sheet->setCellValueByColumnAndRow(11, $row, $siniestro->prioridad_name ?? $siniestro->prioridad);
-            $sheet->setCellValueByColumnAndRow(12, $row, $siniestro->monto_reclamado ?? 0);
-            $sheet->setCellValueByColumnAndRow(13, $row, $siniestro->monto_aprobado ?? 0);
-            $sheet->setCellValueByColumnAndRow(14, $row, $siniestro->monto_pagado ?? 0);
-            $sheet->setCellValueByColumnAndRow(15, $row, $siniestro->assignedAdjuster ? $siniestro->assignedAdjuster->name : '');
-            $sheet->setCellValueByColumnAndRow(16, $row, $siniestro->dias_tramite ?? 0);
-            $sheet->setCellValueByColumnAndRow(17, $row, $siniestro->lugar_ocurrencia ?? '');
-            $sheet->setCellValueByColumnAndRow(18, $row, $siniestro->ciudad_ocurrencia ?? '');
-            $sheet->setCellValueByColumnAndRow(19, $row, substr($siniestro->descripcion_hechos ?? '', 0, 500));
-            $sheet->setCellValueByColumnAndRow(20, $row, $siniestro->created_at ? Carbon::parse($siniestro->created_at)->format('Y-m-d H:i:s') : '');
+            $sheet->setCellValue([1, $row], $siniestro->numero_siniestro);
+            $sheet->setCellValue([2, $row], $siniestro->numero_poliza);
+            $sheet->setCellValue([3, $row], $siniestro->cliente ? trim(($siniestro->cliente->first_name ?? '') . ' ' . ($siniestro->cliente->last_name ?? '')) : '');
+            $sheet->setCellValue([4, $row], $siniestro->cliente ? $siniestro->cliente->document_number : '');
+            $sheet->setCellValue([5, $row], $siniestro->aseguradora);
+            $sheet->setCellValue([6, $row], $siniestro->tipo_seguro_name ?? $siniestro->tipo_seguro);
+            $sheet->setCellValue([7, $row], $siniestro->tipo_siniestro_name ?? $siniestro->tipo_siniestro);
+            $sheet->setCellValue([8, $row], $siniestro->fecha_ocurrencia ? Carbon::parse($siniestro->fecha_ocurrencia)->format('Y-m-d') : '');
+            $sheet->setCellValue([9, $row], $siniestro->fecha_reporte ? Carbon::parse($siniestro->fecha_reporte)->format('Y-m-d H:i:s') : '');
+            $sheet->setCellValue([10, $row], $siniestro->estado_name ?? $siniestro->estado);
+            $sheet->setCellValue([11, $row], $siniestro->prioridad_name ?? $siniestro->prioridad);
+            $sheet->setCellValue([12, $row], $siniestro->monto_reclamado ?? 0);
+            $sheet->setCellValue([13, $row], $siniestro->monto_aprobado ?? 0);
+            $sheet->setCellValue([14, $row], $siniestro->monto_pagado ?? 0);
+            $sheet->setCellValue([15, $row], $siniestro->assignedAdjuster ? $siniestro->assignedAdjuster->name : '');
+            $sheet->setCellValue([16, $row], $siniestro->dias_tramite ?? 0);
+            $sheet->setCellValue([17, $row], $siniestro->lugar_ocurrencia ?? '');
+            $sheet->setCellValue([18, $row], $siniestro->ciudad_ocurrencia ?? '');
+            $sheet->setCellValue([19, $row], substr($siniestro->descripcion_hechos ?? '', 0, 500));
+            $sheet->setCellValue([20, $row], $siniestro->created_at ? Carbon::parse($siniestro->created_at)->format('Y-m-d H:i:s') : '');
 
             // Formato de números para montos
-            $sheet->getStyleByColumnAndRow(12, $row)->getNumberFormat()->setFormatCode('#,##0');
-            $sheet->getStyleByColumnAndRow(13, $row)->getNumberFormat()->setFormatCode('#,##0');
-            $sheet->getStyleByColumnAndRow(14, $row)->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle([12, $row])->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle([13, $row])->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle([14, $row])->getNumberFormat()->setFormatCode('#,##0');
 
             $row++;
         }

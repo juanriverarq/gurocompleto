@@ -58,9 +58,10 @@ const AntiMatterOrb = ({ variant, className = '' }: { variant: OrbVariant; class
 
 interface FloatingAssistantProps {
   variant?: OrbVariant;
+  trigger?: 'orb' | 'none';
 }
 
-const FloatingAssistant = ({ variant = 'topbar' }: FloatingAssistantProps = {}) => {
+const FloatingAssistant = ({ variant = 'topbar', trigger = 'orb' }: FloatingAssistantProps = {}) => {
   const { user } = useUnifiedAuth();
   const firstName = user?.displayName?.split(' ')[0] || 'usuario';
 
@@ -512,16 +513,20 @@ const FloatingAssistant = ({ variant = 'topbar' }: FloatingAssistantProps = {}) 
 
   return (
     <>
-      {/* Botón trigger: inline, para que quede dentro del topbar donde lo monta el Header */}
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="cursor-pointer transition-transform hover:scale-110 active:scale-95 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#573CFF]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#0d0d0e] rounded-full flex items-center justify-center"
-        title="Octupus"
-        aria-label="Abrir Octupus"
-      >
-        <AntiMatterOrb variant={variant} />
-      </button>
+      {trigger === 'orb' && (
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="cursor-pointer transition-transform hover:scale-110 active:scale-95 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#573CFF]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#0d0d0e] rounded-full flex items-center justify-center"
+          title="Octupus"
+          aria-label="Abrir Octupus"
+        >
+          <AntiMatterOrb variant={variant} />
+        </button>
+      )}
+      {trigger === 'none' && (
+        <span id="guro-open-assistant" className="hidden" onClick={() => setOpen(true)} />
+      )}
       {portalContent}
     </>
   );

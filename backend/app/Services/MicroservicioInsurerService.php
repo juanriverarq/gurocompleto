@@ -51,6 +51,13 @@ class MicroservicioInsurerService
             'ttl_hours' => 10,
             'required_fields' => ['email', 'password'],
         ],
+        'allianz' => [
+            'slug' => 'allianz',
+            'login' => '/allianz/login',
+            'health' => '/allianz/saldos',
+            'ttl_hours' => 1,
+            'required_fields' => ['username', 'password'],
+        ],
     ];
 
     public function supportedInsurers(): array
@@ -447,6 +454,14 @@ class MicroservicioInsurerService
             return [
                 'email' => $credentials['email'],
                 'password' => $credentials['password'],
+            ];
+        }
+
+        if ($insurerCode === 'allianz') {
+            return [
+                'username' => $credentials['username'],
+                'password' => $credentials['password'],
+                'save_credentials' => true,
             ];
         }
 

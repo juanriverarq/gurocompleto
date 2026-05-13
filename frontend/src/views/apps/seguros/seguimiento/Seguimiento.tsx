@@ -280,8 +280,8 @@ const SeguimientoTableRow = memo(
         </Table.Cell>
         <Table.Cell className="whitespace-nowrap pr-8">
           <div className="text-sm text-gray-900 dark:text-white">
-            {item.scheduled_for
-              ? format(new Date(item.scheduled_for), 'dd/MM/yyyy HH:mm', { locale: es })
+            {(item.due_date || item.scheduled_for)
+              ? format(new Date((item.due_date || item.scheduled_for)!), 'dd/MM/yyyy HH:mm', { locale: es })
               : '-'}
           </div>
         </Table.Cell>
@@ -789,46 +789,18 @@ const Seguimiento: React.FC = () => {
 
   const loadUsuarios = async () => {
     try {
-      const usuariosLista: any[] = [];
-
-      // Agregar usuarios de la tabla users
-      try {
-        const response = await seguimientoService.getUsers();
-        response.data.forEach((u: any) => {
-          usuariosLista.push({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            tipo: 'user',
-          });
-        });
-      } catch (e) {
-        console.error('Error loading users:', e);
-      }
-
-      // Agregar vendedores
-      if (vendedoresHook && vendedoresHook.length > 0) {
-        vendedoresHook.forEach((v: any) => {
-          usuariosLista.push({
-            id: v.id,
-            name: v.nombres || v.nombre || v.name,
-            tipo: 'vendedor',
-          });
-        });
-      }
-
-      // Agregar empleados
-      if (empleadosHook && empleadosHook.length > 0) {
-        empleadosHook.forEach((e: any) => {
-          usuariosLista.push({
-            id: e.id,
-            name: e.nombre_completo || `${e.nombres} ${e.apellidos}` || e.nombre || e.name,
-            tipo: 'empleado',
-          });
-        });
-      }
-
-      setUsuarios(usuariosLista);
+      // El backend getUsers() ya devuelve TODOS los asignables del broker:
+      // usuarios reales, empleados con shadow-user (resueltos a su nombre real)
+      // y empleados sin shadow-user (usando su empleado_brokers.id directamente).
+      // No mezclamos con los hooks para evitar colisión de IDs entre tablas.
+      const response = await seguimientoService.getUsers();
+      const lista = (response.data || []).map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        tipo: (u as any).type === 'empleado' ? 'empleado' : 'user',
+      }));
+      setUsuarios(lista);
     } catch (error) {
       console.error('Error loading usuarios:', error);
       setUsuarios([]);

@@ -184,6 +184,14 @@ class ImportCarteraFromExcel extends Command
                 'fecha_inicio_vigencia' => $this->parseDate($this->col($row, $h, 'FECHA INICIO VIGENCIA PÓLIZA')),
                 'fecha_fin_vigencia' => $this->parseDate($this->col($row, $h, 'FECHA FIN VIGENCIA PÓLIZA')),
                 'estado_cartera' => $estadoCartera,
+                // Flags que determinan en qué tab del timeline aparece la cuota.
+                // por_cobrar: pendiente total (nada recaudado todavía)
+                // por_pagar: cliente pagó en oficina, pendiente girar a aseguradora
+                // comision_por_cobrar: pagado a aseguradora, pendiente cobrar comisión
+                // comision_recibida: ciclo completo (cerrada)
+                'recaudado_en_oficina' => in_array($estadoCartera, ['por_pagar', 'comision_por_cobrar', 'comision_recibida'], true),
+                'recaudado_aseguradora' => in_array($estadoCartera, ['comision_por_cobrar', 'comision_recibida'], true),
+                'comisionada' => $estadoCartera === 'comision_recibida',
                 'medio_pago' => $this->col($row, $h, 'MEDIO DE PAGO'),
                 'codigo_contable' => $this->col($row, $h, 'CÓDIGO CONTABLE') ?? $this->col($row, $h, 'CODIGO CONTABLE'),
                 'codigo_radicacion' => $this->col($row, $h, 'CÓDIGO RADICACIÓN'),
@@ -275,6 +283,14 @@ class ImportCarteraFromExcel extends Command
     private function parseDate(?string $val): ?string
     {
         if (!$val) return null;
+        // Excel serial date number (e.g. 45785) — toArray with formatData=false returns these as numbers
+        if (is_numeric($val) && (int) $val > 10000) {
+            try {
+                return date('Y-m-d', \PhpOffice\PhpSpreadsheet\Shared\Date::excelToTimestamp((int) $val));
+            } catch (\Throwable $e) {
+                // fall through to text parse
+            }
+        }
         try {
             return \Carbon\Carbon::parse($val)->format('Y-m-d');
         } catch (\Throwable $e) {

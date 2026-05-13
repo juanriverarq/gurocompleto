@@ -1166,11 +1166,71 @@ class WhatsAppWebhookController extends Controller
                 $conversationMessage->update(['status' => $statusValue]);
             }
 
+            // Actualizar las 3 tablas de notification_logs (pólizas, autos, clientes).
+            // Antes solo se actualizaba campaign_messages y conversation_messages, así
+            // que las notificaciones programadas quedaban como "sent" para siempre
+            // aunque Meta confirmara entrega o reportara fallo.
+            $this->updateNotificationLogStatus($messageId, $statusValue, $errors);
+
         } catch (\Exception $e) {
             Log::error('❌ [META WEBHOOK] Error procesando actualización de estado', [
                 'error' => $e->getMessage(),
                 'status' => $status
             ]);
+        }
+    }
+
+    /**
+     * Actualiza columnas delivered_at / read_at / delivery_failed_at en las
+     * tablas policy/automovil/client_notification_logs según el status que
+     * reportó Meta. Si el status es 'failed' también marca status='failed' y
+     * guarda el error_message para que el operador vea la causa.
+     */
+    protected function updateNotificationLogStatus(string $messageId, string $statusValue, $errors = null): void
+    {
+        $errorJson = $errors ? json_encode($errors) : null;
+        $now = now();
+
+        $tables = [
+            'policy_notification_logs',
+            'automovil_notification_logs',
+            'client_notification_logs',
+        ];
+
+        foreach ($tables as $table) {
+            try {
+                $row = \DB::table($table)->where('whatsapp_message_id', $messageId)->first();
+                if (!$row) continue;
+
+                $update = [];
+                if ($statusValue === 'delivered' && empty($row->delivered_at)) {
+                    $update['delivered_at'] = $now;
+                } elseif ($statusValue === 'read' && empty($row->read_at)) {
+                    $update['read_at'] = $now;
+                    if (empty($row->delivered_at)) $update['delivered_at'] = $now;
+                } elseif ($statusValue === 'failed') {
+                    $update['delivery_failed_at'] = $now;
+                    $update['delivery_error'] = $errorJson;
+                    // Si todavía estaba en 'sent', degradar a 'failed' para que
+                    // se muestre como fallido en la UI.
+                    if (($row->status ?? '') === 'sent') {
+                        $update['status'] = 'failed';
+                        if (\Schema::hasColumn($table, 'error_message')) {
+                            $update['error_message'] = $errorJson ?: 'Mensaje no entregado por Meta';
+                        }
+                    }
+                }
+
+                if (!empty($update)) {
+                    \DB::table($table)->where('id', $row->id)->update($update);
+                }
+            } catch (\Throwable $e) {
+                Log::warning("⚠️ Error actualizando {$table} con status webhook", [
+                    'message_id' => $messageId,
+                    'status' => $statusValue,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 

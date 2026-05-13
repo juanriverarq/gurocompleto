@@ -107,6 +107,8 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
     if (localFilters.renovable !== undefined && localFilters.renovable !== '') count++;
     if (localFilters.fecha_recepcion_desde) count++;
     if (localFilters.fecha_recepcion_hasta) count++;
+    if (localFilters.cancelled_desde) count++;
+    if (localFilters.cancelled_hasta) count++;
     return count;
   }, [localFilters]);
 
@@ -129,6 +131,8 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
       fecha_fin: '',
       fecha_recepcion_desde: '',
       fecha_recepcion_hasta: '',
+      cancelled_desde: '',
+      cancelled_hasta: '',
       renovable: '',
       sort_field: 'created_at',
       sort_direction: 'desc',
@@ -269,7 +273,16 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
                 <Label className="text-sm">Fecha Recepción Hasta</Label>
                 <Input type="date" value={localFilters.fecha_recepcion_hasta || ''} onChange={(e) => set('fecha_recepcion_hasta', e.target.value)} />
               </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Fecha Cancelación Desde</Label>
+                <Input type="date" value={localFilters.cancelled_desde || ''} onChange={(e) => set('cancelled_desde', e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Fecha Cancelación Hasta</Label>
+                <Input type="date" value={localFilters.cancelled_hasta || ''} onChange={(e) => set('cancelled_hasta', e.target.value)} />
+              </div>
             </div>
+            <p className="text-[11px] text-gray-500 mt-2">Las fechas de cancelación filtran por <code>cancelled_at</code>; al usarlas se restringen automáticamente las pólizas canceladas en ese periodo.</p>
           </div>
         </div>
       </Modal.Body>

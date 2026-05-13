@@ -23,6 +23,28 @@ use Carbon\Carbon;
 class CarteraSimpleController extends Controller
 {
     /**
+     * Resolver broker_id soportando empleados, usuarios Firebase y middleware unificado.
+     */
+    private function resolveBrokerId(Request $request): ?int
+    {
+        $brokerId = $request->get('authenticated_broker_id')
+            ?? $request->get('broker_id');
+        if (!$brokerId) {
+            $empleado = $request->get('authenticated_empleado');
+            if ($empleado && isset($empleado->broker_id)) {
+                $brokerId = $empleado->broker_id;
+            }
+        }
+        if (!$brokerId) {
+            $user = $request->user() ?? Auth::user();
+            if ($user && isset($user->broker_id) && $user->broker_id) {
+                $brokerId = $user->broker_id;
+            }
+        }
+        return $brokerId ? (int) $brokerId : null;
+    }
+
+    /**
      * Timeline unificado: cuotas agrupadas por urgencia.
      * GET /api/saas/cartera-simple/timeline
      *
@@ -44,7 +66,7 @@ class CarteraSimpleController extends Controller
      */
     public function timeline(Request $request)
     {
-        $brokerId = Auth::user()->broker_id ?? null;
+        $brokerId = $this->resolveBrokerId($request);
         if (!$brokerId) {
             return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
         }
@@ -234,7 +256,7 @@ class CarteraSimpleController extends Controller
      */
     public function pagar(Request $request, int $itemId)
     {
-        $brokerId = Auth::user()->broker_id ?? null;
+        $brokerId = $this->resolveBrokerId($request);
         if (!$brokerId) {
             return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
         }
@@ -325,7 +347,7 @@ class CarteraSimpleController extends Controller
      */
     public function avisar(Request $request, int $itemId)
     {
-        $brokerId = Auth::user()->broker_id ?? null;
+        $brokerId = $this->resolveBrokerId($request);
         if (!$brokerId) {
             return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
         }
@@ -428,7 +450,7 @@ class CarteraSimpleController extends Controller
      */
     public function revertirPaso(Request $request, int $itemId)
     {
-        $brokerId = Auth::user()->broker_id ?? null;
+        $brokerId = $this->resolveBrokerId($request);
         if (!$brokerId) {
             return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
         }
@@ -607,9 +629,9 @@ class CarteraSimpleController extends Controller
      * Leer configuración de cartera del broker.
      * GET /api/saas/cartera-simple/settings
      */
-    public function getSettings()
+    public function getSettings(Request $request)
     {
-        $brokerId = Auth::user()->broker_id ?? null;
+        $brokerId = $this->resolveBrokerId($request);
         if (!$brokerId) {
             return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
         }
@@ -631,7 +653,7 @@ class CarteraSimpleController extends Controller
      */
     public function updateSettings(Request $request)
     {
-        $brokerId = Auth::user()->broker_id ?? null;
+        $brokerId = $this->resolveBrokerId($request);
         if (!$brokerId) {
             return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
         }
@@ -659,9 +681,9 @@ class CarteraSimpleController extends Controller
      * Detalle de una cuota con sus pagos y recibos asociados.
      * GET /api/saas/cartera-simple/cuota/{itemId}
      */
-    public function detalle(int $itemId)
+    public function detalle(Request $request, int $itemId)
     {
-        $brokerId = Auth::user()->broker_id ?? null;
+        $brokerId = $this->resolveBrokerId($request);
         if (!$brokerId) {
             return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
         }
@@ -676,8 +698,18 @@ class CarteraSimpleController extends Controller
             ->orderBy('fecha_pago', 'desc')
             ->get();
 
+        $pagoIds = $pagos->pluck('id')->filter()->values();
         $recibos = DB::table('recibos_caja')
-            ->whereIn('pago_poliza_id', $pagos->pluck('id'))
+            ->where('broker_id', $brokerId)
+            ->where(function ($q) use ($pagoIds, $ci) {
+                if ($pagoIds->isNotEmpty()) {
+                    $q->whereIn('pago_poliza_id', $pagoIds);
+                }
+                if (!empty($ci->poliza_id)) {
+                    $q->orWhere('poliza_id', $ci->poliza_id);
+                }
+            })
+            ->orderBy('created_at', 'desc')
             ->get();
 
         $cobros = DB::table('cobros_comisiones')
@@ -691,6 +723,303 @@ class CarteraSimpleController extends Controller
             'pagos' => $pagos,
             'recibos' => $recibos,
             'cobros_comision' => $cobros,
+        ]);
+    }
+
+    /**
+     * Exportar cartera a CSV.
+     * GET /api/saas/cartera-simple/exportar
+     *
+     * Query params (todos opcionales):
+     *  - search: string
+     *  - group: 'vencidas' | 'hoy' | 'proximos_7' | 'proximos_30' | 'sin_fecha'
+     *           | 'por_pagar_aseguradora' | 'comision_por_cobrar' | 'cerradas'
+     *  - aseguradora: string (nombre)
+     *  - aseguradora_id: int (resuelve a nombre desde tabla aseguradoras)
+     *  - ramo_ids: csv "1,2,3" → solo polizas con ese ramo_id
+     *  - exclude_ramo_ids: csv "1,2"
+     *  - estado_poliza: csv "ACTIVA,VENCIDA" → solo polizas con esos estados
+     *  - exclude_estado_poliza: csv "CANCELADA,ANULADA"
+     *  - forma_pago: 'contado' | 'fraccionado' | 'financiado' | 'credito'
+     *  - fecha_desde / fecha_hasta: YYYY-MM-DD (sobre fecha_limite_pago)
+     *  - estado: estado_cartera específico
+     *  - columnas: csv de IDs de columna (si vacío, usa default)
+     */
+    public function exportar(Request $request)
+    {
+        $brokerId = $this->resolveBrokerId($request);
+        if (!$brokerId) {
+            return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
+        }
+
+        $today = Carbon::today();
+        $q = DB::table('cartera_items')->where('broker_id', $brokerId);
+
+        // Search
+        if ($search = trim((string) $request->query('search', ''))) {
+            $like = '%' . $search . '%';
+            $q->where(function ($w) use ($like) {
+                $w->where('cliente_nombre', 'like', $like)
+                  ->orWhere('cliente_documento', 'like', $like)
+                  ->orWhere('poliza_numero', 'like', $like)
+                  ->orWhere('aseguradora_nombre', 'like', $like)
+                  ->orWhere('ramo_principal', 'like', $like);
+            });
+        }
+
+        // Aseguradora (nombre directo o resuelto desde id)
+        if ($request->filled('aseguradora')) {
+            $q->where('aseguradora_nombre', $request->aseguradora);
+        }
+        if ($request->filled('aseguradora_id')) {
+            $aseg = DB::table('aseguradoras')->where('id', $request->aseguradora_id)->value('nombre');
+            if ($aseg) $q->where('aseguradora_nombre', $aseg);
+        }
+
+        // Ramos: incluir o excluir (mediante poliza_id → polizas.ramo_id)
+        if ($request->filled('ramo_ids')) {
+            $ids = array_filter(array_map('trim', explode(',', (string) $request->ramo_ids)));
+            if (!empty($ids)) {
+                $polizaIds = DB::table('polizas')
+                    ->where('broker_id', $brokerId)
+                    ->whereIn('ramo_id', $ids)
+                    ->pluck('id');
+                $q->whereIn('poliza_id', $polizaIds);
+            }
+        }
+        if ($request->filled('exclude_ramo_ids')) {
+            $ids = array_filter(array_map('trim', explode(',', (string) $request->exclude_ramo_ids)));
+            if (!empty($ids)) {
+                $excludePolizaIds = DB::table('polizas')
+                    ->where('broker_id', $brokerId)
+                    ->whereIn('ramo_id', $ids)
+                    ->pluck('id');
+                $q->where(function ($w) use ($excludePolizaIds) {
+                    $w->whereNotIn('poliza_id', $excludePolizaIds)->orWhereNull('poliza_id');
+                });
+            }
+        }
+
+        // Estado de póliza: incluir o excluir (mediante poliza_id → polizas.status).
+        // La columna real es `status` con valores en inglés/minúscula
+        // (active, expired, cancelled, not_renewed, accrued, renewed, quoted).
+        if ($request->filled('estado_poliza')) {
+            $estados = array_filter(array_map('trim', explode(',', (string) $request->estado_poliza)));
+            if (!empty($estados)) {
+                $polizaIds = DB::table('polizas')
+                    ->where('broker_id', $brokerId)
+                    ->whereIn('status', $estados)
+                    ->pluck('id');
+                $q->whereIn('poliza_id', $polizaIds);
+            }
+        }
+        if ($request->filled('exclude_estado_poliza')) {
+            $estados = array_filter(array_map('trim', explode(',', (string) $request->exclude_estado_poliza)));
+            if (!empty($estados)) {
+                $excludePolizaIds = DB::table('polizas')
+                    ->where('broker_id', $brokerId)
+                    ->whereIn('status', $estados)
+                    ->pluck('id');
+                $q->where(function ($w) use ($excludePolizaIds) {
+                    $w->whereNotIn('poliza_id', $excludePolizaIds)->orWhereNull('poliza_id');
+                });
+            }
+        }
+
+        // Forma de pago (case-insensitive)
+        if ($request->filled('forma_pago')) {
+            $fp = strtolower(trim((string) $request->forma_pago));
+            $q->whereRaw('LOWER(forma_pago) = ?', [$fp]);
+        }
+
+        // Estado de cartera
+        if ($request->filled('estado')) {
+            $q->where('estado_cartera', $request->estado);
+        }
+
+        // Rango de fechas sobre fecha_limite_pago
+        if ($request->filled('fecha_desde')) {
+            $q->whereDate('fecha_limite_pago', '>=', $request->fecha_desde);
+        }
+        if ($request->filled('fecha_hasta')) {
+            $q->whereDate('fecha_limite_pago', '<=', $request->fecha_hasta);
+        }
+
+        // Group/tab — replica la lógica de timeline()
+        $group = $request->query('group');
+
+        // Si no se especifica grupo (o es "all"), por defecto = pendientes activos
+        // (igual que el tab "Todos" del UI: vencidas + hoy + proximos_7/30 + sin_fecha)
+        // Excluye pagadas, anuladas, anticipos, pago directo
+        if (!$group || $group === 'all') {
+            $q->where('recaudado_en_oficina', false)
+              ->where('recaudado_aseguradora', false)
+              ->where('recibo_pago_directo', false)
+              ->where('es_anticipo', false)
+              ->where('recibo_anulado', false);
+        }
+
+        if ($group && $group !== 'all') {
+            switch ($group) {
+                case 'vencidas':
+                    $q->where('recaudado_en_oficina', false)->where('recaudado_aseguradora', false)
+                      ->where('recibo_pago_directo', false)->where('es_anticipo', false)
+                      ->where('recibo_anulado', false)
+                      ->whereNotNull('fecha_limite_pago')
+                      ->whereDate('fecha_limite_pago', '<', $today);
+                    break;
+                case 'hoy':
+                    $q->where('recaudado_en_oficina', false)->where('recaudado_aseguradora', false)
+                      ->where('recibo_pago_directo', false)->where('es_anticipo', false)
+                      ->where('recibo_anulado', false)
+                      ->whereDate('fecha_limite_pago', $today);
+                    break;
+                case 'proximos_7':
+                    $q->where('recaudado_en_oficina', false)->where('recaudado_aseguradora', false)
+                      ->where('recibo_pago_directo', false)->where('es_anticipo', false)
+                      ->where('recibo_anulado', false)
+                      ->whereDate('fecha_limite_pago', '>', $today)
+                      ->whereDate('fecha_limite_pago', '<=', $today->copy()->addDays(7));
+                    break;
+                case 'proximos_30':
+                    $q->where('recaudado_en_oficina', false)->where('recaudado_aseguradora', false)
+                      ->where('recibo_pago_directo', false)->where('es_anticipo', false)
+                      ->where('recibo_anulado', false)
+                      ->whereDate('fecha_limite_pago', '>', $today->copy()->addDays(7))
+                      ->whereDate('fecha_limite_pago', '<=', $today->copy()->addDays(30));
+                    break;
+                case 'sin_fecha':
+                    $q->where('recaudado_en_oficina', false)->where('recaudado_aseguradora', false)
+                      ->where('recibo_pago_directo', false)->where('es_anticipo', false)
+                      ->where('recibo_anulado', false)
+                      ->whereNull('fecha_limite_pago');
+                    break;
+                case 'por_pagar_aseguradora':
+                    $q->where('recaudado_en_oficina', true)->where('recaudado_aseguradora', false)
+                      ->where('recibo_pago_directo', false)->where('recibo_anulado', false);
+                    break;
+                case 'comision_por_cobrar':
+                    $q->where('recaudado_aseguradora', true)->where('comisionada', false)
+                      ->where('recibo_anulado', false);
+                    break;
+                case 'cerradas':
+                    $q->where('comisionada', true)->where('recibo_anulado', false)
+                      ->whereDate('fecha_comisionada', '>=', $today->copy()->subDays(30));
+                    break;
+            }
+        }
+
+        // Definición de columnas disponibles
+        $allColumns = [
+            'poliza_numero'              => ['header' => 'Número Póliza',           'col' => 'poliza_numero'],
+            'numero_pago'                => ['header' => 'Cuota',                   'col' => 'numero_pago'],
+            'cliente_nombre'             => ['header' => 'Cliente',                 'col' => 'cliente_nombre'],
+            'cliente_documento'          => ['header' => 'Documento',               'col' => 'cliente_documento'],
+            'aseguradora_nombre'         => ['header' => 'Aseguradora',             'col' => 'aseguradora_nombre'],
+            'ramo_principal'             => ['header' => 'Ramo',                    'col' => 'ramo_principal'],
+            'subramo'                    => ['header' => 'Subramo',                 'col' => 'subramo'],
+            'forma_pago'                 => ['header' => 'Forma de Pago',           'col' => 'forma_pago'],
+            'riesgo'                     => ['header' => 'Riesgo',                  'col' => 'riesgo'],
+            // 'placas' es virtual: se llena por lookup a automoviles.poliza_id
+            'placas'                     => ['header' => 'Placas',                  'col' => 'placas',                     'virtual' => true],
+            'vendedor_nombre'            => ['header' => 'Vendedor',                'col' => 'vendedor_nombre'],
+            'prima_total_pago'           => ['header' => 'Prima Cuota',             'col' => 'prima_total_pago',           'format' => 'number'],
+            'valor_neto_a_pagar'         => ['header' => 'Valor Neto a Pagar',      'col' => 'valor_neto_a_pagar',         'format' => 'number'],
+            'saldo_pendiente_oficina'    => ['header' => 'Saldo Pendiente Oficina', 'col' => 'saldo_pendiente_oficina',    'format' => 'number'],
+            'saldo_pendiente_aseguradora'=> ['header' => 'Saldo Pendiente Aseg.',   'col' => 'saldo_pendiente_aseguradora','format' => 'number'],
+            'valor_recaudado_oficina'    => ['header' => 'Recaudado Oficina',       'col' => 'valor_recaudado_oficina',    'format' => 'number'],
+            'valor_pagado_aseguradora'   => ['header' => 'Pagado Aseguradora',      'col' => 'valor_pagado_aseguradora',   'format' => 'number'],
+            'comision_a_recibir'         => ['header' => 'Comisión a Recibir',      'col' => 'comision_a_recibir',         'format' => 'number'],
+            'comision_recibida'          => ['header' => 'Comisión Recibida',       'col' => 'comision_recibida',          'format' => 'number'],
+            'fecha_limite_pago'          => ['header' => 'Fecha Límite Pago',       'col' => 'fecha_limite_pago'],
+            'fecha_recaudado_oficina'    => ['header' => 'Fecha Recaudo Oficina',   'col' => 'fecha_recaudado_oficina'],
+            'fecha_pago_aseguradora'     => ['header' => 'Fecha Pago Aseguradora',  'col' => 'fecha_pago_aseguradora'],
+            'fecha_comisionada'          => ['header' => 'Fecha Comisión Cobrada',  'col' => 'fecha_comisionada'],
+            'estado_cartera'             => ['header' => 'Estado Cartera',          'col' => 'estado_cartera'],
+            'sede'                       => ['header' => 'Sede',                    'col' => 'sede'],
+        ];
+
+        $defaultColumns = [
+            'poliza_numero', 'numero_pago', 'cliente_nombre', 'cliente_documento',
+            'aseguradora_nombre', 'ramo_principal', 'forma_pago',
+            'prima_total_pago', 'saldo_pendiente_oficina', 'saldo_pendiente_aseguradora',
+            'comision_a_recibir', 'fecha_limite_pago', 'estado_cartera',
+        ];
+
+        $columnasParam = $request->query('columnas', '');
+        $columnas = $columnasParam ? array_values(array_filter(explode(',', $columnasParam), fn($c) => isset($allColumns[$c]))) : $defaultColumns;
+        if (empty($columnas)) $columnas = $defaultColumns;
+
+        // SELECT solo las columnas reales (no virtuales)
+        $select = array_unique(array_map(
+            fn($c) => $allColumns[$c]['col'],
+            array_filter($columnas, fn($c) => empty($allColumns[$c]['virtual']))
+        ));
+        // poliza_id siempre necesario si se pidió 'placas' (para el lookup)
+        $needsPlacas = in_array('placas', $columnas, true);
+        if ($needsPlacas && !in_array('poliza_id', $select, true)) {
+            $select[] = 'poliza_id';
+        }
+        $q->orderBy('fecha_limite_pago', 'asc')->orderBy('id');
+
+        $filename = 'cartera_' . date('Y-m-d_H-i-s') . '.csv';
+
+        return response()->stream(function () use ($q, $columnas, $allColumns, $select, $needsPlacas) {
+            set_time_limit(0);
+            if (ob_get_level()) ob_end_clean();
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+
+            $headers = array_map(fn($c) => $allColumns[$c]['header'], $columnas);
+            fputcsv($handle, $headers, ';');
+            fflush($handle);
+
+            $q->select($select)->chunk(500, function ($rows) use ($handle, $columnas, $allColumns, $needsPlacas) {
+                // Lookup de placas por poliza_id si se pidió la columna virtual
+                $placasByPoliza = [];
+                if ($needsPlacas) {
+                    $polizaIds = array_values(array_unique(array_filter(array_map(fn($r) => $r->poliza_id ?? null, $rows->all()))));
+                    if (!empty($polizaIds)) {
+                        $rowsPlacas = DB::table('automoviles')
+                            ->whereIn('poliza_id', $polizaIds)
+                            ->whereNotNull('placa')
+                            ->select('poliza_id', DB::raw('GROUP_CONCAT(DISTINCT placa ORDER BY placa SEPARATOR ", ") as placas'))
+                            ->groupBy('poliza_id')
+                            ->get();
+                        foreach ($rowsPlacas as $rp) {
+                            $placasByPoliza[$rp->poliza_id] = $rp->placas;
+                        }
+                    }
+                }
+
+                foreach ($rows as $row) {
+                    $line = [];
+                    foreach ($columnas as $c) {
+                        if ($c === 'placas') {
+                            $line[] = $placasByPoliza[$row->poliza_id ?? null] ?? '';
+                            continue;
+                        }
+                        $col = $allColumns[$c]['col'];
+                        $val = $row->{$col} ?? '';
+                        if (isset($allColumns[$c]['format']) && $allColumns[$c]['format'] === 'number') {
+                            $line[] = number_format((float) $val, 2, ',', '');
+                        } else {
+                            $line[] = $val;
+                        }
+                    }
+                    fputcsv($handle, $line, ';');
+                }
+                fflush($handle);
+                flush();
+            });
+
+            fclose($handle);
+        }, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
         ]);
     }
 }

@@ -160,6 +160,11 @@ class RecibosComisionesController extends Controller
      */
     public function sync(Request $request, InsurerSyncService $svc)
     {
+        // Sincronización HTTP-síncrona: SURA + HDI en serie pueden tomar >60s.
+        // PHP CLI ignora `php -d max_execution_time=N`, así que lo desactivamos aquí.
+        @set_time_limit(0);
+        @ini_set('max_execution_time', '0');
+
         $brokerId = $this->resolveBrokerId($request);
         $anio = (string) $request->input('anio', date('Y'));
         $mes = str_pad((string) $request->input('mes', date('m')), 2, '0', STR_PAD_LEFT);

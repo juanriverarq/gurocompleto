@@ -828,6 +828,11 @@ class LiquidacionesVendedoresController extends Controller
                     $comisionBruta = (float) $detalle->comision_bruta;
                     $ivaComision = $comisionBruta * ($vendedor->porcentaje_iva / 100);
 
+                    // ReteIVA = IVA × % retención IVA del vendedor (NO es el monto del IVA).
+                    // El campo $detalle->monto_iva guarda el IVA bruto, no el reteIVA, así que
+                    // lo recalculamos para que la planilla muestre el valor correcto.
+                    $reteIvaCalc = $ivaComision * ((float) ($vendedor->porcentaje_retencion_iva ?? 0) / 100);
+
                     // Resolver nombre del cliente en tiempo real si está vacío
                     $clienteNombre = $detalle->cliente_nombre;
                     if (empty(trim($clienteNombre ?? ''))) {
@@ -853,7 +858,7 @@ class LiquidacionesVendedoresController extends Controller
                         'comision_bruta' => $comisionBruta,
                         'iva_comision' => $ivaComision,
                         'retencion_fuente' => (float) $detalle->monto_retencion,
-                        'retencion_iva' => (float) $detalle->monto_iva,
+                        'retencion_iva' => $reteIvaCalc,
                         'retencion_ica' => (float) $detalle->monto_retencion_ica,
                         'comision_neta' => (float) $detalle->comision_neta,
                     ];
@@ -863,7 +868,7 @@ class LiquidacionesVendedoresController extends Controller
                     $totales['comision_bruta_total'] += $comisionBruta;
                     $totales['iva_comision_total'] += $ivaComision;
                     $totales['retencion_total'] += (float) $detalle->monto_retencion;
-                    $totales['reteiva_total'] += (float) $detalle->monto_iva;
+                    $totales['reteiva_total'] += $reteIvaCalc;
                     $totales['retencion_ica_total'] += (float) $detalle->monto_retencion_ica;
                     $totales['comision_neta_total'] += (float) $detalle->comision_neta;
                 }

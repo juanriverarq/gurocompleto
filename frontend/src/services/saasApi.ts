@@ -802,6 +802,13 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
+  async getAutomovilesTabCounts(): Promise<ApiResponse<{ todos: number; proximos: number; vencidos: number; sin_datos_runt: number; no_sincronizados: number }>> {
+    const response = await fetch(`${API_BASE_URL}/saas/automoviles/tab-counts`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
   async createAutomovil(data: {
     placa: string;
     marca?: string;
@@ -949,6 +956,32 @@ class SaasApiService {
       }
       onError?.(e?.message || 'Error de conexión');
     }
+  }
+
+  /**
+   * Sync RUNT masivo en modo JSON (no streaming). Procesa una tanda corta
+   * sincrónicamente y retorna los contadores. Funciona detrás de Apache /
+   * Cloudflare donde SSE se buffereaba. El consumidor encadena batches.
+   */
+  async syncRuntMasivoJson(
+    opts: { onlyPending?: boolean; limit?: number; signal?: AbortSignal } = {},
+  ): Promise<{ success: boolean; total: number; success_count: number; failed: number; skipped: number; cancelled?: boolean; items?: any[] }>
+  {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/saas/automoviles/sync-runt-json`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        only_pending: opts.onlyPending !== false,
+        limit: opts.limit ?? 10,
+      }),
+      signal: opts.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+    return await response.json();
   }
 
   async getAutomovilInsuredValue(params: {
@@ -1172,6 +1205,7 @@ class SaasApiService {
 
   async getCarteraAseguradoras(params: {
     page?: number; per_page?: number; tab?: string; search?: string; insurer?: string;
+    link_filter?: 'all' | 'linked' | 'unlinked';
   }): Promise<ApiResponse<any>> {
     const searchParams = new URLSearchParams();
     if (params.page) searchParams.set('page', String(params.page));
@@ -1179,16 +1213,19 @@ class SaasApiService {
     if (params.tab) searchParams.set('tab', params.tab);
     if (params.search) searchParams.set('search', params.search);
     if (params.insurer) searchParams.set('insurer', params.insurer);
+    if (params.link_filter && params.link_filter !== 'all') searchParams.set('link_filter', params.link_filter);
     const response = await fetch(`${API_BASE_URL}/saas/cartera-aseguradoras?${searchParams}`, {
       headers: await this.getAuthHeaders(),
     });
     return this.handleResponse(response);
   }
 
-  async getCarteraAseguradorasStats(insurer?: string): Promise<ApiResponse<any>> {
-    const url = insurer
-      ? `${API_BASE_URL}/saas/cartera-aseguradoras/stats?insurer=${insurer}`
-      : `${API_BASE_URL}/saas/cartera-aseguradoras/stats`;
+  async getCarteraAseguradorasStats(insurer?: string, linkFilter?: 'all' | 'linked' | 'unlinked'): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams();
+    if (insurer) params.set('insurer', insurer);
+    if (linkFilter && linkFilter !== 'all') params.set('link_filter', linkFilter);
+    const qs = params.toString();
+    const url = `${API_BASE_URL}/saas/cartera-aseguradoras/stats${qs ? `?${qs}` : ''}`;
     const response = await fetch(url, { headers: await this.getAuthHeaders() });
     return this.handleResponse(response);
   }
@@ -1243,6 +1280,42 @@ class SaasApiService {
       body: JSON.stringify(params),
     });
     return this.handleResponse(response);
+  }
+
+  // ===== PAPELERA (registros soft-deleted) =====
+  async getPapeleraEntidades(): Promise<ApiResponse<Array<{ key: string; label: string; count: number }>>> {
+    const r = await fetch(`${API_BASE_URL}/saas/papelera/entidades`, { headers: await this.getAuthHeaders() });
+    return this.handleResponse(r);
+  }
+  async getPapeleraItems(entidad: string, params: { page?: number; per_page?: number; search?: string } = {}): Promise<ApiResponse<{ items: any[]; pagination: any; columns: Record<string, string> }>> {
+    const usp = new URLSearchParams();
+    if (params.page) usp.set('page', String(params.page));
+    if (params.per_page) usp.set('per_page', String(params.per_page));
+    if (params.search) usp.set('search', params.search);
+    const r = await fetch(`${API_BASE_URL}/saas/papelera/${entidad}?${usp}`, { headers: await this.getAuthHeaders() });
+    return this.handleResponse(r);
+  }
+  async restaurarPapelera(entidad: string, ids: number[]): Promise<ApiResponse<{ restored: number }>> {
+    const r = await fetch(`${API_BASE_URL}/saas/papelera/${entidad}/restaurar`, {
+      method: 'POST',
+      headers: { ...(await this.getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    return this.handleResponse(r);
+  }
+  async eliminarDefinitivoPapelera(entidad: string, ids: number[]): Promise<ApiResponse<{ deleted: number }>> {
+    const r = await fetch(`${API_BASE_URL}/saas/papelera/${entidad}/eliminar`, {
+      method: 'POST',
+      headers: { ...(await this.getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    return this.handleResponse(r);
+  }
+  async exportarPapelera(entidad: string, search?: string): Promise<Blob> {
+    const usp = new URLSearchParams();
+    if (search) usp.set('search', search);
+    const r = await fetch(`${API_BASE_URL}/saas/papelera/${entidad}/exportar?${usp}`, { headers: await this.getAuthHeaders() });
+    return await r.blob();
   }
 
   // ===== BÚSQUEDA GLOBAL (Top Bar) =====

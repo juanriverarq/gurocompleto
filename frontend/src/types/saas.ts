@@ -274,6 +274,10 @@ export interface ClienteFilters {
   per_page?: number;
   sort_field?: string;
   sort_direction?: 'asc' | 'desc';
+  // Papelera: 'only' devuelve únicamente clientes soft-deleted
+  trashed?: 'only' | 'none';
+  // Otros campos sueltos que el builder de Clientes.tsx pasa al API
+  [key: string]: any;
 }
 
 export interface UsuarioFilters {

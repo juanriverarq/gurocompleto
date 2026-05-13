@@ -62,34 +62,48 @@ class RefreshPolizaPaymentDates extends Command
                 $polizaId = $row->poliza_id;
                 $procesadas++;
 
-                $proxima = DB::table('cartera_items')
-                    ->where('poliza_id', $polizaId)
-                    ->where('recaudado_en_oficina', false)
-                    ->where('recaudado_aseguradora', false)
-                    ->where('recibo_pago_directo', false)
-                    ->where('es_anticipo', false)
-                    ->where('recibo_anulado', false)
+                $pendientesBase = function () use ($polizaId) {
+                    return DB::table('cartera_items')
+                        ->where('poliza_id', $polizaId)
+                        ->where('recaudado_en_oficina', false)
+                        ->where('recaudado_aseguradora', false)
+                        ->where('recibo_pago_directo', false)
+                        ->where('es_anticipo', false)
+                        ->where('recibo_anulado', false);
+                };
+
+                $proxima = (clone $pendientesBase())
                     ->whereNotNull('fecha_limite_pago')
                     ->min('fecha_limite_pago');
 
-                $current = DB::table('polizas')
-                    ->where('id', $polizaId)
-                    ->value('payment_due_date');
+                $tieneItems = DB::table('cartera_items')->where('poliza_id', $polizaId)->exists();
+                $tienePendientes = $pendientesBase()->exists();
 
-                $nuevoEstado = null;
-                if ($proxima === null) {
-                    $nuevoEstado = 'paid';
-                } else {
-                    $nuevoEstado = strtotime($proxima) < strtotime(date('Y-m-d')) ? 'overdue' : 'pending';
+                $polizaActual = DB::table('polizas')->where('id', $polizaId)->first();
+
+                // Calcular nuevos valores
+                $nuevoEstadoPago = null;
+                if (!$tienePendientes && $tieneItems) $nuevoEstadoPago = 'paid';
+                elseif ($proxima !== null) $nuevoEstadoPago = strtotime($proxima) < strtotime(date('Y-m-d')) ? 'overdue' : 'pending';
+
+                $nuevoEstadoCartera = $polizaActual->estado_cartera ?? null;
+                if ($tieneItems) {
+                    if (!$tienePendientes) {
+                        $nuevoEstadoCartera = 'Pagado';
+                    } else {
+                        $hayVencidas = (clone $pendientesBase())
+                            ->whereNotNull('fecha_limite_pago')
+                            ->whereDate('fecha_limite_pago', '<', date('Y-m-d'))
+                            ->exists();
+                        $nuevoEstadoCartera = $hayVencidas ? 'En mora' : 'Sin pagos Asignados';
+                    }
                 }
-
-                $currentEstado = DB::table('polizas')->where('id', $polizaId)->value('payment_status');
 
                 $needsUpdate = false;
                 $payload = [];
 
-                // Comparar fechas (normalizar a Y-m-d)
-                $currentNorm = $current ? substr($current, 0, 10) : null;
+                // Fechas
+                $currentNorm = $polizaActual->payment_due_date ? substr($polizaActual->payment_due_date, 0, 10) : null;
                 $proximaNorm = $proxima ? substr($proxima, 0, 10) : null;
                 if ($currentNorm !== $proximaNorm) {
                     $payload['payment_due_date'] = $proxima;
@@ -97,9 +111,16 @@ class RefreshPolizaPaymentDates extends Command
                     $needsUpdate = true;
                 }
 
-                if ($currentEstado !== $nuevoEstado) {
-                    $payload['payment_status'] = $nuevoEstado;
+                // Estado pago
+                if (($polizaActual->payment_status ?? null) !== $nuevoEstadoPago && $nuevoEstadoPago !== null) {
+                    $payload['payment_status'] = $nuevoEstadoPago;
                     $cambiosEstado++;
+                    $needsUpdate = true;
+                }
+
+                // Estado cartera
+                if (($polizaActual->estado_cartera ?? null) !== $nuevoEstadoCartera && $nuevoEstadoCartera !== null) {
+                    $payload['estado_cartera'] = $nuevoEstadoCartera;
                     $needsUpdate = true;
                 }
 

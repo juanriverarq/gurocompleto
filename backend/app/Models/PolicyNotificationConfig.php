@@ -220,26 +220,33 @@ class PolicyNotificationConfig extends Model
      */
     public function getDaysBeforeForType(string $type): array
     {
-        $multipleField = $type . '_days_before_multiple';
-        $singleField = $type . '_days_before';
-        
+        // Mapeo del notification_type al prefijo de columna en la BD.
+        // expiration → expiration_*, renewal → renewal_*, payment_due → payment_*
+        $columnPrefix = match ($type) {
+            'payment_due' => 'payment',
+            default => $type,
+        };
+
+        $multipleField = $columnPrefix . '_days_before_multiple';
+        $singleField = $columnPrefix . '_days_before';
+
         // Preferir el campo múltiple si existe
         if (!empty($this->$multipleField)) {
             return $this->$multipleField;
         }
-        
+
         // Fallback al campo único
         if (!empty($this->$singleField)) {
             return [$this->$singleField];
         }
-        
+
         // Valores por defecto
         $defaults = [
             'expiration' => [30],
             'renewal' => [45],
-            'payment' => [7],
+            'payment_due' => [7],
         ];
-        
+
         return $defaults[$type] ?? [30];
     }
 
@@ -287,7 +294,8 @@ class PolicyNotificationConfig extends Model
             '{{end_date}}' => $policy->end_date ? $policy->end_date->format('d/m/Y') : 'N/A',
             '{{renewal_date}}' => $policy->renewal_date ? $policy->renewal_date->format('d/m/Y') : 'N/A',
             '{{payment_due_date}}' => $policy->payment_due_date ? $policy->payment_due_date->format('d/m/Y') : 'N/A',
-            '{{premium_amount}}' => number_format($policy->premium_amount, 0, ',', '.'),
+            '{{payment_cuota_number}}' => $policy->notification_cuota_numero ?? '',
+            '{{premium_amount}}' => number_format($policy->notification_cuota_amount ?? $policy->premium_amount, 0, ',', '.'),
             '{{total_amount}}' => number_format($policy->total_amount, 0, ',', '.'),
             '{{riesgo}}' => $policy->description ?? '-',
             '{{days_until_expiration}}' => $policy->getDaysUntilExpiration(),
@@ -468,7 +476,10 @@ class PolicyNotificationConfig extends Model
                   ->where('created_at', '>=', now()->startOfDay());
             });
 
-            $policies = $query->limit(30)->get();
+            // Antes: limit(30) hardcoded → "Próximas notificaciones: 30" siempre
+            // que el broker tuviera más de 30 vencimientos en rango.
+            // Ahora respetamos el $limit del caller (con un techo de seguridad).
+            $policies = $query->limit(max($limit, 50))->get();
             
             foreach ($policies as $policy) {
                 $client = $policy->client;
@@ -570,6 +581,22 @@ class PolicyNotificationConfig extends Model
      */
     public function getStats(): array
     {
+        // Conteos reales desde policy_notification_logs (broker-scoped).
+        // Antes se usaban total_sent/total_failed (contadores en la propia config)
+        // que drifteaban: los re-envíos manuales no los incrementaban y
+        // total_skipped ni siquiera existía como columna → "Omitidas: 0" siempre.
+        $totals = PolicyNotificationLog::where('broker_id', $this->broker_id)
+            ->selectRaw('
+                SUM(CASE WHEN status = "sent" THEN 1 ELSE 0 END) as sent,
+                SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN status = "skipped" THEN 1 ELSE 0 END) as skipped
+            ')
+            ->first();
+
+        $totalSent    = (int)($totals->sent ?? 0);
+        $totalFailed  = (int)($totals->failed ?? 0);
+        $totalSkipped = (int)($totals->skipped ?? 0);
+
         $recentLogs = $this->logs()
             ->where('created_at', '>=', now()->subDays(30))
             ->selectRaw('
@@ -587,16 +614,17 @@ class PolicyNotificationConfig extends Model
         }
 
         return [
-            'total_sent' => $this->total_sent ?? 0,
-            'total_failed' => $this->total_failed ?? 0,
+            'total_sent' => $totalSent,
+            'total_failed' => $totalFailed,
+            'total_skipped' => $totalSkipped,
             'last_30_days' => [
                 'total' => $recentLogs->total ?? 0,
                 'sent' => $recentLogs->sent ?? 0,
                 'failed' => $recentLogs->failed ?? 0,
                 'skipped' => $recentLogs->skipped ?? 0,
             ],
-            'success_rate' => ($this->total_sent ?? 0) > 0 
-                ? round(($this->total_sent / ($this->total_sent + ($this->total_failed ?? 0))) * 100, 2)
+            'success_rate' => $totalSent > 0
+                ? round(($totalSent / ($totalSent + $totalFailed)) * 100, 2)
                 : 0,
             // Última ejecución
             'last_execution' => $this->last_execution_at?->diffForHumans() ?? 'Nunca',

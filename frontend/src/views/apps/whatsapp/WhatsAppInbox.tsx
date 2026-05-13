@@ -42,7 +42,8 @@ const WhatsAppInbox: React.FC = () => {
     loadConversations();
   }, [filter, searchTerm]);
 
-  // Polling: refrescar conversaciones y mensajes cada 5s
+  // Polling: refrescar conversaciones y mensajes cada 10s (era 5s).
+  // Los mensajes en vivo llegan por WebSocket; este es solo respaldo.
   useEffect(() => {
     if (!hasConnections) return;
     const interval = setInterval(() => {
@@ -50,7 +51,7 @@ const WhatsAppInbox: React.FC = () => {
       if (selectedConversation) {
         loadMessages(selectedConversation.id);
       }
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [hasConnections, selectedConversation, filter, searchTerm]);
 

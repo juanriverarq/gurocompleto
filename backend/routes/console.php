@@ -274,13 +274,15 @@ Schedule::command('insurer-sync:daily-cartera')
 
 /**
  * Drain worker para la cola `default`.
- * Arranca cada 10 min, procesa todos los jobs pendientes y sale
- * (`--stop-when-empty`). Esto evita tener que mantener un systemd/supervisor
- * dedicado: el cron de schedule:run basta para procesar la cola.
+ * Arranca cada minuto, procesa todos los jobs pendientes y sale
+ * (`--stop-when-empty`). `withoutOverlapping()` evita que se dispare un nuevo
+ * worker si el anterior aún está corriendo (jobs como /sura/cartera tardan
+ * varios minutos). Esto da feedback rápido en UI (conectar aseguradora,
+ * disparar sync, etc.) sin necesidad de systemd/supervisor dedicado.
  * Timeout 600s = espacio para /sura/cartera (Playwright + SAML).
  */
 Schedule::command('queue:work --queue=default --stop-when-empty --timeout=600 --tries=1')
-    ->everyTenMinutes()
-    ->withoutOverlapping()
+    ->everyMinute()
+    ->withoutOverlapping(15)   // expiración del lock = 15 min (mayor que timeout del job)
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/queue-worker.log'));

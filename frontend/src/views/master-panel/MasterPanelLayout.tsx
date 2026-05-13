@@ -28,6 +28,7 @@ const MasterPanelLayout: React.FC = () => {
     { path: '/master-panel/dashboard', icon: 'solar:chart-2-bold-duotone', label: 'Dashboard', tooltip: 'Dashboard' },
     { path: '/master-panel/brokers', icon: 'solar:buildings-2-bold-duotone', label: 'Brokers', tooltip: 'Gestión de Brokers' },
     { path: '/master-panel/usuarios', icon: 'solar:users-group-two-rounded-bold-duotone', label: 'Usuarios', tooltip: 'Usuarios Globales' },
+    { path: '/master-panel/soporte', icon: 'solar:chat-round-call-bold-duotone', label: 'Soporte', tooltip: 'Centro de Soporte' },
     { path: '/master-panel/facturacion', icon: 'solar:bill-list-bold-duotone', label: 'Facturación', tooltip: 'Facturación y Pagos' },
     { path: '/master-panel/finanzas', icon: 'solar:wallet-bold-duotone', label: 'Finanzas', tooltip: 'Finanzas y Wallets' },
     { path: '/master-panel/llamadas', icon: 'solar:phone-calling-bold-duotone', label: 'Voz AI', tooltip: 'Llamadas de Voz AI' },

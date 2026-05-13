@@ -49,6 +49,12 @@ export interface AutomovilNotificationLog {
   sent_at?: string;
   status: 'pending' | 'sent' | 'failed' | 'skipped';
   error_message?: string;
+  whatsapp_message_id?: string;
+  delivered_at?: string | null;
+  read_at?: string | null;
+  delivery_failed_at?: string | null;
+  delivery_error?: string | null;
+  failed_at?: string | null;
   created_at: string;
   updated_at: string;
   automovil?: {
@@ -182,10 +188,11 @@ class AutomovilNotificationService {
     });
   }
 
-  async getWhatsAppTemplates(): Promise<any[]> {
+  async getWhatsAppTemplates(instanceId?: number | null): Promise<any[]> {
     try {
-      const response = await api.get('/saas/automovil-notifications/templates');
-      return response.data.data;
+      const params = instanceId ? { instance_id: instanceId } : {};
+      const response = await api.get('/saas/automovil-notifications/whatsapp-templates', { params });
+      return response.data.data || [];
     } catch (error) {
       console.error('Error getting WhatsApp templates:', error);
       return [];

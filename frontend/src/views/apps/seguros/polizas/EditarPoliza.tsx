@@ -65,6 +65,7 @@ const EditarPoliza: React.FC = () => {
     }
   };
 
+
   // Cargar póliza
   const loadPoliza = async () => {
     if (!id) {

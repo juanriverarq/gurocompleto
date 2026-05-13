@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 's
 import { useNavigate } from 'react-router-dom';
 import { Icon as IconifyIcon } from '@iconify/react';
 import HeroButton from 'src/components/HeroButton';
+import TableActionMenu, { TableMenuItem } from 'src/components/TableActionMenu';
 import { commercialTasksService, TASK_TYPES, TASK_STATUSES, TASK_PRIORITIES } from 'src/services/commercialTasksService';
 
 const ListaTareas: React.FC = () => {
@@ -97,7 +98,7 @@ const ListaTareas: React.FC = () => {
       </Card>
 
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-visible">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -140,14 +141,16 @@ const ListaTareas: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{TASK_PRIORITIES[task.priority as keyof typeof TASK_PRIORITIES]}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{commercialTasksService.formatDate(task.due_date)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
-                          <Button variant="outline" onClick={() => navigate(`/apps/saas/commercial-tasks/${task.id}`)}>
-                            <IconifyIcon icon="solar:eye-bold" className="w-4 h-4" />
-                          </Button>
-                          <Button variant="outline" onClick={() => navigate(`/apps/saas/commercial-tasks/${task.id}/editar`)}>
-                            <IconifyIcon icon="solar:pen-bold" className="w-4 h-4" />
-                          </Button>
-                        </div>
+                        <TableActionMenu>
+                          <TableMenuItem onClick={() => navigate(`/apps/saas/commercial-tasks/${task.id}`)}>
+                            <IconifyIcon icon="solar:eye-bold" height={18} />
+                            <span>Ver Detalles</span>
+                          </TableMenuItem>
+                          <TableMenuItem onClick={() => navigate(`/apps/saas/commercial-tasks/${task.id}/editar`)}>
+                            <IconifyIcon icon="solar:pen-new-square-bold-duotone" height={18} />
+                            <span>Editar</span>
+                          </TableMenuItem>
+                        </TableActionMenu>
                       </td>
                     </tr>
                   ))

@@ -106,6 +106,16 @@ export const carteraSimpleService = {
     return res.data;
   },
 
+  async actualizarCuotaPoliza(polizaId: number | string, itemId: number | string, payload: {
+    fecha_limite_pago?: string | null;
+    prima_total_pago?: number;
+    comision_a_recibir?: number;
+    numero_pago?: string | null;
+  }) {
+    const res = await api.put(`/saas/polizas/${polizaId}/cartera-items/${itemId}`, payload);
+    return res.data;
+  },
+
   async pagar(itemId: number, payload: PagarPayload) {
     const res = await api.post(`/saas/cartera-simple/cuota/${itemId}/pagar`, payload);
     return res.data;
@@ -129,6 +139,15 @@ export const carteraSimpleService = {
   async revertirPaso(itemId: number) {
     const res = await api.post(`/saas/cartera-simple/cuota/${itemId}/revertir-paso`);
     return res.data;
+  },
+
+  async exportar(filters: Record<string, any> = {}): Promise<Blob> {
+    const params: Record<string, string> = {};
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') params[k] = String(v);
+    });
+    const res = await api.get('/saas/cartera-simple/exportar', { params, responseType: 'blob' });
+    return res.data as Blob;
   },
 
   /**

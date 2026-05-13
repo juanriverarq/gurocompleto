@@ -290,6 +290,11 @@ class PolicyNotificationController extends Controller
                     'error_message' => $log->error_message,
                     'sent_at' => $log->sent_at,
                     'failed_at' => $log->failed_at,
+                    'delivered_at' => $log->delivered_at,
+                    'read_at' => $log->read_at,
+                    'delivery_failed_at' => $log->delivery_failed_at,
+                    'delivery_error' => $log->delivery_error,
+                    'whatsapp_message_id' => $log->whatsapp_message_id,
                     'created_at' => $log->created_at,
                     // Campos de la póliza
                     'policy_number' => $poliza?->policy_number ?? $poliza?->numero_poliza ?? '-',
@@ -653,18 +658,37 @@ class PolicyNotificationController extends Controller
                 $pending['renewal'] = $polizas->map(fn($p) => $transformPolicy($p, 'renewal', $p->renewal_date ?? $p->end_date))->toArray();
             }
 
-            // Pólizas con pago próximo
+            // Pólizas con pago próximo o vencido recientemente.
+            // Rango: [hoy - 30 días, hoy + payment_days_before] para incluir cuotas
+            // que ya vencieron y siguen pendientes de cobro (los filtros recaudado_*
+            // excluyen las que sí están pagadas).
+            $overdueWindow = 30;
             if ($config->notify_payment_due) {
+                $cuotasVencibles = \DB::table('cartera_items')
+                    ->where('broker_id', $brokerId)
+                    ->whereNotNull('poliza_id')
+                    ->whereNotNull('fecha_limite_pago')
+                    ->whereBetween('fecha_limite_pago', [
+                        now()->subDays($overdueWindow)->toDateString(),
+                        now()->addDays($config->payment_days_before)->toDateString()
+                    ])
+                    ->where('recaudado_en_oficina', false)
+                    ->where('recaudado_aseguradora', false)
+                    ->where('recibo_pago_directo', false)
+                    ->where('es_anticipo', false)
+                    ->where('recibo_anulado', false)
+                    ->orderBy('fecha_limite_pago')
+                    ->orderBy('id')
+                    ->get(['id', 'poliza_id', 'numero_pago', 'fecha_limite_pago', 'prima_total_pago', 'saldo_pendiente_oficina']);
+
+                $polizaIdsConCuotaPendiente = $cuotasVencibles->pluck('poliza_id')->unique()->values()->all();
+
                 $query = Poliza::forBroker($brokerId)
                     ->where(function($q) use ($activeStatuses) {
                         $q->whereIn('status', $activeStatuses)
                           ->orWhereIn(\DB::raw('LOWER(status)'), $activeStatuses);
                     })
-                    ->whereNotNull('payment_due_date')
-                    ->whereBetween('payment_due_date', [
-                        now(),
-                        now()->addDays($config->payment_days_before)
-                    ])
+                    ->whereIn('id', $polizaIdsConCuotaPendiente)
                     // Excluir pólizas marcadas como Pagado en Cartera e Impuestos
                     ->where(function($q) {
                         $q->whereNull('estado_cartera')
@@ -674,7 +698,16 @@ class PolicyNotificationController extends Controller
                 
                 $polizas = $applyExclusions($query)->limit(20)->get();
                 
-                $pending['payment_due'] = $polizas->map(fn($p) => $transformPolicy($p, 'payment_due', $p->payment_due_date))->toArray();
+                $pending['payment_due'] = $polizas->map(function($p) use ($transformPolicy, $cuotasVencibles) {
+                    $cuota = $cuotasVencibles->firstWhere('poliza_id', $p->id);
+                    if ($cuota) {
+                        $p->payment_due_date = \Carbon\Carbon::parse($cuota->fecha_limite_pago);
+                        $p->setAttribute('notification_cuota_id', $cuota->id);
+                        $p->setAttribute('notification_cuota_numero', $cuota->numero_pago);
+                        $p->setAttribute('notification_cuota_amount', (float) ($cuota->prima_total_pago ?? $cuota->saldo_pendiente_oficina ?? 0));
+                    }
+                    return $transformPolicy($p, 'payment_due', $p->payment_due_date);
+                })->toArray();
             }
 
             return response()->json([
@@ -1049,6 +1082,27 @@ class PolicyNotificationController extends Controller
                 $ramoName = $poliza->ramo ? ($poliza->ramo->nombre ?? '-') : ($poliza->product_name ?? '-');
                 $riesgo = $poliza->description ?? '-';
 
+                // Para payment_due: usar la próxima cuota pendiente desde cartera_items
+                // (misma fuente de verdad que el cron). Si la póliza no tiene cuota pendiente,
+                // abortamos el envío manual: no hay nada que recordar pagar.
+                if ($type === 'payment_due') {
+                    $cuotaPendiente = \DB::table('cartera_items')
+                        ->where('broker_id', $brokerId)
+                        ->where('poliza_id', $poliza->id)
+                        ->where('recaudado_en_oficina', false)
+                        ->where('recaudado_aseguradora', false)
+                        ->where('recibo_pago_directo', false)
+                        ->where('es_anticipo', false)
+                        ->where('recibo_anulado', false)
+                        ->whereNotNull('fecha_limite_pago')
+                        ->orderBy('fecha_limite_pago')
+                        ->first();
+                    if (!$cuotaPendiente) {
+                        return ['success' => false, 'error' => 'La póliza no tiene cuotas pendientes en cartera, no se envía notificación de pago.'];
+                    }
+                    $poliza->payment_due_date = \Carbon\Carbon::parse($cuotaPendiente->fecha_limite_pago);
+                }
+
                 $templateParams = match($type) {
                     'expiration' => [
                         $clientName,
@@ -1066,11 +1120,12 @@ class PolicyNotificationController extends Controller
                         $ramoName,
                         $riesgo,
                     ],
+                    // {{1}} nombre · {{2}} póliza · {{3}} compañía · {{4}} fecha pago (cuota pendiente) · {{5}} ramo · {{6}} riesgo
                     'payment_due' => [
                         $clientName,
                         $poliza->policy_number ?? '-',
+                        $poliza->insurance_company ?? '-',
                         $poliza->payment_due_date ? $poliza->payment_due_date->format('d/m/Y') : 'N/A',
-                        '$' . number_format($poliza->premium_amount ?? 0, 0, ',', '.'),
                         $ramoName,
                         $riesgo,
                     ],

@@ -393,7 +393,15 @@ const ClientSegmentManager: React.FC<ClientSegmentManagerProps> = ({
                           <Label className="text-xs">Campo</Label>
                           <select
                             value={filter.field}
-                            onChange={(e) => updateFilter(index, { field: e.target.value, operator: 'equals', value: '' })}
+                            onChange={(e) => {
+                              // Al cambiar el campo, seleccionar el primer operador válido para su tipo
+                              // (tags no tiene 'equals', así que hay que usar el default del tipo)
+                              const newField = e.target.value;
+                              const field = availableFields.find(f => f.key === newField);
+                              const ops = field ? clientSegmentService.getOperatorsForFieldType(field.type) : [];
+                              const defaultOp = (ops[0]?.value as any) || 'equals';
+                              updateFilter(index, { field: newField, operator: defaultOp, value: '' });
+                            }}
                             className="w-full p-2 border rounded text-sm"
                           >
                             <option value="">Seleccionar campo</option>
@@ -429,14 +437,58 @@ const ClientSegmentManager: React.FC<ClientSegmentManagerProps> = ({
                         {/* Valor */}
                         <div>
                           <Label className="text-xs">Valor</Label>
-                          {filter.operator !== 'is_empty' && filter.operator !== 'is_not_empty' && (
-                            <Input
-                              placeholder="Valor"
-                              value={filter.value}
-                              onChange={(e) => updateFilter(index, { value: e.target.value })}
-                              className="text-sm"
-                            />
-                          )}
+                          {filter.operator !== 'is_empty' && filter.operator !== 'is_not_empty' && (() => {
+                            const field = availableFields.find(f => f.key === filter.field);
+                            // Para campos select con opciones predefinidas, renderizar dropdown
+                            if (field?.type === 'select' && Array.isArray(field.options)) {
+                              return (
+                                <select
+                                  value={filter.value ?? ''}
+                                  onChange={(e) => updateFilter(index, { value: e.target.value })}
+                                  className="w-full p-2 border rounded text-sm"
+                                >
+                                  <option value="">Seleccionar…</option>
+                                  {field.options.map((opt) => (
+                                    <option key={String(opt.value)} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              );
+                            }
+                            // Para fecha: input type=date
+                            if (field?.type === 'date') {
+                              return (
+                                <Input
+                                  type="date"
+                                  value={filter.value ?? ''}
+                                  onChange={(e) => updateFilter(index, { value: e.target.value })}
+                                  className="text-sm"
+                                />
+                              );
+                            }
+                            // Número
+                            if (field?.type === 'number') {
+                              return (
+                                <Input
+                                  type="number"
+                                  placeholder="Valor"
+                                  value={filter.value ?? ''}
+                                  onChange={(e) => updateFilter(index, { value: e.target.value })}
+                                  className="text-sm"
+                                />
+                              );
+                            }
+                            // Default: texto (incluye tags)
+                            return (
+                              <Input
+                                placeholder={field?.type === 'tags' ? 'Nombre de la etiqueta' : 'Valor'}
+                                value={filter.value ?? ''}
+                                onChange={(e) => updateFilter(index, { value: e.target.value })}
+                                className="text-sm"
+                              />
+                            );
+                          })()}
                         </div>
 
                         {/* Acciones */}

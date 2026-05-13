@@ -483,6 +483,32 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   const [marcandoPagada, setMarcandoPagada] = useState(false);
   const [showQuickPagada, setShowQuickPagada] = useState(false);
 
+  const paymentPlanChanged = () => {
+    if (!isEditMode || !polizaToEdit) return false;
+    return String(formData.formaPago || '') !== String(polizaToEdit.forma_pago || '')
+      || String(formData.periodicidadPago || '') !== String(polizaToEdit.periodicidad_pago || '')
+      || String(formData.cuotas || '') !== String((polizaToEdit as any).installments_count || '');
+  };
+
+  const hasActivePolicyPayments = async () => {
+    if (!polizaToEdit?.id) return false;
+    const res = await carteraSimpleService.timeline({ search: formData.numeroPoliza || polizaToEdit.numero_poliza, limit: 200 });
+    const all: any[] = [];
+    Object.values(res.data || {}).forEach((items: any) => {
+      (items || []).forEach((c: any) => all.push(c));
+    });
+    return all.some((c: any) => {
+      if (String(c.poliza_numero || '') !== String(formData.numeroPoliza || polizaToEdit.numero_poliza || '')) return false;
+      if (c.recibo_anulado) return false;
+      return !!c.recaudado_en_oficina
+        || !!c.recaudado_aseguradora
+        || !!c.comisionada
+        || Number(c.valor_recaudado_oficina || 0) > 0
+        || Number(c.valor_pagado_aseguradora || 0) > 0
+        || Number(c.comision_recibida || 0) > 0;
+    });
+  };
+
   const handleMarcarPolizaPagada = async (modo: 'oficina' | 'aseguradora_directo' | 'completo') => {
     if (!polizaToEdit?.id) return;
     const labels = {
@@ -522,6 +548,9 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   const [cancellationReason, setCancellationReason] = useState<string>('');
   const [cancellationReasonOther, setCancellationReasonOther] = useState<string>('');
   const [cancellationReasons, setCancellationReasons] = useState<Array<{ key: string; label: string }>>([]);
+  const [nonRenewalReason, setNonRenewalReason] = useState<string>('');
+  const [nonRenewalReasonOther, setNonRenewalReasonOther] = useState<string>('');
+  const [nonRenewalReasons, setNonRenewalReasons] = useState<Array<{ key: string; label: string }>>([]);
   const [aseguradoras, setAseguradoras] = useState<{ id: string; nombre: string }[]>([]);
   const [sedes, setSedes] = useState<{ id: string; nombre: string }[]>([]);
   const [ramos, setRamos] = useState<{ id: string; nombre: string; subramo: string[]; comisiones_aseguradoras: { aseguradora_id: string; aseguradora_nombre?: string; porcentaje_iva: number; porcentaje_comision: number; pri_a_pre_por_defecto: number }[] }[]>([]);
@@ -605,6 +634,16 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
 
   const normalizePlate = useCallback((s: string): string => {
     return (s || '').toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9-]/g, '');
+  }, []);
+
+  const isVehicleRamo = useCallback((value: string): boolean => {
+    const normalized = String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return normalized.includes('auto')
+      || normalized.includes('soat')
+      || normalized.includes('moto')
+      || normalized.includes('motocicleta')
+      || normalized.includes('motocarro')
+      || normalized.includes('vehiculo');
   }, []);
 
   const addPlate = useCallback((raw: string) => {
@@ -721,12 +760,16 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     });
   }, []);
 
-  // Cargar motivos de cancelación
+  // Cargar motivos de cancelación y no renovación
   useEffect(() => {
     (async () => {
       try {
-        const list = await polizaService.getCancellationReasons();
+        const [list, listNr] = await Promise.all([
+          polizaService.getCancellationReasons(),
+          polizaService.getNonRenewalReasons(),
+        ]);
         setCancellationReasons(list || []);
+        setNonRenewalReasons(listNr || []);
       } catch {}
     })();
   }, []);
@@ -735,7 +778,6 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   useEffect(() => {
     if (isEditMode && polizaToEdit && (polizaToEdit as any).cancellation_reason && cancellationReasons.length > 0) {
       const existing = (polizaToEdit as any).cancellation_reason;
-      // Si coincide con una clave conocida, usar esa clave; si no, es texto libre → "otro"
       const isKnownKey = cancellationReasons.some(r => r.key === existing);
       if (isKnownKey) {
         setCancellationReason(existing);
@@ -745,6 +787,20 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
       }
     }
   }, [isEditMode, polizaToEdit, cancellationReasons]);
+
+  // Precargar motivo de no renovación existente en modo edición
+  useEffect(() => {
+    if (isEditMode && polizaToEdit && (polizaToEdit as any).non_renewal_reason && nonRenewalReasons.length > 0) {
+      const existing = (polizaToEdit as any).non_renewal_reason;
+      const isKnownKey = nonRenewalReasons.some(r => r.key === existing);
+      if (isKnownKey) {
+        setNonRenewalReason(existing);
+      } else {
+        setNonRenewalReason('otro');
+        setNonRenewalReasonOther(existing);
+      }
+    }
+  }, [isEditMode, polizaToEdit, nonRenewalReasons]);
 
   // Buscar clientes por query (debounce)
   useEffect(() => {
@@ -1402,7 +1458,9 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           total: formData.total ? parseFloat(formData.total) : undefined,
           porcentaje_comision: formData.porcentajeComision ? parseFloat(formData.porcentajeComision) : undefined,
           comision: formData.comision ? parseFloat(formData.comision) : undefined,
-          gastos_adicionales: formData.gastosAdicionales ? parseFloat(formData.gastosAdicionales) : undefined,
+          // Si el campo está vacío o en 0, enviar 0 explícitamente (no undefined)
+          // para que el backend lo actualice y limpie el valor anterior.
+          gastos_adicionales: parseFloat(formData.gastosAdicionales) || 0,
           gastos_adicionales_aplica_iva: !!formData.gastosAdicionalesAplicaIva,
           forma_pago: formData.formaPago || undefined,
           periodicidad_pago: formData.periodicidadPago || undefined,
@@ -1420,6 +1478,9 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           estado: mapUiToEstado(formData.tipoPoliza) || 'ACTIVA',
           cancellation_reason: formData.tipoPoliza === 'cancelada'
             ? (cancellationReason === 'otro' ? (cancellationReasonOther || 'otro') : (cancellationReason || undefined))
+            : undefined,
+          non_renewal_reason: formData.tipoPoliza === 'no_renovada'
+            ? (nonRenewalReason === 'otro' ? (nonRenewalReasonOther || 'otro') : (nonRenewalReason || undefined))
             : undefined,
           sede: formData.sede || undefined,
           // Extensiones
@@ -1446,8 +1507,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           beneficiario_oneroso_documento: formData.beneficiarioOnerosoDocumento || undefined,
           // Beneficiarios array (múltiples)
           beneficiarios: beneficiarios.filter(b => b.nombre.trim() || b.documento.trim()),
-          // Vehículos: enviar si el ramo es automotor (Automóvil o SOAT) y hay placas
-          ...(((s => s.includes('auto') || s.includes('soat'))(String(formData.ramoPrincipal || '').toLowerCase())) && Array.isArray((formData as any).placas)
+          // Vehículos: enviar si el ramo es automotor (Automóvil, SOAT, motos, motocicletas) y hay placas
+          ...(isVehicleRamo(String(formData.ramoPrincipal || '')) && Array.isArray((formData as any).placas)
             ? { placas: (formData as any).placas }
             : {}),
           // Campos SoftSeguros
@@ -1494,6 +1555,44 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           return;
         }
 
+        let shouldRegeneratePaymentPlan = false;
+
+        if (isEditMode && polizaToEdit?.id && paymentPlanChanged()) {
+          const hasPayments = await hasActivePolicyPayments();
+          if (hasPayments) {
+            const confirmed = window.confirm(
+              'Esta póliza ya tiene pagos/recaudos registrados.\n\n' +
+              'Para cambiar la Forma de Pago, Periodicidad o Número de cuotas, el sistema revertirá TODOS los pagos de la póliza y dejará la cartera pendiente nuevamente.\n\n' +
+              'Luego guardará el nuevo periodo y generará las nuevas cuotas con las fechas correspondientes. Después deberás marcar los pagos nuevamente según corresponda.\n\n' +
+              '¿Deseas continuar, revertir todos los pagos y generar las nuevas cuotas?'
+            );
+
+            if (!confirmed) {
+              setIsLoading(false);
+              return;
+            }
+
+            const revertResponse = await polizaService.revertirRecaudoCompleto(polizaToEdit.id);
+            if (!revertResponse.success) {
+              toast({
+                title: 'No se pudieron revertir los pagos',
+                description: revertResponse.message || 'No se aplicó el cambio de forma de pago.',
+                variant: 'destructive',
+              });
+              setIsLoading(false);
+              return;
+            }
+
+            toast({
+              title: 'Pagos revertidos',
+              description: 'Ahora se guardará el cambio de periodo y se generarán las nuevas cuotas.',
+            });
+            shouldRegeneratePaymentPlan = true;
+          } else {
+            shouldRegeneratePaymentPlan = true;
+          }
+        }
+
         // Crear o actualizar la póliza
         let response;
         if (isEditMode && polizaToEdit?.id) {
@@ -1537,6 +1636,49 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         }
         
         if (response.success) {
+          // Guardar el PDF usado para el lector IA como carátula de la póliza
+          if (pdfFile) {
+            try {
+              const savedPolizaId = isEditMode
+                ? String(polizaToEdit!.id)
+                : String((response.data as any)?.id ?? (response as any)?.data?.id ?? '');
+              if (savedPolizaId) {
+                await polizaService.subirDocumento(savedPolizaId, pdfFile, { type: 'caratula' });
+              }
+            } catch (_e) {
+              // No bloqueamos el flujo si falla el guardado del PDF
+            }
+          }
+
+          if (isEditMode && polizaToEdit?.id && shouldRegeneratePaymentPlan) {
+            try {
+              const regen = await polizaService.regenerarCarteraCuotas(polizaToEdit.id, {
+                forma_pago: formData.formaPago || undefined,
+                periodicidad_pago: formData.periodicidadPago || undefined,
+                cuotas: formData.cuotas ? parseInt(formData.cuotas, 10) : undefined,
+              } as any);
+
+              if (regen.success) {
+                toast({
+                  title: 'Nuevas cuotas generadas',
+                  description: regen.message || 'La cartera fue reconstruida con el nuevo plan de pago.',
+                });
+              } else {
+                toast({
+                  title: 'No se pudieron generar las nuevas cuotas',
+                  description: regen.message || 'Revisa la cartera de la póliza.',
+                  variant: 'destructive',
+                });
+              }
+            } catch (e: any) {
+              toast({
+                title: 'Error generando cuotas',
+                description: e?.response?.data?.message || e?.message || 'La póliza se guardó, pero no se regeneró la cartera.',
+                variant: 'destructive',
+              });
+            }
+          }
+
           if (isEditMode && onSaveSuccess) {
             // Si está en modo edición, llamar callback
             onSaveSuccess();
@@ -1718,6 +1860,34 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
               </>
             )}
 
+            {/* Motivo de no renovación - solo visible cuando estado es No renovada */}
+            {formData.tipoPoliza === 'no_renovada' && (
+              <>
+                <FormField
+                  id="nonRenewalReason"
+                  name="nonRenewalReason"
+                  label="Motivo de no renovación *"
+                  value={nonRenewalReason}
+                  onChange={(e: any) => setNonRenewalReason(e.target.value)}
+                  type="select"
+                  options={[
+                    { value: '', label: '— Selecciona un motivo —' },
+                    ...nonRenewalReasons.map(r => ({ value: r.key, label: r.label }))
+                  ]}
+                />
+                {nonRenewalReason === 'otro' && (
+                  <FormField
+                    id="nonRenewalReasonOther"
+                    name="nonRenewalReasonOther"
+                    label="Especifica el motivo *"
+                    value={nonRenewalReasonOther}
+                    onChange={(e: any) => setNonRenewalReasonOther(e.target.value)}
+                    placeholder="Describe el motivo de no renovación"
+                  />
+                )}
+              </>
+            )}
+
             <div className="flex items-center gap-3 pt-5">
               <label className="flex items-center gap-1.5 text-xs">
                 <button type="button" onClick={() => setFormData(prev => ({ ...prev, renovable: !prev.renovable }))} className={`inline-flex h-5 w-9 items-center rounded-full transition ${formData.renovable ? 'bg-primary' : 'bg-gray-300'}`}>
@@ -1790,7 +1960,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
             <FormField id="sede" name="sede" label="Sede" value={formData.sede} onChange={handleInputChange} type="select" options={[{ value: '', label: 'Seleccionar' }, ...sedes.map(s => ({ value: s.nombre, label: s.nombre }))]} />
 
             {/* Placas de vehículos */}
-            {(s => s.includes('auto') || s.includes('soat'))(String(formData.ramoPrincipal || '').toLowerCase()) && (
+            {isVehicleRamo(String(formData.ramoPrincipal || '')) && (
               <div className="col-span-full z-[100]">
                 <Label htmlFor="placa_input" className="text-xs font-medium text-gray-900 dark:text-white">Placas</Label>
                 <div className="mt-1 relative">

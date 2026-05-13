@@ -23,6 +23,9 @@ const Renovaciones: React.FC = () => {
   const [showRenovarModal, setShowRenovarModal] = useState(false);
   const [renAseguradoraId, setRenAseguradoraId] = useState<string>('');
   const [renRamoId, setRenRamoId] = useState<string>('');
+  const [renCaratulaFile, setRenCaratulaFile] = useState<File | null>(null);
+  const [renPdfProcessing, setRenPdfProcessing] = useState(false);
+  const [renPdfSuggestions, setRenPdfSuggestions] = useState<Record<string, string>>({});
   const [renPrimaNeta, setRenPrimaNeta] = useState<string>('');
   const [renPorcentajeIva, setRenPorcentajeIva] = useState<string>('19');
   const [renIva, setRenIva] = useState<string>('');
@@ -255,7 +258,32 @@ const Renovaciones: React.FC = () => {
     // Pre-fill aseguradora/ramo from poliza
     setRenAseguradoraId((renovacion as any).aseguradora_id ? String((renovacion as any).aseguradora_id) : '');
     setRenRamoId((renovacion as any).ramo_id ? String((renovacion as any).ramo_id) : '');
+    setRenCaratulaFile(null);
+    setRenPdfSuggestions({});
     setShowRenovarModal(true);
+  };
+
+  const handleRenCaratulaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setRenCaratulaFile(file);
+    setRenPdfSuggestions({});
+    if (!file || file.type !== 'application/pdf') return;
+    try {
+      setRenPdfProcessing(true);
+      const { processPdf } = await import('src/services/advancedPdfProcessor');
+      const result = await processPdf(file);
+      const s: Record<string, string> = {};
+      if (result?.numeroPoliza) s.numeroPoliza = result.numeroPoliza;
+      if (result?.fechaInicio) s.fechaInicio = result.fechaInicio;
+      if (result?.fechaFin) s.fechaFin = result.fechaFin;
+      if (result?.primaNeta) s.primaNeta = String(Math.round(parseFloat(result.primaNeta) || 0));
+      if (result?.total) s.total = String(Math.round(parseFloat(result.total) || 0));
+      setRenPdfSuggestions(s);
+    } catch (_e) {
+      // silencioso
+    } finally {
+      setRenPdfProcessing(false);
+    }
   };
 
   const handleExportRenovaciones = async () => {
@@ -709,7 +737,7 @@ const Renovaciones: React.FC = () => {
               <div className="relative">
                 <Icon icon="solar:magnifer-bold-duotone" className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <TextInput
-                  placeholder="Buscar por número de póliza, cliente..."
+                  placeholder="Buscar por número de póliza, cliente, placa..."
                   value={filters.search || ''}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFilterChange('search', e.target.value)}
                   className="pl-10 h-10 text-sm rounded-[10px] bg-white dark:bg-darkgray border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-500 dark:focus:border-blue-500"
@@ -1464,8 +1492,47 @@ const Renovaciones: React.FC = () => {
                     id="caratula"
                     name="caratula"
                     accept="application/pdf"
+                    onChange={handleRenCaratulaChange}
                     className="block w-full text-sm text-gray-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
+                  {renPdfProcessing && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                      <Spinner size="sm" />
+                      <span>Leyendo PDF con IA...</span>
+                    </div>
+                  )}
+                  {!renPdfProcessing && Object.keys(renPdfSuggestions).length > 0 && (
+                    <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-xs">
+                      <p className="font-semibold text-green-700 dark:text-green-400 mb-2">IA detectó en el PDF — haz clic para aplicar:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {renPdfSuggestions.numeroPoliza && (
+                          <button type="button" onClick={() => { const el = document.getElementById('ren_nueva_numero_poliza') as HTMLInputElement; if (el) { el.value = renPdfSuggestions.numeroPoliza; el.dispatchEvent(new Event('input', { bubbles: true })); } }} className="px-2 py-1 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 rounded cursor-pointer hover:bg-green-200">
+                            N° póliza: {renPdfSuggestions.numeroPoliza}
+                          </button>
+                        )}
+                        {renPdfSuggestions.fechaInicio && (
+                          <button type="button" onClick={() => { const el = document.getElementById('ren_fecha_inicio') as HTMLInputElement; if (el) { el.value = renPdfSuggestions.fechaInicio; el.dispatchEvent(new Event('input', { bubbles: true })); } }} className="px-2 py-1 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 rounded cursor-pointer hover:bg-green-200">
+                            Inicio: {renPdfSuggestions.fechaInicio}
+                          </button>
+                        )}
+                        {renPdfSuggestions.fechaFin && (
+                          <button type="button" onClick={() => { const el = document.getElementById('ren_fecha_fin') as HTMLInputElement; if (el) { el.value = renPdfSuggestions.fechaFin; el.dispatchEvent(new Event('input', { bubbles: true })); } }} className="px-2 py-1 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 rounded cursor-pointer hover:bg-green-200">
+                            Fin: {renPdfSuggestions.fechaFin}
+                          </button>
+                        )}
+                        {renPdfSuggestions.primaNeta && (
+                          <button type="button" onClick={() => setRenPrimaNeta(renPdfSuggestions.primaNeta)} className="px-2 py-1 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 rounded cursor-pointer hover:bg-green-200">
+                            Prima: ${Number(renPdfSuggestions.primaNeta).toLocaleString('es-CO')}
+                          </button>
+                        )}
+                        {renPdfSuggestions.total && (
+                          <button type="button" onClick={() => setRenTotal(renPdfSuggestions.total)} className="px-2 py-1 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 rounded cursor-pointer hover:bg-green-200">
+                            Total: ${Number(renPdfSuggestions.total).toLocaleString('es-CO')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="observaciones_renovacion" className="mb-2 block text-gray-900 dark:text-white">

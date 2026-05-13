@@ -233,9 +233,15 @@ class SaasPolizasController extends Controller
         try {
             // Obtener broker_id dinámicamente usando el método unificado
             $brokerId = $this->getBrokerId($request);
-            
+
+            // Tab "Papelera": cuando trashed=only, devolver únicamente soft-deleted.
+            $trashedMode = (string) $request->input('trashed', 'none');
+            $baseQuery = $trashedMode === 'only'
+                ? Poliza::onlyTrashed()
+                : Poliza::query();
+
             // OPTIMIZACIÓN: Construir la query base con aislamiento multi-tenant y eager loading optimizado
-            $query = Poliza::where('broker_id', $brokerId)
+            $query = $baseQuery->where('broker_id', $brokerId)
                 ->with([
                     'client:id,client_type,first_name,last_name,company,company_legal_name,document_type,document_number,email,phone,mobile_phone,address,birth_date',
                     'assignedUser:id,name,email',
@@ -346,6 +352,14 @@ class SaasPolizasController extends Controller
                 $query->where('end_date', '<=', $request->fecha_fin);
             }
 
+            // Fechas de cancelación (cancelled_at) - aplica para cualquier estado
+            if ($request->filled('cancelled_desde')) {
+                $query->whereDate('cancelled_at', '>=', $request->cancelled_desde);
+            }
+            if ($request->filled('cancelled_hasta')) {
+                $query->whereDate('cancelled_at', '<=', $request->cancelled_hasta);
+            }
+
             // Ordenamiento: vigentes primero, luego más recientes
             $sortField = $request->get('sort_field');
             $sortDirection = strtolower((string)$request->get('sort_direction', 'asc')) === 'desc' ? 'desc' : 'asc';
@@ -401,9 +415,15 @@ class SaasPolizasController extends Controller
         try {
             // Obtener broker_id dinámicamente usando el método unificado
             $brokerId = $this->getBrokerId($request);
-            
+
+            // Tab "Papelera": cuando trashed=only, devolver únicamente soft-deleted.
+            $trashedMode = (string) $request->input('trashed', 'none');
+            $baseQuery = $trashedMode === 'only'
+                ? Poliza::onlyTrashed()
+                : Poliza::query();
+
             // OPTIMIZACIÓN: Construir la query base con aislamiento multi-tenant y eager loading optimizado
-            $query = Poliza::where('broker_id', $brokerId)
+            $query = $baseQuery->where('broker_id', $brokerId)
                 ->with([
                     'client:id,client_type,first_name,last_name,company,company_legal_name,document_type,document_number,email,phone,mobile_phone,address,birth_date',
                     'assignedUser:id,name,email',
@@ -526,6 +546,14 @@ class SaasPolizasController extends Controller
 
             if ($request->has('fecha_fin') && !empty($request->fecha_fin)) {
                 $query->where('end_date', '<=', $request->fecha_fin);
+            }
+
+            // Fechas de cancelación (cancelled_at) - aplica para cualquier estado
+            if ($request->filled('cancelled_desde')) {
+                $query->whereDate('cancelled_at', '>=', $request->cancelled_desde);
+            }
+            if ($request->filled('cancelled_hasta')) {
+                $query->whereDate('cancelled_at', '<=', $request->cancelled_hasta);
             }
 
             // Ordenamiento: vigentes primero, luego más recientes
@@ -1235,6 +1263,7 @@ class SaasPolizasController extends Controller
             'fecha_fin' => $poliza->end_date?->format('Y-m-d'),
             'estado' => $this->mapStatusToFrontend($poliza->status),
             'cancellation_reason' => $poliza->cancellation_reason,
+            'non_renewal_reason' => $poliza->non_renewal_reason,
             'cancelled_at' => $poliza->cancelled_at?->format('Y-m-d H:i:s'),
             'cancelled_by' => $poliza->cancelled_by,
             'sede' => ($poliza->custom_fields['sede'] ?? 'Principal'), // Preferir sede guardada en custom_fields
@@ -1345,9 +1374,11 @@ class SaasPolizasController extends Controller
             $diasAdelantado = 60; // 2 meses - solo próximas a vencer
             
             // Construir la query base con aislamiento multi-tenant
-            // Solo mostrar pólizas marcadas como renovables
+            // Solo mostrar pólizas marcadas como renovables y excluir canceladas
+            // (las canceladas no aplican para gestión de renovación).
             $query = Poliza::where('broker_id', $brokerId)
                 ->where('auto_renewal', true)
+                ->where('status', '!=', 'cancelled')
                 ->with(['client', 'assignedUser', 'createdBy', 'ramo', 'automoviles']);
 
             // Normalización de filtros de cliente
@@ -1441,6 +1472,14 @@ class SaasPolizasController extends Controller
                         $qr->where('nombre', 'like', "%{$ramo}%");
                     })
                     ->orWhere('type', 'like', "%{$ramo}%");
+                });
+            }
+
+            // Filtro por placa (búsqueda exacta en automóviles vinculados)
+            if ($request->has('placa') && !empty($request->placa)) {
+                $placa = strtoupper(trim($request->placa));
+                $query->whereHas('automoviles', function($qa) use ($placa) {
+                    $qa->where('placa', 'like', "%{$placa}%");
                 });
             }
 
@@ -1549,9 +1588,10 @@ class SaasPolizasController extends Controller
             
             $today = Carbon::now();
             
-            // Query base: solo pólizas renovables del broker
+            // Query base: solo pólizas renovables del broker, excluyendo canceladas
             $baseQuery = Poliza::where('broker_id', $brokerId)
-                ->where('auto_renewal', true);
+                ->where('auto_renewal', true)
+                ->where('status', '!=', 'cancelled');
 
             // Total renovaciones: todas las pólizas
             $totalRenovaciones = (clone $baseQuery)->count();
@@ -2370,6 +2410,8 @@ class SaasPolizasController extends Controller
                 'recaudado' => 'nullable|boolean',
                 'recaudado_en_oficina' => 'nullable|boolean',
                 'fecha_recaudo' => 'nullable|date',
+                'cartera_pagado_oficina' => 'nullable|boolean',
+                'cartera_pagado_aseguradora' => 'nullable|boolean',
                 // Impuestos
                 'porcentaje_impuesto_bomberos' => 'nullable|numeric|min:0|max:100',
                 'impuesto_bomberos' => 'nullable|numeric|min:0',
@@ -2649,8 +2691,15 @@ class SaasPolizasController extends Controller
                 $clienteNombre = $cliente ? trim(($cliente->first_name ?? '') . ' ' . ($cliente->last_name ?? '')) : 'Sin cliente asignado';
 
                 $fp = strtolower((string)($validated['forma_pago'] ?? ''));
-                $numCuotas = (int)($poliza->installments_count ?? 0);
-                $esFraccionado = in_array($fp, ['fraccionado', 'financiado']) && $numCuotas > 1;
+                $numCuotas = $this->calculateCuotasForPoliza($poliza, $fp);
+
+                // Si calculate retornó múltiples cuotas pero installments_count está vacío,
+                // persistir el valor inferido para que UI lo muestre.
+                if ($numCuotas > 1 && (!$poliza->installments_count || $poliza->installments_count <= 1)) {
+                    $poliza->update(['installments_count' => $numCuotas]);
+                    $poliza->refresh();
+                }
+                $esFraccionado = $numCuotas > 1;
 
                 if ($esFraccionado) {
                     // Create N cartera_items (one per cuota) with staggered due dates
@@ -2743,6 +2792,39 @@ class SaasPolizasController extends Controller
                 }
             } catch (\Throwable $e) {
                 \Log::warning("Auto-create cartera_item failed for poliza {$poliza->id}: " . $e->getMessage());
+            }
+
+            $marcarOficina = $request->boolean('cartera_pagado_oficina');
+            $marcarAseguradora = $request->boolean('cartera_pagado_aseguradora');
+            $esPagado = isset($validated['estado_cartera'])
+                && is_string($validated['estado_cartera'])
+                && strcasecmp(trim($validated['estado_cartera']), 'Pagado') === 0;
+
+            if ($esPagado && ($marcarOficina || $marcarAseguradora)) {
+                if ($marcarOficina && $marcarAseguradora) {
+                    $marcarOficina = false;
+                }
+                try {
+                    $pagoCtrl = app(\App\Http\Controllers\Api\PagoPolizaController::class);
+                    $fakeReq = new Request([
+                        'fecha' => now()->toDateString(),
+                        'metodo_pago' => 'efectivo',
+                        'observaciones' => 'Recaudo automático (cartera marcada como Pagado al crear póliza)',
+                        'oficina' => $marcarOficina,
+                        'aseguradora' => $marcarAseguradora,
+                    ]);
+                    $pagoCtrl->marcarPolizaPagada($fakeReq, $poliza->id);
+                    \Log::info("Recaudo automático generado al crear póliza", [
+                        'poliza_id' => $poliza->id,
+                        'tipo' => $marcarOficina ? 'oficina' : 'aseguradora',
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::warning("Marcar póliza pagada falló al crear poliza {$poliza->id}: " . $e->getMessage());
+                }
+            } elseif ($esPagado) {
+                \Log::info("Cartera marcada Pagado al crear póliza sin tipo de recaudo", [
+                    'poliza_id' => $poliza->id,
+                ]);
             }
 
             // Auditoría
@@ -2886,6 +2968,7 @@ class SaasPolizasController extends Controller
                 'fecha_fin' => 'sometimes|required|date',
                 'estado' => 'nullable|in:ACTIVA,VENCIDA,CANCELADA,SUSPENDIDA,COTIZACION,DEVENGADA,EXPEDICION,NO_RENOVADA,PENDIENTE,COTIZACIÓN,EXPEDICIÓN,VIGENTE',
                 'cancellation_reason' => 'nullable|string|max:100',
+                'non_renewal_reason' => 'nullable|string|max:100',
                 'sede' => 'nullable|string|max:255',
 
                 // Nuevos campos para edición coherentes con store
@@ -3008,8 +3091,10 @@ class SaasPolizasController extends Controller
             if (isset($validated['total'])) {
                 $updateData['total_amount'] = $validated['total'];
             }
-            if (isset($validated['gastos_adicionales'])) {
-                $updateData['gastos_adicionales'] = $validated['gastos_adicionales'];
+            // Usar array_key_exists para que null y 0 explícitos también actualicen
+            // (isset(null) es false y bloqueaba el "limpiar" del usuario en edición).
+            if (array_key_exists('gastos_adicionales', $validated)) {
+                $updateData['gastos_adicionales'] = $validated['gastos_adicionales'] ?? 0;
             }
             if (isset($validated['porcentaje_comision'])) {
                 $updateData['commission_percentage'] = $validated['porcentaje_comision'];
@@ -3029,6 +3114,15 @@ class SaasPolizasController extends Controller
                 $fp = strtolower((string)$validated['forma_pago']);
                 if ($fp === 'contado') {
                     $updateData['payment_method'] = 'cash';
+                    // Contado: revertir a una sola cuota anual. Si no se envían
+                    // valores explícitos de cuotas/periodicidad, forzar reset
+                    // para que la regeneración de cartera produzca 1 sola cuota.
+                    if (!isset($validated['cuotas'])) {
+                        $updateData['installments_count'] = 1;
+                    }
+                    if (!isset($validated['periodicidad_pago']) || empty($validated['periodicidad_pago'])) {
+                        $updateData['payment_frequency'] = 'annual';
+                    }
                 } elseif ($fp === 'credito') {
                     $updateData['payment_method'] = 'card';
                 } elseif ($fp === 'financiado' || $fp === 'fraccionado') {
@@ -3208,6 +3302,12 @@ class SaasPolizasController extends Controller
                     // Permitir actualizar el motivo aunque ya esté cancelada
                     $updateData['cancellation_reason'] = $validated['cancellation_reason'];
                 }
+                // Si cambia a NO_RENOVADA, guardar motivo de no renovación
+                if ($nuevoStatus === 'not_renewed') {
+                    $updateData['non_renewal_reason'] = $validated['non_renewal_reason'] ?? null;
+                } elseif (isset($validated['non_renewal_reason']) && $nuevoStatus === 'not_renewed') {
+                    $updateData['non_renewal_reason'] = $validated['non_renewal_reason'];
+                }
             }
             // Fecha de recepción (administrativa)
             if (isset($validated['fecha_recepcion'])) {
@@ -3255,14 +3355,76 @@ class SaasPolizasController extends Controller
 
             $poliza->update($updateData);
 
+            // ── Detección de cambio en estructura de cuotas ──
+            // Regenera cartera_items si:
+            //  a) Cambia forma_pago/payment_frequency/installments_count, O
+            //  b) No hay items válidos (no anulados) en la renovación actual
+            $cuotasFields = ['payment_frequency', 'installments_count', 'payment_method'];
+            $formaPagoCambio = isset($validated['forma_pago']);
+            $cuotasFieldsChanged = $formaPagoCambio || !empty(array_intersect($cuotasFields, array_keys($updateData)));
+
+            $renovacionActual = (int) ($poliza->numero_renovacion ?? 0);
+            $itemsValidos = DB::table('cartera_items')
+                ->where('poliza_id', $poliza->id)
+                ->where('broker_id', $brokerId)
+                ->where('numero_renovacion', $renovacionActual)
+                ->where('recibo_anulado', false)
+                ->count();
+            $sinItemsValidos = $itemsValidos === 0;
+
+            $regeneradas = false;
+            if ($cuotasFieldsChanged || $sinItemsValidos) {
+                try {
+                    $poliza->refresh();
+                    $formaPagoNew = $validated['forma_pago'] ?? null;
+
+                    // Auto-rellenar installments_count si es fraccionado/financiado y no se especificó
+                    if (in_array(strtolower((string)$formaPagoNew), ['fraccionado', 'financiado'])
+                        && (!isset($validated['cuotas']) || empty($validated['cuotas']))
+                        && (!$poliza->installments_count || $poliza->installments_count <= 1)) {
+                        $inferred = $this->calculateCuotasForPoliza($poliza, $formaPagoNew);
+                        if ($inferred > 1) {
+                            $poliza->update(['installments_count' => $inferred]);
+                            $poliza->refresh();
+                        }
+                    }
+
+                    $generated = $this->regenerateCarteraItemsForPoliza($poliza, $formaPagoNew);
+                    if ($generated > 0) {
+                        $regeneradas = true;
+                        $proximaCuota = DB::table('cartera_items')
+                            ->where('poliza_id', $poliza->id)
+                            ->where('broker_id', $brokerId)
+                            ->where('numero_renovacion', (int) ($poliza->numero_renovacion ?? 0))
+                            ->where('recibo_anulado', false)
+                            ->whereNotNull('fecha_limite_pago')
+                            ->min('fecha_limite_pago');
+                        $poliza->update([
+                            'payment_due_date' => $proximaCuota,
+                            'payment_status' => 'pending',
+                            'estado_cartera' => 'Sin pagos Asignados',
+                        ]);
+                        $poliza->refresh();
+                        \Log::info("Cartera regenerada", [
+                            'poliza_id' => $poliza->id,
+                            'cuotas' => $generated,
+                            'forma_pago' => $formaPagoNew,
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    \Log::warning("regenerateCarteraItemsForPoliza falló: " . $e->getMessage(), ['poliza_id' => $poliza->id]);
+                }
+            }
+
             // Sync cartera_items when financial or key fields change
+            // (skip si acabamos de regenerar — el bloque siguiente machacaría las cuotas con el monto total)
             $carteraFields = [
                 'premium_amount', 'vat_amount', 'total_amount', 'commission_amount',
                 'commission_percentage', 'payment_frequency', 'start_date', 'end_date',
                 'installments_count', 'status', 'policy_number', 'client_name',
                 'client_document', 'insurance_company', 'aseguradora_id', 'seller_name',
             ];
-            if (!empty(array_intersect($carteraFields, array_keys($updateData)))) {
+            if (!$regeneradas && !empty(array_intersect($carteraFields, array_keys($updateData)))) {
                 try {
                     $poliza->refresh();
 
@@ -3799,6 +3961,7 @@ class SaasPolizasController extends Controller
                 'estado' => 'required|in:ACTIVA,VENCIDA,CANCELADA,SUSPENDIDA,COTIZACION,DEVENGADA,EXPEDICION,NO_RENOVADA,PENDIENTE,COTIZACIÓN,EXPEDICIÓN,VIGENTE',
                 'motivo' => 'nullable|string|max:500',
                 'cancellation_reason' => 'nullable|string|max:100',
+                'non_renewal_reason' => 'nullable|string|max:100',
             ]);
 
             $estadoAnterior = $this->mapStatusToFrontend($poliza->status);
@@ -3815,6 +3978,10 @@ class SaasPolizasController extends Controller
                 $updatePayload['cancellation_reason'] = $validated['cancellation_reason']
                     ?? $validated['motivo']
                     ?? null;
+            }
+            // Si el nuevo estado es NO_RENOVADA, guardar motivo de no renovación
+            if ($nuevoEstado === 'not_renewed') {
+                $updatePayload['non_renewal_reason'] = $validated['non_renewal_reason'] ?? null;
             }
 
             $poliza->update($updatePayload);
@@ -3928,8 +4095,8 @@ class SaasPolizasController extends Controller
         $key = preg_replace('/[^a-z0-9]+/i', '_', $key);
         $key = trim($key, '_');
 
-        // Fallback amplio: cualquier cosa que contenga "auto" la tratamos como autos
-        if (strpos($key, 'auto') !== false) {
+        // Fallback amplio: cualquier cosa automotor la tratamos como autos
+        if (strpos($key, 'auto') !== false || strpos($key, 'moto') !== false || strpos($key, 'vehiculo') !== false) {
             return 'autos';
         }
 
@@ -3940,6 +4107,12 @@ class SaasPolizasController extends Controller
             'automotores' => 'autos',
             'vehiculo' => 'autos',
             'vehiculos' => 'autos',
+            'moto' => 'autos',
+            'motos' => 'autos',
+            'motocicleta' => 'autos',
+            'motocicletas' => 'autos',
+            'motocarro' => 'autos',
+            'motocarros' => 'autos',
             'autos' => 'autos',
             'soat' => 'autos',
             'vida' => 'vida',
@@ -3952,6 +4125,264 @@ class SaasPolizasController extends Controller
         ];
 
         return $mapping[$key] ?? 'otros';
+    }
+
+    /**
+     * Infiere el número de cuotas desde periodicidad + duración de la póliza.
+     *  - mensual + 12 meses = 12
+     *  - trimestral + 12 meses = 4
+     *  - semestral + 12 meses = 2
+     *  - anual = 1
+     */
+    private function inferCuotasFromPeriodicidad(?string $paymentFrequency, ?string $startDate, ?string $endDate): int
+    {
+        $freqMeses = match ($paymentFrequency) {
+            'monthly' => 1,
+            'quarterly' => 3,
+            'semi-annual', 'semiannual', 'biannual' => 6,
+            'annual', 'yearly' => 12,
+            default => 12,
+        };
+        if (!$startDate || !$endDate) return 1;
+        try {
+            $inicio = \Carbon\Carbon::parse($startDate);
+            $fin = \Carbon\Carbon::parse($endDate);
+            $meses = max(1, (int) round($inicio->diffInDays($fin) / 30));
+            return max(1, (int) round($meses / $freqMeses));
+        } catch (\Throwable) {
+            return 1;
+        }
+    }
+
+    /**
+     * Devuelve el número de cuotas a generar para una póliza.
+     * Lógica liberal: genera múltiples cuotas si CUALQUIERA de estas condiciones:
+     *  1. installments_count > 1 (explícito por el usuario)
+     *  2. forma_pago = fraccionado | financiado | credito
+     *  3. payment_frequency != annual/yearly (mensual/trimestral/semestral)
+     * En contado o anual sin cuotas explícitas → 1.
+     */
+    private function calculateCuotasForPoliza($poliza, ?string $formaPago = null): int
+    {
+        $fp = strtolower((string) ($formaPago ?? ''));
+
+        // Contado nunca tiene cuotas múltiples (debe evaluarse ANTES que
+        // installments_count para que un cambio a "contado" revierta cuotas
+        // previamente guardadas en la póliza)
+        if ($fp === 'contado') return 1;
+
+        // installments_count explícito gana sobre el resto
+        $explicitas = (int) ($poliza->installments_count ?? 0);
+        if ($explicitas > 1) return $explicitas;
+
+        $esMultiCuota = in_array($fp, ['fraccionado', 'financiado', 'credito'])
+            || !in_array($poliza->payment_frequency, ['annual', 'yearly', null, '']);
+
+        if (!$esMultiCuota) return 1;
+
+        return $this->inferCuotasFromPeriodicidad(
+            $poliza->payment_frequency,
+            $poliza->start_date?->toDateString() ?? $poliza->start_date,
+            $poliza->end_date?->toDateString() ?? $poliza->end_date,
+        );
+    }
+
+    /**
+     * (Re)genera cartera_items para una póliza según forma_pago + cuotas.
+     * Solo regenera si NO hay pagos NO ANULADOS registrados en los items actuales.
+     * Devuelve el número de cuotas creadas, o -1 si no se pudo (había pagos válidos).
+     */
+    private function regenerateCarteraItemsForPoliza($poliza, ?string $formaPago = null): int
+    {
+        $brokerId = $poliza->broker_id;
+        $renovacion = (int) ($poliza->numero_renovacion ?? 0);
+
+        // Verificar que no haya pagos ACTIVOS (no anulados)
+        $hayPagosActivos = DB::table('cartera_items')
+            ->where('poliza_id', $poliza->id)
+            ->where('broker_id', $brokerId)
+            ->where('numero_renovacion', $renovacion)
+            ->where('recibo_anulado', false)  // ← clave: ignorar anulados
+            ->where(function ($q) {
+                $q->where('recaudado_en_oficina', true)
+                  ->orWhere('recaudado_aseguradora', true)
+                  ->orWhere('comisionada', true)
+                  ->orWhere('valor_recaudado_oficina', '>', 0);
+            })->exists();
+
+        if ($hayPagosActivos) {
+            \Log::info("regenerateCarteraItemsForPoliza skip: hay pagos activos", ['poliza_id' => $poliza->id]);
+            return -1;
+        }
+
+        $numCuotas = $this->calculateCuotasForPoliza($poliza, $formaPago);
+
+        $montoTotal = ((float) ($poliza->total_amount ?? 0) > 0)
+            ? (float) $poliza->total_amount
+            : ((float) ($poliza->premium_amount ?? 0) + (float) ($poliza->vat_amount ?? 0));
+        $primaNeta = (float) ($poliza->premium_amount ?? 0);
+        $comision = (float) ($poliza->commission_amount ?? 0);
+
+        if ($montoTotal <= 0) return 0;
+
+        // Borrar items actuales sin pagos
+        DB::table('cartera_items')
+            ->where('poliza_id', $poliza->id)
+            ->where('broker_id', $brokerId)
+            ->where('numero_renovacion', $renovacion)
+            ->delete();
+
+        // Resolver nombres
+        $cliente = $poliza->client_id ? DB::table('clientes')->find($poliza->client_id) : null;
+        $clienteNombre = $cliente ? trim(($cliente->first_name ?? '') . ' ' . ($cliente->last_name ?? '')) : 'Sin cliente asignado';
+        $clienteDoc = $cliente?->document_number;
+        $asegNombre = $poliza->insurance_company;
+        if ($poliza->aseguradora_id) {
+            $aseg = DB::table('aseguradoras')->find($poliza->aseguradora_id);
+            if ($aseg) $asegNombre = $aseg->nombre;
+        }
+        $ramoNombre = null;
+        if ($poliza->ramo_id) {
+            $ramo = DB::table('ramos')->find($poliza->ramo_id);
+            if ($ramo) $ramoNombre = $ramo->nombre;
+        }
+
+        $fechaInicio = $poliza->start_date ? \Carbon\Carbon::parse($poliza->start_date) : now();
+        $fechaFin = $poliza->end_date ? \Carbon\Carbon::parse($poliza->end_date) : null;
+        $diasVigencia = $fechaFin && $fechaFin->greaterThan($fechaInicio)
+            ? max(1, $fechaInicio->diffInDays($fechaFin))
+            : null;
+        $montoCuota = round($montoTotal / max(1, $numCuotas), 2);
+        $primaNetaCuota = round($primaNeta / max(1, $numCuotas), 2);
+        $comisionCuota = round($comision / max(1, $numCuotas), 2);
+
+        for ($i = 0; $i < $numCuotas; $i++) {
+            $esCuotaFinal = ($i === $numCuotas - 1);
+            $montoActual = $esCuotaFinal ? ($montoTotal - $montoCuota * ($numCuotas - 1)) : $montoCuota;
+            $primaNetaActual = $esCuotaFinal ? ($primaNeta - $primaNetaCuota * ($numCuotas - 1)) : $primaNetaCuota;
+            $comisionActual = $esCuotaFinal ? ($comision - $comisionCuota * ($numCuotas - 1)) : $comisionCuota;
+            $fechaLimite = $diasVigencia
+                ? (clone $fechaInicio)->addDays((int) floor(($diasVigencia / max(1, $numCuotas)) * $i))
+                : (clone $fechaInicio)->addMonths($i);
+
+            DB::table('cartera_items')->insert([
+                'broker_id' => $brokerId,
+                'poliza_id' => $poliza->id,
+                'cliente_id' => $poliza->client_id,
+                'numero_renovacion' => $renovacion,
+                'poliza_numero' => $poliza->policy_number,
+                'cliente_nombre' => $clienteNombre,
+                'cliente_documento' => $clienteDoc,
+                'aseguradora_nombre' => $asegNombre,
+                'ramo_principal' => $ramoNombre,
+                'vendedor_nombre' => $poliza->seller_name,
+                'forma_pago' => $formaPago,
+                'numero_pago' => $numCuotas > 1 ? (($i + 1) . '/' . $numCuotas) : null,
+                'prima_neta' => $primaNetaActual,
+                'valor_neto_a_pagar' => max(0, $montoActual - $comisionActual),
+                'prima_total_pago' => $montoActual,
+                'prima_total' => $montoTotal,
+                'comision_a_recibir' => $comisionActual,
+                'comision_vendedor' => 0,
+                'estado_cartera' => 'por_cobrar',
+                'valor_recaudado_oficina' => 0,
+                'valor_pagado_aseguradora' => 0,
+                'saldo_pendiente_oficina' => $montoActual,
+                'saldo_pendiente_aseguradora' => 0,
+                'comision_recibida' => 0,
+                'dias_vencidos' => 0,
+                'fecha_limite_pago' => $fechaLimite->toDateString(),
+                'fecha_inicio_vigencia' => $poliza->start_date,
+                'fecha_fin_vigencia' => $poliza->end_date,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return $numCuotas;
+    }
+
+    public function regenerarCarteraCuotas(Request $request, $id)
+    {
+        try {
+            $brokerId = $request->attributes->get('broker_id') ?? 1;
+            $poliza = Poliza::where('broker_id', $brokerId)->find($id);
+
+            if (!$poliza) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Póliza no encontrada',
+                ], 404);
+            }
+
+            $poliza->refresh();
+            $formaPago = $request->input('forma_pago')
+                ?? $poliza->forma_pago
+                ?? $poliza->payment_method
+                ?? null;
+
+            $updates = [];
+            if ($request->filled('periodicidad_pago')) {
+                $updates['payment_frequency'] = $this->mapPaymentFrequencyFromFrontend($request->input('periodicidad_pago'));
+            } elseif ($request->filled('payment_frequency')) {
+                $updates['payment_frequency'] = $this->mapPaymentFrequencyFromFrontend($request->input('payment_frequency'));
+            }
+
+            if ($request->filled('cuotas')) {
+                $updates['installments_count'] = max(1, (int) $request->input('cuotas'));
+            } elseif ($request->filled('installments_count')) {
+                $updates['installments_count'] = max(1, (int) $request->input('installments_count'));
+            }
+
+            if (!empty($updates)) {
+                $poliza->update($updates);
+                $poliza->refresh();
+            }
+
+            DB::beginTransaction();
+            $cuotas = $this->regenerateCarteraItemsForPoliza($poliza, $formaPago);
+
+            if ($cuotas === -1) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se puede regenerar: la póliza tiene pagos activos no anulados.',
+                ], 409);
+            }
+
+            $proxima = DB::table('cartera_items')
+                ->where('poliza_id', $poliza->id)
+                ->where('broker_id', $brokerId)
+                ->where('numero_renovacion', (int) ($poliza->numero_renovacion ?? 0))
+                ->where('recibo_anulado', false)
+                ->whereNotNull('fecha_limite_pago')
+                ->min('fecha_limite_pago');
+
+            $poliza->update([
+                'installments_count' => max(1, $cuotas),
+                'payment_due_date' => $proxima,
+                'payment_status' => $cuotas > 0 ? 'pending' : $poliza->payment_status,
+                'estado_cartera' => $cuotas > 0 ? 'Sin pagos Asignados' : $poliza->estado_cartera,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Cartera regenerada con {$cuotas} cuota(s).",
+                'data' => [
+                    'cuotas' => $cuotas,
+                    'payment_due_date' => $proxima,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('regenerarCarteraCuotas failed: ' . $e->getMessage(), ['poliza_id' => $id]);
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo regenerar la cartera: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -4820,6 +5251,22 @@ class SaasPolizasController extends Controller
                 $query->where('ramo_id', $request->ramo_id);
             }
 
+            if ($request->filled('ramo_ids')) {
+                $ids = array_filter(array_map('trim', explode(',', (string) $request->ramo_ids)));
+                if (!empty($ids)) {
+                    $query->whereIn('ramo_id', $ids);
+                }
+            }
+
+            if ($request->filled('exclude_ramo_ids')) {
+                $ids = array_filter(array_map('trim', explode(',', (string) $request->exclude_ramo_ids)));
+                if (!empty($ids)) {
+                    $query->where(function ($q) use ($ids) {
+                        $q->whereNotIn('ramo_id', $ids)->orWhereNull('ramo_id');
+                    });
+                }
+            }
+
             if ($request->has('estado') && !empty($request->estado)) {
                 $estadoFilter = strtoupper(trim((string)$request->estado));
                 if ($estadoFilter === 'POR_VENCER') {
@@ -4868,10 +5315,39 @@ class SaasPolizasController extends Controller
                 $query->where('end_date', '<=', $request->fecha_fin);
             }
 
+            // Fechas de cancelación (cancelled_at) - útil para reportar pólizas canceladas en un periodo
+            if ($request->filled('cancelled_desde')) {
+                $query->whereDate('cancelled_at', '>=', $request->cancelled_desde);
+            }
+            if ($request->filled('cancelled_hasta')) {
+                $query->whereDate('cancelled_at', '<=', $request->cancelled_hasta);
+            }
+
+            if ($request->filled('cancellation_reason')) {
+                $query->where('cancellation_reason', $request->cancellation_reason);
+            }
+
             if ($request->filled('subramo')) {
                 $subramoVal = $request->subramo;
                 $query->whereHas('ramo', function($q) use ($subramoVal) {
                     $q->where('subramo', 'like', "%{$subramoVal}%");
+                });
+            }
+
+            if ($request->filled('forma_pago')) {
+                $fp = strtolower(trim((string) $request->forma_pago));
+                $methodMap = ['contado' => 'cash', 'credito' => 'card', 'financiado' => 'financing'];
+                $query->where(function ($q) use ($fp, $methodMap) {
+                    $q->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(custom_fields, '$.forma_pago'))) = ?", [$fp]);
+                    if (isset($methodMap[$fp])) {
+                        $q->orWhere(function ($q2) use ($fp, $methodMap) {
+                            $q2->where(function ($q3) {
+                                $q3->whereNull('custom_fields')
+                                   ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(custom_fields, '$.forma_pago')) IS NULL")
+                                   ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(custom_fields, '$.forma_pago')) = ''");
+                            })->where('payment_method', $methodMap[$fp]);
+                        });
+                    }
                 });
             }
 
@@ -4966,6 +5442,8 @@ class SaasPolizasController extends Controller
             'observaciones' => ['header' => 'Observaciones', 'getter' => fn($p) => $p->notes ? strip_tags($p->notes) : ''],
             'telefono_cliente' => ['header' => 'Teléfono Cliente', 'getter' => fn($p) => $p->client?->phone ?? $p->client?->mobile_phone ?? ''],
             'email_cliente' => ['header' => 'Email Cliente', 'getter' => fn($p) => $p->client?->email ?? ''],
+            'fecha_cancelacion' => ['header' => 'Fecha Cancelación', 'getter' => fn($p) => $p->cancelled_at ? $p->cancelled_at->format('Y-m-d') : ''],
+            'motivo_cancelacion' => ['header' => 'Motivo Cancelación', 'getter' => fn($p) => $p->cancellation_reason ?? ''],
         ];
     }
 
@@ -5127,6 +5605,7 @@ class SaasPolizasController extends Controller
             
             $query = Poliza::where('broker_id', $brokerId)
                 ->where('auto_renewal', true)
+                ->where('status', '!=', 'cancelled')
                 ->with(['client', 'assignedUser', 'ramo', 'automoviles', 'vendedor']);
             
             // Filtros por días de vencimiento
@@ -5746,6 +6225,17 @@ class SaasPolizasController extends Controller
     public function cancellationReasons()
     {
         $reasons = \App\Models\Poliza::CANCELLATION_REASONS;
+        return response()->json([
+            'success' => true,
+            'data' => collect($reasons)
+                ->map(fn($label, $key) => ['key' => $key, 'label' => $label])
+                ->values(),
+        ]);
+    }
+
+    public function nonRenewalReasons()
+    {
+        $reasons = \App\Models\Poliza::NON_RENEWAL_REASONS;
         return response()->json([
             'success' => true,
             'data' => collect($reasons)
