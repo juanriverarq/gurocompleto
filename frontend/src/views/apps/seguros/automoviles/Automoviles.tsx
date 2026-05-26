@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRuntSync } from 'src/context/RuntSyncContext';
+import { useToast } from 'src/hooks/use-toast';
 import { Card, Button, Table, TextInput, Label, Spinner, Modal, Select } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import HeroButton from 'src/components/HeroButton';
@@ -114,6 +115,7 @@ const Automoviles: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [runtLoading, setRuntLoading] = useState(false);
   const { loading: massRuntLoading, stopping: massRuntStopping, progress: massRuntProgress, done: massRuntDone, start: startRuntSync, stop: stopRuntSync, clearDone: clearMassRuntDone } = useRuntSync();
+  const { toast } = useToast();
   const [showRuntPopover, setShowRuntPopover] = useState(false);
   const [showRuntResync, setShowRuntResync] = useState(false);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
@@ -1711,8 +1713,13 @@ const Automoviles: React.FC = () => {
                         setEditForm(data);
                       }
                       loadData();
+                      toast({ title: 'RUNT actualizado', description: 'Datos del vehículo sincronizados correctamente.' });
                     } catch (e: any) {
-                      alert(e?.message || 'Error al consultar RUNT');
+                      toast({
+                        title: 'Error al consultar RUNT',
+                        description: e?.message || 'No se pudo conectar con el RUNT.',
+                        variant: 'destructive',
+                      });
                     } finally {
                       setRuntLoading(false);
                     }

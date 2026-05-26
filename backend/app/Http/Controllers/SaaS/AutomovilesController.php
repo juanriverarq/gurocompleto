@@ -523,15 +523,21 @@ class AutomovilesController extends Controller
                 }
 
                 try {
-                    $response = Http::timeout(10)->get('https://historialrunt.org/api/consultar.php', [
-                        'placa' => strtoupper($auto->placa),
-                        'documento' => $documento,
-                    ]);
+                    // Consulta RUNT directa vía microservicio (OCR del libre-captcha).
+                    // Antes: historialrunt.org (servicio terciario). Ahora: portal público oficial.
+                    $response = Http::timeout(120)->get(
+                        rtrim((string) config('services.microservicio.base_url'), '/') . '/runt/consulta-vehiculo',
+                        [
+                            'placa' => strtoupper($auto->placa),
+                            'documento' => $documento,
+                            'tipo_doc' => 'C',
+                        ]
+                    );
 
                     $body = $response->json() ?? [];
                     if (!$response->ok() || empty($body['success'])) {
                         $failed++;
-                        $msg = $body['error'] ?? $body['mensaje'] ?? $body['message'] ?? ('HTTP ' . $response->status());
+                        $msg = $body['detail'] ?? $body['error'] ?? $body['mensaje'] ?? $body['message'] ?? ('HTTP ' . $response->status());
                         // Marcar como consultado si la respuesta llegó (no fue timeout/error de red)
                         // para que el cursor avance en próximas pasadas.
                         if ($response->ok()) {
@@ -671,14 +677,18 @@ class AutomovilesController extends Controller
                 continue;
             }
             try {
-                $response = Http::timeout(10)->get('https://historialrunt.org/api/consultar.php', [
-                    'placa' => strtoupper($auto->placa),
-                    'documento' => $documento,
-                ]);
+                $response = Http::timeout(120)->get(
+                    rtrim((string) config('services.microservicio.base_url'), '/') . '/runt/consulta-vehiculo',
+                    [
+                        'placa' => strtoupper($auto->placa),
+                        'documento' => $documento,
+                        'tipo_doc' => 'C',
+                    ]
+                );
                 $body = $response->json() ?? [];
                 if (!$response->ok() || empty($body['success'])) {
                     $failed++;
-                    $msg = $body['error'] ?? $body['mensaje'] ?? $body['message'] ?? ('HTTP ' . $response->status());
+                    $msg = $body['detail'] ?? $body['error'] ?? $body['mensaje'] ?? $body['message'] ?? ('HTTP ' . $response->status());
                     // Marcar como consultado incluso si el RUNT respondió "no coincide"
                     // para que el cursor avance y el sync masivo no se quede en loop
                     // sobre los mismos vehículos. Solo evitamos marcar en errores
@@ -743,6 +753,20 @@ class AutomovilesController extends Controller
         ]);
     }
 
+    private function parseRuntDate(?string $value): ?string
+    {
+        if (empty($value)) return null;
+        // DD/MM/YYYY → Y-m-d
+        if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $value, $m)) {
+            return "{$m[3]}-{$m[2]}-{$m[1]}";
+        }
+        // ISO con zona horaria: 2025-07-22T00:00:00.000-05:00 → Y-m-d
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $value, $m)) {
+            return $m[1];
+        }
+        return $value;
+    }
+
     private function applyRuntData(Automovil $auto, array $data): void
     {
         $vehiculo = $data['vehiculo'] ?? [];
@@ -777,14 +801,14 @@ class AutomovilesController extends Controller
         }
 
         $auto->numero_soat = $soat['numSoat'] ?? $auto->numero_soat;
-        $auto->fecha_inicio_soat = !empty($soat['fechaInicioPoliza']) ? $soat['fechaInicioPoliza'] : $auto->fecha_inicio_soat;
-        $auto->fecha_vencimiento_soat = !empty($soat['fechaVencimSoat']) ? $soat['fechaVencimSoat'] : $auto->fecha_vencimiento_soat;
+        $auto->fecha_inicio_soat = $this->parseRuntDate($soat['fechaInicioPoliza'] ?? null) ?? $auto->fecha_inicio_soat;
+        $auto->fecha_vencimiento_soat = $this->parseRuntDate($soat['fechaVencimSoat'] ?? null) ?? $auto->fecha_vencimiento_soat;
         $auto->aseguradora_soat = $soat['razonSocialAsegur'] ?? $auto->aseguradora_soat;
         $auto->estado_soat = $soat['estadoSoat'] ?? $soat['estado'] ?? $auto->estado_soat;
 
         $auto->numero_certificado_rtm = $rtm['numeCerti'] ?? $auto->numero_certificado_rtm;
-        $auto->fecha_expedicion_rtm = !empty($rtm['fechaExpedicionRvt']) ? $rtm['fechaExpedicionRvt'] : $auto->fecha_expedicion_rtm;
-        $auto->fecha_vencimiento_rtm = !empty($rtm['fechaVencimientoRvt']) ? $rtm['fechaVencimientoRvt'] : $auto->fecha_vencimiento_rtm;
+        $auto->fecha_expedicion_rtm = $this->parseRuntDate($rtm['fechaExpedicionRvt'] ?? null) ?? $auto->fecha_expedicion_rtm;
+        $auto->fecha_vencimiento_rtm = $this->parseRuntDate($rtm['fechaVencimientoRvt'] ?? null) ?? $auto->fecha_vencimiento_rtm;
         $auto->nombre_cda_rtm = $rtm['nombreCda'] ?? $auto->nombre_cda_rtm;
         $auto->estado_rtm = $rtm['estadoRvt'] ?? $auto->estado_rtm;
 
@@ -792,7 +816,7 @@ class AutomovilesController extends Controller
         $auto->gravamenes = $estadoLegal['gravamenes'] ?? $vehiculo['gravamenes'] ?? $auto->gravamenes;
         $auto->prendas = $estadoLegal['prendas'] ?? $vehiculo['prendas'] ?? $auto->prendas;
         $auto->organismo_transito = $estadoLegal['organismoTransito'] ?? $vehiculo['organismoTransito'] ?? $auto->organismo_transito;
-        $auto->fecha_registro_runt = !empty($vehiculo['fechaRegistro']) ? $vehiculo['fechaRegistro'] : $auto->fecha_registro_runt;
+        $auto->fecha_registro_runt = $this->parseRuntDate($vehiculo['fechaRegistro'] ?? null) ?? $auto->fecha_registro_runt;
 
         $auto->propietario_nombre = $propietario['nombre'] ?? $auto->propietario_nombre;
         $auto->propietario_documento = $propietario['documento'] ?? $auto->propietario_documento;
@@ -837,16 +861,23 @@ class AutomovilesController extends Controller
         }
 
         try {
-            $response = Http::timeout(30)->get('https://historialrunt.org/api/consultar.php', [
-                'placa' => strtoupper($placa),
-                'documento' => $documento,
-            ]);
+            // Consulta RUNT directa vía microservicio (portal público oficial + OCR captcha).
+            $response = Http::timeout(120)->get(
+                rtrim((string) config('services.microservicio.base_url'), '/') . '/runt/consulta-vehiculo',
+                [
+                    'placa' => strtoupper($placa),
+                    'documento' => $documento,
+                    'tipo_doc' => 'C',
+                ]
+            );
 
             if (!$response->ok()) {
+                $errBody = $response->json() ?? [];
+                $errMsg = $errBody['detail'] ?? $errBody['message'] ?? $errBody['error'] ?? ('Error al consultar RUNT: HTTP ' . $response->status());
                 return response()->json([
                     'success' => false,
-                    'message' => 'Error al consultar RUNT: HTTP ' . $response->status(),
-                ], 502);
+                    'message' => $errMsg,
+                ], $response->status() >= 400 ? $response->status() : 502);
             }
 
             $data = $response->json();
@@ -861,10 +892,20 @@ class AutomovilesController extends Controller
             $this->applyRuntData($auto, $data);
             $auto->save();
 
+            $fresh = $auto->fresh();
             return response()->json([
                 'success' => true,
                 'message' => 'Consulta RUNT exitosa. Datos actualizados.',
-                'data' => $auto->fresh(),
+                'data' => array_merge($fresh->toArray(), [
+                    'fecha_inicio_soat'      => $fresh->fecha_inicio_soat?->format('Y-m-d'),
+                    'fecha_vencimiento_soat' => $fresh->fecha_vencimiento_soat?->format('Y-m-d'),
+                    'fecha_expedicion_rtm'   => $fresh->fecha_expedicion_rtm?->format('Y-m-d'),
+                    'fecha_vencimiento_rtm'  => $fresh->fecha_vencimiento_rtm?->format('Y-m-d'),
+                    'fecha_registro_runt'    => $fresh->fecha_registro_runt?->format('Y-m-d'),
+                    'runt_consulted_at'      => $fresh->runt_consulted_at?->format('Y-m-d H:i:s'),
+                    'updated_at'             => $fresh->updated_at?->format('Y-m-d H:i:s'),
+                    'created_at'             => $fresh->created_at?->format('Y-m-d H:i:s'),
+                ]),
             ]);
         } catch (\Throwable $e) {
             Log::error('RUNT consultation failed', [
