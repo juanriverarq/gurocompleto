@@ -1106,6 +1106,14 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
+  async pingInsurer(insurerCode: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/ping`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
   async healthCheckInsurer(insurerCode: string): Promise<ApiResponse<any>> {
     const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/${insurerCode}/health-check`, {
       method: 'POST',
@@ -1186,6 +1194,34 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
+  async guiameTts(params: { text: string; voice?: string }): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/saas/guiame/tts`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
+    if (!response.ok) {
+      throw new Error(`TTS failed: ${response.status}`);
+    }
+    return response.blob();
+  }
+
+  async guiameChat(params: {
+    message: string;
+    page_url?: string;
+    page_title?: string;
+    screenshot?: string;
+    case_state?: string;
+    history?: { role: 'user' | 'assistant'; content: string }[];
+  }): Promise<ApiResponse<{ response: string; model: string; latency_ms?: number; highlight?: { x: number; y: number; label?: string } | null; navigate?: string | null }>> {
+    const response = await fetch(`${API_BASE_URL}/saas/guiame/chat`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
+    return this.handleResponse(response);
+  }
+
   async cancelSync(batchId: string): Promise<ApiResponse<any>> {
     const response = await fetch(`${API_BASE_URL}/saas/integraciones/aseguradoras/sync/${batchId}/cancel`, {
       method: 'POST',
@@ -1206,6 +1242,7 @@ class SaasApiService {
   async getCarteraAseguradoras(params: {
     page?: number; per_page?: number; tab?: string; search?: string; insurer?: string;
     link_filter?: 'all' | 'linked' | 'unlinked';
+    seller_filter?: 'all' | 'with' | 'without';
   }): Promise<ApiResponse<any>> {
     const searchParams = new URLSearchParams();
     if (params.page) searchParams.set('page', String(params.page));
@@ -1214,10 +1251,35 @@ class SaasApiService {
     if (params.search) searchParams.set('search', params.search);
     if (params.insurer) searchParams.set('insurer', params.insurer);
     if (params.link_filter && params.link_filter !== 'all') searchParams.set('link_filter', params.link_filter);
+    if (params.seller_filter && params.seller_filter !== 'all') searchParams.set('seller_filter', params.seller_filter);
     const response = await fetch(`${API_BASE_URL}/saas/cartera-aseguradoras?${searchParams}`, {
       headers: await this.getAuthHeaders(),
     });
     return this.handleResponse(response);
+  }
+
+  /**
+   * Export CSV de cartera consolidada con filtros. Descarga directa como blob.
+   * Devuelve la URL preparada para usar con <a download> o fetch + saveAs.
+   */
+  async exportCarteraAseguradoras(params: {
+    tab?: string; search?: string; insurer?: string;
+    link_filter?: 'all' | 'linked' | 'unlinked';
+    seller_filter?: 'all' | 'with' | 'without';
+  }): Promise<Blob> {
+    const searchParams = new URLSearchParams();
+    if (params.tab) searchParams.set('tab', params.tab);
+    if (params.search) searchParams.set('search', params.search);
+    if (params.insurer) searchParams.set('insurer', params.insurer);
+    if (params.link_filter && params.link_filter !== 'all') searchParams.set('link_filter', params.link_filter);
+    if (params.seller_filter && params.seller_filter !== 'all') searchParams.set('seller_filter', params.seller_filter);
+    const response = await fetch(`${API_BASE_URL}/saas/cartera-aseguradoras/export?${searchParams}`, {
+      headers: await this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Export falló: HTTP ${response.status}`);
+    }
+    return await response.blob();
   }
 
   async getCarteraAseguradorasStats(insurer?: string, linkFilter?: 'all' | 'linked' | 'unlinked'): Promise<ApiResponse<any>> {
@@ -1233,6 +1295,117 @@ class SaasApiService {
   async getCarteraAseguradorasCuotas(policyNumber: string): Promise<ApiResponse<any>> {
     const url = `${API_BASE_URL}/saas/cartera-aseguradoras/cuotas/${encodeURIComponent(policyNumber)}`;
     const response = await fetch(url, { headers: await this.getAuthHeaders() });
+    return this.handleResponse(response);
+  }
+
+  async deleteCarteraAseguradorasData(params: { insurer?: string } = {}): Promise<ApiResponse<any>> {
+    const sp = new URLSearchParams();
+    if (params.insurer) sp.set('insurer', params.insurer);
+    const qs = sp.toString();
+    const response = await fetch(`${API_BASE_URL}/saas/cartera-aseguradoras/data${qs ? `?${qs}` : ''}`, {
+      method: 'DELETE',
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async previewCarteraAseguradorasImport(file: File, insurer?: string): Promise<ApiResponse<any>> {
+    const form = new FormData();
+    form.append('file', file);
+    if (insurer) form.append('insurer_code', insurer);
+    const response = await fetch(`${API_BASE_URL}/saas/cartera-aseguradoras/import/preview`, {
+      method: 'POST',
+      headers: await this.getAuthHeadersOnly(),
+      body: form,
+    });
+    return this.handleResponse(response);
+  }
+
+  async importCarteraAseguradoras(file: File, params: {
+    insurer_code: string; mapping: Record<string, number | null>; replace?: boolean;
+  }): Promise<ApiResponse<any>> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('insurer_code', params.insurer_code);
+    form.append('mapping', JSON.stringify(params.mapping));
+    form.append('replace', params.replace ? '1' : '0');
+    const response = await fetch(`${API_BASE_URL}/saas/cartera-aseguradoras/import`, {
+      method: 'POST',
+      headers: await this.getAuthHeadersOnly(),
+      body: form,
+    });
+    return this.handleResponse(response);
+  }
+
+  // ===== EMAIL SETTINGS DEL BROKER (SMTP) =====
+
+  async getBrokerEmailSettings(): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/email-settings`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async updateBrokerEmailSettings(payload: {
+    from_email: string; from_name?: string; reply_to_email?: string;
+    smtp_host: string; smtp_port: number; smtp_username: string;
+    smtp_password?: string;  // opcional al editar (si vacío, mantiene el existente)
+    smtp_encryption?: 'tls' | 'ssl' | null; provider?: string;
+  }): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/email-settings`, {
+      method: 'PUT',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse(response);
+  }
+
+  async testBrokerEmailSettings(to?: string): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/email-settings/test`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify({ to }),
+    });
+    return this.handleResponse(response);
+  }
+
+  // ===== NOTIFICACIONES EMAIL A VENDEDORES (CONFIG GLOBAL DEL BROKER) =====
+
+  async getVendedorNotificationConfig(): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/vendedor-notifications`, {
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
+  async updateVendedorNotificationConfig(payload: {
+    enabled?: boolean;
+    recipients_mode?: 'all' | 'with_email_only';
+    bcc_admin?: string | null;
+    cartera_enabled?: boolean;
+    cartera_frequency?: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+    cartera_day_of_week?: number;
+    cartera_day_of_month?: number;
+    cartera_hour?: number;
+    cartera_min_dias_mora?: number;
+    vencimientos_enabled?: boolean;
+    vencimientos_dias_anticipacion?: number[];
+    vencimientos_hour?: number;
+  }): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/vendedor-notifications`, {
+      method: 'PUT',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse(response);
+  }
+
+  async testVendedorNotification(type: 'cartera' | 'vencimientos'): Promise<ApiResponse<any>> {
+    const response = await fetch(`${API_BASE_URL}/saas/vendedor-notifications/test`, {
+      method: 'POST',
+      headers: await this.getAuthHeaders(),
+      body: JSON.stringify({ type }),
+    });
     return this.handleResponse(response);
   }
 
@@ -1282,6 +1455,21 @@ class SaasApiService {
     return this.handleResponse(response);
   }
 
+  async deleteRecibosComisionesData(params: {
+    insurer?: string; anio?: string; mes?: string;
+  } = {}): Promise<ApiResponse<any>> {
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+    });
+    const qs = sp.toString();
+    const response = await fetch(`${API_BASE_URL}/saas/recibos-comisiones/data${qs ? `?${qs}` : ''}`, {
+      method: 'DELETE',
+      headers: await this.getAuthHeaders(),
+    });
+    return this.handleResponse(response);
+  }
+
   // ===== PAPELERA (registros soft-deleted) =====
   async getPapeleraEntidades(): Promise<ApiResponse<Array<{ key: string; label: string; count: number }>>> {
     const r = await fetch(`${API_BASE_URL}/saas/papelera/entidades`, { headers: await this.getAuthHeaders() });
@@ -1303,11 +1491,11 @@ class SaasApiService {
     });
     return this.handleResponse(r);
   }
-  async eliminarDefinitivoPapelera(entidad: string, ids: number[]): Promise<ApiResponse<{ deleted: number }>> {
+  async eliminarDefinitivoPapelera(entidad: string, ids: number[], deleteAll = false): Promise<ApiResponse<{ deleted: number }>> {
     const r = await fetch(`${API_BASE_URL}/saas/papelera/${entidad}/eliminar`, {
       method: 'POST',
       headers: { ...(await this.getAuthHeaders()), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify({ ids, delete_all: deleteAll }),
     });
     return this.handleResponse(r);
   }

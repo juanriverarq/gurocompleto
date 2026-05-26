@@ -34,7 +34,112 @@
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
-  
+
+  <!-- ============ LANDINGS B2B TRANSACCIONALES ============ -->
+
+  <!-- L1 · CRM para corredores de seguros -->
+  <url>
+    <loc>https://guro.co/crm-corredores-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <!-- L2 · Software para corredores de seguros (LATAM) -->
+  <url>
+    <loc>https://guro.co/software-corredores-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <!-- L10 · Comparativas BOFU vs competidores -->
+  <url>
+    <loc>https://guro.co/comparar/guro-vs-ebroker</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/comparar/guro-vs-sumavisos</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/comparar/guro-vs-velneo</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/comparar/guro-vs-e2k</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/comparar/guro-vs-mac-corredor</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/comparar/guro-vs-hubspot-insurance</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <url>
+    <loc>https://guro.co/software-agencias-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/automatizacion-renovaciones-polizas</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/whatsapp-business-corredores-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/ia-para-corredores-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/gestion-comisiones-corredores-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/cotizador-embebido-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/gestion-siniestros-corredor</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/comparar</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
   <!-- ============ BLOG ============ -->
   
   <!-- Blog Index -->
@@ -55,151 +160,297 @@
   
   <!-- Blog Articles -->
   <url>
-    <loc>https://guro.co/blog/mejores-software-seguros-colombia</loc>
+    <loc>https://guro.co/blog/mejor-software-corredores-seguros-colombia</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/integracion-contable-software-seguros</loc>
+    <loc>https://guro.co/blog/integracion-erp-contable-agencias-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/software-correduria-pequena</loc>
+    <loc>https://guro.co/blog/software-corredor-independiente-pequeno</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/descargar-software-manejo-polizas</loc>
+    <loc>https://guro.co/blog/software-gestion-polizas-online</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/caracteristicas-clave-software-seguros</loc>
+    <loc>https://guro.co/blog/features-imprescindibles-crm-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/soporte-espanol-software-seguros</loc>
+    <loc>https://guro.co/blog/soporte-tecnico-software-seguros-latam</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/gestion-siniestros-en-linea</loc>
+    <loc>https://guro.co/blog/gestionar-siniestros-online-corredor</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/prueba-gratuita-software-seguros</loc>
+    <loc>https://guro.co/blog/como-evaluar-crm-corredor-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/software-seguros-en-la-nube-colombia</loc>
+    <loc>https://guro.co/blog/software-cloud-seguros-colombia</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/costos-promedio-software-seguros-empresas-medianas</loc>
+    <loc>https://guro.co/blog/cuanto-cuesta-software-agencia-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/comparar-funcionalidades-precios-software-seguros</loc>
+    <loc>https://guro.co/blog/criterios-elegir-software-corredor</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/software-seguros-vida</loc>
+    <loc>https://guro.co/blog/gestionar-polizas-seguros-vida</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/cotizaciones-digitales-software-seguros</loc>
+    <loc>https://guro.co/blog/cotizador-digital-corredor-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/soporte-tecnico-local-software-seguros</loc>
+    <loc>https://guro.co/blog/soporte-local-corredores-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/gestion-clientes-crm-software-seguros</loc>
+    <loc>https://guro.co/blog/crm-clientes-corredor-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/tendencias-tecnologicas-software-seguros</loc>
+    <loc>https://guro.co/blog/insurtech-tendencias-2026</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/integracion-moviles-agentes-software-seguros</loc>
+    <loc>https://guro.co/blog/app-movil-asesores-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/cumplimiento-regulacion-colombia-software-seguros</loc>
+    <loc>https://guro.co/blog/superfinanciera-software-corredor</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/tutoriales-software-seguros</loc>
+    <loc>https://guro.co/blog/academia-corredor-tutoriales-guro</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/software-corretaje-grande</loc>
+    <loc>https://guro.co/blog/software-broker-corretaje-enterprise</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/software-seguros-vehiculos</loc>
+    <loc>https://guro.co/blog/gestion-polizas-auto-corredor</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/licencias-mensuales-software-seguros</loc>
+    <loc>https://guro.co/blog/pricing-saas-corredor-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/reportes-fiscales-software-seguros</loc>
+    <loc>https://guro.co/blog/reportes-dian-corredor-seguros</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://guro.co/blog/software-seguros-inteligencia-artificial</loc>
+    <loc>https://guro.co/blog/ia-seguros-casos-uso-corredor</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
+  <!-- ===== Plan Editorial Fase 1 · Primeros 3 artículos ===== -->
   <url>
-    <loc>https://guro.co/blog/migrar-datos-software-seguros</loc>
+    <loc>https://guro.co/blog/que-es-insurtech-guia-corredores-latam</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/como-ser-corredor-de-seguros-colombia</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/ia-corredores-seguros-12-casos-latam</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/que-es-una-poliza-de-seguro</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/poliza-de-arrendamiento-guia-2026</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/glosario-seguros-corredores-80-terminos</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/diferencia-agente-corredor-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/renovacion-automatica-polizas-guia</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/todo-riesgo-vs-soat-diferencias</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/tabla-comisiones-corredores-seguros-colombia</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/gestionar-siniestro-paso-a-paso-corredor</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/7-kpis-agencia-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/poliza-responsabilidad-civil-colombia</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/poliza-de-cumplimiento-colombia</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/whatsapp-business-vender-seguros-guia</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/mejores-software-corredores-seguros-latam-2026</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/conseguir-clientes-agencia-seguros-10-canales</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/plan-90-dias-digitalizar-agencia-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/modelo-carta-renovacion-poliza-seguro</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/calcular-automatizar-comisiones-equipo-ventas</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/carta-reclamacion-seguro-siniestro</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/cross-selling-up-selling-seguros-ia</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/guro-vs-ebroker-analisis-profundo</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://guro.co/blog/mini-sitio-web-vendedor-seguros</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://guro.co/blog/migracion-excel-a-software-corredor</loc>
     <lastmod>2026-02-12</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

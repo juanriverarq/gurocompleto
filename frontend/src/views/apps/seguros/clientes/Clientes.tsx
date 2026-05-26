@@ -39,6 +39,7 @@ import equidadLogo from 'src/assets/images/logoscompanias/equidad.png';
 import axaLogo from 'src/assets/images/logoscompanias/axa.png';
 import mapfreLogo from 'src/assets/images/logoscompanias/mapfre.png';
 import allianzLogo from 'src/assets/images/logoscompanias/allianz.png';
+import mundialLogo from 'src/assets/images/logoscompanias/mundial.svg';
 
 const INSURER_LOGOS: Record<string, string> = {
   sura: suraLogo,
@@ -54,6 +55,8 @@ const INSURER_LOGOS: Record<string, string> = {
   'axa-colpatria': axaLogo,
   mapfre: mapfreLogo,
   allianz: allianzLogo,
+  mundial: mundialLogo,
+  'seguros mundial': mundialLogo,
 };
 
 const getInsurerLogo = (nombre: string): string | null => {
@@ -1224,24 +1227,24 @@ const Clientes: React.FC = () => {
 
   const handleBulkDeleteClientes = async () => {
     if (selectedIds.size === 0) return;
-    if (
-      !confirm(
-        `¿Eliminar ${selectedIds.size} cliente(s) seleccionados? Esta acción no se puede deshacer.`,
-      )
-    )
-      return;
+    const isTrash = filters.trashed === 'only';
+    if (!confirm(`¿${isTrash ? 'Eliminar PERMANENTEMENTE' : 'Eliminar'} ${selectedIds.size} cliente(s) seleccionados? Esta acción no se puede deshacer.`)) return;
     try {
       setLoading(true);
-      const ids = Array.from(selectedIds);
-      const results = await Promise.allSettled(ids.map((id) => saasApi.deleteCliente(id)));
-      const ok = results.filter((r) => r.status === 'fulfilled').length;
-      const fail = results.length - ok;
-      toast({
-        title: 'Eliminación masiva de clientes',
-        description: `Eliminados: ${ok}. Fallidos: ${fail}.`,
-      });
+      if (isTrash) {
+        const ids = Array.from(selectedIds).map(Number);
+        const res = await saasApi.eliminarDefinitivoPapelera('clientes', ids);
+        toast({ title: 'Eliminación permanente', description: `Eliminados definitivamente: ${(res.data as any)?.deleted ?? ids.length}.` });
+      } else {
+        const ids = Array.from(selectedIds);
+        const results = await Promise.allSettled(ids.map((id) => saasApi.deleteCliente(id)));
+        const ok = results.filter((r) => r.status === 'fulfilled').length;
+        const fail = results.length - ok;
+        toast({ title: 'Eliminación masiva de clientes', description: `Eliminados: ${ok}. Fallidos: ${fail}.` });
+      }
       clearSelection();
       await cargarClientes();
+      await loadEstadisticas();
     } catch (_e) {
       // Mensajes de error ya manejados por el servicio en cada intento
     } finally {
@@ -1283,16 +1286,19 @@ const Clientes: React.FC = () => {
   // Borrado masivo de TODOS los clientes
   const handleBulkDeleteAll = async () => {
     if (bulkDeleteConfirmText !== 'ELIMINAR TODOS') return;
-    
+
     try {
       setLoading(true);
-      const response = await saasApi.bulkDeleteClientes({ delete_all: true });
+      const isTrash = filters.trashed === 'only';
+      const response = isTrash
+        ? await saasApi.eliminarDefinitivoPapelera('clientes', [], true)
+        : await saasApi.bulkDeleteClientes({ delete_all: true });
       
       if (response.success) {
         const data = response.data as any;
         toast({
           title: 'Borrado masivo completado',
-          description: response.message || `Se eliminaron ${data?.deleted_count || 0} clientes.`,
+          description: response.message || `Se eliminaron ${data?.deleted_count ?? data?.deleted ?? 0} clientes.`,
         });
         setShowBulkDeleteAllModal(false);
         setBulkDeleteConfirmText('');

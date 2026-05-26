@@ -20,6 +20,27 @@ html:not(.dark) .page-wrapper .bg-neutral-900      { background-color: #ffffff; 
 html:not(.dark) .page-wrapper .bg-neutral-800      { background-color: #f3f4f6; } /* gray-100 */
 html:not(.dark) .page-wrapper .bg-neutral-700      { background-color: #e5e7eb; } /* gray-200 */
 html:not(.dark) .page-wrapper .bg-black            { background-color: #ffffff; }
+html:not(.dark) .page-wrapper .bg-\[\#0d0d0d\],
+html:not(.dark) .page-wrapper .bg-\[\#0d0d0e\],
+html:not(.dark) .page-wrapper .bg-\[\#08090b\],
+html:not(.dark) .page-wrapper .bg-\[\#111\],
+html:not(.dark) .page-wrapper .bg-\[\#111111\] { background-color: #ffffff; }
+
+/* Botones con fondo negro intencional (HeroButton, AuthLogin submit, etc.) — mantener negro en light mode */
+html:not(.dark) .page-wrapper button.bg-\[\#0d0d0d\],
+html:not(.dark) .page-wrapper a.bg-\[\#0d0d0d\] {
+  background-color: #0d0d0d !important;
+}
+html:not(.dark) .page-wrapper button.bg-\[\#0d0d0d\] span,
+html:not(.dark) .page-wrapper button.bg-\[\#0d0d0d\] svg,
+html:not(.dark) .page-wrapper a.bg-\[\#0d0d0d\] span,
+html:not(.dark) .page-wrapper a.bg-\[\#0d0d0d\] svg {
+  color: #ffffff !important;
+}
+html:not(.dark) .page-wrapper .bg-\[\#1a1a1a\],
+html:not(.dark) .page-wrapper .bg-\[\#1A1A1A\],
+html:not(.dark) .page-wrapper .bg-\[\#1f1f1f\],
+html:not(.dark) .page-wrapper .bg-\[\#1F1F1F\] { background-color: #f3f4f6; }
 
 /* Con transparencias (backdrop cards) — incluye todas las variantes /10 a /90 */
 html:not(.dark) .page-wrapper .bg-neutral-950\/90  { background-color: rgba(255, 255, 255, 0.98); }
@@ -104,6 +125,14 @@ html:not(.dark) .page-wrapper .text-neutral-300    { color: #374151; } /* gray-7
 html:not(.dark) .page-wrapper .text-neutral-400    { color: #6b7280; } /* gray-500 */
 html:not(.dark) .page-wrapper .text-neutral-500    { color: #6b7280; }
 html:not(.dark) .page-wrapper .text-neutral-600    { color: #4b5563; } /* gray-600 */
+html:not(.dark) .page-wrapper .text-\[\#f3f4f6\],
+html:not(.dark) .page-wrapper .text-\[\#F3F4F6\],
+html:not(.dark) .page-wrapper .text-\[\#fafafa\],
+html:not(.dark) .page-wrapper .text-\[\#FAFAFA\] { color: #111827; }
+html:not(.dark) .page-wrapper .text-\[\#d1d5db\],
+html:not(.dark) .page-wrapper .text-\[\#D1D5DB\] { color: #374151; }
+html:not(.dark) .page-wrapper .text-\[\#9ca3af\],
+html:not(.dark) .page-wrapper .text-\[\#9CA3AF\] { color: #6b7280; }
 
 /* Hover text */
 html:not(.dark) .page-wrapper .hover\:text-white:hover        { color: #111827; }
@@ -147,6 +176,80 @@ html:not(.dark) .page-wrapper .bg-gradient-to-l.text-white,
 html:not(.dark) .page-wrapper .bg-gradient-to-br.text-white,
 html:not(.dark) .page-wrapper .bg-gradient-to-bl.text-white {
   color: #ffffff !important;
+}
+
+html:not(.dark) .page-wrapper button.bg-\[\#573CFF\],
+html:not(.dark) .page-wrapper a.bg-\[\#573CFF\],
+html:not(.dark) .page-wrapper .bg-\[\#573CFF\] {
+  color: #ffffff;
+}
+
+html:not(.dark) .page-wrapper button.bg-primary,
+html:not(.dark) .page-wrapper a.bg-primary,
+html:not(.dark) .page-wrapper .bg-primary {
+  color: #ffffff;
+}
+
+html:not(.dark) .page-wrapper input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+html:not(.dark) .page-wrapper textarea,
+html:not(.dark) .page-wrapper select {
+  color: #111827;
+  border-color: #d1d5db;
+  color-scheme: light;
+}
+
+html:not(.dark) .page-wrapper input:focus,
+html:not(.dark) .page-wrapper textarea:focus,
+html:not(.dark) .page-wrapper select:focus {
+  border-color: rgba(87, 60, 255, 0.75);
+  box-shadow: 0 0 0 3px rgba(87, 60, 255, 0.14);
+  outline: none;
+}
+
+html:not(.dark) .page-wrapper input:disabled,
+html:not(.dark) .page-wrapper textarea:disabled,
+html:not(.dark) .page-wrapper select:disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+html:not(.dark) .page-wrapper .bg-green-50,
+html:not(.dark) .page-wrapper .bg-green-100,
+html:not(.dark) .page-wrapper .bg-emerald-50,
+html:not(.dark) .page-wrapper .bg-emerald-100 {
+  background-color: #ecfdf3;
+}
+
+html:not(.dark) .page-wrapper .text-green-700,
+html:not(.dark) .page-wrapper .text-green-800,
+html:not(.dark) .page-wrapper .text-emerald-700,
+html:not(.dark) .page-wrapper .text-emerald-800 {
+  color: #15803d;
+}
+
+html:not(.dark) .page-wrapper .border-green-200,
+html:not(.dark) .page-wrapper .border-emerald-200 {
+  border-color: #bbf7d0;
+}
+
+html:not(.dark) .page-wrapper .bg-yellow-50,
+html:not(.dark) .page-wrapper .bg-yellow-100,
+html:not(.dark) .page-wrapper .bg-amber-50,
+html:not(.dark) .page-wrapper .bg-amber-100 {
+  background-color: #fffbeb;
+}
+
+html:not(.dark) .page-wrapper .text-yellow-700,
+html:not(.dark) .page-wrapper .text-yellow-800,
+html:not(.dark) .page-wrapper .text-amber-700,
+html:not(.dark) .page-wrapper .text-amber-800 {
+  color: #92400e;
+}
+
+html:not(.dark) .page-wrapper .border-yellow-200,
+html:not(.dark) .page-wrapper .border-amber-200 {
+  border-color: #fde68a;
 }
 
 /* Wallet widget (gradiente personalizado con CSS en <style>) */

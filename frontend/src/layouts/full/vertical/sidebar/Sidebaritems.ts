@@ -15,6 +15,9 @@ export interface MenuitemsType {
   children?: MenuitemsType[];
   // Acción requerida para visibilidad en el menú (por defecto 'ver')
   requiredAction?: 'ver' | 'crear' | 'editar' | 'eliminar' | 'renovar' | 'emitir';
+  // Operatividad requerida para que este item sea visible. Si la operativa del
+  // broker no incluye este modo, el item se oculta. Sin valor → siempre visible.
+  requiredOperativa?: 'manual' | 'automatica';
   chip?: string;
   chipColor?: string;
   variant?: string;
@@ -166,18 +169,21 @@ const BaseMenuitems: MenuitemsType[] = [
     title: 'Cartera',
     icon: 'solar:wallet-bold-duotone',
     href: '/apps/cartera',
+    requiredOperativa: 'manual',
   },
   {
     id: uniqueId(),
     title: 'Cartera Aseguradoras',
     icon: 'solar:buildings-3-bold-duotone',
     href: '/apps/cartera/aseguradoras',
+    requiredOperativa: 'automatica',
   },
   {
     id: uniqueId(),
     title: 'Comisiones Aseguradoras',
     icon: 'solar:dollar-minimalistic-bold-duotone',
     href: '/apps/comisiones/aseguradoras',
+    requiredOperativa: 'automatica',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -534,15 +540,16 @@ export const getFilteredMenuItems = (
   canAccessModule: (module: string) => boolean,
   terminologia?: { vendedor: string; vendedorPlural: string },
   isModuleInPlan?: (module: string) => boolean,
+  operativa?: { manual: boolean; automatica: boolean },
 ): MenuitemsType[] => {
   let items = [...BaseMenuitems];
-  
+
   // Aplicar terminología si se proporciona
   if (terminologia) {
     items = applyTerminologia(items, terminologia);
   }
-  
-  const filteredItems = filterMenuItemsByPermissions(items, hasPermission, canAccessModule, isModuleInPlan);
+
+  const filteredItems = filterMenuItemsByPermissions(items, hasPermission, canAccessModule, isModuleInPlan, operativa);
   const cleanedItems = cleanOrphanedNavLabels(filteredItems);
   return cleanedItems;
 };

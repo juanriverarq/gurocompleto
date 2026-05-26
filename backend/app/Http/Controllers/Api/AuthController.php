@@ -402,12 +402,13 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            // Crear el broker
+            // Crear el broker (arranca en modo "Agencia Automática" por defecto)
             $broker = Broker::create(array_merge($validator->validated(), [
                 'owner_id' => $user->id,
                 'status' => 'trial',
                 'plan' => 'starter',
                 'country' => $request->country ?? 'Colombia',
+                'features' => ['operativa_automatica'],
                 // Cambiado a 7 días de prueba
                 'trial_ends_at' => now()->addDays(7),
             ]));

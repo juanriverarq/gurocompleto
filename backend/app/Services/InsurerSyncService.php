@@ -36,17 +36,25 @@ class InsurerSyncService
         'seguros-del-estado' => 'estado',
         'la-equidad' => 'equidad',
         'allianz' => 'allianz',
+        'qualitas' => 'qualitas',
+        'mundial' => 'mundial',
     ];
 
     private const DOC_TYPE_MAP = [
         'C' => 'CC', 'CC' => 'CC', 'CEDULA' => 'CC', 'CÉDULA' => 'CC',
         'CEDULA DE CIUDADANIA' => 'CC', 'CÉDULA DE CIUDADANÍA' => 'CC',
+        'CED.CIUDADANIA' => 'CC', 'CED CIUDADANIA' => 'CC',
         'CE' => 'CE', 'CEDULA EXTRANJERIA' => 'CE', 'CÉDULA DE EXTRANJERÍA' => 'CE',
+        'CED.EXTRANJERIA' => 'CE', 'CED EXTRANJERIA' => 'CE', 'CEDULA DE EXTRANJERIA' => 'CE',
         'NIT' => 'NIT', 'NT' => 'NIT',
         'TI' => 'TI', 'TARJ.IDENTIDAD' => 'TI', 'TARJETA DE IDENTIDAD' => 'TI',
         'RC' => 'RC', 'REGISTRO CIVIL' => 'RC',
         'PA' => 'PA', 'PP' => 'PA', 'PASAPORTE' => 'PA',
         'PEP' => 'PEP', 'PPT' => 'PPT',
+        'PERMISO PROTECCION TEMPORAL' => 'PPT',
+        'PERMISO POR PROTECCION TEMPORAL' => 'PPT',
+        'PERMISO POR PROTECCION TEMPORL' => 'PPT', // SURA usa este recorte
+        'PERMISO ESPECIAL DE PERMANENCIA' => 'PEP',
         // Bolívar numeric codes
         '1' => 'CC', '2' => 'NIT', '3' => 'CE', '4' => 'TI', '5' => 'PA', '6' => 'RC',
     ];
@@ -116,6 +124,16 @@ class InsurerSyncService
                 'message' => 'Seguros del Estado no expone un listado de clientes'];
         }
 
+        if ($slug === 'qualitas') {
+            return ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'total_fetched' => 0,
+                'message' => 'Qualitas no expone un listado independiente de clientes (se derivan de pólizas)'];
+        }
+
+        if ($slug === 'mundial') {
+            return ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'total_fetched' => 0,
+                'message' => 'Clientes de Seguros Mundial se derivan de la cartera'];
+        }
+
         $allClients = $this->fetchRecords($slug, 'clientes', $conn->microservice_session_id);
         if (isset($allClients['_error'])) {
             return ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'total_fetched' => 0,
@@ -128,6 +146,7 @@ class InsurerSyncService
         $updated = 0;
         $unchanged = 0;
         $errors = 0;
+        $skippedManual = 0;
 
         foreach ($allClients as $raw) {
             try {
@@ -147,6 +166,12 @@ class InsurerSyncService
                     ->first();
 
                 if ($existing) {
+                    // Si el cliente es manual (nunca lo tocó el sync), no lo tocamos.
+                    // Marca: custom_fields._sync_source ausente.
+                    if (empty($existing->custom_fields['_sync_source'] ?? null)) {
+                        $skippedManual++;
+                        continue;
+                    }
                     $wasDeleted = $existing->trashed();
                     if ($wasDeleted) {
                         $existing->restore();
@@ -183,6 +208,11 @@ class InsurerSyncService
                         ->where('document_number', $normalized['document_number'])
                         ->first();
                     if ($retry) {
+                        // Cliente manual: no tocar.
+                        if (empty($retry->custom_fields['_sync_source'] ?? null)) {
+                            $skippedManual++;
+                            continue;
+                        }
                         $wasDeleted = $retry->trashed();
                         if ($wasDeleted) {
                             $retry->restore();
@@ -219,7 +249,7 @@ class InsurerSyncService
             }
         }
 
-        return ['created' => $created, 'updated' => $updated, 'unchanged' => $unchanged, 'errors' => $errors, 'total_fetched' => count($allClients)];
+        return ['created' => $created, 'updated' => $updated, 'unchanged' => $unchanged, 'skipped_manual' => $skippedManual, 'errors' => $errors, 'total_fetched' => count($allClients)];
     }
 
     private function normalizeCliente(string $insurerCode, array $raw): ?array
@@ -361,6 +391,11 @@ class InsurerSyncService
     {
         $slug = self::SLUG_MAP[$conn->insurer_code] ?? $conn->insurer_code;
 
+        if ($slug === 'mundial') {
+            return ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'total_fetched' => 0,
+                'message' => 'Pólizas de Seguros Mundial se derivan de la cartera'];
+        }
+
         $allPolizas = $this->fetchRecords($slug, 'polizas', $conn->microservice_session_id);
         if (isset($allPolizas['_error'])) {
             return ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'errors' => 0, 'total_fetched' => 0,
@@ -373,6 +408,16 @@ class InsurerSyncService
         $updated = 0;
         $unchanged = 0;
         $errors = 0;
+        $skippedManual = 0;
+        $adoptedManual = 0;
+        $clientsCreated = 0;
+        $clientsUpdated = 0;
+
+        // Resolver aseguradora_id una sola vez (constante por insurer del broker).
+        // Sin esto, las pólizas creadas por sync quedan sin FK y la UI no muestra el insurer.
+        $aseguradoraId = \App\Models\Aseguradora::where('broker_id', $conn->broker_id)
+            ->whereRaw('LOWER(nombre) = ?', [strtolower($this->insurerDisplayName($conn->insurer_code))])
+            ->value('id');
 
         foreach ($allPolizas as $raw) {
             try {
@@ -407,21 +452,34 @@ class InsurerSyncService
                     if ($client && empty($normalized['client_name'])) {
                         $normalized['client_name'] = trim($client->first_name . ' ' . $client->last_name);
                     }
+                    if (!$client) {
+                        $clientResult = $this->syncClienteFromPoliza($conn, $normalized);
+                        $client = $clientResult['client'];
+                        $clientId = $client?->id;
+                        if (($clientResult['status'] ?? null) === 'created') {
+                            $clientsCreated++;
+                        } elseif (($clientResult['status'] ?? null) === 'updated') {
+                            $clientsUpdated++;
+                        }
+                    }
                 }
 
                 $sourceTag = "Sincronizado desde " . $this->insurerDisplayName($conn->insurer_code);
                 if ($branchName) {
                     $normalized['description'] = ($normalized['description'] ?? '') ?: "Ramo: {$branchName}";
-                    // Resolve ramo_id from branch name at listing time
-                    $ramoRecord = \App\Models\Ramo::where('broker_id', $conn->broker_id)
-                        ->whereRaw('LOWER(nombre) = ?', [strtolower($branchName)])
-                        ->first();
-                    if ($ramoRecord) {
-                        $normalized['ramo_id'] = $ramoRecord->id;
+                    $ramoId = $this->resolveOrCreateRamoForBroker($conn->broker_id, $branchName);
+                    if ($ramoId) {
+                        $normalized['ramo_id'] = $ramoId;
                     }
                 }
 
                 if ($existing) {
+                    // Detectar si la póliza era manual (sin _sync_source). Antes la
+                    // saltábamos; ahora la "adoptamos" pero SOLO sobrescribimos
+                    // campos que difieren del sync (para no machacar info que el
+                    // usuario hubiera puesto a mano si ya coincide).
+                    $wasManualBefore = empty($existing->custom_fields['_sync_source'] ?? null);
+
                     $wasDeleted = $existing->trashed();
                     if ($wasDeleted) {
                         $existing->restore();
@@ -438,9 +496,69 @@ class InsurerSyncService
                         continue;
                     }
 
-                    $updateData = array_filter($normalized, fn($v) => $v !== null && $v !== '');
-                    unset($updateData['policy_number']);
+                    $candidateUpdates = array_filter($normalized, fn($v) => $v !== null && $v !== '');
+                    unset($candidateUpdates['policy_number']);
+
+                    if ($wasManualBefore) {
+                        // Manual: comparar campo por campo. Solo escribir lo que cambia.
+                        $diff = [];
+                        foreach ($candidateUpdates as $k => $v) {
+                            $cur = $existing->$k;
+                            $changed = false;
+                            if (is_numeric($v) && is_numeric($cur)) {
+                                $changed = abs((float) $v - (float) $cur) > 0.0001;
+                            } else {
+                                $changed = trim((string) $v) !== trim((string) ($cur ?? ''));
+                            }
+                            if ($changed) {
+                                $diff[$k] = $v;
+                            }
+                        }
+                        if (empty($diff)) {
+                            // Data ya coincide. Solo marcar como "adoptada" para que
+                            // futuros syncs hagan el hash-skip rápido.
+                            $cf = array_merge($existing->custom_fields ?? [], [
+                                '_sync_hash'   => $hash,
+                                '_sync_source' => "{$conn->insurer_code}_sync",
+                                '_sync_at'     => now()->toIso8601String(),
+                                '_was_manual'  => true,
+                            ]);
+                            if ($branchName !== '') {
+                                $cf['_branch_name'] = $branchName;
+                            }
+                            if ($detailMeta !== []) {
+                                $cf['_detail'] = array_merge($cf['_detail'] ?? [], $detailMeta);
+                            }
+                            $existing->update(['custom_fields' => $cf]);
+                            $adoptedManual++;
+                            continue;
+                        }
+                        // Hay campos que difieren — actualizar solo esos + marker.
+                        $updateData = $diff;
+                        if ($clientId && empty($existing->client_id)) {
+                            $updateData['client_id'] = $clientId;
+                        }
+                        if ($aseguradoraId && empty($existing->aseguradora_id)) {
+                            $updateData['aseguradora_id'] = $aseguradoraId;
+                        }
+                        $updateData['custom_fields'] = $this->mergePolizaSyncCustomFields(
+                            array_merge($existing->custom_fields ?? [], ['_was_manual' => true]),
+                            $conn->insurer_code,
+                            $hash,
+                            $detailMeta,
+                            $branchName
+                        );
+                        $existing->update($updateData);
+                        $adoptedManual++;
+                        continue;
+                    }
+
+                    // Ya era sync-managed — comportamiento original (sobrescribe todo).
+                    $updateData = $candidateUpdates;
                     $updateData['client_id'] = $clientId ?? $existing->client_id;
+                    if ($aseguradoraId && empty($existing->aseguradora_id)) {
+                        $updateData['aseguradora_id'] = $aseguradoraId;
+                    }
                     $updateData['custom_fields'] = $this->mergePolizaSyncCustomFields(
                         $existing->custom_fields ?? [],
                         $conn->insurer_code,
@@ -448,6 +566,13 @@ class InsurerSyncService
                         $detailMeta,
                         $branchName
                     );
+                    // Reparar type si quedó como 'vida' por bug histórico
+                    if ($existing->type === 'vida' || empty($existing->type)) {
+                        $newType = $this->mapBranchNameToType($branchName, $detailMeta);
+                        if ($newType !== 'vida' || stripos($branchName, 'vida') !== false || stripos($branchName, 'masvida') !== false) {
+                            $updateData['type'] = $newType;
+                        }
+                    }
                     $existing->update($updateData);
                     if ($wasDeleted) {
                         $created++;
@@ -473,7 +598,12 @@ class InsurerSyncService
                 ], $normalized, [
                     'broker_id' => $conn->broker_id,
                     'client_id' => $clientId,
+                    'aseguradora_id' => $aseguradoraId,
                     'insurance_company' => $this->insurerDisplayName($conn->insurer_code),
+                    // type: enum DB con default 'vida'. Si no lo seteamos, TODAS
+                    // las pólizas sincronizadas quedan como 'vida' aunque sean
+                    // autos/hogar/etc. Mapeamos desde branchName.
+                    'type' => $this->mapBranchNameToType($branchName, $detailMeta),
                 ]));
                 $created++;
             } catch (\Throwable $e) {
@@ -483,12 +613,16 @@ class InsurerSyncService
                         ->where('policy_number', $normalized['policy_number'])
                         ->first();
                     if ($retry) {
+                        // Si era manual, la "adoptamos" igual que el path principal.
+                        // Marcamos _was_manual y dejamos que el update overwrite los
+                        // campos (esta rama solo corre en race conditions raros).
+                        $wasManualRetry = empty($retry->custom_fields['_sync_source'] ?? null);
                         $wasDeleted = $retry->trashed();
                         if ($wasDeleted) {
                             $retry->restore();
                         }
                         $h = $retry->custom_fields['_sync_hash'] ?? null;
-                        if (!$wasDeleted && $h === $hash) {
+                        if (!$wasDeleted && !$wasManualRetry && $h === $hash) {
                             $unchanged++;
                         } else {
                             $updateData = array_filter($normalized, fn($v) => $v !== null && $v !== '');
@@ -500,9 +634,17 @@ class InsurerSyncService
                                 $hash,
                                 $detailMeta
                             );
+                            // Marcar _was_manual si venía de retry sobre manual.
+                            if ($wasManualRetry) {
+                                $cfNow = is_array($updateData['custom_fields']) ? $updateData['custom_fields'] : [];
+                                $cfNow['_was_manual'] = true;
+                                $updateData['custom_fields'] = $cfNow;
+                            }
                             $retry->update($updateData);
                             if ($wasDeleted) {
                                 $created++;
+                            } elseif ($wasManualRetry) {
+                                $adoptedManual++;
                             } else {
                                 $updated++;
                             }
@@ -525,7 +667,12 @@ class InsurerSyncService
             }
         }
 
-        return ['created' => $created, 'updated' => $updated, 'unchanged' => $unchanged, 'errors' => $errors, 'total_fetched' => count($allPolizas)];
+        $result = ['created' => $created, 'updated' => $updated, 'unchanged' => $unchanged, 'skipped_manual' => $skippedManual, 'adopted_manual' => $adoptedManual, 'errors' => $errors, 'total_fetched' => count($allPolizas)];
+        if ($clientsCreated > 0 || $clientsUpdated > 0) {
+            $result['clientes_derivados_created'] = $clientsCreated;
+            $result['clientes_derivados_updated'] = $clientsUpdated;
+        }
+        return $result;
     }
 
     // ──────────────────────────────────────────────────────
@@ -621,6 +768,12 @@ class InsurerSyncService
         }
 
         $slug = self::SLUG_MAP[$conn->insurer_code] ?? $conn->insurer_code;
+
+        // Insurers that derive polizas from cartera have no dedicated detail endpoint.
+        if (in_array($slug, ['mundial'], true)) {
+            return ['success' => true, 'partial' => false, 'not_applicable' => true, 'coverages_count' => 0];
+        }
+
         $expectedSource = "{$conn->insurer_code}_sync";
         $src = $poliza->custom_fields['_sync_source'] ?? '';
         if ($src !== $expectedSource) {
@@ -712,11 +865,9 @@ class InsurerSyncService
                     $branchName = $polizaUpdates['_branch_name_for_detail'] ?? null;
                     unset($polizaUpdates['_branch_name_for_detail']);
                     if ($branchName) {
-                        $ramo = \App\Models\Ramo::where('broker_id', $poliza->broker_id)
-                            ->whereRaw('LOWER(nombre) = ?', [strtolower($branchName)])
-                            ->first();
-                        if ($ramo) {
-                            $polizaUpdates['ramo_id'] = $ramo->id;
+                        $ramoId = $this->resolveOrCreateRamoForBroker($poliza->broker_id, $branchName);
+                        if ($ramoId) {
+                            $polizaUpdates['ramo_id'] = $ramoId;
                         }
                     }
                     $poliza->fill($polizaUpdates);
@@ -2306,9 +2457,116 @@ class InsurerSyncService
                     ]))) ?: null,
                 ];
 
+            case 'qualitas':
+                // Campos DWR: {certificado, endoso, fchEmision, moneda, nombreAseg, poliza,
+                //              prima, ramo, tipoOperacion, tomador, vigencia}
+                // Qualitas no devuelve fin de vigencia en este listado — se infiere o queda null.
+                // tipoOperacion: "Poliza" (nueva), "Sin Prima" (endoso sin valor), "Rehabilitacion",
+                // "Incremento de Recargos", etc. Solo nos interesan las "Poliza" como pólizas nuevas;
+                // las otras son endosos del mismo numero_poliza.
+                $polNum = trim((string) ($raw['poliza'] ?? ''));
+                if ($polNum === '') return null;
+                $prima = $this->parseDecimal($raw['prima'] ?? null);
+                $tipoOp = trim((string) ($raw['tipoOperacion'] ?? ''));
+                $tomador = trim((string) ($raw['tomador'] ?? ''));
+                $aseg = trim((string) ($raw['nombreAseg'] ?? ''));
+                $ramoCodigo = trim((string) ($raw['ramo'] ?? ''));
+                $ramoNombre = $this->qualitasRamoName($ramoCodigo);
+                return [
+                    'policy_number' => $polNum,
+                    'product_name' => $ramoNombre,
+                    '_branch_name' => $ramoNombre,
+                    'client_name' => $tomador ?: $aseg,
+                    'policy_holder_name' => $tomador ?: $aseg,
+                    // Qualitas no devuelve documento del tomador en este listado.
+                    'client_document' => null,
+                    'policy_holder_document' => null,
+                    'issue_date' => $this->parseDate($raw['fchEmision'] ?? ''),
+                    'start_date' => $this->parseDate($raw['vigencia'] ?? $raw['fchEmision'] ?? ''),
+                    'end_date' => null,  // detalle por póliza puede aportar end_date
+                    'status' => $tipoOp === 'Poliza' ? 'active' : ($tipoOp === 'Sin Prima' ? 'active' : 'active'),
+                    'premium_amount' => $prima,
+                    'description' => trim(implode(' · ', array_filter([
+                        $tipoOp !== 'Poliza' ? $tipoOp : null,
+                        $ramoCodigo !== '' ? "Código ramo {$ramoCodigo}" : null,
+                    ]))) ?: null,
+                ];
+
             default:
                 return null;
         }
+    }
+
+    private function syncClienteFromPoliza(InsurerConnection $conn, array $poliza): array
+    {
+        $docNumber = trim((string) ($poliza['client_document'] ?? $poliza['policy_holder_document'] ?? ''));
+        if ($docNumber === '') {
+            return ['client' => null, 'status' => 'skipped'];
+        }
+
+        $fullName = trim((string) ($poliza['client_name'] ?? $poliza['policy_holder_name'] ?? ''));
+        if ($fullName === '') {
+            $fullName = 'Cliente ' . $docNumber;
+        }
+
+        $docType = self::DOC_TYPE_MAP[strtoupper(trim((string) ($poliza['policy_holder_doc_type'] ?? 'CC')))] ?? 'CC';
+        $clientType = $docType === 'NIT' ? 'empresa' : 'persona';
+        $nameParts = preg_split('/\s+/', $fullName) ?: [];
+        $firstName = $nameParts[0] ?? $fullName;
+        $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
+        $hashPayload = [
+            'name' => $fullName,
+            'document_type' => $docType,
+            'document_number' => $docNumber,
+            'address' => $poliza['policy_holder_address'] ?? null,
+            'phone' => $poliza['policy_holder_phone'] ?? null,
+            'city' => $poliza['policy_holder_city'] ?? null,
+        ];
+        $hash = md5(json_encode($hashPayload));
+
+        $client = Cliente::withTrashed()
+            ->where('broker_id', $conn->broker_id)
+            ->where('document_number', $docNumber)
+            ->first();
+
+        $data = [
+            'broker_id' => $conn->broker_id,
+            'client_type' => $clientType,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'company' => $clientType === 'empresa' ? $fullName : null,
+            'document_type' => $docType,
+            'document_number' => $docNumber,
+            'email' => strtolower(str_replace(' ', '', $docNumber)) . '@sinregistro.com',
+            'phone' => trim((string) ($poliza['policy_holder_phone'] ?? '')),
+            'mobile_phone' => trim((string) ($poliza['policy_holder_phone'] ?? '')) ?: '0000000000',
+            'address' => trim((string) ($poliza['policy_holder_address'] ?? '')) ?: 'Sin dirección',
+            'city' => trim((string) ($poliza['policy_holder_city'] ?? '')),
+            'source' => $conn->insurer_code,
+            'status' => 'active',
+            'notes' => "Importado desde " . $this->insurerDisplayName($conn->insurer_code) . " a partir de póliza",
+            'custom_fields' => [
+                '_sync_hash' => $hash,
+                '_sync_source' => "{$conn->insurer_code}_sync",
+                '_sync_at' => now()->toIso8601String(),
+            ],
+        ];
+
+        if ($client) {
+            if ($client->trashed()) {
+                $client->restore();
+            }
+            $existingHash = $client->custom_fields['_sync_hash'] ?? null;
+            if ($existingHash !== $hash) {
+                unset($data['broker_id'], $data['document_number'], $data['source']);
+                $data['custom_fields'] = array_merge($client->custom_fields ?? [], $data['custom_fields']);
+                $client->update(array_filter($data, fn($v) => $v !== null && $v !== ''));
+                return ['client' => $client->refresh(), 'status' => 'updated'];
+            }
+            return ['client' => $client, 'status' => 'unchanged'];
+        }
+
+        return ['client' => Cliente::create($data), 'status' => 'created'];
     }
 
     // ──────────────────────────────────────────────────────
@@ -2344,6 +2602,12 @@ class InsurerSyncService
                 case 'allianz':
                     $allItems = $this->fetchCarteraAllianz($sessionId);
                     break;
+                case 'qualitas':
+                    $allItems = $this->fetchCarteraQualitas($sessionId, $conn);
+                    break;
+                case 'mundial':
+                    $allItems = $this->fetchCarteraMundial($sessionId);
+                    break;
                 default:
                     return ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'total_fetched' => 0,
                         'message' => "Cartera no disponible para {$insurerName}"];
@@ -2353,6 +2617,13 @@ class InsurerSyncService
                 'error' => "Tiempo de espera agotado al obtener cartera de {$insurerName}."];
         } catch (\Throwable $e) {
             if ($e->getCode() === 401 || str_contains($e->getMessage(), '401') || str_contains($e->getMessage(), 'expirada')) {
+                // Marcar la conexión como reconnect_required para que la UI muestre el botón
+                // "Reconectar" sin que el usuario tenga que adivinar por qué falla el sync.
+                $conn->update([
+                    'status' => 'reconnect_required',
+                    'last_error' => "Sesión expirada al sincronizar cartera de {$insurerName}",
+                    'last_healthcheck_at' => now(),
+                ]);
                 return ['created' => 0, 'updated' => 0, 'unchanged' => 0, 'total_fetched' => 0,
                     'error' => "Sesión expirada. Reconecta {$insurerName} desde Integraciones."];
             }
@@ -2364,12 +2635,14 @@ class InsurerSyncService
 
         $created = 0;
         $errors = 0;
+        $clientsCreated = 0;
+        $clientsUpdated = 0;
 
         // Cartera is a point-in-time snapshot — replace atomically so that:
         // (a) no duplicate rows accumulate across resyncs, and
         // (b) if inserts fail mid-way, the old data is preserved (transaction rollback).
         // Days-in-mora, paid installments, etc. are always taken from the fresh API response.
-        DB::transaction(function () use ($allItems, $brokerId, $conn, $insurerName, &$created, &$errors) {
+        DB::transaction(function () use ($allItems, $brokerId, $conn, $insurerName, &$created, &$errors, &$clientsCreated, &$clientsUpdated) {
             CarteraAseguradora::where('broker_id', $brokerId)
                 ->where('insurer_code', $conn->insurer_code)
                 ->delete();
@@ -2380,10 +2653,35 @@ class InsurerSyncService
                     $item['insurer_code']  = $conn->insurer_code;
                     $item['insurer_name']  = $insurerName;
                     $item['synced_at']     = now();
+                    // Strip internal-only fields before hashing/inserting
+                    unset($item['_client_phone'], $item['_client_mobile'], $item['_client_email'], $item['_abs']);
                     $item['sync_hash']     = md5(json_encode($item));
+                    // Resolver link a póliza local: exact match primero; si no, suffix
+                    // match con mismo cliente (SURA reporta 081003691040 vs póliza 3691040).
+                    $item['matched_poliza_id'] = $this->resolveMatchedPolizaId(
+                        $brokerId,
+                        (string) ($item['policy_number'] ?? ''),
+                        (string) ($item['client_document'] ?? '')
+                    );
 
                     CarteraAseguradora::create($item);
                     $created++;
+
+                    if ($conn->insurer_code === 'qualitas') {
+                        $raw = is_array($item['raw_data'] ?? null) ? $item['raw_data'] : [];
+                        $clientResult = $this->syncClienteFromPoliza($conn, [
+                            'client_name' => $item['client_name'] ?? $raw['nomAsegurado'] ?? $raw['tomador'] ?? null,
+                            'policy_holder_name' => $item['client_name'] ?? $raw['nomAsegurado'] ?? $raw['tomador'] ?? null,
+                            'client_document' => $raw['idAsegurado'] ?? null,
+                            'policy_holder_document' => $raw['idAsegurado'] ?? null,
+                            'policy_holder_doc_type' => 'CC',
+                        ]);
+                        if (($clientResult['status'] ?? null) === 'created') {
+                            $clientsCreated++;
+                        } elseif (($clientResult['status'] ?? null) === 'updated') {
+                            $clientsUpdated++;
+                        }
+                    }
                 } catch (\Throwable $e) {
                     $errors++;
                     Log::warning('[INSURER SYNC] Error cartera row', [
@@ -2394,7 +2692,19 @@ class InsurerSyncService
             }
         });
 
-        return ['created' => $created, 'updated' => 0, 'unchanged' => 0, 'errors' => $errors, 'total_fetched' => count($allItems)];
+        $result = ['created' => $created, 'updated' => 0, 'unchanged' => 0, 'errors' => $errors, 'total_fetched' => count($allItems)];
+        if ($clientsCreated > 0 || $clientsUpdated > 0) {
+            $result['clientes_derivados_created'] = $clientsCreated;
+            $result['clientes_derivados_updated'] = $clientsUpdated;
+        }
+
+        // Mundial: importar clientes y pólizas desde los mismos datos de cartera
+        if ($conn->insurer_code === 'mundial' && count($allItems) > 0) {
+            $cpResult = $this->syncClientesPolizasFromCarteraMundial($conn, $allItems);
+            $result = array_merge($result, $cpResult);
+        }
+
+        return $result;
     }
 
     /**
@@ -2677,7 +2987,7 @@ class InsurerSyncService
             'policy_number' => $policyNumber,
             'ramo' => $ramo !== '' ? $ramo : null,
             'product_name' => null,
-            'prima_total' => $valorNeto > 0 ? $valorNeto : $valorPendiente,
+            'prima_total' => $valorPendiente,
             'valor_pendiente' => $valorPendiente,
             'valor_pagado' => $valorPagado,
             'bonificacion' => 0,
@@ -2875,10 +3185,9 @@ class InsurerSyncService
                 $ramo = $this->hdiPickScalar($row, ['ramo', 'nombre_ramo', 'desc_ramo', 'nombreRamo']);
                 $product = $this->hdiPickScalar($row, ['tipo', 'producto', 'nombre_producto', 'desc_producto', 'producto_descripcion']);
 
-                $primaTotal = $this->hdiPickFloat($row, ['prima_total', 'primaTotal', 'prima', 'valor_prima']);
-                if ($primaTotal <= 0) {
-                    $primaTotal = $totalPagar;
-                }
+                // 'prima_total' en la API de HDI contado es el total agregado del portafolio completo,
+                // no la prima individual del recibo. El valor correcto por recibo es 'total_pagar'.
+                $primaTotal = $totalPagar;
 
                 $valorPagado = $this->hdiPickFloat($row, ['valor_pagado', 'valorPagado', 'pagado', 'total_pagado']);
 
@@ -2955,8 +3264,23 @@ class InsurerSyncService
 
                 $saldoTotal = $this->hdiPickFloat($p, ['saldo_total', 'saldoTotal', 'saldo', 'saldo_pendiente', 'valor_pendiente']);
                 $valorMora = $this->hdiPickFloat($p, ['valor_mora', 'valorMora']);
+                $cuotasPagadasFin = $this->hdiPickInt($p, ['cuotas_pagadas', 'cuotasPagadas']) ?? 0;
+                $totalCuotasFin = $this->hdiPickInt($p, ['total_cuotas', 'totalCuotas', 'nro_cuotas']) ?? 0;
 
-                $valorPendiente = $saldoTotal > 0 ? $saldoTotal : $valorMora;
+                // Para financiada, "Pendiente" debe reflejar el valor de la(s) cuota(s)
+                // por cobrar AHORA — no el saldo total del crédito (que incluye cuotas
+                // futuras aún no devengadas). Prioridad:
+                //  1) valor_mora si HDI lo reporta (suma de cuotas vencidas)
+                //  2) cuota estimada = saldo_total / cuotas restantes
+                //  3) saldo_total como último recurso
+                $cuotasRestantes = max(0, $totalCuotasFin - $cuotasPagadasFin);
+                $valorCuotaEstimado = ($cuotasRestantes > 0 && $saldoTotal > 0)
+                    ? round($saldoTotal / $cuotasRestantes, 2)
+                    : 0.0;
+                $valorPendiente = $valorMora > 0
+                    ? $valorMora
+                    : ($valorCuotaEstimado > 0 ? $valorCuotaEstimado : $saldoTotal);
+
                 if ($valorPendiente <= 0 && $diasMora <= 0) {
                     continue;
                 }
@@ -2972,7 +3296,7 @@ class InsurerSyncService
                     'client_doc_type' => null,
                     'ramo' => ($rm = $this->hdiPickScalar($p, ['ramo', 'nombre_ramo'])) !== '' ? $rm : null,
                     'product_name' => ($lf = $this->hdiPickScalar($p, ['linea_financiacion', 'lineaFinanciacion', 'producto', 'tipo'])) !== '' ? $lf : null,
-                    'prima_total' => $saldoTotal > 0 ? $saldoTotal : $valorPendiente,
+                    'prima_total' => $valorPendiente > 0 ? $valorPendiente : $saldoTotal,
                     'valor_pendiente' => $valorPendiente,
                     'valor_pagado' => $this->hdiPickFloat($p, ['valor_pagado', 'pagado']),
                     'bonificacion' => $this->hdiPickFloat($p, ['bonificacion']),
@@ -3221,8 +3545,10 @@ class InsurerSyncService
         Log::info("[SURA-CARTERA-ASYNC] Iniciado report_id={$reportId}");
 
         // Paso 2 — polling
-        // Total worst-case ≈ 580s (38 polls * 15s). El queue worker tolera 600s.
-        $maxPolls = 38;
+        // Worst-case 80 polls × 15s = 1200s (20 min). El portal SURA con brokers
+        // grandes (1000+ pólizas) tarda 7-15 min en horas pico. El queue worker
+        // tolera 1800s, así que hay margen aún para retornar el payload.
+        $maxPolls = 80;
         $pollIntervalS = 15;
         $finalEstado = null;
         for ($i = 1; $i <= $maxPolls; $i++) {
@@ -3372,7 +3698,7 @@ class InsurerSyncService
                 'client_doc_type' => $docType,
                 'ramo' => $row['producto'] ?? null,
                 'product_name' => $row['producto'] ?? null,
-                'prima_total' => $importe,
+                'prima_total' => 0,
                 'valor_pendiente' => $saldo,
                 'valor_pagado' => $abonos,
                 'bonificacion' => 0,
@@ -3589,6 +3915,75 @@ class InsurerSyncService
         return $items;
     }
 
+    /**
+     * Cartera Qualitas vía microservicio POST /qualitas/cartera.
+     *
+     * NOTA importante: el portal Qualitas Colombia NO expone "cartera pendiente"
+     * en este endpoint — devuelve pólizas PAGADAS en el rango de fechas. Esto sirve
+     * como histórico de recibos cobrados, pero no es saldo vivo por cobrar.
+     * Para cartera pendiente real necesitaríamos otro endpoint (no presente en HARs aún).
+     *
+     * Respuesta:
+     *   { polizas_pagadas: [{agentId, poliza, ramo, certificado, endoso, recibo, remesa,
+     *     fEmision, fIniVigencia, fVencimiento, fPago, idAsegurado, nomAsegurado,
+     *     primaNeta, primaAbonada, ivaMl, ivaMe, oficina, serie, moneda, tomador}, ...] }
+     */
+    private function fetchCarteraQualitas(string $sessionId, InsurerConnection $conn): array
+    {
+        return [];
+
+        $rows = [];
+        foreach ($this->qualitasDateWindows() as $window) {
+            $response = $this->apiPost('/qualitas/cartera', $sessionId, [
+                'desde' => $window['desde'],
+                'hasta' => $window['hasta'],
+            ], 90);
+            if (!$response->ok()) {
+                if ($response->status() === 401) {
+                    throw new \RuntimeException('Sesión expirada', 401);
+                }
+                continue;
+            }
+            $data = $response->json();
+            $windowRows = $data['polizas_pagadas'] ?? [];
+            if (is_array($windowRows)) {
+                $rows = array_merge($rows, $windowRows);
+            }
+        }
+
+        if (!is_array($rows)) return [];
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) continue;
+            $polNum = trim((string) ($row['poliza'] ?? ''));
+            if ($polNum === '') continue;
+            $primaNeta = (float) ($row['primaNeta'] ?? 0);
+            $primaAbonada = (float) ($row['primaAbonada'] ?? 0);
+            $iva = (float) ($row['ivaMl'] ?? 0);
+            $items[] = [
+                'policy_number' => $polNum,
+                'client_name' => trim((string) ($row['tomador'] ?? $row['nomAsegurado'] ?? '')),
+                'client_document' => trim((string) ($row['idAsegurado'] ?? '')) ?: null,
+                'ramo' => (string) ($row['ramo'] ?? ''),
+                'product_name' => "Ramo {$row['ramo']}",
+                'prima_total' => $primaNeta > 0 ? $primaNeta : 0,
+                'valor_pendiente' => 0,  // Qualitas pagadas = ya cobradas, saldo 0
+                'valor_pagado' => $primaAbonada,
+                'bonificacion' => 0,
+                'dias_mora' => 0,
+                'rango_mora' => CarteraAseguradora::calcRangoMora(0),
+                'fecha_inicio_vigencia' => $this->parseDate((string) ($row['fIniVigencia'] ?? '')),
+                'fecha_expedicion' => $this->parseDate((string) ($row['fEmision'] ?? '')),
+                'fecha_vencimiento' => $this->parseDate((string) ($row['fVencimiento'] ?? '')),
+                'numero_recibo' => trim((string) ($row['recibo'] ?? '')) ?: null,
+                'source_endpoint' => '/qualitas/cartera',
+                'raw_data' => $row,
+            ];
+        }
+        return $items;
+    }
+
     // ──────────────────────────────────────────────────────
     //  COMISIONES
     // ──────────────────────────────────────────────────────
@@ -3619,6 +4014,9 @@ class InsurerSyncService
                     // HDI: mes corriente trae detalle por póliza, mes histórico
                     // trae 1 fila resumen del período (totales reales del mes).
                     $allItems = $this->fetchComisionesHdi($sessionId, $anio, $mes);
+                    break;
+                case 'qualitas':
+                    $allItems = $this->fetchComisionesQualitas($sessionId, $anio, $mes);
                     break;
                 default:
                     return [
@@ -3789,24 +4187,60 @@ class InsurerSyncService
 
         $data = $response->json() ?? [];
         $rows = $data['comisiones'] ?? [];
+        $totales = is_array($data['totales'] ?? null) ? $data['totales'] : [];
         if (!is_array($rows)) {
             return [];
         }
 
-        // Fecha sintética: primer día del mes/año declarados (HDI no entrega
-        // fecha de recaudo por póliza en este endpoint).
         $fechaSyn = null;
         if ($anio && $mes) {
             $fechaSyn = $this->parseDate("{$anio}-{$mes}-01");
         }
 
         $items = [];
+        if (!empty($totales)) {
+            $gross = (float) ($totales['gross'] ?? 0);
+            $total = (float) ($totales['total'] ?? 0);
+            if ($gross !== 0.0 || $total !== 0.0) {
+                $period = "{$anio}{$mes}";
+                $items[] = [
+                    'ramo_codigo' => null,
+                    'producto' => 'RESUMEN_PERIODO',
+                    'policy_number' => "PERIODO_{$period}",
+                    'numero_recibo' => null,
+                    'client_name' => "TOTAL HDI {$mes}/{$anio}",
+                    'client_document' => null,
+                    'client_doc_type' => null,
+                    'oficina' => $totales['broker_city'] ?? null,
+                    'fecha_recaudo' => $fechaSyn,
+                    'fecha_pago_asesor' => null,
+                    'prima_neta' => $gross,
+                    'valor_pagado_tomador' => $gross,
+                    'porcentaje_comision' => 0,
+                    'valor_comision' => $gross,
+                    'estado' => 'legalizada',
+                    'concepto' => 'Total periodo HDI',
+                    'subramo' => null,
+                    'source_endpoint' => '/hdi/comisiones',
+                    'raw_data' => ['totales' => $totales, 'is_summary' => true],
+                ];
+            }
+        }
         foreach ($rows as $row) {
-            if (!is_array($row)) {
+            if (!is_array($row) || (($row['is_summary'] ?? false) && !empty($totales))) {
                 continue;
             }
-            $premium = (float) ($row['premium_value'] ?? 0);
-            $commission = (float) ($row['commission_value'] ?? 0);
+            $premium = $this->hdiPickFloat($row, [
+                'premium_value', 'premiumValue', 'prima_neta', 'primaNeta', 'premium',
+                'gross', 'valor_prima', 'valorPrima', 'valor_pagado', 'valorPagado',
+            ]);
+            $commission = $this->hdiPickFloat($row, [
+                'commission_value', 'commissionValue', 'valor_comision', 'valorComision',
+                'commission', 'comision', 'total_commission', 'totalCommission', 'total',
+            ]);
+            if ($premium <= 0 && $commission <= 0) {
+                continue;
+            }
             $items[] = [
                 'ramo_codigo' => null,
                 'producto' => (string) ($row['product_type'] ?? ''),
@@ -3820,12 +4254,80 @@ class InsurerSyncService
                 'fecha_pago_asesor' => null,
                 'prima_neta' => $premium,
                 'valor_pagado_tomador' => $premium,
-                'porcentaje_comision' => (float) ($row['commission_percentage'] ?? 0),
+                'porcentaje_comision' => $this->hdiPickFloat($row, [
+                    'commission_percentage', 'commissionPercentage', 'porcentaje_comision',
+                    'porcentajeComision', 'percentage', 'porcentaje',
+                ]),
                 'valor_comision' => $commission,
                 'estado' => 'legalizada',
                 'concepto' => null,
                 'subramo' => null,
                 'source_endpoint' => '/hdi/comisiones',
+                'raw_data' => $row,
+            ];
+        }
+
+        return $items;
+    }
+
+    private function fetchComisionesQualitas(string $sessionId, string $anio, string $mes): array
+    {
+        $response = Http::acceptJson()
+            ->timeout(90)
+            ->connectTimeout(15)
+            ->withHeaders(['X-Session-Id' => $sessionId])
+            ->post($this->baseUrl() . '/qualitas/comisiones');
+
+        if (!$response->ok()) {
+            if ($response->status() === 401) {
+                throw new \RuntimeException('Sesión Qualitas expirada', 401);
+            }
+            if (in_array($response->status(), [404, 422], true)) {
+                return [];
+            }
+            throw new \RuntimeException($this->extractErrorMessage($response));
+        }
+
+        $data = $response->json() ?? [];
+        $rows = $data['edos_cuenta'] ?? [];
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $primaNeta = (float) ($row['primaNeta'] ?? $row['prima_neta'] ?? $row['prima'] ?? 0);
+            $valorPagado = (float) ($row['primaAbonada'] ?? $row['valor_pagado'] ?? $row['valorPagado'] ?? $row['pagado'] ?? 0);
+            $valorComision = (float) ($row['valorComision'] ?? $row['valor_comision'] ?? $row['comision'] ?? $row['commission'] ?? 0);
+            $fecha = $this->parseDate((string) ($row['fecha'] ?? ''));
+            if ($fecha) {
+                $dt = \Carbon\Carbon::parse($fecha);
+                if ($dt->format('Y') !== $anio || $dt->format('m') !== $mes) {
+                    continue;
+                }
+            }
+            $items[] = [
+                'ramo_codigo' => null,
+                'producto' => 'Estado de cuenta',
+                'policy_number' => null,
+                'numero_recibo' => (string) ($row['clave'] ?? ''),
+                'client_name' => null,
+                'client_document' => null,
+                'client_doc_type' => null,
+                'oficina' => null,
+                'fecha_recaudo' => $fecha,
+                'fecha_pago_asesor' => $fecha,
+                'prima_neta' => $primaNeta,
+                'valor_pagado_tomador' => $valorPagado,
+                'porcentaje_comision' => $primaNeta > 0 ? round(($valorComision / $primaNeta) * 100, 4) : 0,
+                'valor_comision' => $valorComision,
+                'estado' => 'legalizada',
+                'concepto' => (string) ($row['descripcion'] ?? ''),
+                'subramo' => null,
+                'source_endpoint' => '/qualitas/comisiones',
                 'raw_data' => $row,
             ];
         }
@@ -3859,11 +4361,94 @@ class InsurerSyncService
             }
         }
 
-        // HDI polizas uses page/per_page (default 50), needs pagination to get all.
-        if ($slug === 'hdi' && $dataType === 'polizas') {
+        // HDI: los endpoints /hdi/polizas y /hdi/clientes del microservicio NO
+        // soportan paginación real — internamente iteran 36 meses extrayendo
+        // de pólizas y devuelven la lista. Si Laravel pagina con page/per_page,
+        // el microservicio recalcula TODO en cada page → miles de POST /index al
+        // portal y HDI nos bloquea. Solución: una sola llamada con per_page muy
+        // grande para que devuelva todo de un golpe.
+        if ($slug === 'hdi' && in_array($dataType, ['polizas', 'clientes'], true)) {
             try {
-                return $this->fetchPaginated("/{$slug}/{$dataType}", $sessionId, $dataType, 100, null);
-            } catch (\RuntimeException $e) {
+                $endpoint = "/{$slug}/{$dataType}";
+                $timeout = $this->endpointTimeout($slug, $dataType);
+                $response = $this->apiGetLongWithQuery(
+                    $endpoint,
+                    $sessionId,
+                    ['page' => 1, 'per_page' => 10000, 'meses' => 36],
+                    $timeout,
+                );
+                if (!$response->ok()) {
+                    if ($response->status() === 401) {
+                        return ['_error' => "Sesión expirada. Reconecta HDI desde Integraciones."];
+                    }
+                    return ['_error' => $this->extractErrorMessage($response)];
+                }
+                $data = $response->json() ?? [];
+                if (($data['success'] ?? null) === false && !empty($data['detail'] ?? $data['message'] ?? null)) {
+                    return ['_error' => (string) ($data['detail'] ?? $data['message'])];
+                }
+                return $data[$dataType] ?? [];
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                return ['_error' => "Tiempo de espera agotado al obtener {$dataType} de HDI."];
+            } catch (\Throwable $e) {
+                return ['_error' => $e->getMessage()];
+            }
+        }
+
+        // Seguros del Estado: portal nuevo de intermediarios devuelve XLSX parseado a rows.
+        // El endpoint /estado/produccion reemplaza al viejo /estado/polizas (Grid scraping).
+        if ($slug === 'estado' && $dataType === 'polizas') {
+            try {
+                $desde = now()->subYear()->format('d/m/Y');
+                $hasta = now()->format('d/m/Y');
+                $response = $this->apiPost('/estado/produccion', $sessionId, [
+                    'start' => $desde,
+                    'end'   => $hasta,
+                    // branch_code: 65 es valor por defecto (Medellín). Si el broker tiene
+                    // otra agencia, esto traerá vacío — habría que iterar branches.
+                    'branch_code' => '65',
+                ], 600);
+                if (!$response->ok()) {
+                    if ($response->status() === 401) {
+                        return ['_error' => 'Sesión expirada. Reconecta Seguros del Estado desde Integraciones.'];
+                    }
+                    return ['_error' => $this->extractErrorMessage($response)];
+                }
+                $data = $response->json() ?? [];
+                return $data['rows'] ?? [];
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                return ['_error' => 'Tiempo de espera agotado al obtener producción de Seguros del Estado.'];
+            } catch (\Throwable $e) {
+                return ['_error' => $e->getMessage()];
+            }
+        }
+
+        // Qualitas: POST con body {desde, hasta}. Devuelve {polizas: [...]} (alias del endpoint).
+        if ($slug === 'qualitas' && in_array($dataType, ['polizas', 'cartera'], true)) {
+            try {
+                $endpoint = $dataType === 'polizas' ? '/qualitas/polizas' : '/qualitas/cartera';
+                $rows = [];
+                foreach ($this->qualitasDateWindows() as $window) {
+                    $response = $this->apiPost($endpoint, $sessionId, [
+                        'desde' => $window['desde'],
+                        'hasta' => $window['hasta'],
+                    ], 90);
+                    if (!$response->ok()) {
+                        if ($response->status() === 401) {
+                            return ['_error' => "Sesión expirada. Reconecta Qualitas desde Integraciones."];
+                        }
+                        return ['_error' => $this->extractErrorMessage($response)];
+                    }
+                    $data = $response->json() ?? [];
+                    $windowRows = $data['polizas'] ?? $data['polizas_pagadas'] ?? [];
+                    if (is_array($windowRows)) {
+                        $rows = array_merge($rows, $windowRows);
+                    }
+                }
+                return $rows;
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                return ['_error' => "Tiempo de espera agotado al obtener {$dataType} de Qualitas."];
+            } catch (\Throwable $e) {
                 return ['_error' => $e->getMessage()];
             }
         }
@@ -3918,15 +4503,41 @@ class InsurerSyncService
         $page = 1;
         $total = 0;
 
+        // Status HTTP que típicamente son transitorios (microservicio caído, gateway, timeouts).
+        $transientStatuses = [408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 524];
+        $maxRetries = 4;
+
         while (true) {
-            $response = $this->apiGetWithQuery($endpoint, $sessionId, [
-                $qn['page'] => $page,
-                $qn['per_page'] => $perPage,
-            ]);
+            $attempt = 0;
+            $response = null;
+            while (true) {
+                $attempt++;
+                $response = $this->apiGetWithQuery($endpoint, $sessionId, [
+                    $qn['page'] => $page,
+                    $qn['per_page'] => $perPage,
+                ]);
+                if ($response->ok()) break;
+
+                $status = $response->status();
+                $isTransient = in_array($status, $transientStatuses, true);
+                if ($isTransient && $attempt < $maxRetries) {
+                    // Backoff exponencial: 5s, 15s, 45s
+                    $sleep = (int) min(60, 5 * (3 ** ($attempt - 1)));
+                    Log::warning("[INSURER SYNC] Reintentando {$endpoint} page={$page} (intento {$attempt}/{$maxRetries})", [
+                        'status' => $status,
+                        'sleep_s' => $sleep,
+                    ]);
+                    sleep($sleep);
+                    continue;
+                }
+                break; // No transient o agotó reintentos
+            }
+
             if (!$response->ok()) {
                 Log::warning("[INSURER SYNC] Paginación falló en {$endpoint} page={$page}", [
                     'status' => $response->status(),
                     'body' => substr($response->body(), 0, 200),
+                    'attempts' => $attempt,
                 ]);
                 // Page 1 failure = total failure; report error instead of silently returning 0.
                 if ($page === 1) {
@@ -3937,7 +4548,16 @@ class InsurerSyncService
                     }
                     throw new \RuntimeException("HTTP {$response->status()}: " . ($detail ?: substr($response->body(), 0, 200)));
                 }
-                break; // Partial failure on page N>1: return what we have
+                // Partial failure on page N>1: si tenemos total reportado y faltan muchas
+                // páginas por bajar, hacer fallar el sync para que el usuario pueda reintentar
+                // todo en vez de marcarlo "completed" con data incompleta.
+                if ($total > 0 && count($all) < $total * 0.9) {
+                    throw new \RuntimeException(
+                        "Microservicio no responde tras {$attempt} intentos en {$endpoint} (página {$page}). "
+                        . 'Bajadas ' . count($all) . " de {$total} pólizas. Reintenta la sincronización."
+                    );
+                }
+                break; // Pérdida tolerable: devolver lo que hay
             }
 
             $data = $response->json() ?? [];
@@ -4123,6 +4743,153 @@ class InsurerSyncService
         return $lower ? 'active' : 'pending';
     }
 
+    /**
+     * Resuelve qué póliza local linkear con un row de cartera_aseguradoras.
+     *  1) Exact match policy_number = policy_number
+     *  2) Suffix match: la policy_number local es sufijo del policy_number de cartera
+     *     Y el cliente coincide (mismo client_document). Aplica al patrón SURA donde
+     *     cartera reporta "081003691040" y la póliza local es "3691040".
+     * Devuelve poliza.id o null.
+     */
+    private function resolveMatchedPolizaId(int $brokerId, string $policyNumber, string $clientDoc): ?int
+    {
+        $pn = trim($policyNumber);
+        if ($pn === '') return null;
+
+        // 1) Exact match
+        $exact = \DB::table('polizas')
+            ->where('broker_id', $brokerId)
+            ->where('policy_number', $pn)
+            ->whereNull('deleted_at')
+            ->value('id');
+        if ($exact) return (int) $exact;
+
+        // 2) Suffix match — requiere cliente conocido para evitar matches falsos
+        $doc = trim($clientDoc);
+        if ($doc === '' || strlen($pn) < 6) return null;
+        $row = \DB::table('polizas')
+            ->where('broker_id', $brokerId)
+            ->where('client_document', $doc)
+            ->whereNull('deleted_at')
+            ->whereRaw('CHAR_LENGTH(policy_number) BETWEEN 5 AND ?', [strlen($pn) - 1])
+            ->whereRaw('? LIKE CONCAT(\'%\', policy_number)', [$pn])
+            ->orderByRaw('CHAR_LENGTH(policy_number) DESC')
+            ->limit(1)
+            ->value('id');
+        return $row ? (int) $row : null;
+    }
+
+    /**
+     * Resuelve ramo_id para un broker a partir del branch_name de la aseguradora.
+     * Si el ramo no existe en el catálogo del broker, lo crea con ese nombre.
+     * Aplica alias canónicos para nombres comunes (AUTOMOVILES → Autos Livianos, etc).
+     */
+    private function resolveOrCreateRamoForBroker(int $brokerId, string $branchName): ?int
+    {
+        $branchName = trim($branchName);
+        if ($branchName === '') {
+            return null;
+        }
+
+        $b = strtolower($branchName);
+
+        $aliases = [
+            'automoviles' => 'Autos Livianos',
+            'automovil' => 'Autos Livianos',
+            'autos' => 'Autos Livianos',
+            'autoplus' => 'Autos Livianos',
+            'vida individual' => 'Vida individual',
+            'vida grupo' => 'VG voluntario',
+            'vida deudores' => 'VG deudores',
+            'hogar' => 'Hogar',
+            'hogarsura' => 'Hogar',
+            'salud' => 'Salud familiar',
+            'soat' => 'SOAT',
+            'arl' => 'ARL',
+            'incendio' => 'Incendio',
+            'transporte' => 'Transporte mercancías',
+            'cumplimiento' => 'Cumplimiento',
+            'responsabilidad civil' => 'Responsabilidad Civil Extracontractual',
+            'rce' => 'Responsabilidad Civil Extracontractual',
+        ];
+        $targetName = $aliases[$b] ?? $branchName;
+
+        $existing = \App\Models\Ramo::where('broker_id', $brokerId)
+            ->whereRaw('LOWER(nombre) = ?', [strtolower($targetName)])
+            ->first();
+        if ($existing) {
+            return $existing->id;
+        }
+
+        $created = \App\Models\Ramo::create([
+            'broker_id' => $brokerId,
+            'nombre' => $targetName,
+            'subramo' => [],
+        ]);
+        return $created->id;
+    }
+
+    /**
+     * Mapea el nombre del ramo (de la aseguradora) al enum 'type' de polizas.
+     * Sin esto, todas las pólizas sincronizadas caen al default 'vida' de la DB
+     * (aunque sean autos, hogar, salud, etc).
+     *
+     * Enum válido: 'vida','autos','hogar','empresarial','salud','accidentes','responsabilidad_civil','otros'
+     */
+    private function mapBranchNameToType(string $branchName, array $detailMeta = []): string
+    {
+        $b = strtolower(trim($branchName));
+        // Códigos SURA 3-digit cuando disponibles (más precisos que el nombre)
+        $code = strtolower((string) ($detailMeta['ramo_codigo'] ?? ''));
+        if ($code !== '') {
+            // 040 = autos, 042 = SOAT, 081 vida individual, 083 vida grupo,
+            // 086 exequial (vida), 084 masvida (vida), 028 salud, 030 hogar/incendio,
+            // 012 hogarsura (hogar). Mapping conservador.
+            $byCode = [
+                '040' => 'autos', '041' => 'autos', '042' => 'autos', '043' => 'autos',
+                '081' => 'vida',  '082' => 'vida',  '083' => 'vida',  '084' => 'vida',
+                '086' => 'vida',  '087' => 'vida',  '088' => 'vida',  '181' => 'vida',
+                '028' => 'salud', '029' => 'salud',
+                '012' => 'hogar', '030' => 'hogar',
+                '050' => 'responsabilidad_civil',
+                '060' => 'accidentes', '061' => 'accidentes',
+            ];
+            if (isset($byCode[$code])) {
+                return $byCode[$code];
+            }
+        }
+        if ($b === '') return 'otros';
+
+        // Match por palabra clave en nombre
+        if (str_contains($b, 'auto') || str_contains($b, 'vehic') || str_contains($b, 'soat')) {
+            return 'autos';
+        }
+        if (str_contains($b, 'vida') || str_contains($b, 'masvida') || str_contains($b, 'exequ')
+            || str_contains($b, 'juvenil') || str_contains($b, 'pension') || str_contains($b, 'surenta')
+            || str_contains($b, 'capitaliz')) {
+            return 'vida';
+        }
+        if (str_contains($b, 'hogar') || str_contains($b, 'incendio') || str_contains($b, 'copropied')) {
+            return 'hogar';
+        }
+        if (str_contains($b, 'salud') || str_contains($b, 'medic') || str_contains($b, 'enferm')) {
+            return 'salud';
+        }
+        if (str_contains($b, 'accidente') || str_contains($b, ' ap ') || str_starts_with($b, 'ap ')
+            || $b === 'ap' || str_contains($b, 'educacion') || str_contains($b, 'educación')) {
+            return 'accidentes';
+        }
+        if (str_contains($b, 'responsab') || str_contains($b, ' rc ') || str_starts_with($b, 'rc ')
+            || $b === 'rc' || str_contains($b, 'rce')) {
+            return 'responsabilidad_civil';
+        }
+        if (str_contains($b, 'empresa') || str_contains($b, 'pyme') || str_contains($b, 'industr')
+            || str_contains($b, 'comerc') || str_contains($b, 'bancaseguros')) {
+            return 'empresarial';
+        }
+        return 'otros';
+    }
+
     private function insurerDisplayName(string $code): string
     {
         return match ($code) {
@@ -4151,6 +4918,46 @@ class InsurerSyncService
     private function baseUrl(): string
     {
         return rtrim((string) config('services.microservicio.base_url'), '/');
+    }
+
+    private function qualitasDateWindows(): array
+    {
+        $years = max(1, min(10, (int) env('QUALITAS_SYNC_YEARS', 5)));
+        $end = now()->startOfDay();
+        $limit = now()->subYears($years)->startOfDay();
+        $windows = [];
+
+        while ($end->greaterThan($limit)) {
+            $start = $end->copy()->subYear()->addDay();
+            if ($start->lessThan($limit)) {
+                $start = $limit->copy();
+            }
+            $windows[] = [
+                'desde' => $start->format('d/m/Y'),
+                'hasta' => $end->format('d/m/Y'),
+            ];
+            $end = $start->copy()->subDay();
+        }
+
+        return $windows;
+    }
+
+    private function qualitasRamoName(string $code): string
+    {
+        $normalized = str_pad(trim($code), 2, '0', STR_PAD_LEFT);
+        return match ($normalized) {
+            '01' => 'Responsabilidad Civil',
+            '02' => 'Transporte',
+            '03' => 'Autos',
+            '04' => 'SOAT',
+            '05' => 'Cumplimiento',
+            '06' => 'Todo Riesgo Construcción',
+            '07' => 'Manejo',
+            '08' => 'Incendio',
+            '09' => 'Hogar',
+            '10' => 'Accidentes Personales',
+            default => $code !== '' ? "Ramo {$code}" : 'Sin ramo',
+        };
     }
 
     private function apiGet(string $endpoint, string $sessionId)
@@ -4186,6 +4993,17 @@ class InsurerSyncService
             ->get($url, $query);
     }
 
+    private function apiGetLongWithQuery(string $endpoint, string $sessionId, array $query = [], int $timeout = 90)
+    {
+        $url = $this->baseUrl() . $endpoint;
+
+        return Http::acceptJson()
+            ->timeout($timeout)
+            ->connectTimeout(15)
+            ->withHeaders(['X-Session-Id' => $sessionId])
+            ->get($url, $query);
+    }
+
     private function apiPost(string $endpoint, string $sessionId, array $body = [], int $timeout = 60)
     {
         $url = $this->baseUrl() . $endpoint;
@@ -4195,5 +5013,277 @@ class InsurerSyncService
             ->connectTimeout(15)
             ->withHeaders(['X-Session-Id' => $sessionId])
             ->post($url, $body);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // MUNDIAL
+    // ──────────────────────────────────────────────────────────────────
+
+    /**
+     * Cartera Seguros Mundial vía microservicio GET /mundial/cartera.
+     *
+     * El portal retorna filas con nivel_proceso=9 (pendientes de pago).
+     * Campos clave: poliza, certificado, Tomador, nit_tomador, Ramo,
+     * prima_total, ValorTotalPagar, antiguedad, fec_vig_desde, fec_vig_hasta.
+     *
+     * `antiguedad` usa la notación "1-Entre 0 y 30", "2-Entre 31 y 60", etc.
+     * Mapeamos al límite inferior del rango para dias_mora.
+     */
+    private function fetchCarteraMundial(string $sessionId): array
+    {
+        $response = $this->apiGetLong('/mundial/cartera', $sessionId, 180);
+        if (!$response->ok()) {
+            if (in_array($response->status(), [404, 422, 405], true)) {
+                return [];
+            }
+            if ($response->status() === 401) {
+                throw new \RuntimeException('Sesión expirada', 401);
+            }
+            return [];
+        }
+
+        $data = $response->json();
+        $rows = $data['cartera'] ?? [];
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        // Excel already maps all fields; Python router returns normalized names.
+        $items = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $valor          = (float) ($row['valor_pendiente']      ?? 0);
+            $primaNeta      = (float) ($row['prima_total']         ?? $row['prima_directa'] ?? $valor);
+            $valorIva       = (float) ($row['valor_iva']           ?? 0);
+            $gastosEmision  = (float) ($row['valor_gastos_emision'] ?? 0);
+            $tasaRunt       = (float) ($row['valor_tasa_runt']     ?? 0);
+            $diasMora       = (int)   ($row['dias_mora']            ?? 0);
+
+            $clientDoc = trim((string) ($row['client_document'] ?? ''));
+            $docType   = ($clientDoc && strlen($clientDoc) >= 9 && ctype_digit($clientDoc)) ? 'NIT' : 'CC';
+
+            $items[] = [
+                'policy_number'          => trim((string) ($row['policy_number'] ?? '')),
+                'client_name'            => $row['client_name'] ?? null,
+                'client_document'        => $clientDoc ?: null,
+                'client_doc_type'        => $docType,
+                'ramo'                   => $row['ramo'] ?? null,
+                'product_name'           => $row['ramo'] ?? null,
+                'prima_total'            => $primaNeta,
+                'valor_pendiente'        => $valor,
+                'valor_pagado'           => 0.0,
+                'valor_iva'              => $valorIva,
+                'valor_gastos_emision'   => $gastosEmision,
+                'valor_tasa_runt'        => $tasaRunt,
+                'bonificacion'           => 0,
+                'dias_mora'              => $diasMora,
+                'rango_mora'             => CarteraAseguradora::calcRangoMora($diasMora),
+                'fecha_inicio_vigencia'  => $row['fecha_inicio_vigencia'] ?? null,
+                'fecha_expedicion'       => $row['fecha_expedicion']      ?? null,
+                'fecha_vencimiento'      => $row['fecha_vencimiento']     ?? null,
+                'numero_recibo'          => $row['numero_recibo'] ?? null,
+                'source_endpoint'        => '/mundial/cartera',
+                'raw_data'               => $row,
+                // Contact fields parsed by Python
+                '_client_phone'          => $row['client_phone']  ?? null,
+                '_client_mobile'         => $row['client_mobile'] ?? null,
+                '_client_email'          => $row['client_email']  ?? null,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Importa clientes y pólizas a partir de los ítems de cartera de Mundial.
+     * Se llama justo después de que syncCartera inserta las filas de cartera.
+     *
+     * Estrategia:
+     *  - Clientes: upsert por document_number, una sola vez por cliente único.
+     *  - Pólizas:  upsert por policy_number; cuando la misma póliza aparece en
+     *    múltiples endosos, se usa el endoso con mayor valor absoluto como referencia
+     *    para las fechas de vigencia y el monto.
+     */
+    private function syncClientesPolizasFromCarteraMundial(InsurerConnection $conn, array $allItems): array
+    {
+        $brokerId    = $conn->broker_id;
+        $insurerName = $this->insurerDisplayName($conn->insurer_code);
+
+        $aseguradoraId = \App\Models\Aseguradora::where('broker_id', $brokerId)
+            ->whereRaw('LOWER(nombre) = ?', [strtolower($insurerName)])
+            ->value('id');
+
+        $clientsCreated = 0;
+        $clientsUpdated = 0;
+        $polizasCreated = 0;
+        $polizasUpdated = 0;
+
+        // ── 1. Deduplicate: best row per poliza ──
+        // Prefer positive-valor rows; among same sign, take highest absolute value.
+        // This ensures that policies where ALL rows are credit notes (valor < 0)
+        // are still represented — they'll be created with payment_status = 'paid'.
+        $byPoliza = [];
+        foreach ($allItems as $item) {
+            $polNum = trim((string) ($item['policy_number'] ?? ''));
+            if ($polNum === '') {
+                continue;
+            }
+            $valor = (float) ($item['valor_pendiente'] ?? 0);
+            $abs   = abs($valor);
+            if (!isset($byPoliza[$polNum])) {
+                $byPoliza[$polNum] = array_merge($item, ['_abs' => $abs]);
+            } else {
+                $existingValor = (float) ($byPoliza[$polNum]['valor_pendiente'] ?? 0);
+                // Positive row always beats a negative row
+                if ($valor > 0 && $existingValor <= 0) {
+                    $byPoliza[$polNum] = array_merge($item, ['_abs' => $abs]);
+                } elseif (($valor > 0) === ($existingValor > 0) && $abs > $byPoliza[$polNum]['_abs']) {
+                    $byPoliza[$polNum] = array_merge($item, ['_abs' => $abs]);
+                }
+            }
+        }
+
+        // ── 2. Deduplicate clients by document ──
+        $seenDocs = [];
+
+        foreach ($byPoliza as $polNum => $item) {
+            $clientDoc  = trim((string) ($item['client_document'] ?? ''));
+            $clientName = trim((string) ($item['client_name']     ?? ''));
+            $docType    = $item['client_doc_type'] ?? 'CC';
+
+            // ── Sync cliente ──────────────────────────────────────────────
+            $clientId = null;
+            if ($clientDoc !== '' && !isset($seenDocs[$clientDoc])) {
+                $seenDocs[$clientDoc] = true;
+                $phone  = $item['_client_phone']  ?? null;
+                $mobile = $item['_client_mobile'] ?? null;
+                $email  = $item['_client_email']  ?? null;
+
+                $clientResult = $this->syncClienteFromPoliza($conn, [
+                    'client_name'            => $clientName,
+                    'policy_holder_name'     => $clientName,
+                    'client_document'        => $clientDoc,
+                    'policy_holder_document' => $clientDoc,
+                    'policy_holder_doc_type' => $docType,
+                    'policy_holder_phone'    => $phone ?? $mobile,
+                    'policy_holder_email'    => $email,
+                ]);
+
+                // Patch contact data if we have better info than the default placeholder
+                $client = $clientResult['client'];
+                if ($client && ($phone || $mobile || $email)) {
+                    $patch = [];
+                    if ($phone  && empty($client->phone))        $patch['phone']        = $phone;
+                    if ($mobile && empty($client->mobile_phone)) $patch['mobile_phone'] = $mobile;
+                    if ($email  && (empty($client->email) || str_ends_with($client->email, '@sinregistro.com'))) {
+                        $patch['email'] = strtolower($email);
+                    }
+                    if ($patch) {
+                        $client->update($patch);
+                    }
+                }
+
+                if (($clientResult['status'] ?? null) === 'created') {
+                    $clientsCreated++;
+                } elseif (($clientResult['status'] ?? null) === 'updated') {
+                    $clientsUpdated++;
+                }
+                $clientId = $client?->id;
+            } elseif ($clientDoc !== '') {
+                $clientId = Cliente::withTrashed()
+                    ->where('broker_id', $brokerId)
+                    ->where('document_number', $clientDoc)
+                    ->value('id');
+            }
+
+            // ── Sync póliza ───────────────────────────────────────────────
+            if ($polNum === '') {
+                continue;
+            }
+
+            try {
+                $valorPendiente = (float) ($item['valor_pendiente'] ?? 0);
+                $ramoName = trim((string) ($item['ramo'] ?? ''));
+                $ramoId   = $ramoName ? $this->resolveOrCreateRamoForBroker($brokerId, $ramoName) : null;
+
+                $hash = md5(json_encode([
+                    'policy_number' => $polNum,
+                    'client_doc'    => $clientDoc,
+                    'start_date'    => $item['fecha_inicio_vigencia'] ?? null,
+                    'end_date'      => $item['fecha_vencimiento']     ?? null,
+                    'premium'       => $valorPendiente,
+                ]));
+
+                $existing = Poliza::withTrashed()
+                    ->where('broker_id', $brokerId)
+                    ->where('policy_number', $polNum)
+                    ->first();
+
+                // When all cartera rows are credit notes (val <= 0) use prima_total
+                // for the premium and mark the policy as paid. Use abs() because
+                // credit-note rows have negative prima_total values too.
+                $rawPrima      = (float) ($item['prima_total'] ?? 0);
+                $premiumAmount = abs($rawPrima) ?: abs($valorPendiente);
+                $paymentStatus = $valorPendiente > 0 ? 'pending' : 'paid';
+
+                $polizaData = [
+                    'broker_id'         => $brokerId,
+                    'policy_number'     => $polNum,
+                    'client_id'         => $clientId,
+                    'client_name'       => $clientName ?: null,
+                    'client_document'   => $clientDoc  ?: null,
+                    'insurance_company' => $insurerName,
+                    'aseguradora_id'    => $aseguradoraId,
+                    'ramo_id'           => $ramoId,
+                    'product_name'      => $ramoName ?: null,
+                    'issue_date'        => $item['fecha_expedicion']     ?? null,
+                    'start_date'        => $item['fecha_inicio_vigencia'] ?? null,
+                    'end_date'          => $item['fecha_vencimiento']    ?? null,
+                    'premium_amount'    => $premiumAmount,
+                    'total_amount'      => $valorPendiente > 0 ? $valorPendiente : $premiumAmount,
+                    'vat_amount'        => (float) ($item['valor_iva']           ?? 0),
+                    'gastos_adicionales'=> (float) ($item['valor_gastos_emision'] ?? 0) + (float) ($item['valor_tasa_runt'] ?? 0),
+                    'status'            => 'active',
+                    'payment_status'    => $paymentStatus,
+                    'type'              => $this->mapBranchNameToType($ramoName),
+                    'custom_fields'     => [
+                        '_sync_hash'          => $hash,
+                        '_sync_source'        => 'mundial_sync',
+                        '_sync_at'            => now()->toIso8601String(),
+                        'valor_iva'           => (float) ($item['valor_iva']           ?? 0),
+                        'valor_gastos_emision'=> (float) ($item['valor_gastos_emision'] ?? 0),
+                        'valor_tasa_runt'     => (float) ($item['valor_tasa_runt']     ?? 0),
+                    ],
+                ];
+
+                if ($existing) {
+                    if ($existing->trashed()) {
+                        $existing->restore();
+                    }
+                    $existingHash = $existing->custom_fields['_sync_hash'] ?? null;
+                    if ($existingHash !== $hash) {
+                        $updates = array_diff_key($polizaData, ['broker_id' => 1, 'policy_number' => 1]);
+                        $updates['custom_fields'] = array_merge($existing->custom_fields ?? [], $polizaData['custom_fields']);
+                        $existing->update(array_filter($updates, fn($v) => $v !== null && $v !== ''));
+                        $polizasUpdated++;
+                    }
+                } else {
+                    Poliza::create($polizaData);
+                    $polizasCreated++;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('[MUNDIAL] Error upsert póliza', ['poliza' => $polNum, 'error' => $e->getMessage()]);
+            }
+        }
+
+        return [
+            'clientes_created' => $clientsCreated,
+            'clientes_updated' => $clientsUpdated,
+            'polizas_created'  => $polizasCreated,
+            'polizas_updated'  => $polizasUpdated,
+        ];
     }
 }

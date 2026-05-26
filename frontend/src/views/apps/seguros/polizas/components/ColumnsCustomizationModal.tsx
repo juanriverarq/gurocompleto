@@ -100,7 +100,7 @@ const AVAILABLE_COLUMNS: ColumnOption[] = [
     label: 'Origen',
     description: 'Sincronizado desde aseguradora o carga manual',
     icon: 'solar:import-bold',
-    defaultVisible: false
+    defaultVisible: true
   }
 ];
 

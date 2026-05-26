@@ -53,6 +53,7 @@ const PALETTE: PaletteItem[] = [
   { type: 'add_tag',       label: 'Añadir Etiqueta',   icon: 'solar:tag-horizontal-bold',     description: 'Etiquetar conversación' },
   { type: 'remove_tag',    label: 'Quitar Etiqueta',   icon: 'solar:tag-horizontal-bold-duotone', description: 'Desetiquetar' },
   { type: 'media',         label: 'Multimedia',        icon: 'solar:gallery-bold',            description: 'Imagen/video/doc' },
+  { type: 'consent',      label: 'Consentimiento',    icon: 'solar:shield-check-bold',       description: 'Autorización de datos' },
 ];
 
 // ────────────────────────── main component ──────────────────────────
@@ -1866,6 +1867,61 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({ element, onChange, onDe
                 onChange={(e) => commitConfig({ caption: e.target.value } as any)}
                 className="bg-[#1A1A1A] border-[#2F2F2F] text-white"
               />
+            </div>
+          </>
+        )}
+
+        {nodeType === 'consent' && (
+          <>
+            <div className="p-3 rounded-lg border border-sky-500/20 bg-sky-500/10">
+              <div className="flex items-center gap-2 mb-1">
+                <Icon icon="solar:shield-check-bold" className="text-sky-400" width={14} />
+                <span className="text-xs font-semibold text-sky-300">Consentimiento de datos</span>
+              </div>
+              <p className="text-[11px] text-sky-200/70">
+                El cliente debe responder <strong>1</strong> para aceptar o <strong>2</strong> para rechazar. Al aceptar, se graba la fecha en su perfil de contacto.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#9CA3AF] mb-1">Texto del mensaje</label>
+              <Textarea
+                rows={6}
+                value={(config as any).message || ''}
+                onChange={(e) => commitConfig({ message: e.target.value } as any)}
+                placeholder="🔒 *Tratamiento de datos personales*&#10;&#10;Antes de continuar, queremos contarte que protegemos tu información según la Ley 1581 de 2012.&#10;&#10;¿Aceptas el tratamiento de tus datos personales?"
+                className="bg-[#1A1A1A] border-[#2F2F2F] text-white text-xs font-mono"
+              />
+              <div className="text-[10px] text-[#6B7280] mt-1">Este mensaje se envía al cliente antes de mostrar las opciones. Soporta *negrita* y _cursiva_ de WhatsApp.</div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-[#9CA3AF] mb-1">
+                  <Icon icon="solar:check-circle-bold" width={11} className="inline mr-1 text-green-400" />
+                  Opción aceptar
+                </label>
+                <TextInput
+                  sizing="sm"
+                  value={(config as any).accept_label || ''}
+                  onChange={(e) => commitConfig({ accept_label: e.target.value } as any)}
+                  placeholder="Sí, acepto"
+                  className="bg-[#1A1A1A] border-[#2F2F2F] text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#9CA3AF] mb-1">
+                  <Icon icon="solar:close-circle-bold" width={11} className="inline mr-1 text-red-400" />
+                  Opción rechazar
+                </label>
+                <TextInput
+                  sizing="sm"
+                  value={(config as any).reject_label || ''}
+                  onChange={(e) => commitConfig({ reject_label: e.target.value } as any)}
+                  placeholder="No acepto"
+                  className="bg-[#1A1A1A] border-[#2F2F2F] text-white"
+                />
+              </div>
             </div>
           </>
         )}

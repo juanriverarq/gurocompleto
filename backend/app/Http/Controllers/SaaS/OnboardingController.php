@@ -320,6 +320,14 @@ class OnboardingController extends Controller
             $selectedModules = $request->input('modules', []);
             $plan = $this->inferPlanFromModules($selectedModules);
 
+            // Default de operatividad: si el request no especifica ningún modo,
+            // arrancar como "Agencia Automática" para brokers nuevos.
+            $featuresToSave = is_array($selectedModules) ? $selectedModules : [];
+            if (!in_array('operativa_manual', $featuresToSave, true)
+                && !in_array('operativa_automatica', $featuresToSave, true)) {
+                $featuresToSave[] = 'operativa_automatica';
+            }
+
             DB::beginTransaction();
 
             try {
@@ -339,7 +347,7 @@ class OnboardingController extends Controller
                     'max_users' => $maxUsers,
                     'max_clients' => 999999,
                     'max_policies' => 999999,
-                    'features' => $request->input('modules', []),
+                    'features' => $featuresToSave,
                     'status' => 'trial',
                     'trial_ends_at' => Carbon::now()->addDays(7),
                     'owner_id' => $user->id,
@@ -562,6 +570,10 @@ class OnboardingController extends Controller
 
     /**
      * Obtener características según el plan
+     *
+     * Todos los planes incluyen por defecto `operativa_automatica` para que los
+     * brokers nuevos arranquen con el modo "Agencia Automática" (sincronización
+     * con aseguradoras). El master puede cambiarlo después en /master-panel.
      */
     private function getPlanFeatures(string $plan): array
     {
@@ -571,6 +583,7 @@ class OnboardingController extends Controller
                 'max_clients' => 100,
                 'max_policies' => 500,
                 'features' => [
+                    'operativa_automatica',
                     'client_management',
                     'policy_management',
                     'basic_reports',
@@ -582,6 +595,7 @@ class OnboardingController extends Controller
                 'max_clients' => 500,
                 'max_policies' => 2000,
                 'features' => [
+                    'operativa_automatica',
                     'client_management',
                     'policy_management',
                     'advanced_reports',
@@ -597,6 +611,7 @@ class OnboardingController extends Controller
                 'max_clients' => -1, // Sin límite
                 'max_policies' => -1, // Sin límite
                 'features' => [
+                    'operativa_automatica',
                     'client_management',
                     'policy_management',
                     'advanced_reports',

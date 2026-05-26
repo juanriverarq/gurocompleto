@@ -12,6 +12,7 @@ import equidadLogo from '../../../assets/images/logoscompanias/equidad.png';
 import mapfreLogo from '../../../assets/images/logoscompanias/mapfre.png';
 import qualitasLogo from '../../../assets/images/logoscompanias/qualitas.svg';
 import allianzLogo from '../../../assets/images/logoscompanias/allianz.png';
+import mundialLogo from '../../../assets/images/logoscompanias/mundial.svg';
 
 // ─── Types ───────────────────────────────────────────────────────
 // Cada fila representa UNA PÓLIZA con sus cuotas pendientes consolidadas.
@@ -31,17 +32,41 @@ interface CarteraRow {
   ramo: string | null;
   product_name: string | null;
 
+  // Asesor/vendedor de la póliza (puede haber hasta 2). Vienen del LEFT JOIN
+  // con polizas; null si la póliza no está vinculada en Guro o no tiene vendedor.
+  seller_id: number | null;
+  seller_name: string | null;
+  seller_id_2: number | null;
+  seller_name_2: string | null;
+
   // Valores de prima (varios ángulos):
   //   - prima_poliza : prima real contratada (de `polizas.premium_amount`). 0 si no hay match.
   //   - prima_cuotas : suma de importes SOLO de las cuotas pendientes.
-  //   - prima_total  : usar prima_poliza si > 0, sino fallback a prima_cuotas.
-  prima_total: number;
+  //   - prima_total  : prima real de póliza; null si no está disponible.
+  prima_total: number | null;
   prima_poliza?: number;
   prima_cuotas?: number;
+  importe_cuotas?: number;
+  prima_disponible?: boolean | number;
+  tipo_cobro?: 'financiada' | 'contado' | string;
+  forma_pago?: string | null;
+  medio_pago?: string | null;
+  banco?: string | null;
+  tipo_cuenta?: string | null;
+  cuenta_bancaria?: string | null;
+  dias_cancelacion?: number | string | null;
+  tipo_cobro_fuente?: string | null;
+  linea_financiacion?: string | null;
+  clasificacion?: string | null;
+  convenio?: string | null;
+  placa?: string | null;
 
   valor_pendiente: number;              // saldo real pendiente (suma de cuotas por pagar)
   valor_pagado: number;                 // abonos SOLO de cuotas pendientes
   valor_pagado_total?: number;          // prima_poliza - valor_pendiente (si prima_poliza > 0)
+  valor_iva?: number;
+  valor_gastos_emision?: number;
+  valor_tasa_runt?: number;
   bonificacion: number;
   dias_mora: number;                    // MAX de días de mora entre cuotas
   rango_mora: string;
@@ -97,6 +122,7 @@ const INSURER_LOGOS: Record<string, string> = {
   mapfre: mapfreLogo,
   qualitas: qualitasLogo,
   allianz: allianzLogo,
+  mundial: mundialLogo,
 };
 
 const fmt = (n: number) =>
@@ -143,14 +169,130 @@ const CarteraAseguradoras: React.FC = () => {
   const [syncBatchId, setSyncBatchId] = useState<string | null>(null);
   const [cancellingSync, setCancellingSync] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
-  const [msDiagLoading, setMsDiagLoading] = useState(false);
   const [msDiagText, setMsDiagText] = useState('');
   const [detailRow, setDetailRow] = useState<CarteraRow | null>(null);
   const [detailComisiones, setDetailComisiones] = useState<{ items: any[]; totales: any } | null>(null);
   const [detailComisionesLoading, setDetailComisionesLoading] = useState(false);
   const [detailCuotas, setDetailCuotas] = useState<{ items: CuotaDetalle[]; totales: any } | null>(null);
   const [detailCuotasLoading, setDetailCuotasLoading] = useState(false);
+  // Export modal
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportTab, setExportTab] = useState<string>('todos');
+  const [exportLinkFilter, setExportLinkFilter] = useState<'all' | 'linked' | 'unlinked'>('all');
+  const [exportSellerFilter, setExportSellerFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [exportInsurer, setExportInsurer] = useState<string>('');
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importInsurer, setImportInsurer] = useState('');
+  const [importReplace, setImportReplace] = useState(true);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importPreview, setImportPreview] = useState<any | null>(null);
+  const [importMapping, setImportMapping] = useState<Record<string, number | null>>({});
+  const [importMsg, setImportMsg] = useState('');
+  const [accionesOpen, setAccionesOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const importInsurerOptions = useMemo(() => {
+    const fixed = [
+      { insurer_code: 'sura', insurer_name: 'SURA' },
+      { insurer_code: 'hdi', insurer_name: 'HDI' },
+      { insurer_code: 'bolivar', insurer_name: 'Bolívar' },
+      { insurer_code: 'allianz', insurer_name: 'Allianz' },
+      { insurer_code: 'qualitas', insurer_name: 'Qualitas' },
+      { insurer_code: 'mapfre', insurer_name: 'Mapfre' },
+      { insurer_code: 'axa-colpatria', insurer_name: 'AXA Colpatria' },
+      { insurer_code: 'sbs', insurer_name: 'SBS' },
+      { insurer_code: 'zurich', insurer_name: 'Zurich' },
+      { insurer_code: 'previsora', insurer_name: 'Previsora' },
+      { insurer_code: 'mundial', insurer_name: 'Mundial' },
+      { insurer_code: 'bbva', insurer_name: 'BBVA' },
+      { insurer_code: 'seguros-del-estado', insurer_name: 'Seguros del Estado' },
+      { insurer_code: 'equidad', insurer_name: 'Equidad' },
+    ];
+    const byCode = new Map<string, { insurer_code: string; insurer_name: string }>();
+    // Fixed list PRIMERO para que sus nombres canónicos ("SURA", "HDI"…) ganen
+    // sobre cualquier insurer_name potencialmente sucio en cartera_aseguradoras
+    // (e.g. "ARL SURA" del sync). Aún incluimos by_insurer para insurers nuevos
+    // no presentes en el fixed list.
+    [...fixed, ...(stats?.by_insurer || [])].forEach((ins: any) => {
+      const code = String(ins.insurer_code || '').trim();
+      if (!code || byCode.has(code)) return;
+      byCode.set(code, { insurer_code: code, insurer_name: ins.insurer_name || code.toUpperCase() });
+    });
+    return Array.from(byCode.values());
+  }, [stats?.by_insurer]);
+
+  const handleExport = async () => {
+    setExportLoading(true);
+    try {
+      const blob = await saasApi.exportCarteraAseguradoras({
+        tab: exportTab !== 'todos' ? exportTab : undefined,
+        insurer: exportInsurer || undefined,
+        link_filter: exportLinkFilter,
+        seller_filter: exportSellerFilter,
+      });
+      // Descargar el blob como CSV
+      const filenameParts = ['cartera'];
+      if (exportTab !== 'todos') filenameParts.push(exportTab);
+      if (exportLinkFilter !== 'all') filenameParts.push(exportLinkFilter);
+      if (exportSellerFilter !== 'all') filenameParts.push(`asesor_${exportSellerFilter}`);
+      filenameParts.push(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+      const filename = filenameParts.join('_') + '.csv';
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      setExportOpen(false);
+    } catch (e: any) {
+      alert('Error al exportar: ' + (e?.message || 'desconocido'));
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleImportPreview = async () => {
+    if (!importFile || !importInsurer) {
+      setImportMsg('Selecciona compañía y archivo.');
+      return;
+    }
+    setImportLoading(true);
+    setImportMsg('Analizando archivo...');
+    try {
+      const res = await saasApi.previewCarteraAseguradorasImport(importFile, importInsurer);
+      setImportPreview(res.data);
+      setImportMapping(res.data?.mapping || {});
+      setImportMsg(`Detectadas ${res.data?.detected_rows || 0} filas. Revisa el mapeo antes de importar.`);
+    } catch (e: any) {
+      setImportMsg(e?.message || 'Error analizando archivo');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleImportConfirm = async () => {
+    if (!importFile || !importInsurer) return;
+    setImportLoading(true);
+    setImportMsg('Importando cartera...');
+    try {
+      const res = await saasApi.importCarteraAseguradoras(importFile, {
+        insurer_code: importInsurer,
+        mapping: importMapping,
+        replace: importReplace,
+      });
+      setImportMsg(res.message || 'Importación completada');
+      await loadStats();
+      await loadItems();
+    } catch (e: any) {
+      setImportMsg(e?.message || 'Error importando archivo');
+    } finally {
+      setImportLoading(false);
+    }
+  };
 
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -219,35 +361,6 @@ const CarteraAseguradoras: React.FC = () => {
   const isBrowserFetchFailure = (msg: string) =>
     msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('Load failed');
 
-  const runMicroserviceDiag = async () => {
-    setMsDiagLoading(true);
-    setMsDiagText('');
-    try {
-      const r = await saasApi.getMicroservicioReachability();
-      if (!r.success || !r.data) {
-        setMsDiagText(r.message || 'Sin respuesta del diagnóstico.');
-        return;
-      }
-      const d = r.data;
-      if (d.reachable) {
-        setMsDiagText(
-          `Servidor → microservicio: OK (${d.configured_base || '—'}, ${d.latency_ms ?? '?'} ms, HTTP ${d.http_status ?? '—'}). ${d.hint || ''}`,
-        );
-      } else {
-        setMsDiagText(`Servidor → microservicio: NO alcanzable. ${d.error || ''} ${d.hint || ''}`.trim());
-      }
-    } catch (err: unknown) {
-      const m = err instanceof Error ? err.message : String(err);
-      setMsDiagText(
-        isBrowserFetchFailure(m)
-          ? 'No se pudo llamar al API de diagnóstico (mismo problema que al sincronizar: navegador ↔ Laravel).'
-          : `Diagnóstico: ${m}`,
-      );
-    } finally {
-      setMsDiagLoading(false);
-    }
-  };
-
   const startSync = async () => {
     setSyncing(true);
     setSyncMsg('Iniciando sincronización...');
@@ -276,6 +389,7 @@ const CarteraAseguradoras: React.FC = () => {
             for (const [code, d] of Object.entries(details) as [string, any][]) {
               const p = d?.progress?.cartera;
               if (d?.error) parts.push(`${code}: ${d.error}`);
+              else if (p?.error) parts.push(`${code}: ${p.error}`);
               else if (p) parts.push(`${code}: ${p.created} nuevos, ${p.updated} actualizados`);
               else if (d?.status === 'completed') parts.push(`${code}: sin datos de cartera`);
             }
@@ -318,6 +432,24 @@ const CarteraAseguradoras: React.FC = () => {
   };
 
   const availableInsurers = useMemo(() => stats?.by_insurer || [], [stats]);
+
+  const clearData = async () => {
+    const scope = insurerFilter || 'todas las aseguradoras';
+    if (!window.confirm(`¿Eliminar datos de cartera de ${scope}? Luego podrás resincronizar.`)) return;
+    setSyncing(true);
+    setSyncMsg('Eliminando datos de cartera...');
+    try {
+      const res = await saasApi.deleteCarteraAseguradorasData({ insurer: insurerFilter || undefined });
+      setSyncMsg(res.message || `Eliminados ${res.data?.deleted ?? 0} registros`);
+      setPage(1);
+      await loadStats();
+      await loadItems();
+    } catch (e: any) {
+      setSyncMsg(e?.message || 'Error eliminando datos');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // ─── Detail Modal ────────────────────────────────────────────
   const renderDetailModal = () => {
@@ -366,11 +498,11 @@ const CarteraAseguradoras: React.FC = () => {
           <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
             {/* Montos principales + mora */}
             {(() => {
-              const primaReal = Number(r.prima_poliza ?? 0);
+              const primaReal = Number(r.prima_total ?? r.prima_poliza ?? 0);
               const pagadoTotal = Number(r.valor_pagado_total ?? 0);
-              const hasPrimaReal = primaReal > 0;
+              const hasPrimaReal = Boolean(r.prima_disponible) && primaReal > 0;
               const pendiente = Number(r.valor_pendiente);
-              const primaMostrar = hasPrimaReal ? primaReal : Number(r.prima_total);
+              const importeCuotas = Number(r.importe_cuotas ?? r.prima_cuotas ?? 0);
               // Avance = pagado / facturado (pagado + pendiente). Es el % de lo
               // efectivamente facturado que ya está cobrado, sin depender de la
               // prima del contrato (que en planes mensuales recurrentes puede
@@ -385,16 +517,16 @@ const CarteraAseguradoras: React.FC = () => {
                   <div className="grid grid-cols-4 gap-3">
                     <div
                       className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950/60 p-3 text-center"
-                      title={hasPrimaReal ? 'Prima anual contratada (desde tabla pólizas)' : 'Sin prima de póliza: se muestra suma de cuotas pendientes'}
+                      title={hasPrimaReal ? 'Prima anual contratada (desde tabla pólizas)' : 'La aseguradora no entregó prima real de póliza para este registro'}
                     >
                       <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">
-                        {hasPrimaReal ? 'Prima póliza' : 'Prima (cuotas)'}
+                        Prima póliza
                       </p>
-                      <p className="text-base font-bold text-gray-600 dark:text-neutral-300 tabular-nums">{fmt(primaMostrar)}</p>
+                      <p className="text-base font-bold text-gray-600 dark:text-neutral-300 tabular-nums">{hasPrimaReal ? fmt(primaReal) : '—'}</p>
                     </div>
-                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-center" title="Prima pagada por el tomador">
-                      <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">Pagado</p>
-                      <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{fmt(pagadoTotal)}</p>
+                    <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950/60 p-3 text-center" title="Importe reportado por las cuotas/recibos pendientes sincronizados">
+                      <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">Importe cuotas</p>
+                      <p className="text-base font-bold text-gray-600 dark:text-neutral-300 tabular-nums">{importeCuotas > 0 ? fmt(importeCuotas) : '—'}</p>
                     </div>
                     <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-center" title="Saldo pendiente por cobrar">
                       <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">Pendiente</p>
@@ -434,9 +566,29 @@ const CarteraAseguradoras: React.FC = () => {
                 <Field label="Número de póliza" value={r.policy_number} mono />
                 <Field label="Ramo" value={r.ramo} />
                 <Field label="Producto" value={r.product_name} />
+                <Field label="Tipo de cobro" value={r.tipo_cobro === 'financiada' ? 'Financiada' : 'Contado'} />
+                <Field label="Periodicidad" value={r.forma_pago} />
+                <Field label="Medio pago" value={r.medio_pago} />
                 <Field label="Bonificación" value={r.bonificacion > 0 ? fmt(r.bonificacion) : '—'} />
               </div>
             </div>
+
+            {(r.banco || r.tipo_cuenta || r.cuenta_bancaria || r.dias_cancelacion != null || r.tipo_cobro_fuente || r.linea_financiacion || r.clasificacion || r.convenio || r.placa) && (
+              <div>
+                <p className="text-[11px] text-gray-400 dark:text-neutral-500 font-medium uppercase tracking-wider mb-3">Información de cobro</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  <Field label="Cobro fuente" value={r.tipo_cobro_fuente} />
+                  <Field label="Línea financiación" value={r.linea_financiacion} />
+                  <Field label="Clasificación" value={r.clasificacion} />
+                  <Field label="Convenio" value={r.convenio} />
+                  <Field label="Placa" value={r.placa} mono />
+                  <Field label="Banco" value={r.banco} />
+                  <Field label="Tipo cuenta" value={r.tipo_cuenta} />
+                  <Field label="Cuenta" value={r.cuenta_bancaria} mono />
+                  <Field label="Días cancelación" value={r.dias_cancelacion != null ? String(r.dias_cancelacion) : '—'} />
+                </div>
+              </div>
+            )}
 
             {/* Dates */}
             <div>
@@ -679,13 +831,54 @@ const CarteraAseguradoras: React.FC = () => {
               {cancellingSync ? 'Deteniendo...' : 'Detener'}
             </button>
           )}
+          {/* Acciones dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setAccionesOpen(o => !o)}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:bg-gray-50 dark:hover:bg-neutral-800 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors"
+            >
+              <Icon icon="solar:menu-dots-bold-duotone" width={18} />
+              Acciones
+              <Icon icon="solar:alt-arrow-down-bold" width={14} className={`transition-transform ${accionesOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {accionesOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setAccionesOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg py-1 overflow-hidden">
+                  <button
+                    onClick={() => { setAccionesOpen(false); setExportOpen(true); }}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+                  >
+                    <Icon icon="solar:download-bold-duotone" width={16} className="text-gray-500 dark:text-neutral-400" />
+                    Exportar
+                  </button>
+                  <button
+                    onClick={() => { setAccionesOpen(false); setImportOpen(true); setImportInsurer(insurerFilter || ''); setImportMsg(''); }}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+                  >
+                    <Icon icon="solar:upload-bold-duotone" width={16} className="text-gray-500 dark:text-neutral-400" />
+                    Importar Excel
+                  </button>
+                  <div className="my-1 border-t border-gray-100 dark:border-neutral-800" />
+                  <button
+                    onClick={() => { setAccionesOpen(false); clearData(); }}
+                    disabled={syncing}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-50 transition-colors"
+                  >
+                    <Icon icon="solar:trash-bin-trash-bold-duotone" width={16} />
+                    Limpiar datos
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={startSync}
             disabled={syncing}
             className="flex items-center gap-2 rounded-lg border border-[#573CFF]/40 bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-60 px-4 py-2.5 text-sm font-medium text-white transition-colors"
           >
             <Icon icon={syncing ? 'svg-spinners:ring-resize' : 'solar:refresh-bold-duotone'} width={18} />
-            {syncing ? 'Sincronizando...' : 'Sincronizar cartera'}
+            {syncing ? 'Sincronizando...' : 'Sincronizar'}
           </button>
         </div>
       </div>
@@ -814,6 +1007,7 @@ const CarteraAseguradoras: React.FC = () => {
                 <col className="w-[145px]" />
                 <col className="w-[150px]" />
                 <col className="w-[170px]" />
+                <col className="w-[180px]" />
                 <col className="w-[130px]" />
                 <col className="w-[135px]" />
                 <col className="w-[105px]" />
@@ -827,11 +1021,12 @@ const CarteraAseguradoras: React.FC = () => {
                   <th className="px-4 py-3 font-medium">Documento</th>
                   <th className="px-4 py-3 font-medium">Póliza</th>
                   <th className="px-4 py-3 font-medium">Ramo</th>
-                  <th className="px-4 py-3 font-medium text-right">Prima</th>
+                  <th className="px-4 py-3 font-medium">Asesor</th>
+                  <th className="px-4 py-3 font-medium text-right">Prima póliza</th>
                   <th className="px-4 py-3 font-medium text-right">Pendiente</th>
                   <th className="px-4 py-3 font-medium text-center">Mora</th>
                   <th className="px-4 py-3 font-medium">Vigencia</th>
-                  <th className="px-4 py-3 font-medium">Cuotas</th>
+                  <th className="px-4 py-3 font-medium">Cobro</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-neutral-800/60">
@@ -909,18 +1104,60 @@ const CarteraAseguradoras: React.FC = () => {
                       <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
                         <div className="truncate" title={row.ramo || row.product_name || undefined}>{row.ramo || row.product_name || '—'}</div>
                       </td>
-                      <td
-                        className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300 text-right tabular-nums"
-                        title={Number(row.prima_poliza ?? 0) > 0
-                          ? 'Prima anual contratada'
-                          : 'Sin prima en póliza — se muestra suma de cuotas pendientes'}
-                      >
-                        {fmt(row.prima_total)}
-                        {!Number(row.prima_poliza ?? 0) && (
-                          <span className="ml-1 text-[9px] text-amber-500 dark:text-amber-400/80 align-top" title="Prima inferida desde cuotas">*</span>
+                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
+                        {row.seller_name ? (
+                          <div
+                            className="truncate"
+                            title={
+                              row.seller_name_2
+                                ? `${row.seller_name} / ${row.seller_name_2}`
+                                : row.seller_name
+                            }
+                          >
+                            {row.seller_name}
+                            {row.seller_name_2 && (
+                              <span className="text-gray-400 dark:text-neutral-500"> / {row.seller_name_2}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white font-semibold text-right tabular-nums">{fmt(row.valor_pendiente)}</td>
+                      <td
+                        className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300 text-right tabular-nums"
+                        title={Boolean(row.prima_disponible) && Number(row.prima_total ?? row.prima_poliza ?? 0) > 0
+                          ? 'Prima anual contratada'
+                          : 'Sin prima real disponible desde la aseguradora ni póliza vinculada'}
+                      >
+                        {Boolean(row.prima_disponible) && Number(row.prima_total ?? row.prima_poliza ?? 0) > 0
+                          ? fmt(Number(row.prima_total ?? row.prima_poliza ?? 0))
+                          : '—'}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-sm text-gray-900 dark:text-white font-semibold text-right tabular-nums"
+                        title={(() => {
+                          const iva = Number(row.valor_iva ?? 0);
+                          const gastos = Number(row.valor_gastos_emision ?? 0);
+                          const runt = Number(row.valor_tasa_runt ?? 0);
+                          const prima = Number(row.prima_cuotas ?? row.prima_total ?? row.prima_poliza ?? 0);
+                          if (!iva && !gastos && !runt) return undefined;
+                          const parts: string[] = [];
+                          if (prima > 0) parts.push(`Prima: ${fmt(prima)}`);
+                          if (iva > 0) parts.push(`IVA: ${fmt(iva)}`);
+                          if (gastos > 0) parts.push(`Gastos emisión: ${fmt(gastos)}`);
+                          if (runt > 0) parts.push(`Tasa RUNT: ${fmt(runt)}`);
+                          const calc = prima + iva + gastos + runt;
+                          const total = Number(row.valor_pendiente);
+                          const ok = Math.abs(calc - total) < 1;
+                          parts.push(`Total: ${fmt(total)}${ok ? ' ✓' : ' ⚠ (difiere del calculado)'}`);
+                          return parts.join('\n');
+                        })()}
+                      >
+                        {fmt(row.valor_pendiente)}
+                        {(Number(row.valor_iva ?? 0) > 0 || Number(row.valor_gastos_emision ?? 0) > 0 || Number(row.valor_tasa_runt ?? 0) > 0) && (
+                          <span className="ml-1 text-[10px] text-blue-400 dark:text-blue-500 cursor-help" title="Ver desglose">ⓘ</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${mora.bg} ${mora.text}`}>{mora.label}</span>
                       </td>
@@ -941,14 +1178,15 @@ const CarteraAseguradoras: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">
                         {(row.cuotas_pendientes ?? 0) > 0 ? (
-                          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                            <span className={`inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-semibold ${(row.cuotas_pendientes ?? 0) > 1 ? 'bg-[#573CFF]/15 text-[#573CFF]' : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400'}`}>
-                              {row.cuotas_pendientes}
+                          <span className="inline-flex flex-col gap-1 whitespace-nowrap">
+                            <span className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${row.tipo_cobro === 'financiada' ? 'bg-[#573CFF]/15 text-[#573CFF]' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'}`}>
+                              <Icon icon={row.tipo_cobro === 'financiada' ? 'solar:calendar-mark-bold-duotone' : 'solar:card-bold-duotone'} width={12} />
+                              {row.tipo_cobro === 'financiada' ? 'Financiada' : 'Contado'}
                             </span>
-                            <span className="text-[10px] text-gray-400 dark:text-neutral-600">pend.</span>
-                            {row.total_cuotas != null && row.total_cuotas > 0 && (
-                              <span className="text-[10px] text-gray-400 dark:text-neutral-600">de {row.total_cuotas}</span>
-                            )}
+                            <span className="text-[10px] text-gray-400 dark:text-neutral-600">
+                              {row.cuotas_pendientes} pend.
+                              {row.total_cuotas != null && row.total_cuotas > 0 ? ` de ${row.total_cuotas}` : ''}
+                            </span>
                           </span>
                         ) : (
                           '—'
@@ -994,6 +1232,349 @@ const CarteraAseguradoras: React.FC = () => {
 
       {/* Detail Modal */}
       {renderDetailModal()}
+
+      {/* Export Modal */}
+      {exportOpen && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center px-4"
+          onClick={() => !exportLoading && setExportOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-200 dark:border-neutral-800 shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between p-5 border-b border-gray-200 dark:border-neutral-800">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Exportar cartera
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+                  CSV con los filtros que selecciones — útil para reportes y depuración.
+                </p>
+              </div>
+              <button
+                onClick={() => !exportLoading && setExportOpen(false)}
+                disabled={exportLoading}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors disabled:opacity-50"
+              >
+                <Icon icon="solar:close-circle-linear" width={22} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              {/* Mora */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400 mb-2">
+                  Estado de mora
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {TABS.map((t) => {
+                    const active = exportTab === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setExportTab(t.key)}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                          active
+                            ? 'bg-[#573CFF] border-[#573CFF] text-white'
+                            : 'bg-gray-50 dark:bg-neutral-800 border-gray-200 dark:border-neutral-700 text-gray-700 dark:text-neutral-300 hover:border-gray-300'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Vínculo */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400 mb-2">
+                  Vínculo con Guro (cliente + póliza)
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { v: 'all', label: 'Todos', hint: 'sin filtrar' },
+                    { v: 'linked', label: 'Vinculados', hint: 'con cliente y póliza' },
+                    { v: 'unlinked', label: 'Sin vincular', hint: 'pendientes de agregar' },
+                  ].map((opt) => {
+                    const active = exportLinkFilter === opt.v;
+                    return (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setExportLinkFilter(opt.v as any)}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${
+                          active
+                            ? 'bg-[#573CFF] border-[#573CFF] text-white'
+                            : 'bg-gray-50 dark:bg-neutral-800 border-gray-200 dark:border-neutral-700 text-gray-700 dark:text-neutral-300 hover:border-gray-300'
+                        }`}
+                        title={opt.hint}
+                      >
+                        <div className="font-medium">{opt.label}</div>
+                        <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500 dark:text-neutral-500'}`}>
+                          {opt.hint}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Asesor */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400 mb-2">
+                  Asesor / Vendedor
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { v: 'all', label: 'Cualquiera', hint: 'sin filtrar' },
+                    { v: 'with', label: 'Con asesor', hint: 'tiene asignado' },
+                    { v: 'without', label: 'Sin asesor', hint: 'falta asignar' },
+                  ].map((opt) => {
+                    const active = exportSellerFilter === opt.v;
+                    return (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setExportSellerFilter(opt.v as any)}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${
+                          active
+                            ? 'bg-[#573CFF] border-[#573CFF] text-white'
+                            : 'bg-gray-50 dark:bg-neutral-800 border-gray-200 dark:border-neutral-700 text-gray-700 dark:text-neutral-300 hover:border-gray-300'
+                        }`}
+                        title={opt.hint}
+                      >
+                        <div className="font-medium">{opt.label}</div>
+                        <div className={`text-[10px] mt-0.5 ${active ? 'text-white/80' : 'text-gray-500 dark:text-neutral-500'}`}>
+                          {opt.hint}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Aseguradora (opcional, reusa el filtro de pantalla) */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400 mb-2">
+                  Aseguradora (opcional)
+                </label>
+                <select
+                  value={exportInsurer}
+                  onChange={(e) => setExportInsurer(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                >
+                  <option value="">Todas las aseguradoras</option>
+                  {(stats?.by_insurer || []).map((ins) => (
+                    <option key={ins.insurer_code} value={ins.insurer_code}>
+                      {ins.insurer_name} ({ins.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950/50 flex items-center justify-between rounded-b-2xl">
+              <button
+                onClick={() => setExportOpen(false)}
+                disabled={exportLoading}
+                className="text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleExport}
+                disabled={exportLoading}
+                className="flex items-center gap-2 rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-60 px-5 py-2.5 text-sm font-semibold text-white transition-colors"
+              >
+                <Icon icon={exportLoading ? 'svg-spinners:ring-resize' : 'solar:download-bold'} width={16} />
+                {exportLoading ? 'Generando CSV...' : 'Descargar CSV'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {importOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !importLoading && setImportOpen(false)} />
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-2xl flex flex-col">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-neutral-800">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#573CFF]/10 flex items-center justify-center">
+                  <Icon icon="solar:upload-bold-duotone" width={20} className="text-[#573CFF]" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">Importar cartera</h2>
+                  <p className="text-xs text-gray-500 dark:text-neutral-500">Excel o CSV · automapeo de columnas</p>
+                </div>
+              </div>
+              <button onClick={() => !importLoading && setImportOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors">
+                <Icon icon="solar:close-bold" width={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+              {/* 1. Seleccionar aseguradora */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-neutral-500 mb-3">1. Selecciona la aseguradora</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                  {importInsurerOptions.map((ins) => {
+                    const logo = INSURER_LOGOS[ins.insurer_code];
+                    const selected = importInsurer === ins.insurer_code;
+                    return (
+                      <button
+                        key={ins.insurer_code}
+                        onClick={() => setImportInsurer(ins.insurer_code)}
+                        className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all ${
+                          selected
+                            ? 'border-[#573CFF] bg-[#573CFF]/8 shadow-sm shadow-[#573CFF]/20'
+                            : 'border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800/50 hover:border-[#573CFF]/40 hover:bg-[#573CFF]/5 dark:hover:border-neutral-600'
+                        }`}
+                      >
+                        <div className="w-14 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm border border-gray-200 dark:border-neutral-600 px-1.5">
+                          {logo ? (
+                            <img src={logo} alt={ins.insurer_name} className="max-h-7 max-w-full w-auto object-contain" />
+                          ) : (
+                            <span className="text-[9px] font-bold text-gray-500 uppercase">{ins.insurer_code.slice(0, 4)}</span>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-medium leading-tight text-center ${selected ? 'text-[#573CFF]' : 'text-gray-600 dark:text-neutral-400'}`}>
+                          {ins.insurer_name}
+                        </span>
+                        {selected && <div className="w-1.5 h-1.5 rounded-full bg-[#573CFF]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Subir archivo */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-neutral-500 mb-3">2. Archivo Excel / CSV</p>
+                <label className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed cursor-pointer transition-all p-6 ${
+                  importFile
+                    ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'
+                    : 'border-gray-300 dark:border-neutral-700 hover:border-[#573CFF] hover:bg-[#573CFF]/5 bg-white dark:bg-neutral-800/30'
+                }`}>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.txt"
+                    className="hidden"
+                    onChange={(e) => { setImportFile(e.target.files?.[0] || null); setImportPreview(null); }}
+                  />
+                  {importFile ? (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                        <Icon icon="solar:file-check-bold-duotone" width={28} className="text-emerald-500" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{importFile.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-neutral-500 mt-0.5">{(importFile.size / 1024).toFixed(0)} KB · Haz clic para cambiar</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-neutral-800 flex items-center justify-center">
+                        <Icon icon="solar:cloud-upload-bold-duotone" width={28} className="text-gray-400 dark:text-neutral-500" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-medium text-gray-700 dark:text-neutral-300">Arrastra o haz clic para seleccionar</p>
+                        <p className="text-xs text-gray-500 dark:text-neutral-500 mt-0.5">.xlsx · .xls · .csv</p>
+                      </div>
+                    </>
+                  )}
+                </label>
+              </div>
+
+              {/* Opción reemplazar */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <div className={`w-10 h-6 rounded-full transition-colors flex items-center flex-shrink-0 ${importReplace ? 'bg-[#573CFF]' : 'bg-gray-200 dark:bg-neutral-700'}`}
+                  onClick={() => setImportReplace(r => !r)}>
+                  <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform mx-1 ${importReplace ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+                <span className="text-sm text-gray-700 dark:text-neutral-300">Reemplazar cartera existente de esta compañía</span>
+              </label>
+
+              {/* Botón analizar */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleImportPreview}
+                  disabled={importLoading || !importFile || !importInsurer}
+                  className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 disabled:opacity-40 px-4 py-2.5 text-sm font-semibold text-gray-800 dark:text-neutral-200 transition-colors"
+                >
+                  <Icon icon={importLoading ? 'svg-spinners:ring-resize' : 'solar:magic-stick-3-bold-duotone'} width={16} />
+                  {importLoading ? 'Analizando...' : 'Analizar y automapear'}
+                </button>
+                {importMsg && <span className="text-xs text-gray-500 dark:text-neutral-500">{importMsg}</span>}
+              </div>
+
+              {/* Preview & mapping */}
+              {importPreview && (
+                <div className="space-y-5 pt-2 border-t border-gray-200 dark:border-neutral-800">
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-neutral-500 mb-3">Mapeo de columnas</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      {Object.entries(importPreview.fields || {}).map(([field, label]) => (
+                        <label key={field} className="grid grid-cols-2 items-center gap-2 text-xs">
+                          <span className="text-gray-700 dark:text-neutral-400 truncate">{String(label)}</span>
+                          <select
+                            value={importMapping[field] ?? ''}
+                            onChange={(e) => setImportMapping((m) => ({ ...m, [field]: e.target.value === '' ? null : Number(e.target.value) }))}
+                            className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 py-1.5 text-xs text-gray-900 dark:text-white"
+                          >
+                            <option value="">No mapear</option>
+                            {(importPreview.headers || []).map((h: string, idx: number) => (
+                              <option key={`${field}-${idx}`} value={idx}>{h}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-neutral-500 mb-3">Vista previa</h3>
+                    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-neutral-800">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-gray-50 dark:bg-neutral-950">
+                          <tr>{(importPreview.headers || []).slice(0, 10).map((h: string, i: number) => <th key={i} className="px-3 py-2 text-left text-gray-600 dark:text-neutral-400 font-semibold whitespace-nowrap">{h}</th>)}</tr>
+                        </thead>
+                        <tbody>
+                          {(importPreview.sample_rows || []).map((row: any[], i: number) => (
+                            <tr key={i} className="border-t border-gray-200 dark:border-neutral-800 even:bg-gray-50 dark:even:bg-neutral-800/30">
+                              {row.slice(0, 10).map((v, j) => <td key={j} className="px-3 py-2 text-gray-700 dark:text-neutral-300 whitespace-nowrap">{String(v ?? '')}</td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950/50 flex items-center justify-between gap-3">
+              <button onClick={() => setImportOpen(false)} disabled={importLoading} className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={handleImportConfirm}
+                disabled={importLoading || !importPreview || !importFile || !importInsurer}
+                className="flex items-center gap-2 rounded-xl bg-[#573CFF] hover:bg-[#4b31e6] disabled:opacity-40 px-5 py-2.5 text-sm font-semibold text-white transition-colors shadow-sm shadow-[#573CFF]/30"
+              >
+                <Icon icon={importLoading ? 'svg-spinners:ring-resize' : 'solar:upload-bold'} width={16} />
+                Importar cartera
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

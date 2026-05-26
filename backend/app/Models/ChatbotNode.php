@@ -34,6 +34,7 @@ class ChatbotNode extends Model
     const TYPE_TRANSFER = 'transfer';
     const TYPE_DELAY = 'delay';
     const TYPE_END = 'end';
+    const TYPE_CONSENT = 'consent';
 
     public function flow(): BelongsTo
     {

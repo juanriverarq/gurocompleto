@@ -1021,10 +1021,14 @@ class WhatsAppInboxController extends Controller
             return response(['error' => 'Broker no encontrado'], 403);
         }
 
-        $agents = \App\Models\User::where('broker_id', $broker->id)
-            ->where('is_active', true)
-            ->select('id', 'name', 'email', 'role')
-            ->orderBy('name')
+        $agents = \App\Models\User::where('users.broker_id', $broker->id)
+            ->leftJoin('empleados_broker', function ($join) {
+                $join->on('empleados_broker.email', '=', 'users.email')
+                     ->where('empleados_broker.acceso_activo', true);
+            })
+            ->select('users.id', 'users.name', 'users.email', 'users.role', 'empleados_broker.cargo', 'empleados_broker.departamento')
+            ->orderBy('empleados_broker.cargo')
+            ->orderBy('users.name')
             ->get();
 
         return response(['agents' => $agents], 200);
@@ -1286,6 +1290,7 @@ class WhatsAppInboxController extends Controller
                 \DB::raw("MAX(contact_city) as contact_city"),
                 \DB::raw("MAX(contact_document_id) as contact_document_id"),
                 \DB::raw("MAX(contact_notes) as contact_notes"),
+                \DB::raw("MAX(data_consent_at) as data_consent_at"),
                 \DB::raw('COUNT(DISTINCT id) as total_conversations'),
                 \DB::raw('SUM(message_count) as total_messages'),
                 \DB::raw('MAX(last_message_at) as last_interaction_at'),

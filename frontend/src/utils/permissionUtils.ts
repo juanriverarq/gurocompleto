@@ -182,6 +182,7 @@ export const filterMenuItemsByPermissions = (
   hasPermission: (module: string, action: string) => boolean,
   canAccessModule: (module: string) => boolean,
   isModuleInPlan?: (module: string) => boolean,
+  operativa?: { manual: boolean; automatica: boolean },
 ): MenuitemsType[] => {
   return menuItems.filter((item) => {
     // Mantener labels de sección si hay elementos válidos después (se limpia abajo)
@@ -190,6 +191,13 @@ export const filterMenuItemsByPermissions = (
     // Siempre mostrar items con chip "Próximamente" (están deshabilitados pero visibles)
     if ((item as any).chip === 'Próximamente') return true;
 
+    // Operatividad: ocultar items cuya operativa requerida no esté activa en el broker.
+    const reqOp = (item as any).requiredOperativa as 'manual' | 'automatica' | undefined;
+    if (reqOp && operativa) {
+      if (reqOp === 'manual' && !operativa.manual) return false;
+      if (reqOp === 'automatica' && !operativa.automatica) return false;
+    }
+
     // Si tiene hijos, filtrar recursivamente
     if (item.children && item.children.length > 0) {
       const filteredChildren = filterMenuItemsByPermissions(
@@ -197,6 +205,7 @@ export const filterMenuItemsByPermissions = (
         hasPermission,
         canAccessModule,
         isModuleInPlan,
+        operativa,
       );
       if (filteredChildren.length === 0) return false;
       item.children = filteredChildren;

@@ -70,7 +70,7 @@ class ConnectInsurerJob implements ShouldQueue
             $result = match ($this->mode) {
                 'connect_auto'    => $microservice->connectAuto($this->insurerCode, $credentials ?? [], $this->mfaCode, $this->challengeId),
                 'connect_browser' => $microservice->connectBrowser($this->insurerCode, $connection->broker_id),
-                default           => $microservice->connect($this->insurerCode, $credentials ?? []),
+                default           => $microservice->connect($this->insurerCode, $credentials ?? [], $connection->broker_id),
             };
 
             // ── MFA requerido (SURA) — pausa el job en estado intermedio ──

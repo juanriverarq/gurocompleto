@@ -26,6 +26,7 @@ import EmailDesigner from 'src/components/email/EmailDesigner';
 import EmailCampaignWizard from 'src/components/email/EmailCampaignWizard';
 import PermissionGate from 'src/components/PermissionGate';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
+import BrokerEmailSettingsCard from './BrokerEmailSettingsCard';
 
 type SortBy = 'recientes' | 'usos' | 'apertura';
 type ViewMode = 'grid' | 'list';
@@ -972,6 +973,9 @@ const Plantillas = () => {
       }
     >
       <div className="p-6 space-y-6">
+        {/* Configuración SMTP del broker (para notificaciones a vendedores) */}
+        <BrokerEmailSettingsCard />
+
         <div className="grid grid-cols-12 gap-6">
           {/* Main content container */}
           <div className="col-span-12">

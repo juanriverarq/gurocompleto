@@ -1,15 +1,23 @@
 import { Helmet } from 'react-helmet';
-import { Link, useParams } from 'react-router';
+import { Link, Navigate, useParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { Icon } from '@iconify/react';
 import Navbar from 'src/components/landingpage/framer-landing/Navbar';
 import Footer from 'src/components/landingpage/framer-landing/Footer';
 import { segurosArticles } from 'src/data/blog/segurosFaq';
+import { BLOG_REDIRECTS } from 'src/data/blog/blogRedirects';
 
 const tagStyle = 'bg-white/[0.05] text-white/50 border-white/[0.08]';
 
 const BlogArticle = () => {
   const { slug } = useParams();
+
+  // Si el slug es legacy (canibalizaba "software seguros"), redirige al slug nuevo.
+  // Cliente-side por ahora — para 301 real configurar también Cloudflare Page Rules.
+  if (slug && BLOG_REDIRECTS[slug]) {
+    return <Navigate replace to={`/blog/${BLOG_REDIRECTS[slug]}`} />;
+  }
+
   const article = segurosArticles.find((a) => a.slug === slug);
 
   if (!article) {

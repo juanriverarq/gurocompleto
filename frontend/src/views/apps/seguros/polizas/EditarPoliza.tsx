@@ -10,8 +10,11 @@ import AnexosPoliza from './components/AnexosPoliza';
 import ComisionesPoliza from './components/ComisionesPoliza';
 import VinculadosPoliza from './components/VinculadosPoliza';
 import PagosPoliza from './components/PagosPoliza';
+import PagosAseguradoraPoliza from './components/PagosAseguradoraPoliza';
+import ComisionesAseguradoraPoliza from './components/ComisionesAseguradoraPoliza';
 import CoberturasPolizaTab from './components/CoberturasPolizaTab';
 import TareasAsociadas from '../components/TareasAsociadas';
+import useOperativaMode from 'src/hooks/useOperativaMode';
 
 const EditarPoliza: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +26,7 @@ const EditarPoliza: React.FC = () => {
   const [currentCategory, setCurrentCategory] = useState<string>('individual');
   const [syncing, setSyncing] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const operativa = useOperativaMode();
 
   const handleDownloadPdf = async () => {
     if (!id) return;
@@ -146,7 +150,7 @@ const EditarPoliza: React.FC = () => {
           <div className="text-xs text-gray-500">
             <strong>{poliza.numero_poliza}</strong> — {poliza.aseguradora_nombre || poliza.aseguradora || ''} / {poliza.ramo_nombre || poliza.ramo_principal || ''}
           </div>
-          {poliza.sync_source && (
+          {poliza.sync_source && poliza.detail_sync_status !== 'not_applicable' && (
             <>
               <Button
                 color="light"
@@ -158,18 +162,25 @@ const EditarPoliza: React.FC = () => {
                 {syncing ? <Spinner size="xs" className="mr-1" /> : <HiRefresh className="w-3 h-3 mr-1" />}
                 {syncing ? 'Sincronizando…' : 'Resincronizar'}
               </Button>
-              {poliza.sync_source === 'hdi' && (
-                <Button
-                  color="light"
-                  size="xs"
-                  disabled={downloadingPdf}
-                  onClick={() => void handleDownloadPdf()}
-                  title="Descargar carátula PDF desde HDI"
-                >
-                  {downloadingPdf ? <Spinner size="xs" className="mr-1" /> : <HiDownload className="w-3 h-3 mr-1" />}
-                  {downloadingPdf ? 'Descargando…' : 'Carátula PDF'}
-                </Button>
-              )}
+              {(() => {
+                // El backend expone sync_source como 'hdi_sync', 'sura_sync', etc.
+                const src = (poliza.sync_source ?? '').toString().toLowerCase();
+                const insurer = src.replace(/_sync$/, '');
+                const supportsCaratula = insurer === 'hdi' || insurer === 'sura';
+                if (!supportsCaratula) return null;
+                return (
+                  <Button
+                    color="light"
+                    size="xs"
+                    disabled={downloadingPdf}
+                    onClick={() => void handleDownloadPdf()}
+                    title={`Descargar carátula PDF desde ${insurer.toUpperCase()}`}
+                  >
+                    {downloadingPdf ? <Spinner size="xs" className="mr-1" /> : <HiDownload className="w-3 h-3 mr-1" />}
+                    {downloadingPdf ? 'Descargando…' : 'Carátula PDF'}
+                  </Button>
+                );
+              })()}
             </>
           )}
         </div>
@@ -206,37 +217,57 @@ const EditarPoliza: React.FC = () => {
             <VinculadosPoliza polizaId={poliza.id!} />
           </Tabs.Item>
         )}
-        <Tabs.Item title="Pagos">
-          <PagosPoliza
-            key={`pagos-${poliza.id}-${poliza.updated_at || ''}`}
-            polizaId={String(poliza.id!)}
-            clienteId={poliza.cliente_id ? String(poliza.cliente_id) : undefined}
-            primaTotal={poliza.total || (poliza.prima_neta + (poliza.iva || 0))}
-            primaNeta={poliza.prima_neta}
-            periodicidad={poliza.periodicidad_pago}
-            fechaInicio={poliza.fecha_inicio}
-            fechaFin={poliza.fecha_fin}
-            formaPago={poliza.forma_pago}
-            numeroPoliza={poliza.numero_poliza}
-            clienteNombre={poliza.nombre_completo_cliente || poliza.nombres_cliente}
-            aseguradoraNombre={poliza.aseguradora_nombre || poliza.aseguradora}
-            ramoNombre={poliza.ramo_nombre || poliza.ramo_principal}
-            installmentsCount={poliza.installments_count}
-          />
-        </Tabs.Item>
-        <Tabs.Item title="Comisiones">
-          <ComisionesPoliza 
-            polizaId={poliza.id!} 
-            numeroPoliza={poliza.numero_poliza}
-            vendedorId={poliza.vendedor_id}
-            vendedorId2={poliza.vendedor_id_2}
-            vendedorNombre={poliza.vendedor}
-            vendedor2Nombre={poliza.vendedor_2}
-            aseguradoraNombre={poliza.aseguradora_nombre || poliza.aseguradora}
-            ramoNombre={poliza.ramo_nombre || poliza.ramo_principal}
-            clienteNombre={poliza.nombre_completo_cliente || poliza.nombres_cliente}
-          />
-        </Tabs.Item>
+        {operativa.manual && (
+          <Tabs.Item title={operativa.automatica ? 'Pagos manuales' : 'Pagos'}>
+            <PagosPoliza
+              key={`pagos-${poliza.id}-${poliza.updated_at || ''}`}
+              polizaId={String(poliza.id!)}
+              clienteId={poliza.cliente_id ? String(poliza.cliente_id) : undefined}
+              primaTotal={poliza.total || (poliza.prima_neta + (poliza.iva || 0))}
+              primaNeta={poliza.prima_neta}
+              periodicidad={poliza.periodicidad_pago}
+              fechaInicio={poliza.fecha_inicio}
+              fechaFin={poliza.fecha_fin}
+              formaPago={poliza.forma_pago}
+              numeroPoliza={poliza.numero_poliza}
+              clienteNombre={poliza.nombre_completo_cliente || poliza.nombres_cliente}
+              aseguradoraNombre={poliza.aseguradora_nombre || poliza.aseguradora}
+              ramoNombre={poliza.ramo_nombre || poliza.ramo_principal}
+              installmentsCount={poliza.installments_count}
+            />
+          </Tabs.Item>
+        )}
+        {operativa.manual && (
+          <Tabs.Item title={operativa.automatica ? 'Comisiones manuales' : 'Comisiones'}>
+            <ComisionesPoliza
+              polizaId={poliza.id!}
+              numeroPoliza={poliza.numero_poliza}
+              vendedorId={poliza.vendedor_id}
+              vendedorId2={poliza.vendedor_id_2}
+              vendedorNombre={poliza.vendedor}
+              vendedor2Nombre={poliza.vendedor_2}
+              aseguradoraNombre={poliza.aseguradora_nombre || poliza.aseguradora}
+              ramoNombre={poliza.ramo_nombre || poliza.ramo_principal}
+              clienteNombre={poliza.nombre_completo_cliente || poliza.nombres_cliente}
+            />
+          </Tabs.Item>
+        )}
+        {operativa.automatica && (
+          <Tabs.Item title="Pagos">
+            <PagosAseguradoraPoliza
+              key={`pagos-aseg-${poliza.id}`}
+              numeroPoliza={poliza.numero_poliza}
+            />
+          </Tabs.Item>
+        )}
+        {operativa.automatica && (
+          <Tabs.Item title="Comisiones">
+            <ComisionesAseguradoraPoliza
+              key={`comisiones-aseg-${poliza.id}`}
+              numeroPoliza={poliza.numero_poliza}
+            />
+          </Tabs.Item>
+        )}
         <Tabs.Item title="Tareas">
           <TareasAsociadas
             polizaId={poliza.id}

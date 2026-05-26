@@ -52,6 +52,31 @@ html.dark .page-wrapper .bg-gray-300 {
   background-color: #333333;
 }
 
+html.dark .page-wrapper .bg-slate-50 {
+  background-color: #181818;
+}
+
+html.dark .page-wrapper .bg-slate-100 {
+  background-color: #222222;
+}
+
+html.dark .page-wrapper .bg-slate-200 {
+  background-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .bg-zinc-50 {
+  background-color: #181818;
+}
+
+html.dark .page-wrapper .bg-zinc-100 {
+  background-color: #222222;
+}
+
+html.dark .page-wrapper .bg-stone-50,
+html.dark .page-wrapper .bg-neutral-50 {
+  background-color: #181818;
+}
+
 /* Preservar blanco en elementos decorativos/logos (pequeños circles, avatars) */
 /* Excepción: círculos que contienen logos de aseguradoras deben mantenerse blancos */
 html.dark .page-wrapper .bg-white.rounded-full:not([class*="p-"]):not([class*="shadow"]):not(:has(> img)) {
@@ -76,6 +101,18 @@ html.dark .page-wrapper .hover\:bg-gray-100:hover {
 
 html.dark .page-wrapper .hover\:bg-gray-200:hover {
   background-color: #2e2e2e;
+}
+
+html.dark .page-wrapper .hover\:bg-slate-50:hover,
+html.dark .page-wrapper .hover\:bg-zinc-50:hover,
+html.dark .page-wrapper .hover\:bg-neutral-50:hover {
+  background-color: #202020;
+}
+
+html.dark .page-wrapper .hover\:bg-slate-100:hover,
+html.dark .page-wrapper .hover\:bg-zinc-100:hover,
+html.dark .page-wrapper .hover\:bg-neutral-100:hover {
+  background-color: #252525;
 }
 
 /* =====================================================================
@@ -110,6 +147,39 @@ html.dark .page-wrapper .text-gray-500 {
 
 /* text-gray-400 = #9ca3af — ya es claro, dejamos casi igual */
 html.dark .page-wrapper .text-gray-400 {
+  color: #a1a1aa;
+}
+
+html.dark .page-wrapper .text-slate-950,
+html.dark .page-wrapper .text-zinc-950,
+html.dark .page-wrapper .text-neutral-950,
+html.dark .page-wrapper .text-slate-900,
+html.dark .page-wrapper .text-zinc-900,
+html.dark .page-wrapper .text-neutral-900 {
+  color: #f4f4f5;
+}
+
+html.dark .page-wrapper .text-slate-800,
+html.dark .page-wrapper .text-zinc-800,
+html.dark .page-wrapper .text-neutral-800 {
+  color: #e4e4e7;
+}
+
+html.dark .page-wrapper .text-slate-700,
+html.dark .page-wrapper .text-zinc-700,
+html.dark .page-wrapper .text-neutral-700 {
+  color: #d1d5db;
+}
+
+html.dark .page-wrapper .text-slate-600,
+html.dark .page-wrapper .text-zinc-600,
+html.dark .page-wrapper .text-neutral-600,
+html.dark .page-wrapper .text-slate-500,
+html.dark .page-wrapper .text-zinc-500,
+html.dark .page-wrapper .text-neutral-500,
+html.dark .page-wrapper .text-slate-400,
+html.dark .page-wrapper .text-zinc-400,
+html.dark .page-wrapper .text-neutral-400 {
   color: #a1a1aa;
 }
 
@@ -148,6 +218,21 @@ html.dark .page-wrapper .border-gray-300 {
 
 html.dark .page-wrapper .border-gray-400 {
   border-color: #3f3f3f;
+}
+
+html.dark .page-wrapper .border-slate-100,
+html.dark .page-wrapper .border-zinc-100,
+html.dark .page-wrapper .border-neutral-100,
+html.dark .page-wrapper .border-slate-200,
+html.dark .page-wrapper .border-zinc-200,
+html.dark .page-wrapper .border-neutral-200 {
+  border-color: #2a2a2a;
+}
+
+html.dark .page-wrapper .border-slate-300,
+html.dark .page-wrapper .border-zinc-300,
+html.dark .page-wrapper .border-neutral-300 {
+  border-color: #333333;
 }
 
 /* Bordes específicos en white */
@@ -210,6 +295,23 @@ html.dark .page-wrapper select.bg-gray-100 {
   background-color: #222222;
   color: #f4f4f5;
   border-color: #2a2a2a;
+}
+
+html.dark .page-wrapper input:focus,
+html.dark .page-wrapper textarea:focus,
+html.dark .page-wrapper select:focus {
+  border-color: rgba(87, 60, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(87, 60, 255, 0.18);
+  outline: none;
+}
+
+html.dark .page-wrapper input:disabled,
+html.dark .page-wrapper textarea:disabled,
+html.dark .page-wrapper select:disabled {
+  background-color: #181818;
+  color: #71717a;
+  border-color: #252525;
+  cursor: not-allowed;
 }
 
 /* Placeholders */
@@ -305,6 +407,42 @@ html.dark .page-wrapper .bg-gray-200.text-gray-800 {
   color: #d1d5db;
 }
 
+html.dark .page-wrapper .bg-blue-50.text-blue-700,
+html.dark .page-wrapper .bg-blue-100.text-blue-800 {
+  background-color: rgba(59, 130, 246, 0.14);
+  color: #93c5fd;
+}
+
+html.dark .page-wrapper .bg-green-50.text-green-700,
+html.dark .page-wrapper .bg-green-100.text-green-800,
+html.dark .page-wrapper .bg-emerald-50.text-emerald-700,
+html.dark .page-wrapper .bg-emerald-100.text-emerald-800 {
+  background-color: rgba(16, 185, 129, 0.14);
+  color: #86efac;
+}
+
+html.dark .page-wrapper .bg-red-50.text-red-700,
+html.dark .page-wrapper .bg-red-100.text-red-800 {
+  background-color: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+
+html.dark .page-wrapper .bg-yellow-50.text-yellow-700,
+html.dark .page-wrapper .bg-yellow-100.text-yellow-800,
+html.dark .page-wrapper .bg-amber-50.text-amber-700,
+html.dark .page-wrapper .bg-amber-100.text-amber-800 {
+  background-color: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+html.dark .page-wrapper .bg-purple-50.text-purple-700,
+html.dark .page-wrapper .bg-purple-100.text-purple-800,
+html.dark .page-wrapper .bg-indigo-50.text-indigo-700,
+html.dark .page-wrapper .bg-indigo-100.text-indigo-800 {
+  background-color: rgba(87, 60, 255, 0.18);
+  color: #c4b5fd;
+}
+
 /* =====================================================================
    10. SOMBRAS — ajuste para modo oscuro
    ===================================================================== */
@@ -347,6 +485,18 @@ html.dark .page-wrapper .from-gray-100 {
 
 html.dark .page-wrapper .via-white {
   --tw-gradient-via: #1c1c1c;
+}
+
+html.dark .page-wrapper .from-slate-50,
+html.dark .page-wrapper .from-zinc-50,
+html.dark .page-wrapper .from-neutral-50 {
+  --tw-gradient-from: #181818;
+}
+
+html.dark .page-wrapper .to-slate-50,
+html.dark .page-wrapper .to-zinc-50,
+html.dark .page-wrapper .to-neutral-50 {
+  --tw-gradient-to: #181818;
 }
 
 /* =====================================================================
@@ -539,6 +689,16 @@ html.dark [role="dialog"] .bg-gray-100 { background-color: #222222; }
 html.dark [role="dialog"] .border-gray-200 { border-color: #2a2a2a; }
 html.dark [role="dialog"] .border-gray-100 { border-color: #2a2a2a; }
 
+html.dark [role="dialog"] .bg-slate-50,
+html.dark [role="dialog"] .bg-zinc-50,
+html.dark [role="dialog"] .bg-neutral-50 { background-color: #181818; }
+html.dark [role="dialog"] .bg-slate-100,
+html.dark [role="dialog"] .bg-zinc-100,
+html.dark [role="dialog"] .bg-neutral-100 { background-color: #222222; }
+html.dark [role="dialog"] .border-slate-200,
+html.dark [role="dialog"] .border-zinc-200,
+html.dark [role="dialog"] .border-neutral-200 { border-color: #2a2a2a; }
+
 /* Form elements dentro de modales (sin dark: pair) */
 :where(html.dark [role="dialog"]) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
   background-color: #1c1c1c;
@@ -576,6 +736,44 @@ html.dark .page-wrapper .text-\[\#0A0A0A\] {
 html.dark .page-wrapper .bg-\[\#0d0d0d\],
 html.dark .page-wrapper .bg-\[\#0d0d0e\] {
   background-color: #1c1c1c;
+}
+
+/* =====================================================================
+   21. FLOWBITE / FLOATING MENUS — dropdowns renderizados en body
+   ===================================================================== */
+
+html.dark [data-testid="flowbite-dropdown"],
+html.dark [data-testid="flowbite-popover"],
+html.dark [role="menu"].bg-white,
+html.dark ul[role="menu"].bg-white {
+  background-color: #1c1c1c;
+  border-color: #2a2a2a;
+  color: #f4f4f5;
+}
+
+html.dark [data-testid="flowbite-dropdown"] .text-gray-900,
+html.dark [data-testid="flowbite-dropdown"] .text-gray-800,
+html.dark [data-testid="flowbite-dropdown"] .text-gray-700,
+html.dark [data-testid="flowbite-popover"] .text-gray-900,
+html.dark [data-testid="flowbite-popover"] .text-gray-800,
+html.dark [data-testid="flowbite-popover"] .text-gray-700 {
+  color: #e4e4e7;
+}
+
+html.dark [data-testid="flowbite-dropdown"] .text-gray-600,
+html.dark [data-testid="flowbite-dropdown"] .text-gray-500,
+html.dark [data-testid="flowbite-dropdown"] .text-gray-400,
+html.dark [data-testid="flowbite-popover"] .text-gray-600,
+html.dark [data-testid="flowbite-popover"] .text-gray-500,
+html.dark [data-testid="flowbite-popover"] .text-gray-400 {
+  color: #a1a1aa;
+}
+
+html.dark [data-testid="flowbite-dropdown"] .hover\:bg-gray-100:hover,
+html.dark [data-testid="flowbite-dropdown"] .hover\:bg-gray-50:hover,
+html.dark [data-testid="flowbite-popover"] .hover\:bg-gray-100:hover,
+html.dark [data-testid="flowbite-popover"] .hover\:bg-gray-50:hover {
+  background-color: #252525;
 }
 
 @media print {

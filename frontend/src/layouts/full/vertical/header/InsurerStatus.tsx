@@ -11,6 +11,7 @@ import equidadLogo from '../../../../assets/images/logoscompanias/equidad.png';
 import axaLogo from '../../../../assets/images/logoscompanias/axa.png';
 import mapfreLogo from '../../../../assets/images/logoscompanias/mapfre.png';
 import allianzLogo from '../../../../assets/images/logoscompanias/allianz.png';
+import mundialLogo from '../../../../assets/images/logoscompanias/mundial.svg';
 
 const LOGOS: Record<string, string> = {
   sura: suraLogo,
@@ -23,6 +24,7 @@ const LOGOS: Record<string, string> = {
   axa: axaLogo,
   mapfre: mapfreLogo,
   allianz: allianzLogo,
+  mundial: mundialLogo,
 };
 const NAMES: Record<string, string> = {
   sura: 'Sura',
@@ -35,6 +37,7 @@ const NAMES: Record<string, string> = {
   axa: 'AXA',
   mapfre: 'Mapfre',
   allianz: 'Allianz',
+  mundial: 'Mundial',
 };
 
 interface Connection {

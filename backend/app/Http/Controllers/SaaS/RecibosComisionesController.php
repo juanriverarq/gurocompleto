@@ -30,6 +30,12 @@ class RecibosComisionesController extends Controller
         $policy = $request->input('policy');
 
         $query = RecibosComisionAseguradora::forBroker($brokerId);
+        $query->where(function ($q) {
+            $q->where('prima_neta', '>', 0)
+              ->orWhere('valor_pagado_tomador', '>', 0)
+              ->orWhere('valor_comision', '>', 0)
+              ->orWhere('insurer_code', 'qualitas');
+        });
 
         if ($insurer) $query->where('insurer_code', $insurer);
         if ($anio) $query->where('anio', $anio);
@@ -73,6 +79,12 @@ class RecibosComisionesController extends Controller
 
         $base = fn() => DB::table('recibos_comisiones_aseguradoras')
             ->where('broker_id', $brokerId)
+            ->where(function ($q) {
+                $q->where('prima_neta', '>', 0)
+                  ->orWhere('valor_pagado_tomador', '>', 0)
+                  ->orWhere('valor_comision', '>', 0)
+                  ->orWhere('insurer_code', 'qualitas');
+            })
             ->when($insurer, fn($q) => $q->where('insurer_code', $insurer))
             ->when($anio, fn($q) => $q->where('anio', $anio))
             ->when($mes, fn($q) => $q->where('mes', str_pad($mes, 2, '0', STR_PAD_LEFT)));
@@ -190,6 +202,41 @@ class RecibosComisionesController extends Controller
             'success' => true,
             'anio' => $anio, 'mes' => $mes, 'ramo' => $ramo,
             'summary' => $summary,
+        ]);
+    }
+
+    public function destroyData(Request $request)
+    {
+        $brokerId = $this->resolveBrokerId($request);
+        $insurer = $request->input('insurer');
+        $anio = $request->input('anio');
+        $mes = $request->input('mes');
+
+        $query = RecibosComisionAseguradora::where('broker_id', $brokerId);
+        if ($insurer) {
+            $query->where('insurer_code', $insurer);
+        }
+        if ($anio) {
+            $query->where('anio', (string) $anio);
+        }
+        if ($mes) {
+            $query->where('mes', str_pad((string) $mes, 2, '0', STR_PAD_LEFT));
+        }
+
+        $deleted = $query->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => $deleted > 0
+                ? 'Datos de comisiones eliminados correctamente.'
+                : 'No había datos de comisiones para eliminar.',
+            'data' => [
+                'deleted' => $deleted,
+                'broker_id' => $brokerId,
+                'insurer' => $insurer,
+                'anio' => $anio,
+                'mes' => $mes ? str_pad((string) $mes, 2, '0', STR_PAD_LEFT) : null,
+            ],
         ]);
     }
 

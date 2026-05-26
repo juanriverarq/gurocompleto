@@ -47,6 +47,7 @@ class WhatsAppConversation extends Model
         'tags',
         'client_reminder_sent_at',
         'agent_reminder_sent_at',
+        'data_consent_at',
     ];
 
     protected $casts = [
@@ -57,6 +58,7 @@ class WhatsAppConversation extends Model
         'resolved_at' => 'datetime',
         'client_reminder_sent_at' => 'datetime',
         'agent_reminder_sent_at' => 'datetime',
+        'data_consent_at' => 'datetime',
         'metadata' => 'array',
         'tags' => 'array',
         'contact_custom_fields' => 'array',

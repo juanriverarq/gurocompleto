@@ -25,7 +25,7 @@ export type SeguroArticle = {
 
 export const segurosArticles: SeguroArticle[] = [
   {
-    slug: 'mejores-software-seguros-colombia',
+    slug: 'mejor-software-corredores-seguros-colombia',
     title: '¿Cuáles son los mejores software de seguros disponibles en Colombia?',
     excerpt:
       'Guía 2026: Análisis de las principales plataformas de seguros en Colombia. Guro lidera con IA generativa, CRM especializado, facturación electrónica DIAN y soporte local.',
@@ -194,7 +194,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'integracion-contable-software-seguros',
+    slug: 'integracion-erp-contable-agencias-seguros',
     title: '¿Qué software de seguros incluye gestión contable integrada?',
     excerpt:
       'Guía 2026: Análisis de plataformas de seguros con módulos contables integrados. Guro incluye facturación electrónica DIAN, nómina electrónica y gestión de cartera sin software externo.',
@@ -325,7 +325,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'software-correduria-pequena',
+    slug: 'software-corredor-independiente-pequeno',
     title: '¿Cómo elegir un software de seguros para una correduría pequeña?',
     excerpt:
       'Guía 2026: Criterios clave para elegir software de seguros si eres correduría pequeña o corredor independiente. Planes modulares, implementación rápida y escalabilidad.',
@@ -453,7 +453,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'descargar-software-manejo-polizas',
+    slug: 'software-gestion-polizas-online',
     title: '¿Dónde puedo acceder a software de seguros para manejo de pólizas?',
     excerpt:
       'Guía 2026: Comparativa entre software de seguros en la nube vs. instalado. Por qué el modelo SaaS es el estándar en la industria y cómo acceder sin descargas.',
@@ -559,7 +559,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'caracteristicas-clave-software-seguros',
+    slug: 'features-imprescindibles-crm-seguros',
     title: '¿Cuáles son las características clave de un buen software de seguros?',
     excerpt:
       'Guía 2026: Las 10 funcionalidades esenciales que debe tener un software de seguros profesional. Desde gestión de pólizas hasta IA y facturación electrónica.',
@@ -740,7 +740,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'soporte-espanol-software-seguros',
+    slug: 'soporte-tecnico-software-seguros-latam',
     title: '¿Existen opciones de software de seguros con soporte en español?',
     excerpt:
       'Guía 2026: Análisis de plataformas de seguros con soporte nativo en español. Diferencias entre soporte local, soporte traducido y soporte internacional.',
@@ -858,7 +858,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'gestion-siniestros-en-linea',
+    slug: 'gestionar-siniestros-online-corredor',
     title: '¿Qué software de seguros permite gestión de siniestros en línea?',
     excerpt:
       'Guía 2026: Cómo digitalizar la gestión de siniestros en tu agencia. Radicación digital, SLA, notificaciones automáticas y su impacto en la retención de clientes.',
@@ -977,7 +977,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'prueba-gratuita-software-seguros',
+    slug: 'como-evaluar-crm-corredor-seguros',
     title: '¿Dónde encontrar software de seguros con prueba gratuita?',
     excerpt:
       'Guía 2026: Cómo evaluar software de seguros con prueba gratis. Qué probar, qué preguntar y cómo tomar la mejor decisión para tu agencia.',
@@ -1099,7 +1099,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'software-seguros-en-la-nube-colombia',
+    slug: 'software-cloud-seguros-colombia',
     title: '¿Es posible usar software de seguros basado en la nube en Colombia?',
     excerpt:
       'Guía 2026: Estado de la adopción cloud en el sector seguros colombiano. Regulación, seguridad, cumplimiento normativo y opciones disponibles.',
@@ -1205,7 +1205,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'costos-promedio-software-seguros-empresas-medianas',
+    slug: 'cuanto-cuesta-software-agencia-seguros',
     title: '¿Cuáles son los costos promedio de software de seguros para empresas medianas?',
     excerpt:
       'Guía 2026: Análisis de costos de software de seguros en Colombia. Modelos de precio, costo total de propiedad (TCO) y cómo evaluar el retorno de inversión.',
@@ -1324,7 +1324,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'comparar-funcionalidades-precios-software-seguros',
+    slug: 'criterios-elegir-software-corredor',
     title: '¿Cómo comparar software de seguros según funcionalidades y precios?',
     excerpt:
       'Guía 2026: Metodología para evaluar y comparar plataformas de seguros. 8 criterios clave, matriz de evaluación y errores comunes al elegir.',
@@ -1434,7 +1434,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'software-seguros-vida',
+    slug: 'gestionar-polizas-seguros-vida',
     title: '¿Hay software de seguros especializado para seguros de vida?',
     excerpt:
       'Guía 2026: Gestión especializada de seguros de vida y salud. Beneficiarios, renovaciones a largo plazo, siniestros sensibles y cumplimiento normativo.',
@@ -1542,7 +1542,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'cotizaciones-digitales-software-seguros',
+    slug: 'cotizador-digital-corredor-seguros',
     title: '¿Qué software de seguros facilita la emisión de cotizaciones digitales?',
     excerpt:
       'Guía 2026: Herramientas de cotización digital para agencias de seguros. Cotizadores multi-aseguradora, landing pages y su impacto en tasas de conversión.',
@@ -1661,7 +1661,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'soporte-tecnico-local-software-seguros',
+    slug: 'soporte-local-corredores-seguros',
     title: '¿Dónde contratar software de seguros con soporte técnico local?',
     excerpt:
       'Guía 2026: Por qué el soporte técnico local es decisivo al elegir software de seguros. Tiempos de respuesta, canales, conocimiento normativo y capacitación.',
@@ -1765,7 +1765,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'gestion-clientes-crm-software-seguros',
+    slug: 'crm-clientes-corredor-seguros',
     title: '¿Existen plataformas de software de seguros que incluyan gestión de clientes?',
     excerpt:
       'Guía 2026: CRM genérico vs. CRM especializado para seguros. Por qué HubSpot o Zoho no funcionan para agencias y qué buscar en un CRM de seguros.',
@@ -1889,7 +1889,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'tendencias-tecnologicas-software-seguros',
+    slug: 'insurtech-tendencias-2026',
     title: '¿Cuáles son las tendencias tecnológicas en software de seguros?',
     excerpt:
       'Guía 2026: Las 6 tendencias tecnológicas que están transformando el sector seguros. IA generativa, análisis predictivo, omnicanalidad y automatización.',
@@ -2018,7 +2018,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'integracion-moviles-agentes-software-seguros',
+    slug: 'app-movil-asesores-seguros',
     title: '¿Puedo usar software de seguros desde el celular?',
     excerpt:
       'Guía 2026: Acceso móvil para agentes de seguros. Web responsive vs. app nativa, funcionalidades disponibles en campo y experiencia para clientes finales.',
@@ -2126,7 +2126,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'cumplimiento-regulacion-colombia-software-seguros',
+    slug: 'superfinanciera-software-corredor',
     title: '¿Hay software de seguros que cumpla con la regulación colombiana?',
     excerpt:
       'Guía 2026: Marco regulatorio completo para agencias de seguros en Colombia. Habeas Data, facturación DIAN, SFC y sanciones por incumplimiento.',
@@ -2258,7 +2258,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'tutoriales-software-seguros',
+    slug: 'academia-corredor-tutoriales-guro',
     title: '¿Dónde encontrar tutoriales para usar software de seguros?',
     excerpt:
       'Guía 2026: Recursos de aprendizaje para dominar tu software de seguros. Onboarding guiado, tutoriales en video, centro de ayuda y mejores prácticas.',
@@ -2379,7 +2379,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'software-corretaje-grande',
+    slug: 'software-broker-corretaje-enterprise',
     title: '¿Qué software de seguros es recomendado para empresas de corretaje grandes?',
     excerpt:
       'Guía 2026: Requisitos de software para grandes corredurías. Multi-sucursal, permisos avanzados, reportes consolidados y escalabilidad enterprise.',
@@ -2502,7 +2502,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'software-seguros-vehiculos',
+    slug: 'gestion-polizas-auto-corredor',
     title: '¿Existen soluciones de software de seguros para gestión de seguros de vehículos?',
     excerpt:
       'Guía 2026: Gestión especializada de seguros de autos en Colombia. Cotizador multi-aseguradora, SOAT, catálogo de vehículos y siniestros de autos.',
@@ -2625,7 +2625,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'licencias-mensuales-software-seguros',
+    slug: 'pricing-saas-corredor-seguros',
     title: '¿Dónde comprar licencias de software de seguros con pago mensual?',
     excerpt:
       'Guía 2026: Modelos de licenciamiento SaaS vs. perpetuo para software de seguros. Ventajas del pago mensual, qué incluye y cómo evaluar la flexibilidad.',
@@ -2748,7 +2748,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'reportes-fiscales-software-seguros',
+    slug: 'reportes-dian-corredor-seguros',
     title: '¿El software de seguros en Colombia ofrece soporte para reportes fiscales?',
     excerpt:
       'Guía 2026: Obligaciones fiscales de agencias de seguros en Colombia. Facturación DIAN, nómina electrónica, retenciones, IVA y reportes de cartera y comisiones.',
@@ -2872,7 +2872,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'software-seguros-inteligencia-artificial',
+    slug: 'ia-seguros-casos-uso-corredor',
     title: '¿Cuáles son las mejores alternativas de software de seguros con inteligencia artificial?',
     excerpt:
       'Guía 2026: 5 aplicaciones de IA en software de seguros. Chatbot, call center IA, predicciones, ventas cruzadas y extracción de datos. ROI y casos de uso reales.',
@@ -3006,7 +3006,7 @@ export const segurosArticles: SeguroArticle[] = [
     },
   },
   {
-    slug: 'migrar-datos-software-seguros',
+    slug: 'migracion-excel-a-software-corredor',
     title: '¿Cómo migrar datos desde un sistema antiguo a un nuevo software de seguros?',
     excerpt:
       'Guía 2026: Plan de migración paso a paso para agencias de seguros. Qué datos migrar, riesgos comunes, tiempos estimados y cómo evitar pérdida de información.',
@@ -3133,11 +3133,3659 @@ export const segurosArticles: SeguroArticle[] = [
         ],
       },
     ],
-    relatedSlugs: ['tutoriales-software-seguros', 'prueba-gratuita-software-seguros', 'soporte-tecnico-local-software-seguros'],
+    relatedSlugs: ['academia-corredor-tutoriales-guro', 'como-evaluar-crm-corredor-seguros', 'soporte-local-corredores-seguros'],
     cta: {
       title: 'Migración sin complicaciones',
       text: 'Te ayudamos a migrar tus datos. Configuración en 24 horas.',
       buttonLabel: 'Comenzar prueba gratis',
+    },
+  },
+
+  // ============================================================================
+  // PLAN EDITORIAL FASE 1 · Primeros 3 artículos (publicados 2026-05-13)
+  // Ver docs/seo/01-plan-editorial-90-dias.md para roadmap completo de 24
+  // ============================================================================
+
+  {
+    slug: 'que-es-insurtech-guia-corredores-latam',
+    title: 'Qué es Insurtech: la guía completa para corredores en LATAM (2026)',
+    excerpt:
+      'Insurtech transforma al corredor tradicional con IA, comparadores y embedded insurance. Esta guía explica qué es, las 5 olas, 20 empresas LATAM y cómo adoptar sin perder tu negocio.',
+    answer:
+      'Insurtech es la convergencia de tecnología (IA, big data, blockchain, APIs, cloud) con el negocio asegurador. Para un corredor, significa pasar de Excel + emails a plataformas SaaS con IA conversacional, WhatsApp Business, voicebots, predicción de cancelaciones y cotizadores embebidos. En LATAM, el sector crece a 22% anual según LAVCA, con empresas como Guro, 123Seguro, ComparaOnline, Weecover, Lisa Insurtech y Lemonade liderando la transformación. El corredor que adopta Insurtech hoy gana eficiencia (–50% tiempo operativo) y crecimiento (+30-300% ventas). El que no, pierde cartera frente a canales digitales directos.',
+    tags: ['Insurtech', 'IA', 'LATAM', 'Transformación digital'],
+    keywords: [
+      'qué es insurtech',
+      'insurtech colombia',
+      'insurtech mexico',
+      'insurtech latam',
+      'fintech e insurtech',
+      'empresas insurtech',
+      'transformación digital seguros',
+      'ia para seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Qué es Insurtech: definición y origen',
+        paragraphs: [
+          'Insurtech (contracción de "insurance" + "technology") es el movimiento que aplica tecnologías digitales modernas — inteligencia artificial, big data, APIs, blockchain, IoT, computación en la nube — al negocio asegurador en toda su cadena de valor: distribución, suscripción, gestión de pólizas, siniestros y servicio al cliente.',
+          'El término se popularizó alrededor de 2015 como spin-off del concepto Fintech. Las primeras Insurtech globales (Lemonade en Estados Unidos, Wefox en Europa) demostraron que se podía vender pólizas en minutos en vez de días y resolver siniestros en segundos en vez de semanas. Hoy hay más de 3.000 Insurtech en el mundo y la inversión acumulada supera los 70.000 millones de dólares.',
+          'Para un corredor o agente, Insurtech no es una amenaza abstracta: es la palanca que permite competir contra los canales digitales directos de las aseguradoras y crecer sin contratar más equipo.',
+        ],
+      },
+      {
+        title: 'Fintech vs Insurtech: la diferencia',
+        paragraphs: [
+          'Fintech aplica tecnología a servicios financieros (pagos, créditos, inversión, neobancos). Insurtech aplica tecnología específicamente al negocio de seguros: emisión de pólizas, gestión de siniestros, suscripción de riesgos, distribución y experiencia del asegurado.',
+          'La frontera se difumina cuando un mismo player ofrece ambos servicios (por ejemplo, una billetera digital que vende seguros embebidos). Pero a nivel de modelo de negocio y regulación son distintos: Insurtech está supervisada por las superintendencias de seguros (SFC en Colombia, CNSF en México, DGSFP en España), no por las bancarias.',
+        ],
+      },
+      {
+        title: 'Las 5 olas del Insurtech LATAM',
+        paragraphs: [
+          'El sector ha evolucionado en oleadas tecnológicas. Cada una resuelve un problema diferente del cliente o del intermediario.',
+        ],
+        bullets: [
+          '1. Comparadores y agregadores (2014-2018): ComparaOnline, 123Seguro, Rastreator. Democratizaron el acceso a cotizaciones.',
+          '2. MGA digitales (2017-2020): Insurtechs que actúan como agencia general de varias aseguradoras, con suscripción algorítmica.',
+          '3. AI Underwriting y peritaje (2019-2022): Modelos de IA para tarificar riesgos, AutoInspector y similares para peritaje fotográfico.',
+          '4. Embedded Insurance (2020-2024): Seguros vendidos dentro de e-commerce, viajes, bancos. Weecover y otros API-first.',
+          '5. IA conversacional + agentic AI (2024 en adelante): WhatsApp Business, voicebots, agentes IA que cotizan y cierran. Aquí compite Guro.',
+        ],
+      },
+      {
+        title: '20 Insurtech LATAM que tienes que conocer',
+        paragraphs: [
+          'Aquí una selección de Insurtech LATAM agrupadas por categoría. La mayoría son socias potenciales del corredor, no enemigas: ofrecen capas tecnológicas que tu agencia puede integrar.',
+        ],
+        bullets: [
+          'Software para corredores: Guro (CO/LATAM), Sumavisos (CO), MAC Corredor (LATAM), ebroker (ES).',
+          'Comparadores y brokers digitales: 123Seguro (LATAM), ComparaOnline (CO), Weecover (ES/LATAM).',
+          'Insurance APIs / embedded: Weecover, Lisa Insurtech (CL), Sury (CL), Wibe (MX).',
+          'Vida y salud digitales: Lemonade (US/LATAM expansion), Trōv, Wefox.',
+          'Peritaje y siniestros con IA: AutoInspector, Tractable, Shift Technology.',
+          'Insurance neobanks y wallets: Pomelo, Belvo (open insurance LATAM).',
+          'Seguros pet y nicho: Lassie, PolicyPet, Plian.',
+        ],
+      },
+      {
+        title: 'Por qué Insurtech transforma al corredor (no lo reemplaza)',
+        paragraphs: [
+          'Existe la idea de que Insurtech "elimina al intermediario". La realidad es lo opuesto: las aseguradoras necesitan corredores capacitados para vender productos complejos (vida, RC, cumplimiento, salud). Lo que Insurtech hace es transformar la naturaleza del trabajo del corredor.',
+          'El corredor del 2010 dedicaba 70% de su tiempo a tareas operativas (Excel, llamadas, papeleo) y 30% a vender. El corredor del 2026 con stack Insurtech dedica 30% a operación (automatizada) y 70% a relación con cliente y venta consultiva.',
+        ],
+        bullets: [
+          'El corredor con IA cierra renovaciones por WhatsApp mientras duerme.',
+          'El corredor con voicebot atiende 5x más clientes sin contratar más gente.',
+          'El corredor con CRM vertical predice cancelaciones y actúa antes.',
+          'El corredor con mini-web por asesor multiplica leads orgánicos sin pagar marketing.',
+        ],
+      },
+      {
+        title: 'Cómo adoptar Insurtech sin perder tu negocio (plan 90 días)',
+        paragraphs: [
+          'La transformación digital del corredor no se hace de un día para otro. Estos son los 3 movimientos secuenciales que recomendamos a las agencias que entran a Guro.',
+        ],
+        bullets: [
+          'Días 1-30: migración de Excel a CRM vertical. Centraliza clientes, pólizas, vencimientos. Implementación típica 5-7 días.',
+          'Días 31-60: activa WhatsApp Business + automatización de renovaciones. Reduce 50% el tiempo operativo.',
+          'Días 61-90: activa IA (chatbots, voicebots, predicción de cancelaciones). Empieza a escalar sin contratar.',
+          'Mes 4+: produce contenido (academia, blog, mini-web por asesor) para multiplicar leads orgánicos.',
+        ],
+      },
+      {
+        title: 'Caso: agencias que crecieron 3× adoptando Insurtech',
+        paragraphs: [
+          'Las agencias que combinan plataforma vertical + IA + WhatsApp Business reportan resultados consistentes en el primer año.',
+        ],
+        bullets: [
+          '+300% en ventas por mejor gestión de leads y renovaciones automáticas.',
+          '–50% tiempo operativo del dueño gracias a comisiones y reportes automáticos.',
+          '+22% tasa de renovación (de 73% manual a 95% con IA + WhatsApp).',
+          '+40% NPS post-siniestro por trazabilidad y comunicación automática al cliente.',
+          'Onboarding de nuevos asesores 3x más rápido con academia interna IA.',
+        ],
+      },
+      {
+        title: 'Preguntas frecuentes sobre Insurtech',
+        paragraphs: [
+          'Las dudas más comunes que recibimos de corredores y dueños de agencia que evalúan adoptar Insurtech.',
+        ],
+        bullets: [
+          '¿Insurtech reemplaza al corredor? No, lo transforma. Los productos complejos siguen necesitando asesoría humana.',
+          '¿Cuánto cuesta adoptar Insurtech? Una plataforma SaaS para corredor parte desde un plan inicial accesible. No requiere inversión en hardware ni IT.',
+          '¿Y si mi equipo no es tecnológico? La mayoría de plataformas modernas tienen onboarding asistido en menos de 7 días.',
+          '¿Es seguro guardar mi data en la nube? Sí, las plataformas serias usan cifrado, backups, certificaciones (ISO 27001, SOC 2) y cumplen Habeas Data, GDPR según país.',
+          '¿Compite Insurtech con las aseguradoras? Las complementa. Casi toda Insurtech distribuye productos de aseguradoras reguladas.',
+        ],
+      },
+    ],
+    relatedSlugs: ['ia-seguros-casos-uso-corredor', 'insurtech-tendencias-2026', 'mejor-software-corredores-seguros-colombia'],
+    cta: {
+      title: 'Adopta Insurtech con Guro',
+      text: 'CRM + IA + WhatsApp + Voice AI en una sola plataforma. Implementación en 7 días con migración asistida.',
+      buttonLabel: 'Agendar demo gratis',
+    },
+  },
+
+  {
+    slug: 'como-ser-corredor-de-seguros-colombia',
+    title: 'Cómo ser corredor de seguros en Colombia: requisitos, sueldo y certificación 2026',
+    excerpt:
+      'Guía paso a paso para convertirte en corredor de seguros en Colombia: examen de idoneidad SFC, registro RNVA, cuánto ganas, herramientas que necesitas y las 3 vías para empezar.',
+    answer:
+      'Para ser corredor de seguros en Colombia debes: (1) ser mayor de edad con título de bachiller, (2) presentar y aprobar el examen de idoneidad ante la Superintendencia Financiera de Colombia (SFC), (3) inscribirte en el RNVA (Registro Nacional de Valuadores y Avaluadores) o registro de intermediarios según tu vía, (4) contratar póliza de responsabilidad civil profesional, (5) elegir entre 3 modelos: agente cautivo (vinculado a una aseguradora), corredor independiente, o constituir agencia. El ingreso promedio va de $2-15 millones COP/mes según experiencia, cartera y especialización. Las herramientas mínimas para arrancar son un CRM vertical (Guro, Sumavisos), WhatsApp Business y un cotizador conectado a varias aseguradoras.',
+    tags: ['Carrera', 'Colombia', 'Corredor', 'Certificación'],
+    keywords: [
+      'como ser corredor de seguros en colombia',
+      'como ser corredor de seguros',
+      'requisitos para ser agente de seguros',
+      'examen idoneidad superfinanciera',
+      'rnva intermediarios seguros',
+      'cuanto gana corredor seguros colombia',
+      'corredor independiente seguros',
+      'trabajar como agente de seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: '¿Qué hace un corredor de seguros?',
+        paragraphs: [
+          'Un corredor de seguros es un intermediario profesional, registrado ante la Superintendencia Financiera de Colombia (SFC), que asesora a personas y empresas sobre qué pólizas necesitan, compara opciones entre varias aseguradoras y los acompaña durante el siniestro. A diferencia de un agente cautivo (que vende para una sola aseguradora), el corredor representa los intereses del cliente.',
+          'Su ingreso proviene de comisiones que pagan las aseguradoras por cada póliza colocada. Esa estructura significa: cero costo para el cliente, pero alineación de incentivos entre corredor y aseguradora (no entre corredor y cliente, importante saberlo).',
+        ],
+      },
+      {
+        title: 'Corredor vs Agente vs Asesor Independiente',
+        paragraphs: [
+          'En Colombia hay tres figuras intermediarias en seguros reguladas por el artículo 1347 del Código de Comercio y la SFC. Cada una tiene requisitos y autonomía distintos.',
+        ],
+        bullets: [
+          'Agente colocador (cautivo o independiente persona natural): vinculado por mandato a una aseguradora. Requiere examen de idoneidad pero NO matrícula ante SFC.',
+          'Corredor de seguros (persona jurídica): sociedad anónima o limitada con capital mínimo, matrícula obligatoria ante SFC, póliza RC profesional, representa al cliente ante varias aseguradoras.',
+          'Agencia de seguros (sociedad de comercio): figura intermedia entre agente y corredor. Personería jurídica más simple que el corredor.',
+        ],
+      },
+      {
+        title: 'Requisitos legales en Colombia',
+        paragraphs: [
+          'Los requisitos varían según la figura que elijas (agente, agencia o corredor). Estos son los pasos comunes a todos.',
+        ],
+        bullets: [
+          'Ser mayor de edad con título de bachiller (formación universitaria recomendada pero no obligatoria).',
+          'Aprobar el Examen de Idoneidad de la SFC para el ramo o ramos donde quieras operar.',
+          'No tener antecedentes disciplinarios financieros (consulta gratuita en la web de la SFC).',
+          'Contratar Póliza de Responsabilidad Civil Profesional con cobertura mínima exigida.',
+          'Para corredor (persona jurídica): constituir sociedad, capital mínimo según norma vigente, registro ante SFC.',
+          'Cumplir SARLAFT (sistema de prevención de lavado de activos y financiación del terrorismo).',
+        ],
+      },
+      {
+        title: 'El examen de idoneidad SFC: temario y cómo prepararse',
+        paragraphs: [
+          'Es el filtro técnico obligatorio. La SFC delega la aplicación a entidades certificadoras (FASECOLDA y otras). El examen evalúa conocimiento sobre el ramo específico (autos, vida, salud, cumplimiento, generales).',
+          'El costo del examen ronda los $200.000-400.000 COP según ramo y entidad certificadora. Las preparaciones formales (cursos de 40-80 horas) cuestan entre $500.000 y $1.500.000.',
+        ],
+        bullets: [
+          'Temario: marco legal del seguro, contratos, técnicas de venta, técnica actuarial básica, ramo específico.',
+          'Aprobación: 70% mínimo. Si repruebas puedes presentar de nuevo a las 4 semanas.',
+          'Recursos gratuitos: Estatuto Orgánico del Sistema Financiero, normativa SFC, manuales de Fasecolda.',
+          'Cursos preparatorios: Fasecolda, Politécnico Grancolombiano, Universidad Externado, plataformas online.',
+        ],
+      },
+      {
+        title: '¿Cuánto gana un corredor de seguros en Colombia?',
+        paragraphs: [
+          'El ingreso del corredor es 100% variable y depende del tamaño de la cartera, el ramo y los acuerdos con aseguradoras. Estos son rangos reales del mercado colombiano 2026.',
+        ],
+        bullets: [
+          'Asesor cautivo principiante (años 1-2): $2-4 millones COP/mes promedio.',
+          'Asesor cautivo experimentado: $5-12 millones COP/mes.',
+          'Corredor independiente con cartera consolidada: $8-25 millones COP/mes.',
+          'Dueño de agencia mediana (10-30 empleados): $15-50 millones COP/mes (utilidad).',
+          'Corredor especializado en líneas financieras o RC compleja: $20-80 millones COP/mes.',
+        ],
+      },
+      {
+        title: 'Las 3 vías para arrancar',
+        paragraphs: [
+          'No hay un único camino. Depende de tu apetito de riesgo, capital y conocimiento del sector.',
+        ],
+        bullets: [
+          'Vía A · Cautivo: empezar como agente vinculado a una aseguradora (Sura, Bolívar, Estado, Mundial). Pros: training, marca, comisiones base. Contras: producto único, menor margen.',
+          'Vía B · Independiente: trabajar bajo el paraguas de una agencia ya constituida que te cede pólizas y % de comisión. Pros: variedad, autonomía. Contras: ingresos iniciales bajos.',
+          'Vía C · Constituir agencia/corredor propio: capital, equipo, infraestructura tecnológica. Pros: máximo upside. Contras: alta inversión inicial, riesgo.',
+        ],
+      },
+      {
+        title: 'Herramientas tecnológicas que necesitas desde el día 1',
+        paragraphs: [
+          'En 2026 ningún corredor compite con Excel y un cuaderno. Estas son las herramientas mínimas para arrancar profesional.',
+        ],
+        bullets: [
+          'CRM vertical para corredores: Guro, Sumavisos o E2K. Centraliza clientes, pólizas, vencimientos.',
+          'WhatsApp Business con API oficial: vende y atiende sin pasarse el celular, con trazabilidad.',
+          'Cotizador multi-aseguradora: para responder al cliente con 3-5 opciones en minutos.',
+          'Mini-web propia: cada asesor con su sitio + cotizador embebido, captador de leads orgánicos.',
+          'Plataforma de email marketing y campañas: para nurturing y renovaciones masivas.',
+          'Sistema contable o ERP integrado con DIAN: para facturación electrónica obligatoria.',
+        ],
+      },
+      {
+        title: 'Plan de los primeros 12 meses',
+        paragraphs: [
+          'La curva del corredor tiene fases predecibles. Saber qué esperar evita frustración temprana.',
+        ],
+        bullets: [
+          'Mes 1-3: aprobar examen idoneidad, registrarte, contratar póliza RC, contratar herramientas, conseguir primeros 10 clientes (red personal).',
+          'Mes 4-6: alcanzar 30-50 pólizas activas. Validar nicho de especialización (auto, vida, hogar, empresarial).',
+          'Mes 7-9: superar 100 pólizas. Empezar campañas de marketing en redes y referidos. Considerar primer asesor de apoyo.',
+          'Mes 10-12: superar 200-300 pólizas, ingresos estables, decidir si crecer como corredor independiente o crear agencia.',
+        ],
+      },
+      {
+        title: 'Errores comunes que cometen los nuevos corredores',
+        paragraphs: [
+          'Estos son los 5 errores más caros de quienes empiezan. Evitarlos te ahorra meses de aprendizaje.',
+        ],
+        bullets: [
+          'Vender de todo a todos en vez de especializarse en 1-2 ramos rentables.',
+          'No documentar las pólizas en un CRM y depender del WhatsApp personal.',
+          'No medir tasa de renovación. Vender mucho y renovar poco = no hay negocio.',
+          'No invertir en marketing digital (todo por referidos = crecimiento lineal).',
+          'No tener póliza de RC profesional propia. Un error en una recomendación puede quebrar al corredor.',
+        ],
+      },
+    ],
+    relatedSlugs: ['mejor-software-corredores-seguros-colombia', 'pricing-saas-corredor-seguros', 'que-es-insurtech-guia-corredores-latam'],
+    cta: {
+      title: 'Empieza con Guro desde el día 1',
+      text: 'CRM vertical, WhatsApp Business y cotizadores listos para usar. Plan para corredor independiente desde un precio accesible.',
+      buttonLabel: 'Probar gratis 14 días',
+    },
+  },
+
+  {
+    slug: 'ia-corredores-seguros-12-casos-latam',
+    title: 'Inteligencia Artificial para corredores de seguros: 12 casos reales en LATAM',
+    excerpt:
+      'IA aplicada a corredores LATAM: chatbots que venden, voicebots que cobran, predicción de cancelaciones, lectura de pólizas con OCR, cross-sell automático. 12 casos concretos con resultados.',
+    answer:
+      'La inteligencia artificial transforma el trabajo del corredor en 12 frentes concretos: cotización automatizada por WhatsApp, predicción de cancelaciones, lectura de pólizas con OCR + IA, cross-sell automatizado, voicebots para cobranzas, análisis de siniestralidad, filtrado inteligente de leads entrantes, generación de propuestas comerciales, recordatorios contextualizados, mini-asistente del asesor, formación de nuevos vendedores y análisis de sentimiento del cliente. Los resultados típicos en agencias LATAM que adoptan IA: +30-300% en ventas, –50% en tiempo operativo, +22% en tasa de renovación. Guro implementa estos 12 casos de forma nativa en su plataforma.',
+    tags: ['IA', 'Casos de uso', 'Productividad', 'LATAM'],
+    keywords: [
+      'ia para seguros',
+      'inteligencia artificial seguros',
+      'ia corredor seguros',
+      'chatbot ia seguros',
+      'voice ai seguros',
+      'cross sell seguros ia',
+      'prediccion cancelacion seguros',
+      'ocr polizas seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Por qué la IA cambió el juego del corredor en 2025',
+        paragraphs: [
+          'Hasta 2023, la "IA en seguros" era casi exclusivamente para grandes aseguradoras: modelos actuariales propietarios, suscripción automatizada, detección de fraude. El corredor o agencia mediana no tenía acceso a esa tecnología.',
+          'Desde 2024 cambió todo: modelos open-source como Llama y Mistral, APIs maduras de Claude/GPT/Gemini, voicebots con calidad humana (ElevenLabs) y plataformas verticales que los empaquetan para corredores. Hoy una agencia con 5 empleados accede a la misma IA que usa Allianz.',
+          'Estos son los 12 casos de uso de IA con mayor impacto que vemos en agencias LATAM en 2026.',
+        ],
+      },
+      {
+        title: '1. Cotización automatizada por WhatsApp',
+        paragraphs: [
+          'Un cliente escribe "necesito SOAT para mi placa ABC123" al WhatsApp de la agencia. El chatbot reconoce intención, consulta APIs de las aseguradoras, compara 3 opciones y devuelve la mejor con link de pago. Tiempo total: 30 segundos.',
+        ],
+        bullets: [
+          'Impacto: +60% tasa de respuesta a leads (vs. respuesta manual que tarda horas).',
+          'Funciona 24/7 sin contratar más asesores.',
+          'Escala al humano automáticamente cuando el caso es complejo.',
+        ],
+      },
+      {
+        title: '2. Predicción de cancelaciones (churn prediction)',
+        paragraphs: [
+          'Un modelo de ML entrenado en data histórica de la agencia detecta señales tempranas: caída en interacciones, demoras en pagos, siniestros mal gestionados, cambio de auto. Te avisa 30-60 días antes de la renovación para que actúes.',
+        ],
+        bullets: [
+          'Impacto: identifica el 80%+ de cancelaciones con 30 días de antelación.',
+          'Tasa de retención mejora de 75% a 92% promedio cuando se activa.',
+          'ROI inmediato: cada renovación recuperada vale la suscripción anual de la plataforma.',
+        ],
+      },
+      {
+        title: '3. Lectura de pólizas con OCR + IA',
+        paragraphs: [
+          'El cliente envía la póliza de la competencia en PDF (foto del celular incluso). La IA extrae automáticamente: ramo, vigencia, prima, coberturas, deducibles, beneficiarios. Carga todo en el CRM sin que el asesor tipee nada.',
+        ],
+        bullets: [
+          'Impacto: 15 minutos por póliza ahorrados (de tipeo manual).',
+          'Acelera radicalmente el onboarding de pólizas heredadas.',
+          'Permite cotizar contra-ofertas precisas en segundos.',
+        ],
+      },
+      {
+        title: '4. Cross-sell automatizado',
+        paragraphs: [
+          'IA analiza el perfil de cada cliente (qué pólizas tiene, edad, familia, ingreso estimado, comportamiento) y sugiere productos adicionales con probabilidad de cierre. El asesor recibe lista priorizada cada semana.',
+        ],
+        bullets: [
+          'Casos típicos: cliente con auto → ofrecer vida deudor. Cliente con hogar → mascota. Cliente con empresarial → ARL.',
+          'Conversión típica: 8-15% en clientes activos (vs. 1-3% en bases frías).',
+          'Aumenta LTV (lifetime value) por cliente sin gastar en adquisición nueva.',
+        ],
+      },
+      {
+        title: '5. Voicebots para cobranzas y recordatorios',
+        paragraphs: [
+          'Voicebot con voz natural (ElevenLabs) llama a cuentas vencidas, conversa, agenda pago o escala al humano. El cliente promedio no nota que es IA.',
+        ],
+        bullets: [
+          'Reduce 70% el costo de cobranza.',
+          'Trabaja en horarios off (noches, fines de semana).',
+          'Multiplica capacidad sin contratar call center.',
+        ],
+      },
+      {
+        title: '6. Análisis de siniestralidad por aseguradora',
+        paragraphs: [
+          'IA cruza datos de siniestros con tu cartera y te dice qué aseguradora paga más rápido, cuál niega más siniestros, en qué ramo y tipo de cliente.',
+        ],
+        bullets: [
+          'Insight accionable: cambias colocación hacia aseguradoras con mejor servicio.',
+          'Mejora NPS del cliente final por mejor experiencia post-siniestro.',
+          'Negocias mejores comisiones con aseguradoras top-performer.',
+        ],
+      },
+      {
+        title: '7. Filtrado inteligente de leads entrantes',
+        paragraphs: [
+          'Recepcionista IA atiende los leads de Facebook Ads, web, WhatsApp. Califica intención (caliente vs frío), captura datos mínimos, agenda con el asesor correcto según producto y disponibilidad.',
+        ],
+        bullets: [
+          'Tu equipo solo recibe leads cualificados (no curiosos).',
+          'Tiempo de respuesta cae de horas a segundos.',
+          'Conversión de lead a cita aumenta 2-3x.',
+        ],
+      },
+      {
+        title: '8. Generación automática de propuestas comerciales',
+        paragraphs: [
+          'En base al perfil del cliente, IA arma propuesta personalizada (PDF/Canva) con cotización, coberturas explicadas y casos similares. Llega al cliente en 2 minutos en vez de 2 días.',
+        ],
+        bullets: [
+          'Mantiene tono y branding de la agencia.',
+          'Personaliza ejemplos por edad, profesión, familia del cliente.',
+          'Aumenta tasa de cierre por velocidad y profesionalismo.',
+        ],
+      },
+      {
+        title: '9. Recordatorios contextualizados',
+        paragraphs: [
+          'No es solo "vence tu póliza el X". IA personaliza el mensaje: "Juan, hace 3 años renovaste con Sura el seguro de tu Mazda. Este año hay una opción mejor con Bolívar que ahorra 15%. ¿Te paso el comparativo?".',
+        ],
+        bullets: [
+          'Tasa de respuesta 4-6x superior al recordatorio genérico.',
+          'Diferencia tu agencia de los canales directos de la aseguradora.',
+          'Renovación se vuelve una venta consultiva, no un trámite.',
+        ],
+      },
+      {
+        title: '10. Asistente IA del asesor (copiloto)',
+        paragraphs: [
+          'Mientras el asesor conversa con un cliente, una IA escucha (con permiso), busca información del cliente, sugiere productos, alerta sobre vencimientos cercanos y prepara la propuesta en paralelo.',
+        ],
+        bullets: [
+          'Asesor junior produce como un senior desde la semana 2.',
+          'Reduce error humano en cotizaciones complejas.',
+          'Mejora la experiencia del cliente (menos esperas).',
+        ],
+      },
+      {
+        title: '11. Academia IA para formación de nuevos vendedores',
+        paragraphs: [
+          'Plataforma con tu material de formación + simulador de objeciones + evaluación automática. Nuevo asesor está listo en 2 semanas en vez de 3 meses.',
+        ],
+        bullets: [
+          'Onboarding 3-5x más rápido.',
+          'Estándares de calidad consistentes en todo el equipo.',
+          'Ahorro real en capacitación: el nuevo asesor produce desde el día 14.',
+        ],
+      },
+      {
+        title: '12. Análisis de sentimiento y NPS automático',
+        paragraphs: [
+          'IA analiza WhatsApp, emails y llamadas para detectar clientes molestos antes de que pidan cancelación. Te avisa para que el dueño llame personalmente.',
+        ],
+        bullets: [
+          'Anticipa fugas de clientes premium.',
+          'Acción preventiva con dueño/gerente comercial = mayor tasa de salvataje.',
+          'Mejora reputación de la agencia por respuesta proactiva.',
+        ],
+      },
+      {
+        title: 'Cómo empezar con IA en tu agencia sin abrumarte',
+        paragraphs: [
+          'No actives los 12 casos el primer día. Esta es la secuencia que funciona en agencias LATAM con resultados medibles.',
+        ],
+        bullets: [
+          'Fase 1 (mes 1): WhatsApp Business con chatbot básico + recordatorios IA → impacto inmediato en ventas.',
+          'Fase 2 (mes 2-3): predicción de cancelaciones + cross-sell IA → impacto en cartera retenida.',
+          'Fase 3 (mes 4-6): voicebot cobranzas + asistente del asesor → escala operativa.',
+          'Fase 4 (mes 7+): academia IA + análisis sentimiento + propuestas automáticas → diferenciación competitiva.',
+        ],
+      },
+      {
+        title: 'Privacidad y datos: lo que tienes que saber',
+        paragraphs: [
+          'Adoptar IA con responsabilidad significa entender qué pasa con la data de tus clientes.',
+        ],
+        bullets: [
+          'Tu data nunca debe entrenar modelos públicos. Plataformas serias usan instancias dedicadas.',
+          'Cumple con Habeas Data (Ley 1581 Colombia), GDPR (España), LFPDPPP (México), según país.',
+          'El cliente debe saber cuándo habla con IA. Política transparente refuerza confianza.',
+          'Audita periódicamente: qué prompts se procesan, qué se almacena, cuánto tiempo.',
+        ],
+      },
+    ],
+    relatedSlugs: ['que-es-insurtech-guia-corredores-latam', 'ia-seguros-casos-uso-corredor', 'insurtech-tendencias-2026'],
+    cta: {
+      title: 'Activa las 12 IAs en tu agencia',
+      text: 'Guro implementa los 12 casos de uso de IA de forma nativa. Sin developers, sin add-ons, sin sorpresas en el precio.',
+      buttonLabel: 'Ver demo de IA',
+    },
+  },
+
+  {
+    slug: 'que-es-una-poliza-de-seguro',
+    title: 'Qué es una póliza de seguro: partes, tipos y ejemplos prácticos (guía 2026)',
+    excerpt:
+      'Una póliza es el contrato entre asegurado y aseguradora. Te explico sus 8 partes obligatorias, tipos más comunes en Colombia, endosos, sublímites, deducibles y cómo leerla bien.',
+    answer:
+      'Una póliza de seguro es el contrato escrito entre el asegurado y la aseguradora donde se establecen las condiciones, coberturas, exclusiones, prima y vigencia. En Colombia está regulada por el artículo 1046 del Código de Comercio y debe tener al menos 8 partes obligatorias: identificación de las partes, vigencia, riesgo cubierto, suma asegurada, prima, coberturas, exclusiones y firma. Los tipos más comunes son auto (todo riesgo y SOAT), vida, salud, hogar, cumplimiento, responsabilidad civil y arrendamiento. Términos clave para entenderla: endoso (modificación de la póliza), anexo (documento adicional), sublímite (tope dentro de la cobertura), deducible (lo que paga el asegurado en un siniestro) y coaseguro (porcentaje compartido). Quién la emite: la aseguradora autorizada por la SFC; quién la intermedia: un corredor o agente registrado.',
+    tags: ['Educación', 'Pólizas', 'Cliente final', 'Conceptos'],
+    keywords: [
+      'qué es una poliza',
+      'que es una poliza de seguro',
+      'para que sirve una poliza',
+      'partes de una poliza',
+      'qué es un endoso de póliza de seguro',
+      'qué es un sublimite en una póliza',
+      'que es una poliza en gestion documental',
+      'tipos de poliza',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Definición legal de póliza',
+        paragraphs: [
+          'Una póliza es el documento que materializa el contrato de seguro. En el sistema jurídico colombiano se rige por el artículo 1046 del Código de Comercio y por la regulación de la Superintendencia Financiera de Colombia (SFC). En esencia: la aseguradora se obliga a indemnizar al asegurado contra un riesgo determinado a cambio del pago de una prima.',
+          'La póliza tiene fuerza vinculante. Tanto el asegurado como la aseguradora deben cumplir lo escrito. Por eso es crítico leerla y entenderla antes de firmar — no después, cuando hay un siniestro.',
+        ],
+      },
+      {
+        title: 'Las 8 partes obligatorias de toda póliza',
+        paragraphs: [
+          'Toda póliza emitida en Colombia debe contener mínimo estos elementos. Si falta alguno, el contrato puede ser objeto de revisión legal.',
+        ],
+        bullets: [
+          '1. Identificación de las partes: tomador, asegurado, beneficiario y aseguradora.',
+          '2. Vigencia: fecha de inicio, fecha de fin, hora exacta.',
+          '3. Riesgo o interés asegurado: qué evento o bien se cubre.',
+          '4. Suma asegurada: monto máximo que paga la aseguradora.',
+          '5. Prima: lo que paga el tomador por la cobertura, con frecuencia y forma de pago.',
+          '6. Coberturas: descripción detallada de lo que se cubre.',
+          '7. Exclusiones: lo que NO se cubre (lectura crítica).',
+          '8. Firma del representante de la aseguradora y referencia al intermediario.',
+        ],
+      },
+      {
+        title: 'Tipos de pólizas más comunes en Colombia',
+        paragraphs: [
+          'Las pólizas se agrupan por ramos (líneas de negocio). Cada ramo tiene reglas y coberturas estándar.',
+        ],
+        bullets: [
+          'Autos (Todo Riesgo): cubre daños propios del vehículo, robo, RC frente a terceros, asistencia.',
+          'SOAT: seguro obligatorio para circular, cubre lesiones a personas (no vehículo).',
+          'Vida: cubre fallecimiento del asegurado, paga al beneficiario. Variantes: deudor, grupo, individual.',
+          'Salud / medicina prepagada: cubre gastos médicos por enfermedad o accidente.',
+          'Hogar: cubre daños a la vivienda, contenido y RC del hogar.',
+          'Cumplimiento: garantiza el cumplimiento de un contrato. Usado en licitaciones públicas.',
+          'Responsabilidad Civil: cubre daños que el asegurado cause a terceros.',
+          'Arrendamiento: cubre al arrendador frente a impagos del arrendatario.',
+          'Pyme / Empresarial: cubre la operación completa de una empresa.',
+        ],
+      },
+      {
+        title: 'Endoso, anexo, sublímite, deducible: el glosario',
+        paragraphs: [
+          'Estos términos aparecen en cada póliza y entenderlos evita sorpresas en un siniestro.',
+        ],
+        bullets: [
+          'Endoso: modificación oficial de la póliza ya emitida (cambio de beneficiario, ampliación de cobertura, etc.).',
+          'Anexo: documento adjunto que detalla o complementa una cláusula de la póliza.',
+          'Sublímite: tope máximo dentro de una cobertura (ej: cobertura $100M pero sublímite por robo $20M).',
+          'Deducible: lo que paga el asegurado de su bolsillo antes de que opere la cobertura.',
+          'Coaseguro: porcentaje del siniestro que asume el asegurado (típico en salud).',
+          'Infraseguro: cuando la suma asegurada es menor al valor real del bien; en siniestro paga proporcional.',
+          'Sobreseguro: suma asegurada mayor al valor real (no genera mayor indemnización; pago de prima excesiva).',
+          'Carencia: período inicial donde aún no aplica la cobertura.',
+        ],
+      },
+      {
+        title: 'Vigencia, renovación y cancelación',
+        paragraphs: [
+          'La vigencia es uno de los datos más críticos. Una póliza vencida deja al asegurado sin cobertura aunque el siniestro ocurra al día siguiente.',
+        ],
+        bullets: [
+          'Vigencia típica: 1 año para autos, hogar, RC; pueden ser plurianuales en vida y cumplimiento.',
+          'Renovación: el cliente decide renovar antes del vencimiento. Sin acción, la mayoría se cancela.',
+          'Renovación automática: cláusula opcional donde el contrato se prorroga si ninguna parte se opone.',
+          'Cancelación: cualquiera de las partes puede cancelar con preaviso. La aseguradora devuelve prima no consumida.',
+          'No pago de prima: causa cancelación automática tras un plazo (típicamente 30 días).',
+        ],
+      },
+      {
+        title: '¿Quién emite la póliza? Aseguradora vs corredor vs agente',
+        paragraphs: [
+          'Es importante distinguir los actores. La póliza la emite la aseguradora, pero usualmente se gestiona a través de un intermediario.',
+        ],
+        bullets: [
+          'Aseguradora: entidad autorizada por la SFC para emitir pólizas (Sura, Bolívar, Estado, Mundial, etc.).',
+          'Corredor de seguros: persona jurídica que asesora al cliente y representa sus intereses ante varias aseguradoras.',
+          'Agente colocador: intermediario por mandato, generalmente vinculado a una aseguradora específica.',
+          'Agencia de seguros: figura intermedia con personería jurídica.',
+        ],
+      },
+      {
+        title: 'Cómo leer tu póliza en 10 minutos',
+        paragraphs: [
+          'Aplica esta lista de chequeo cuando recibas una póliza nueva o vayas a renovar. Te ahorra problemas en un eventual siniestro.',
+        ],
+        bullets: [
+          '✓ Datos personales correctos (nombre, cédula, dirección).',
+          '✓ Bien asegurado identificado correctamente (placa, dirección, edad, etc.).',
+          '✓ Vigencia: fecha de inicio y fin claras.',
+          '✓ Suma asegurada acorde al valor real del bien.',
+          '✓ Coberturas listadas e incluyen las que tú esperas.',
+          '✓ Exclusiones revisadas a fondo (lo más subestimado).',
+          '✓ Deducibles y sublímites declarados explícitamente.',
+          '✓ Beneficiarios correctos (especialmente en vida).',
+          '✓ Datos de contacto de la aseguradora para siniestros.',
+          '✓ Información de tu corredor o agente.',
+        ],
+      },
+      {
+        title: 'Preguntas frecuentes sobre pólizas',
+        paragraphs: [
+          'Las dudas más comunes que reciben los corredores sobre pólizas, agrupadas.',
+        ],
+        bullets: [
+          '¿La aseguradora puede negar un siniestro? Sí, si está dentro de las exclusiones o por falsedad en la declaración inicial.',
+          '¿Cuánto tarda el pago de un siniestro? Por norma, máximo 1 mes desde la presentación completa de documentos.',
+          '¿Puedo cambiar de aseguradora a mitad de vigencia? Sí, cancelando la actual (te devuelven prima no consumida).',
+          '¿Qué pasa si pago tarde la prima? Hay período de gracia (típico 30 días). Pasado eso, la póliza se cancela.',
+          '¿Una póliza cubre desde el día que firmo? Generalmente sí, salvo carencias específicas (vida, salud).',
+        ],
+      },
+    ],
+    relatedSlugs: ['gestionar-polizas-seguros-vida', 'gestion-polizas-auto-corredor', 'features-imprescindibles-crm-seguros'],
+    cta: {
+      title: '¿Buscas un corredor de seguros de confianza?',
+      text: 'Tus clientes encuentran al corredor correcto en agencias que usan Guro. Si eres corredor, ofrece a tus clientes la mejor experiencia digital.',
+      buttonLabel: 'Conoce Guro',
+    },
+  },
+
+  {
+    slug: 'poliza-de-arrendamiento-guia-2026',
+    title: 'Póliza de arrendamiento: qué es, cuánto cuesta y cómo cotizarla (2026)',
+    excerpt:
+      'La póliza de arrendamiento protege al propietario frente a impagos del inquilino. Te explico cobertura, costo, requisitos, cómo cotizar y diferencias con la fianza tradicional.',
+    answer:
+      'La póliza de arrendamiento es un seguro que protege al propietario (arrendador) frente al impago de cánones, daños al inmueble y servicios públicos por parte del inquilino (arrendatario). En Colombia reemplaza la figura tradicional del codeudor o fiador. Cuesta entre 6% y 12% del canon mensual, dependiendo del perfil del inquilino, la aseguradora y las coberturas elegidas. Las aseguradoras principales que la emiten son Sura, Seguros del Estado, Mundial de Seguros y Liberty. Para cotizarla necesitas: cédula del inquilino, ingresos certificados, ubicación del inmueble y canon mensual. La cotización tarda entre 2 y 24 horas y el inquilino debe pasar estudio financiero. Para un corredor de seguros, es uno de los ramos de mejor margen y volumen creciente en Colombia.',
+    tags: ['Arrendamiento', 'Cliente final', 'Inmuebles', 'Colombia'],
+    keywords: [
+      'poliza de arrendamiento',
+      'para que sirve una poliza de arrendamiento',
+      'cotizar seguro de arrendamiento',
+      'póliza de arrendamiento sura',
+      'cuanto cuesta poliza de arrendamiento',
+      'poliza de arrendamiento vs fiador',
+      'requisitos poliza de arrendamiento',
+      'qué es una póliza de arrendamiento',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Qué es la póliza de arrendamiento y para qué sirve',
+        paragraphs: [
+          'La póliza de arrendamiento es un seguro emitido por una aseguradora a favor del propietario de un inmueble (arrendador), que cubre el riesgo de que el inquilino (arrendatario) no pague el canon, no pague los servicios públicos o cause daños al inmueble.',
+          'En Colombia se popularizó como reemplazo de la figura del codeudor o fiador tradicional. En lugar de pedirle al inquilino un familiar que respalde el arriendo, le pides una póliza emitida por una aseguradora autorizada por la SFC. Más profesional, más rápido y con menor riesgo legal.',
+        ],
+      },
+      {
+        title: 'Qué cubre exactamente',
+        paragraphs: [
+          'Las coberturas varían entre aseguradoras pero estos son los amparos típicos del producto en Colombia 2026.',
+        ],
+        bullets: [
+          'Canon de arrendamiento: pago al propietario si el inquilino deja de pagar (cobertura entre 12 y 36 meses según producto).',
+          'Servicios públicos: agua, luz, gas, internet pendientes al cierre del contrato.',
+          'Indemnización por daños al inmueble al final del contrato.',
+          'Costos legales de proceso de restitución (típicamente hasta cierto tope).',
+          'Cláusula penal o multas pactadas por incumplimiento.',
+        ],
+      },
+      {
+        title: '¿Cuánto cuesta una póliza de arrendamiento?',
+        paragraphs: [
+          'El costo varía entre 6% y 12% del canon mensual, aunque puede subir o bajar según el perfil del inquilino y las coberturas. Es importante: el inquilino paga la prima, no el propietario.',
+        ],
+        bullets: [
+          'Canon $1.500.000 + perfil bueno: prima anual ~$1.080.000 a $1.440.000 (6-8%).',
+          'Canon $2.500.000 + perfil regular: prima anual ~$2.250.000 a $3.000.000 (9-12%).',
+          'Canon $5.000.000+ + perfil ejecutivo: prima anual ~$3.000.000 a $4.500.000 (5-7.5%).',
+          'Factores que suben el precio: ingresos bajos, sin historial crediticio, contrato a corto plazo, inmueble lujoso.',
+          'Factores que bajan el precio: ingresos altos certificados, buen historial Datacrédito, contrato largo (24+ meses).',
+        ],
+      },
+      {
+        title: 'Aseguradoras que emiten póliza de arrendamiento en Colombia',
+        paragraphs: [
+          'Las principales aseguradoras que venden este producto en el mercado colombiano. Cada una con sus tarifas y filtros de aceptación.',
+        ],
+        bullets: [
+          'Seguros Sura: líder en participación de mercado, proceso 24-48 horas.',
+          'Seguros del Estado: rápido, tarifas competitivas para perfiles medios.',
+          'Mundial de Seguros: buena cobertura, requisitos flexibles.',
+          'Seguros Bolívar: usualmente competitivo en cánones medios y altos.',
+          'Liberty Seguros: bueno para perfiles ejecutivos.',
+          'Allianz Colombia: opciones premium con coberturas ampliadas.',
+        ],
+      },
+      {
+        title: 'Requisitos para tomar la póliza',
+        paragraphs: [
+          'Como toda póliza, hay un estudio financiero del inquilino. Estos son los documentos típicos que pide cualquier aseguradora.',
+        ],
+        bullets: [
+          'Cédula de ciudadanía del inquilino (frontal y posterior).',
+          'Certificación laboral con cargo, antigüedad e ingresos (no mayor a 30 días).',
+          'Desprendibles de pago de los últimos 3 meses.',
+          'Para independientes: declaración de renta + extractos bancarios de 6 meses.',
+          'Referencias personales y comerciales.',
+          'Estudio Datacrédito o central de riesgo (lo hace la aseguradora).',
+          'Datos del inmueble: dirección, estrato, valor del canon, valor comercial.',
+          'Información del propietario: cédula y datos de contacto.',
+        ],
+      },
+      {
+        title: 'Cómo cotizar una póliza de arrendamiento (paso a paso)',
+        paragraphs: [
+          'El proceso completo desde que el inquilino te dice "necesito póliza" hasta que está emitida.',
+        ],
+        bullets: [
+          '1. Recopilar documentos del inquilino (lista anterior).',
+          '2. Calcular el canon total mensual (incluye administración si la hay).',
+          '3. Cargar datos en cotizador online o portal de la aseguradora.',
+          '4. Recibir cotización en 2-24 horas según aseguradora.',
+          '5. Comparar 2-3 aseguradoras (idealmente con un corredor).',
+          '6. Aceptar oferta, pagar prima (anual o financiada hasta 12 cuotas).',
+          '7. Recibir póliza emitida en PDF + entregarla al propietario.',
+        ],
+      },
+      {
+        title: 'Póliza de arrendamiento vs codeudor o fiador',
+        paragraphs: [
+          'Antes era costumbre exigir codeudor. La póliza la reemplaza con ventajas claras.',
+        ],
+        bullets: [
+          'Codeudor: gratis pero difícil de conseguir, lento, requiere análisis del propietario y problemas legales si hay incumplimiento.',
+          'Fiador con finca raíz: más sólido legalmente pero requiere documentos pesados y compromete activos del fiador.',
+          'Póliza de arrendamiento: el inquilino paga la prima, el propietario tiene respaldo de una aseguradora regulada, el proceso es estandarizado y rápido. Es el estándar actual del sector inmobiliario.',
+        ],
+      },
+      {
+        title: 'Por qué la póliza de arrendamiento es un buen producto para el corredor',
+        paragraphs: [
+          'Para corredores, este ramo tiene características que lo hacen muy atractivo comercialmente.',
+        ],
+        bullets: [
+          'Volumen alto y recurrente: cada inmueble en arriendo es un cliente potencial cada 1-2 años.',
+          'Comisión competitiva: entre 15% y 25% de la prima neta según aseguradora.',
+          'Renovación predecible: el contrato de arriendo se renueva, la póliza también.',
+          'Cliente cautivo: una vez que un inquilino entrega su data, suele renovar con el mismo corredor.',
+          'Cross-sell natural: ese inquilino probablemente necesita SOAT, todo riesgo, vida deudor.',
+          'Inmobiliarias como canal: alianzas con inmobiliarias aceleran el crecimiento exponencialmente.',
+        ],
+      },
+      {
+        title: 'Preguntas frecuentes sobre póliza de arrendamiento',
+        paragraphs: [
+          'Las dudas más comunes que reciben los corredores en este producto.',
+        ],
+        bullets: [
+          '¿Quién paga la póliza, el propietario o el inquilino? Siempre el inquilino. El propietario es el beneficiario.',
+          '¿Se puede pagar la póliza por cuotas? Sí, la mayoría de aseguradoras financia en 10-12 cuotas mensuales sin interés (o con un interés bajo).',
+          '¿Qué pasa si el inquilino no pasa el estudio? Buscas otra aseguradora o pides codeudor adicional. Hay aseguradoras especializadas en perfiles complejos.',
+          '¿La póliza cubre si el inquilino se va sin pagar? Sí, esa es su función principal. La aseguradora paga al propietario y persigue al inquilino.',
+          '¿Sirve para arriendo de locales comerciales? Sí, con coberturas y tarifas distintas. Cánones más altos suelen tener primas porcentualmente menores.',
+        ],
+      },
+    ],
+    relatedSlugs: ['que-es-una-poliza-de-seguro', 'gestion-polizas-auto-corredor', 'crm-clientes-corredor-seguros'],
+    cta: {
+      title: '¿Vendes pólizas de arrendamiento? Automatiza con Guro',
+      text: 'Cotiza con +10 aseguradoras desde una sola pantalla. Emisión, cartera, comisiones y renovaciones automáticas. Implementación en 7 días.',
+      buttonLabel: 'Agendar demo gratis',
+    },
+  },
+
+  {
+    slug: 'glosario-seguros-corredores-80-terminos',
+    title: 'Glosario de seguros para corredores: 80 términos esenciales (descargable PDF)',
+    excerpt:
+      'Diccionario completo de términos de seguros en Colombia y LATAM: prima, deducible, sublímite, endoso, coaseguro, reaseguro, IBNR, SARLAFT y 72 más. Listo para descargar.',
+    answer:
+      'Este glosario reúne los 80 términos más usados en el sector seguros en Colombia y LATAM, agrupados por categoría: contrato (prima, vigencia, endoso, anexo), coberturas (deducible, sublímite, suma asegurada, coaseguro), siniestros (perito, ajuste, salvamento, IBNR), tipos de seguro (ramo, vida, generales, autoexpedible), regulación (SFC, SARLAFT, Habeas Data), técnica (reaseguro, retención, retrocesión, prima pura) y comercial (corredor, agente, mandante, mandatario). Es el material de referencia rápida que todo corredor, agente o administrativo de agencia debe tener a mano.',
+    tags: ['Glosario', 'Educación', 'Referencia', 'Corredor'],
+    keywords: [
+      'glosario seguros',
+      'terminologia seguros',
+      'que es prima seguros',
+      'que es deducible seguros',
+      'que es endoso',
+      'que es sublimite',
+      'que es coaseguro',
+      'que es reaseguro',
+      'diccionario seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'A · Términos del contrato y administración',
+        paragraphs: [
+          'Los conceptos que aparecen al firmar y gestionar la póliza.',
+        ],
+        bullets: [
+          'Asegurado: persona o entidad cuyo interés está protegido por la póliza.',
+          'Tomador: quien contrata el seguro y paga la prima (puede o no ser el asegurado).',
+          'Beneficiario: quien recibe la indemnización (típico en pólizas de vida).',
+          'Aseguradora: entidad autorizada por la SFC para emitir pólizas.',
+          'Vigencia: período durante el cual está activa la cobertura.',
+          'Prima: precio del seguro pagado por el tomador.',
+          'Prima pura: parte de la prima destinada exclusivamente a cubrir el riesgo (sin gastos ni comisiones).',
+          'Prima comercial: prima total que paga el cliente, incluye prima pura + gastos + comisión + impuestos.',
+          'Endoso: modificación oficial de una póliza ya emitida.',
+          'Anexo: documento adjunto que detalla o complementa una cláusula.',
+          'Carencia: período inicial sin cobertura efectiva, típico en vida y salud.',
+        ],
+      },
+      {
+        title: 'B · Coberturas y límites',
+        paragraphs: [
+          'Términos críticos para entender qué cubre exactamente tu póliza.',
+        ],
+        bullets: [
+          'Suma asegurada: monto máximo que paga la aseguradora ante un siniestro.',
+          'Sublímite: tope inferior dentro de una cobertura específica.',
+          'Deducible: monto que paga el asegurado de su bolsillo antes de operar la cobertura.',
+          'Coaseguro: porcentaje del siniestro que asume el asegurado (típico en salud).',
+          'Franquicia: similar al deducible, monto inicial no cubierto.',
+          'Amparo: cada cobertura individual de la póliza.',
+          'Exclusión: lo que NO cubre la póliza, expresamente declarado.',
+          'Cobertura: lo que sí cubre la póliza.',
+          'Infraseguro: cuando la suma asegurada es menor al valor real (paga proporcional).',
+          'Sobreseguro: cuando la suma asegurada supera el valor real (paga solo el valor real).',
+          'Coberturas adicionales (riders): amparos opcionales que extienden la cobertura base.',
+        ],
+      },
+      {
+        title: 'C · Siniestros',
+        paragraphs: [
+          'Vocabulario que aparece desde el aviso hasta el pago del siniestro.',
+        ],
+        bullets: [
+          'Siniestro: evento previsto en la póliza que genera derecho a indemnización.',
+          'Aviso de siniestro: notificación formal a la aseguradora.',
+          'Perito o ajustador: profesional que valora el daño y la indemnización.',
+          'Ajuste: proceso de valoración y liquidación del siniestro.',
+          'Indemnización: pago de la aseguradora al asegurado o beneficiario.',
+          'Subrogación: derecho de la aseguradora de cobrar al tercero responsable tras indemnizar.',
+          'Salvamento: parte del bien siniestrado que aún tiene valor.',
+          'Pérdida total: cuando el costo de reparar supera cierto porcentaje del valor.',
+          'Pérdida parcial: daño que no llega a pérdida total.',
+          'Reserva de siniestros: dinero que la aseguradora aparta por siniestros conocidos no liquidados.',
+          'IBNR (Incurred But Not Reported): siniestros ocurridos pero aún no reportados.',
+          'Reapertura de siniestro: caso ya cerrado que vuelve a abrirse por información nueva.',
+        ],
+      },
+      {
+        title: 'D · Tipos de seguros y ramos',
+        paragraphs: [
+          'Categorías del negocio asegurador que debes conocer.',
+        ],
+        bullets: [
+          'Ramo: categoría de pólizas con riesgos similares (autos, vida, salud, hogar...).',
+          'Generales: pólizas distintas a vida y salud.',
+          'Vida: pólizas relacionadas con la vida humana.',
+          'SOAT (Seguro Obligatorio de Accidentes de Tránsito): seguro obligatorio para circular en Colombia.',
+          'Todo Riesgo: cobertura amplia que incluye daños propios + RC + asistencia.',
+          'Responsabilidad Civil (RC): cubre daños causados a terceros.',
+          'Cumplimiento: garantiza cumplimiento contractual, usado en licitaciones.',
+          'Vida deudor: cubre el saldo de un crédito si el deudor fallece.',
+          'Arrendamiento: protege al propietario frente al impago del inquilino.',
+          'Hogar / Patrimonial: cubre la vivienda y su contenido.',
+          'ARL (Riesgos Laborales): cubre accidentes y enfermedades laborales.',
+          'Autoexpedible: productos masivos que no requieren suscripción individual.',
+        ],
+      },
+      {
+        title: 'E · Regulación y cumplimiento (Colombia)',
+        paragraphs: [
+          'Términos legales y regulatorios que todo intermediario debe manejar.',
+        ],
+        bullets: [
+          'SFC (Superintendencia Financiera de Colombia): regulador del sector financiero y asegurador.',
+          'Fasecolda: gremio que agrupa a las aseguradoras de Colombia.',
+          'SARLAFT (Sistema de Administración del Riesgo de Lavado de Activos y Financiación del Terrorismo): obligatorio para intermediarios.',
+          'Habeas Data (Ley 1581 de 2012): protección de datos personales.',
+          'Examen de idoneidad: prueba SFC para intermediarios de seguros.',
+          'RNVA: Registro Nacional de Valuadores y Avaluadores.',
+          'Solvencia II / III: estándares europeos de gestión de riesgos adoptados parcialmente en LATAM.',
+          'Capital regulatorio: capital mínimo exigido a las aseguradoras.',
+        ],
+      },
+      {
+        title: 'F · Técnica y reaseguro',
+        paragraphs: [
+          'Conceptos avanzados que aparecen en el back-office aseguradora-reaseguradora.',
+        ],
+        bullets: [
+          'Reaseguro: cuando una aseguradora cede parte de su riesgo a otra (reaseguradora).',
+          'Retención: porcentaje del riesgo que conserva la aseguradora.',
+          'Retrocesión: cuando la reaseguradora cede parte de su riesgo a otra.',
+          'Tratado: contrato marco entre aseguradora y reaseguradora.',
+          'Facultativo: reaseguro caso por caso, no automático.',
+          'Cuota parte: tipo de reaseguro proporcional.',
+          'Exceso de pérdida (XL): reaseguro no proporcional para grandes siniestros.',
+          'Loss ratio (siniestralidad): siniestros pagados / primas devengadas.',
+          'Combined ratio: loss ratio + gastos / primas, mide rentabilidad técnica.',
+        ],
+      },
+      {
+        title: 'G · Comercial e intermediación',
+        paragraphs: [
+          'Vocabulario del trabajo del corredor, agente o agencia.',
+        ],
+        bullets: [
+          'Corredor de seguros: persona jurídica intermediaria, representa al cliente ante varias aseguradoras.',
+          'Agente colocador: intermediario por mandato, suele estar vinculado a una aseguradora.',
+          'Agencia de seguros: figura intermedia entre agente y corredor.',
+          'Mandante: la aseguradora que delega facultades en el intermediario.',
+          'Mandatario: el intermediario que actúa por cuenta de la aseguradora.',
+          'Comisión directa: pagada por la aseguradora sobre la prima neta.',
+          'Override: comisión adicional al gerente comercial sobre lo producido por su equipo.',
+          'Comisión contingente: bono variable por meta o siniestralidad.',
+          'Cartera: conjunto de pólizas vigentes de un corredor o agencia.',
+          'Renovación: continuación de una póliza al vencer su vigencia.',
+          'Tarificación: proceso de calcular la prima de un riesgo.',
+          'Suscripción: proceso de evaluación y aceptación de un riesgo por la aseguradora.',
+        ],
+      },
+      {
+        title: 'H · Tecnología, IA e Insurtech',
+        paragraphs: [
+          'Términos que aparecen en la transformación digital del sector.',
+        ],
+        bullets: [
+          'Insurtech: tecnología aplicada al negocio asegurador.',
+          'Embedded insurance: seguros vendidos dentro de productos no aseguradores (e-commerce, viajes).',
+          'API de aseguradora: interfaz técnica para cotizar y emitir sin intervención humana.',
+          'WhatsApp Business API: canal oficial de Meta para empresas, con automatización legal.',
+          'Chatbot: agente conversacional automático en chat.',
+          'Voicebot: agente conversacional automático en llamadas de voz.',
+          'OCR (Optical Character Recognition): tecnología que extrae texto de imágenes y PDFs.',
+          'Predicción de cancelación (churn prediction): modelo IA que anticipa qué clientes no renovarán.',
+          'Cross-sell automatizado: recomendación de productos por modelo IA.',
+        ],
+      },
+      {
+        title: 'Cómo usar este glosario',
+        paragraphs: [
+          'Guarda este glosario en favoritos y compártelo con tu equipo. Es especialmente útil para:',
+        ],
+        bullets: [
+          'Capacitar nuevos asesores en sus primeras semanas.',
+          'Preparar el examen de idoneidad de la SFC.',
+          'Resolver dudas de clientes en tiempo real durante una venta o siniestro.',
+          'Estandarizar el vocabulario interno de la agencia.',
+          'Referencia rápida cuando lees pólizas en otros idiomas o de otras aseguradoras.',
+        ],
+      },
+    ],
+    relatedSlugs: ['que-es-una-poliza-de-seguro', 'como-ser-corredor-de-seguros-colombia', 'que-es-insurtech-guia-corredores-latam'],
+    cta: {
+      title: 'Descarga el glosario completo en PDF',
+      text: 'Versión imprimible para tu agencia + futuras actualizaciones por email. Sin spam, solo cuando hay material nuevo.',
+      buttonLabel: 'Descargar glosario',
+    },
+  },
+
+  {
+    slug: 'diferencia-agente-corredor-seguros',
+    title: 'Diferencia entre agente y corredor de seguros: cuál te conviene ser (2026)',
+    excerpt:
+      'Agente vs corredor de seguros: autonomía, comisiones, requisitos legales, sueldo y crecimiento patrimonial. Tabla comparativa y guía para elegir la mejor figura en Colombia, México y España.',
+    answer:
+      'La diferencia clave: un agente de seguros está vinculado por mandato a una o varias aseguradoras (representa a la aseguradora), mientras que un corredor es persona jurídica independiente que representa al cliente ante varias aseguradoras. El agente requiere examen de idoneidad pero no matrícula SFC; el corredor sí requiere constituir sociedad, capital mínimo y matrícula ante la Superintendencia. En ingresos: agente principiante gana $2-4M COP/mes; corredor con cartera consolidada puede superar $25M/mes. En patrimonio a 10 años: el corredor construye una empresa vendible, el agente construye cartera personal. La mejor figura depende de capital inicial, apetito de riesgo y especialización. Esta guía explica el detalle por país (Colombia, México, España).',
+    tags: ['Carrera', 'Comparativa', 'Legal', 'LATAM'],
+    keywords: [
+      'diferencia entre agente y corredor de seguros',
+      'agente vs corredor seguros',
+      'qué son los corredores de seguros',
+      'a que se dedica un corredor de seguros',
+      'que es un corredor de seguros',
+      'agente de seguros cautivo',
+      'corredor independiente vs cautivo',
+      'requisitos corredor de seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Definición rápida (la diferencia en 1 frase)',
+        paragraphs: [
+          'Agente: intermediario por mandato. Vende para una aseguradora (cautivo) o varias (independiente persona natural). Representa los intereses de la aseguradora.',
+          'Corredor: intermediario por contrato de corretaje. Sociedad comercial registrada ante la SFC. Representa los intereses del cliente ante varias aseguradoras. Tiene autonomía total.',
+        ],
+      },
+      {
+        title: 'Tabla comparativa',
+        paragraphs: [
+          'Diferencias estructurales entre las dos figuras en el mercado colombiano (similar en México y España).',
+        ],
+        bullets: [
+          'Naturaleza jurídica: agente = persona natural por mandato. Corredor = persona jurídica (sociedad).',
+          'Registro: agente solo examen idoneidad. Corredor: matrícula SFC + capital mínimo + póliza RC.',
+          'Representa a: agente = aseguradora. Corredor = cliente.',
+          'Aseguradoras con las que opera: agente cautivo = 1. Independiente = varias. Corredor = todas las que quiera.',
+          'Comisión típica: agente 8-15%. Corredor 12-25% (más override).',
+          'Capital inicial: agente ~$0. Corredor: capital social SFC (varios millones COP).',
+          'Equipo: agente solo o pequeño. Corredor: agencia con varios asesores.',
+          'Posibilidad de vender el negocio: agente bajo (cartera personal). Corredor alto (empresa).',
+          'Responsabilidad legal: agente: la aseguradora responde por sus actos. Corredor: responde con su patrimonio.',
+        ],
+      },
+      {
+        title: 'Régimen jurídico por país',
+        paragraphs: [
+          'Las figuras existen en Colombia, México y España con diferencias importantes.',
+        ],
+        bullets: [
+          'Colombia: SFC regula. Código de Comercio art. 1347. Agente, agencia y corredor son las 3 figuras.',
+          'México: CNSF regula. Agente persona física, agente persona moral y broker reaseguro.',
+          'España: DGSFP regula. Agente exclusivo, agente vinculado, corredor (correduría) y operador banca-seguros.',
+          'Argentina: SSN regula. Productor asesor de seguros (PAS) y sociedad de productores.',
+          'Chile: CMF regula. Corredor de seguros (persona natural o jurídica) registrado.',
+        ],
+      },
+      {
+        title: 'Sueldo y comisiones por figura',
+        paragraphs: [
+          'Los ingresos varían enormemente según ramo, antigüedad y tamaño de cartera. Estos son rangos reales del mercado LATAM 2026.',
+        ],
+        bullets: [
+          'Agente cautivo principiante (años 1-2): $2-4M COP/mes promedio.',
+          'Agente cautivo experimentado: $5-12M COP/mes.',
+          'Agente independiente con cartera buena: $8-20M COP/mes.',
+          'Corredor independiente sólido: $8-25M COP/mes.',
+          'Dueño de agencia mediana (10-30 empleados): $15-50M COP/mes en utilidad.',
+          'Corredor especializado (RC compleja, líneas financieras): $20-80M COP/mes.',
+        ],
+      },
+      {
+        title: '¿Cuál genera más patrimonio a 10 años?',
+        paragraphs: [
+          'Esta es la pregunta que diferencia un trabajo de una empresa. Los corredores construyen activo vendible; los agentes construyen flujo de caja.',
+        ],
+        bullets: [
+          'Agente: ingresos altos posibles pero "se va contigo" cuando dejas de trabajar. Difícil vender la cartera (las aseguradoras restringen).',
+          'Corredor: construye una agencia con marca, procesos, equipo y cartera transferible. Las agencias se venden por 2-4x EBITDA.',
+          'Ejemplo: agente con $300M anuales se jubila con la cartera (no vendible). Corredor con misma facturación vende su agencia por $600M-$1.200M.',
+        ],
+      },
+      {
+        title: 'Cómo pasar de agente cautivo a corredor independiente',
+        paragraphs: [
+          'Es un camino común: empezar cautivo (training pagado) y migrar a corredor cuando tienes red y experiencia. Estos son los pasos.',
+        ],
+        bullets: [
+          '1. Año 1-2: aprende como cautivo, construye cartera mínima de 100-200 pólizas.',
+          '2. Año 2-3: ahorra capital semilla (constituir corredor requiere capital mínimo SFC).',
+          '3. Año 3: constituye sociedad, contrata RC profesional, registra matrícula SFC.',
+          '4. Año 3: portabilidad: tu cartera vieja queda en la aseguradora; nueva la construyes como corredor.',
+          '5. Año 4-5: contrata primer asesor de apoyo. Empieza a delegar.',
+          '6. Año 5+: agencia operando con 5-15 personas, dueño dedicado a estrategia.',
+        ],
+      },
+      {
+        title: 'Preguntas frecuentes',
+        paragraphs: [
+          'Las dudas más comunes que escuchamos de gente evaluando entre las dos figuras.',
+        ],
+        bullets: [
+          '¿Necesito ser abogado o contador para ser corredor? No, basta título de bachiller y aprobar el examen SFC.',
+          '¿Cuánto capital se necesita para crear un corredor? Depende del país. En Colombia, varios millones COP según norma vigente.',
+          '¿Puedo ser agente y corredor al mismo tiempo? No, son figuras incompatibles legalmente.',
+          '¿La SFC examina a corredores también? Sí, mismo examen de idoneidad por ramo.',
+          '¿Qué pasa con mi cartera si cambio de cautivo a otra aseguradora? Generalmente se queda con la primera aseguradora. Reconstruyes.',
+        ],
+      },
+    ],
+    relatedSlugs: ['como-ser-corredor-de-seguros-colombia', 'mejor-software-corredores-seguros-colombia', 'que-es-una-poliza-de-seguro'],
+    cta: {
+      title: 'Calculadora de ingresos: agente vs corredor',
+      text: 'Descarga la calculadora Excel que proyecta tus ingresos en cada figura a 5 años. Con datos reales del mercado LATAM.',
+      buttonLabel: 'Descargar calculadora',
+    },
+  },
+
+  {
+    slug: 'renovacion-automatica-polizas-guia',
+    title: 'Renovación automática de pólizas: guía completa para no perder clientes (2026)',
+    excerpt:
+      'El corredor pierde 15-25% de cartera cada año por renovaciones que no se cierran. Te explico el flujo manual que falla, qué se puede automatizar y cómo Guro orquesta renovaciones con IA + WhatsApp.',
+    answer:
+      'La renovación automática es el conjunto de procesos que permite que una póliza próxima a vencer se renueve sin intervención manual del corredor: detección del vencimiento, cálculo de la nueva prima, comunicación al cliente, cotización si cambian condiciones y cierre con link de pago. El corredor promedio pierde entre 15% y 25% de su cartera cada año por procesos manuales: pólizas que se olvidan, llamadas que el cliente no contesta, cotizaciones que llegan tarde. Las agencias que adoptan renovación automática con IA + WhatsApp pasan de tasas de renovación del 70-75% al 90-95%. Este artículo explica cada paso del flujo, qué se puede y qué no se puede automatizar, y los KPIs que importan.',
+    tags: ['Renovaciones', 'Procesos', 'IA', 'WhatsApp'],
+    keywords: [
+      'renovacion automatica de polizas',
+      'renovacion de poliza',
+      'renovacion de polizas de seguros',
+      'tasa renovacion seguros',
+      'automatizar renovacion seguros',
+      'mapfre renovacion de poliza',
+      'aplazar renovacion de poliza',
+      'recordatorio renovacion poliza',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Por qué el corredor pierde 15-25% de cartera cada año',
+        paragraphs: [
+          'No es por mal servicio. Es por procesos que no escalan. Una agencia con 1.000 pólizas vigentes tiene aproximadamente 80-90 vencimientos por mes. Si cada renovación toma 30-45 minutos de gestión manual (llamada, cotización, ajuste, envío, seguimiento), una sola persona tiene capacidad para 40-50 renovaciones bien hechas al mes.',
+          'El resto se hace mal: llamadas que no contestan, cotizaciones que llegan tarde, clientes que ya pidieron a otro corredor, propuestas sin personalizar. Resultado: tasa de renovación cae al 70-75% y 25% de la cartera se va silenciosamente cada año.',
+        ],
+      },
+      {
+        title: 'El flujo manual típico (y por qué falla)',
+        paragraphs: [
+          'Esta es la secuencia que sigue la mayoría de agencias hoy en LATAM. Cada paso tiene un punto de fuga.',
+        ],
+        bullets: [
+          '1. Excel manual de vencimientos: depende de actualización constante. Errores frecuentes.',
+          '2. Llamada del asesor 30 días antes: el cliente no contesta, no devuelve la llamada o pospone.',
+          '3. Cotización manual contra 1-2 aseguradoras: tarda 1-3 días por carga de trabajo.',
+          '4. Envío de PDF por email: 60% de emails no se abren o terminan en spam.',
+          '5. Seguimiento manual a la firma: requiere 3-5 contactos adicionales.',
+          '6. Cierre o pérdida: si el cliente no firma antes del vencimiento, póliza cancelada.',
+        ],
+      },
+      {
+        title: 'Qué se puede y qué no se puede automatizar',
+        paragraphs: [
+          'No todo es automatizable. Estos son los límites realistas con IA + WhatsApp en 2026.',
+        ],
+        bullets: [
+          'Automatizable 100%: detección de vencimientos, cálculo de renovación con mismas coberturas, envío de cotización, recordatorios secuenciales, link de pago.',
+          'Automatizable parcialmente: renovaciones con cambio menor (auto nuevo, dirección, beneficiario) — IA prepara, humano revisa.',
+          'Requiere humano: renovaciones tras siniestro grave, cambios mayores de cobertura, productos complejos (RC, cumplimiento, vida ejecutiva).',
+          'No automatizable: relación de confianza con cliente premium, asesoría compleja, manejo de objeciones difíciles.',
+        ],
+      },
+      {
+        title: 'Comunicación multicanal: WhatsApp + email + voicebot',
+        paragraphs: [
+          'Una sola vía de contacto siempre falla. La secuencia ganadora combina canales con escalamiento inteligente.',
+        ],
+        bullets: [
+          'Día -45: email con cotización personalizada (suave, no urgente).',
+          'Día -30: WhatsApp con cotización + link de pago + cierre por chat.',
+          'Día -15: WhatsApp recordatorio si no respondió.',
+          'Día -7: voicebot llama al cliente, agenda con asesor si conversa.',
+          'Día -2: escalamiento al asesor humano para casos abiertos.',
+          'Día +0: notificación de cancelación + última oportunidad.',
+          'Día +30: campaña de win-back para clientes perdidos.',
+        ],
+      },
+      {
+        title: 'KPIs de un buen proceso de renovación',
+        paragraphs: [
+          'Lo que no se mide, no se mejora. Estos son los indicadores que debes vigilar mensualmente.',
+        ],
+        bullets: [
+          'Tasa de renovación: pólizas renovadas / pólizas vencidas. Meta: >90%.',
+          'Tiempo promedio del proceso: desde detección hasta cierre. Meta: <7 días.',
+          'Tasa de respuesta WhatsApp: meta >60% en primer mensaje.',
+          'Motivos de no renovación: por qué se fueron (precio, siniestro, otro corredor, etc.).',
+          'NPS post-renovación: ¿el cliente recomendaría tu agencia?',
+          'Win-back rate: % de clientes perdidos que recuperas en 90 días.',
+          'Costo de adquisición renovación: cuánto cuesta retener vs adquirir nuevo (típicamente 5-7x más caro adquirir).',
+        ],
+      },
+      {
+        title: 'Cómo orquesta Guro las renovaciones',
+        paragraphs: [
+          'El flujo end-to-end automatizado dentro de Guro, integrando todos los canales y la IA.',
+        ],
+        bullets: [
+          '1. Detección automática de vencimientos con anticipación configurable (30/60/90 días).',
+          '2. IA calcula renovación considerando siniestralidad histórica, edad del bien, cambios de aseguradora.',
+          '3. Comparativa automática contra 3-5 aseguradoras alternativas si la prima sube >15%.',
+          '4. Envío de cotización por WhatsApp con plantilla personalizada + link de pago.',
+          '5. Chatbot conversacional responde dudas y cierra renovación simple.',
+          '6. Voicebot llama si no hay respuesta en WhatsApp.',
+          '7. Escalamiento automático al asesor humano para casos complejos.',
+          '8. Dashboard en vivo del dueño con tasa de renovación, motivos, alertas.',
+        ],
+      },
+      {
+        title: 'Plantillas de comunicación incluidas',
+        paragraphs: [
+          'Estos son los mensajes tipo que funcionan mejor en LATAM. Puedes usarlos directamente como base.',
+        ],
+        bullets: [
+          'Recordatorio suave (D-45): "Hola [nombre], te recordamos que tu seguro de [bien] vence el [fecha]. Te preparamos opciones para que decidas con tranquilidad."',
+          'Cotización (D-30): "Buenas tardes [nombre]. Acá tu cotización de renovación. Si todo está bien con [aseguradora actual], te paso link de pago: [link]. Si quieres ver opciones, aquí tienes 2 alternativas."',
+          'Urgencia amistosa (D-7): "[Nombre], me preocupa que el [fecha] tu póliza queda inactiva. ¿Hay algo que esté impidiendo cerrar? Estoy para ayudarte."',
+          'Win-back (D+30): "Hola [nombre], hace un mes terminó tu póliza con nosotros. Si fue por precio, tengo una opción mejor que la última cotización. Si fue por servicio, me gustaría saber qué pasó."',
+        ],
+      },
+    ],
+    relatedSlugs: ['ia-corredores-seguros-12-casos-latam', 'mejor-software-corredores-seguros-colombia', 'crm-clientes-corredor-seguros'],
+    cta: {
+      title: 'Automatiza renovaciones con Guro',
+      text: 'IA + WhatsApp + voicebot orquestan cada vencimiento. Pasa de 75% a 92% de renovación en 90 días.',
+      buttonLabel: 'Ver módulo de renovaciones',
+    },
+  },
+
+  {
+    slug: 'todo-riesgo-vs-soat-diferencias',
+    title: 'Todo Riesgo Auto vs SOAT: qué cubre cada uno (con ejemplos reales)',
+    excerpt:
+      'SOAT es obligatorio y cubre solo lesiones a personas; Todo Riesgo es opcional y cubre el carro, robo, RC y asistencia. Te explico las diferencias claras con ejemplos de siniestros reales.',
+    answer:
+      'SOAT (Seguro Obligatorio de Accidentes de Tránsito) y Todo Riesgo son productos completamente diferentes que muchos confunden. El SOAT es obligatorio para circular en Colombia, cuesta entre $400.000 y $700.000 año según vehículo, y cubre únicamente lesiones corporales a personas (incluyendo conductor, pasajeros y peatones). El Todo Riesgo es opcional, cuesta entre 3% y 6% del valor del carro al año, y cubre daños al vehículo, robo, responsabilidad civil frente a terceros, y asistencia en carretera. Ejemplo: si chocas tu carro contra un poste, SOAT no cubre nada del vehículo; Todo Riesgo paga la reparación. Si atropellas un peatón, SOAT cubre las lesiones de la persona; Todo Riesgo cubre además daños materiales que cause el accidente.',
+    tags: ['Auto', 'SOAT', 'Todo Riesgo', 'Cliente final'],
+    keywords: [
+      'seguro todo riesgo vehiculo',
+      'todo riesgo vs soat',
+      'consultar seguro todo riesgo de vehiculo por placa',
+      'cotizar seguro todo riesgo carro',
+      'que cubre el soat',
+      'diferencia soat todo riesgo',
+      'seguro vehicular todo riesgo',
+      'soat sura',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Qué es el SOAT y para qué sirve',
+        paragraphs: [
+          'El SOAT (Seguro Obligatorio de Accidentes de Tránsito) es un seguro que la ley colombiana exige a todo vehículo que circule por las vías nacionales. Sin SOAT vigente, el vehículo no puede transitar y multas pueden alcanzar 30 SMDLV.',
+          'Cubre exclusivamente lesiones corporales en accidentes de tránsito, sin importar quién tuvo la culpa. Es decir, protege a las víctimas (conductor, pasajeros, peatones, ciclistas) frente a gastos médicos, incapacidad, muerte y gastos funerarios.',
+        ],
+        bullets: [
+          'Costo SOAT moto 125cc: $400.000-500.000 año.',
+          'Costo SOAT auto particular: $500.000-700.000 año.',
+          'Costo SOAT taxi/servicio público: $800.000-1.500.000 año.',
+          'Quién lo emite: cualquier aseguradora autorizada (Sura, Bolívar, Estado, Mundial, Mapfre, etc.).',
+          'Vigencia: 1 año, renovación obligatoria antes de vencer.',
+        ],
+      },
+      {
+        title: 'Qué es el Todo Riesgo y qué cubre',
+        paragraphs: [
+          'El seguro Todo Riesgo (también llamado Auto Integral) es un seguro voluntario que cubre el vehículo y al asegurado frente a múltiples eventos: daños propios del carro, robo total, hurto de accesorios, daños a terceros, asistencia en carretera y muchas coberturas adicionales opcionales.',
+        ],
+        bullets: [
+          'Daños propios: choque, volcamiento, incendio, daños por terceros.',
+          'Robo total y hurto: cobertura por desaparición del vehículo.',
+          'Hurto de accesorios: radio, llantas, espejos.',
+          'Responsabilidad Civil Extracontractual (RCE): daños materiales y corporales que causes a terceros, mucho más alto que SOAT.',
+          'Asistencia en carretera 24/7: grúa, mecánico, batería, gasolina, hospedaje.',
+          'Conductor elegido: si te tomas un trago, alguien te lleva el carro a casa.',
+          'Carro reemplazo: vehículo provisional mientras reparan el tuyo.',
+          'Gastos médicos a ocupantes (complementario al SOAT).',
+        ],
+      },
+      {
+        title: 'Diferencias clave en una tabla',
+        paragraphs: [
+          'Comparación lado a lado de los dos productos. Es la primera pregunta de casi todo cliente al corredor.',
+        ],
+        bullets: [
+          'Obligatorio: SOAT sí, Todo Riesgo no.',
+          'Costo anual: SOAT $400-700k. Todo Riesgo $1-4M según valor del carro.',
+          'Cubre lesiones a personas: SOAT sí (tope ~$8M por persona). Todo Riesgo sí (mucho más alto).',
+          'Cubre daños a tu vehículo: SOAT NO. Todo Riesgo SÍ.',
+          'Cubre robo: SOAT NO. Todo Riesgo SÍ.',
+          'Cubre RC a terceros: SOAT solo lesiones, no daños materiales. Todo Riesgo sí cubre daños materiales.',
+          'Asistencia carretera: SOAT NO. Todo Riesgo SÍ.',
+          'Te ahorra el deducible en un siniestro: SOAT no aplica. Todo Riesgo tiene deducible típico 10-20% del siniestro.',
+        ],
+      },
+      {
+        title: 'Ejemplos reales de siniestros: qué paga cada uno',
+        paragraphs: [
+          'Casos reales del día a día para entender qué cubre exactamente cada producto.',
+        ],
+        bullets: [
+          'Caso 1 · Chocas contra un poste sin lesionados: SOAT no paga nada. Todo Riesgo paga la reparación del carro.',
+          'Caso 2 · Atropellas un ciclista que termina hospitalizado: SOAT paga hasta ~$25M en gastos médicos. Todo Riesgo paga si hay daños materiales adicionales o si hay demanda mayor.',
+          'Caso 3 · Te roban el carro completo: SOAT no paga. Todo Riesgo paga el valor comercial menos deducible.',
+          'Caso 4 · Te roban solo el radio y llantas: SOAT no paga. Todo Riesgo cubre accesorios si tienes la cobertura activa.',
+          'Caso 5 · Vuelco solo, sin terceros, sin lesionados: SOAT no paga. Todo Riesgo paga la reparación o pérdida total.',
+          'Caso 6 · Chocas con otro carro y eres responsable: SOAT paga lesiones del otro conductor/pasajeros. Todo Riesgo paga reparación del otro carro y tu carro.',
+          'Caso 7 · Inundación tras lluvia fuerte: SOAT no paga. Todo Riesgo paga si tienes amparo de daños por agua.',
+        ],
+      },
+      {
+        title: '¿Vale la pena pagar Todo Riesgo además del SOAT?',
+        paragraphs: [
+          'Depende del valor del carro y tu tolerancia al riesgo. Estos son los criterios prácticos para decidir.',
+        ],
+        bullets: [
+          'Carro nuevo o reciente (<5 años) o valor >$30M: SÍ, Todo Riesgo es casi imprescindible.',
+          'Carro de uso intensivo (trabajo, recorridos largos): SÍ, ya que aumenta exposición al riesgo.',
+          'Carro económico viejo (>10 años, valor <$15M): puedes considerar solo RC extra al SOAT.',
+          'Si pagaste el carro al contado y no puedes reponerlo rápido: SÍ.',
+          'Si el carro está pignorado por crédito vehicular: el banco te exige Todo Riesgo.',
+          'Si vives o trabajas en zona con índice de robos alto: SÍ, considera amparo de robo prioritario.',
+        ],
+      },
+      {
+        title: 'Cómo cotizar Todo Riesgo: factores que afectan la prima',
+        paragraphs: [
+          'La prima de Todo Riesgo depende de muchos factores. Estos son los más relevantes que evalúan las aseguradoras.',
+        ],
+        bullets: [
+          'Valor comercial del vehículo: a mayor valor, mayor prima.',
+          'Marca y modelo: vehículos más robados pagan más (Mazda, Chevrolet, Renault tradicionalmente).',
+          'Año del vehículo: carros más nuevos pagan más en términos absolutos pero menos en %.',
+          'Edad del conductor: <25 años o >70 años pagan más.',
+          'Uso: particular vs comercial vs servicio público.',
+          'Ciudad de circulación: Bogotá > Medellín > otras (por siniestralidad).',
+          'Historial de siniestros del conductor.',
+          'Antigüedad de la licencia: más nueva = mayor prima.',
+        ],
+      },
+      {
+        title: 'Aseguradoras de Todo Riesgo en Colombia',
+        paragraphs: [
+          'Las principales aseguradoras que venden el producto y sus fortalezas relativas según mercado y servicio.',
+        ],
+        bullets: [
+          'Seguros Sura: líder de mercado. Buen servicio, tarifas medias-altas.',
+          'Seguros Bolívar: red de talleres extensa, productos digitales avanzados.',
+          'Seguros del Estado: precios competitivos, buena cobertura nacional.',
+          'Mundial de Seguros: balance precio/cobertura, fuerte en ciudades intermedias.',
+          'AXA Colpatria: producto premium, servicio reconocido.',
+          'Mapfre Colombia: red internacional, asistencia robusta.',
+          'Liberty Seguros: opciones digitales, foco en jóvenes y nuevos clientes.',
+          'HDI Seguros: nicho creciente, buenas tarifas para flotas.',
+          'Equidad Seguros: cooperativa, tarifas para asociados.',
+          'Allianz Colombia: clientes ejecutivos, asistencia premium.',
+        ],
+      },
+      {
+        title: 'Preguntas frecuentes',
+        paragraphs: [
+          'Las dudas más comunes que reciben los corredores en este producto.',
+        ],
+        bullets: [
+          '¿Si tengo SOAT puedo circular sin Todo Riesgo? Sí, el SOAT es lo único legalmente obligatorio.',
+          '¿Si tengo Todo Riesgo necesito SOAT? Sí, el SOAT es obligatorio incluso si tienes Todo Riesgo.',
+          '¿El Todo Riesgo cubre conductor diferente al asegurado? Depende de la póliza. Algunas tienen "todo conductor", otras restringen.',
+          '¿Si presto mi carro y choca, paga la aseguradora? Sí, si la póliza cubre "todo conductor". Verificar siempre.',
+          '¿Puedo pagar Todo Riesgo por cuotas? Sí, financiación típica de 10-12 cuotas mensuales.',
+          '¿Si cambio de carro, sigue válida mi póliza? Generalmente sí con un endoso que actualiza el vehículo.',
+        ],
+      },
+    ],
+    relatedSlugs: ['que-es-una-poliza-de-seguro', 'gestion-polizas-auto-corredor', 'cotizador-digital-corredor-seguros'],
+    cta: {
+      title: '¿Buscas Todo Riesgo? Compara 5 aseguradoras',
+      text: 'Si eres corredor: Guro te conecta con +10 aseguradoras y cotiza en segundos. Si buscas tu seguro: contacta a un corredor que use Guro.',
+      buttonLabel: 'Cotizar con un corredor',
+    },
+  },
+
+  {
+    slug: 'tabla-comisiones-corredores-seguros-colombia',
+    title: 'Tabla de comisiones para corredores de seguros en Colombia (2026, por ramo y aseguradora)',
+    excerpt:
+      'Comisión directa, override y contingente: cuánto paga cada aseguradora colombiana por ramo. Auto, vida, salud, SOAT, cumplimiento, RC, hogar, arrendamiento. Calculadora incluida.',
+    answer:
+      'En Colombia las comisiones a corredores y agentes varían entre 5% y 25% de la prima neta, dependiendo del ramo y la aseguradora. Rangos típicos 2026: SOAT 5-8% (margen bajo por volumen), Auto Todo Riesgo 12-20%, Vida individual 18-25%, Vida grupo 8-12%, Salud/medicina prepagada 8-15%, Hogar 18-22%, Arrendamiento 15-25%, Cumplimiento 12-20%, RC 15-22%. Estas comisiones se complementan con override (5-10% adicional al gerente sobre lo producido por su equipo) y contingente (bonos anuales por meta y siniestralidad). El régimen tributario aplica retención del 11% en la fuente y el corredor responsable de IVA. El corredor inteligente diversifica entre ramos de alto margen (vida individual, RC, arrendamiento) y volumen (auto, SOAT).',
+    tags: ['Comisiones', 'Finanzas', 'Colombia', 'Corredor'],
+    keywords: [
+      'tabla de comisiones agentes de seguros',
+      'comisiones corredor seguros colombia',
+      'cuanto gana corredor seguros',
+      'iva en comisiones por venta de seguros',
+      'override comisiones seguros',
+      'comisiones por ramo seguros',
+      'comisión contingente seguros',
+      'retención comisiones seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Cómo se estructura la comisión en seguros',
+        paragraphs: [
+          'La comisión del corredor o agente tiene 3 componentes principales que se suman. Entender cada uno es clave para proyectar ingresos reales de la agencia.',
+        ],
+        bullets: [
+          'Comisión directa: porcentaje fijo sobre la prima neta de cada póliza vendida. Pagada mensualmente o al momento del pago del cliente.',
+          'Override: comisión adicional al gerente comercial, agencia o broker mayorista sobre lo producido por su equipo o red. Típico 5-10% adicional.',
+          'Comisión contingente: bono anual variable que depende de cumplir metas (volumen, retención, siniestralidad). Puede sumar 10-30% adicional al ingreso anual.',
+        ],
+      },
+      {
+        title: 'Tabla por ramo en Colombia (2026)',
+        paragraphs: [
+          'Rangos típicos de comisión directa por ramo en el mercado colombiano. Las aseguradoras manejan tablas internas que varían según volumen y antigüedad del corredor.',
+        ],
+        bullets: [
+          'SOAT: 5-8% (margen bajo, alto volumen).',
+          'Auto Todo Riesgo: 12-20%.',
+          'Vida Individual: 18-25% primer año, 5-10% renovaciones.',
+          'Vida Grupo: 8-12%.',
+          'Vida Deudor: 10-18%.',
+          'Salud / Medicina Prepagada: 8-15%.',
+          'Hogar: 18-22%.',
+          'Arrendamiento: 15-25%.',
+          'Cumplimiento: 12-20%.',
+          'Responsabilidad Civil: 15-22%.',
+          'Empresarial / Pyme: 15-20%.',
+          'Líneas Financieras (D&O, E&O): 20-30% (muy especializado).',
+          'Cargo (transporte mercancías): 15-25%.',
+          'ARL: 4-6% (regulado, bajo).',
+        ],
+      },
+      {
+        title: 'Tabla referencial por aseguradora (auto y SOAT)',
+        paragraphs: [
+          'Estos son rangos referenciales del mercado. Cada aseguradora maneja sus propias tarifas que varían por volumen del corredor, ramo y siniestralidad histórica.',
+        ],
+        bullets: [
+          'Seguros Sura: auto 14-18%, SOAT 5-7%.',
+          'Seguros Bolívar: auto 13-17%, SOAT 5-7%.',
+          'Seguros del Estado: auto 14-18%, SOAT 6-8%.',
+          'Mundial de Seguros: auto 13-17%, SOAT 5-7%.',
+          'AXA Colpatria: auto 14-18%, SOAT 6-8%.',
+          'Allianz Colombia: auto 14-18%, SOAT 5-7%.',
+          'Mapfre Colombia: auto 13-17%, SOAT 5-7%.',
+          'Liberty Seguros: auto 14-18%, SOAT 5-7%.',
+          'HDI Seguros: auto 15-19%, SOAT 6-8%.',
+          'Equidad Seguros: auto 14-17%, SOAT 5-7%.',
+        ],
+      },
+      {
+        title: 'IVA, retenciones y régimen tributario del corredor',
+        paragraphs: [
+          'Vender pólizas significa generar ingresos sujetos a régimen tributario específico. Estos son los puntos clave para Colombia.',
+        ],
+        bullets: [
+          'IVA: las comisiones de corredor están gravadas con IVA 19%. El corredor factura con IVA a la aseguradora.',
+          'Retención en la fuente: la aseguradora retiene 11% al pagar la comisión (corredor con régimen común).',
+          'Retención de IVA: típicamente la aseguradora retiene 15% del IVA.',
+          'Reteica: depende del municipio donde opere la agencia, generalmente 4-11 por mil.',
+          'Declaración renta: como persona natural con honorarios o sociedad según figura.',
+          'Régimen simple: opcional, simplifica el manejo tributario para corredores pequeños.',
+        ],
+      },
+      {
+        title: 'Comisión de renovación vs nuevo negocio',
+        paragraphs: [
+          'Una diferencia crítica para proyectar ingresos: muchas aseguradoras pagan menos comisión por renovaciones que por nuevos negocios.',
+        ],
+        bullets: [
+          'Auto: nueva 14-18%, renovación 12-16%.',
+          'Vida individual: primer año 18-25%, renovaciones 5-10%.',
+          'Vida grupo: 8-12% sostenido en renovación.',
+          'SOAT: igual en nuevo y renovación (5-8%).',
+          'Hogar: nueva 18-22%, renovación 14-18%.',
+          'Arrendamiento: 15-25% en cada ciclo (cuando es póliza nueva por contrato nuevo).',
+        ],
+      },
+      {
+        title: 'Cómo calcular tu cartera proyectada',
+        paragraphs: [
+          'Ejercicio práctico para una agencia tipo. Cambia los números por los reales de tu portafolio.',
+        ],
+        bullets: [
+          '500 pólizas auto Todo Riesgo × prima promedio $1.500.000 × 15% comisión = $112.500.000/año.',
+          '300 pólizas SOAT × $600.000 × 6% = $10.800.000/año.',
+          '100 pólizas vida individual × $2.500.000 × 22% primer año = $55.000.000 primer año.',
+          '50 pólizas arrendamiento × $1.800.000 × 20% = $18.000.000/año.',
+          'Total estimado: ~$196 millones COP/año comisión directa.',
+          'Sumar override (5-10%) y contingente (10-30%) puede llevar el total real a $230-280M/año.',
+        ],
+      },
+      {
+        title: 'Cómo automatizar el cálculo de comisiones',
+        paragraphs: [
+          'Cuando tu agencia supera las 200-300 pólizas, calcular comisiones a mano se vuelve insostenible. Estas son las opciones:',
+        ],
+        bullets: [
+          'Excel: sirve hasta 200-300 pólizas máximo. Frágil, propenso a errores.',
+          'Software vertical (Guro, Sumavisos, E2K): importa el corte de cada aseguradora, concilia automático, genera estado de cuenta por asesor.',
+          'Plataforma específica de comisiones (Optymyze, Spiff): poderosas pero caras y genéricas (no vertical seguros).',
+          'Recomendado: software vertical de seguros que ya viene con la lógica de comisiones del sector.',
+        ],
+      },
+      {
+        title: 'Errores frecuentes al calcular comisiones',
+        paragraphs: [
+          'Estos son los 6 errores que vemos más seguido al revisar agencias que migran a Guro.',
+        ],
+        bullets: [
+          'Olvidar la diferencia entre prima bruta y prima neta (la comisión va sobre neta).',
+          'No restar IVA antes de calcular comisión.',
+          'No conciliar contra el corte de la aseguradora (perdiendo comisiones no pagadas).',
+          'Pagar al asesor antes de que el cliente pague la prima (riesgo de cartera).',
+          'No diferenciar nuevo negocio de renovación en el cálculo.',
+          'No considerar retenciones al proyectar ingresos personales del asesor.',
+        ],
+      },
+    ],
+    relatedSlugs: ['como-ser-corredor-de-seguros-colombia', 'pricing-saas-corredor-seguros', 'mejor-software-corredores-seguros-colombia'],
+    cta: {
+      title: 'Descarga la plantilla Excel de comisiones',
+      text: 'Calculadora editable con fórmulas para 12 ramos × 10 aseguradoras. Incluye proyección de ingresos a 12 meses.',
+      buttonLabel: 'Descargar plantilla',
+    },
+  },
+
+  {
+    slug: 'gestionar-siniestro-paso-a-paso-corredor',
+    title: 'Cómo gestionar un siniestro paso a paso: del aviso al pago (guía corredor 2026)',
+    excerpt:
+      'Flujo completo de gestión de siniestros para corredores: aviso, radicación, peritaje, ajuste, indemnización. Plantillas de cartas, teléfonos de siniestros por aseguradora y KPIs.',
+    answer:
+      'Gestionar un siniestro de forma profesional incluye 7 pasos: (1) aviso del cliente con todos los datos del evento, (2) radicación formal ante la aseguradora con documentos requeridos, (3) seguimiento del peritaje y valoración, (4) negociación del ajuste si hay diferencias, (5) comunicación continua al cliente, (6) cobro de la indemnización, (7) cierre y análisis post-siniestro. El siniestro mal gestionado es la causa #1 de no renovación: clientes que esperan semanas sin información se sienten abandonados. El siniestro bien gestionado tiene el efecto opuesto: refuerza la relación y aumenta la tasa de renovación al 95%+. Esta guía incluye plantillas de cartas (reclamación, reconsideración, queja Superfinanciera), teléfonos de siniestros de las 10 aseguradoras principales en Colombia y KPIs para medir el proceso.',
+    tags: ['Siniestros', 'Procesos', 'Operación', 'Servicio'],
+    keywords: [
+      'definicion de siniestro en seguros',
+      'gestionar siniestro paso a paso',
+      'como reportar un siniestro',
+      'carta de reclamo al seguro por siniestro',
+      'hdi seguros siniestro',
+      'seguros bolivar siniestros',
+      'chubb seguros siniestros',
+      'mapfre seguros reporte siniestros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Qué es un siniestro (definición y momento crítico)',
+        paragraphs: [
+          'Un siniestro es la materialización del riesgo cubierto en la póliza: el accidente de auto, el robo, el fallecimiento, el incendio, la enfermedad. Es el momento de verdad de la relación cliente-corredor-aseguradora.',
+          'Casi todos los clientes contratan un seguro sin nunca tener un siniestro. Pero cuando ocurre, el cliente recuerda 10 años el cómo fue tratado en ese momento. Renovación, recomendaciones, retención, NPS de la agencia: todo se decide en cómo gestionas siniestros.',
+        ],
+      },
+      {
+        title: 'Paso 1 · Aviso del cliente',
+        paragraphs: [
+          'El cliente reporta el siniestro al corredor o directamente a la aseguradora. La primera hora es crítica: documenta todo y tranquiliza al cliente.',
+        ],
+        bullets: [
+          'Datos a capturar: nombre, número de póliza, fecha y hora del evento, descripción del siniestro, daños conocidos, terceros involucrados.',
+          'Documentos iniciales: fotos del lugar, denuncia ante policía si aplica (auto, robo, incendio).',
+          'Tiempo legal: aviso a aseguradora máximo 5 días hábiles desde el evento (varía por póliza).',
+          'Canales recomendados: WhatsApp con foto del documento de identidad y fotos del siniestro = trazabilidad inmediata.',
+        ],
+      },
+      {
+        title: 'Paso 2 · Radicación formal ante la aseguradora',
+        paragraphs: [
+          'La radicación es la apertura oficial del expediente. Cada aseguradora tiene su proceso y canal preferido.',
+        ],
+        bullets: [
+          'Documentos típicos: aviso de siniestro (formato aseguradora), cédula del asegurado, póliza, factura/recibo de pago, evidencias del siniestro.',
+          'Auto: añade denuncia tránsito, fotos, croquis si aplica, datos de terceros.',
+          'Hogar: factura de bienes dañados, valuación pre-siniestro si la tenías.',
+          'Vida: certificado de defunción, registro civil, beneficiarios.',
+          'RC: demanda o reclamación del tercero, documentación legal.',
+          'Salud: historia clínica, orden médica, facturas.',
+        ],
+      },
+      {
+        title: 'Paso 3 · Peritaje y valoración',
+        paragraphs: [
+          'La aseguradora asigna un perito/ajustador que valora el daño. Aquí es donde más se demoran los procesos si no haces seguimiento.',
+        ],
+        bullets: [
+          'Tiempo típico: 5-15 días para asignar perito; 15-30 días para emitir informe.',
+          'Tu rol como corredor: acompañar al cliente en la visita del perito, garantizar que vea todo el daño.',
+          'Documenta tú también: fotos paralelas, video, testigos.',
+          'Si el perito subvalora: levanta queja formal con valuación independiente.',
+        ],
+      },
+      {
+        title: 'Paso 4 · Ajuste e indemnización',
+        paragraphs: [
+          'Tras el peritaje, la aseguradora emite el ajuste: cuánto va a pagar. Aquí ocurren las disputas.',
+        ],
+        bullets: [
+          'Tiempo legal: máximo 1 mes desde presentación completa de documentos (artículo 1080 Código de Comercio CO).',
+          'Si está conforme el cliente: aceptación + firma de finiquito + pago al cliente o al taller.',
+          'Si NO está conforme: carta de reconsideración con argumentos y evidencias.',
+          'Si persiste el desacuerdo: queja ante Defensor del Consumidor Financiero o Superintendencia Financiera.',
+          'Vía judicial: solo como último recurso por costo y tiempo.',
+        ],
+      },
+      {
+        title: 'Paso 5 · Comunicación continua al cliente',
+        paragraphs: [
+          'El cliente abandonado es el cliente que no renueva. Estandariza la comunicación durante el siniestro.',
+        ],
+        bullets: [
+          'Día 0: confirmación de recepción del aviso + número de caso.',
+          'Día 2: estado de la radicación + documentos pendientes.',
+          'Día 7: confirmación de asignación de perito.',
+          'Día 15: avance del peritaje.',
+          'Día 30: liquidación o explicación si hay demora.',
+          'Día 45: pago efectuado o resolución del caso.',
+          'Día +30 (post-cierre): encuesta NPS al cliente.',
+        ],
+      },
+      {
+        title: 'Teléfonos de siniestros · 10 aseguradoras principales en Colombia',
+        paragraphs: [
+          'Tener a mano los canales directos de siniestros acelera la radicación. Actualizado mayo 2026 — verificar siempre antes de un caso.',
+        ],
+        bullets: [
+          'Seguros Sura: línea siniestros 24/7 en sura.com/lineas o app oficial.',
+          'Seguros Bolívar: 01-8000-123-322, app Mi Bolívar Seguros, asistencia 24/7.',
+          'Seguros del Estado: 01-8000-115-200 línea siniestros, segurosdelestado.com.',
+          'Mundial de Seguros: 01-8000-115-200, app Mundial Seguros, web reporte siniestro.',
+          'AXA Colpatria: 01-8000-912-300, app AXA Colpatria.',
+          'Allianz Colombia: 01-8000-911-922 siniestros, app Allianz.',
+          'Mapfre Colombia: 01-8000-118-000, app Mapfre Auto.',
+          'Liberty Seguros: 018000-123-000 siniestros, app Liberty.',
+          'HDI Seguros: 01-8000-115-555, web reporte 24/7.',
+          'Equidad Seguros: 01-8000-115-555, oficinas regionales.',
+          '⚠️ Verifica siempre el número actualizado en la página oficial antes de un siniestro real.',
+        ],
+      },
+      {
+        title: 'Plantillas de cartas (reclamación, reconsideración, queja SFC)',
+        paragraphs: [
+          'Estas son las cartas que más usa un corredor en gestión de siniestros. Ajusta los datos al caso.',
+        ],
+        bullets: [
+          'Carta de reclamación inicial: presenta el siniestro formalmente cuando la aseguradora demora en responder.',
+          'Carta de reconsideración: cuando aceptan parcialmente o niegan, argumenta con evidencias adicionales.',
+          'Queja ante Defensor del Consumidor: si tras reconsideración persiste el desacuerdo.',
+          'Queja ante Superfinanciera (SFC): canal regulatorio si el Defensor no resuelve.',
+          'Carta de finiquito: cierre formal cuando se llega a acuerdo.',
+          'Tip: en Guro estas plantillas vienen incluidas, se personalizan automáticamente con los datos del cliente y la póliza.',
+        ],
+      },
+      {
+        title: 'KPIs de gestión de siniestros',
+        paragraphs: [
+          'Métricas que debes vigilar mensualmente para mejorar tu proceso.',
+        ],
+        bullets: [
+          'Tiempo promedio de resolución: meta <30 días auto, <45 días otros.',
+          '% siniestros aprobados vs negados: revela calidad de la suscripción.',
+          'NPS post-siniestro: pregunta clave al cliente tras cerrar.',
+          'Renovación tras siniestro: si fue bien gestionado debería ser >85%.',
+          'Ranking por aseguradora: cuál paga más rápido y cuál genera más quejas.',
+          'Motivos de negación frecuentes: para evitar suscribir mal en el futuro.',
+        ],
+      },
+      {
+        title: 'Cómo Guro orquesta cada siniestro',
+        paragraphs: [
+          'El flujo end-to-end automatizado dentro de Guro para no perder ningún paso.',
+        ],
+        bullets: [
+          'Aviso por WhatsApp del cliente: IA estructura datos y crea el caso.',
+          'Notificación automática a la aseguradora con formato requerido.',
+          'Timeline visible al cliente con estados en tiempo real.',
+          'Plantillas de cartas listas para personalizar.',
+          'Métricas y NPS automático al cliente al cerrar.',
+          'Dashboard del dueño con todos los siniestros abiertos por aseguradora y SLA.',
+        ],
+      },
+    ],
+    relatedSlugs: ['que-es-una-poliza-de-seguro', 'gestionar-siniestros-online-corredor', 'renovacion-automatica-polizas-guia'],
+    cta: {
+      title: 'Automatiza la gestión de siniestros',
+      text: 'Guro orquesta cada siniestro desde el aviso por WhatsApp hasta la indemnización. Incluye plantillas de cartas y trazabilidad timeline.',
+      buttonLabel: 'Ver módulo siniestros',
+    },
+  },
+
+  {
+    slug: '7-kpis-agencia-seguros',
+    title: '7 KPIs que todo dueño de agencia de seguros debe medir cada mes (2026)',
+    excerpt:
+      'Los 7 indicadores que separan agencias rentables de las que se estancan: tasa renovación, prima media, CAC, churn, NPS, conversión, productividad por asesor. Fórmulas y benchmarks LATAM.',
+    answer:
+      'Los 7 KPIs que todo dueño de agencia de seguros debe medir cada mes son: (1) Tasa de Renovación — pólizas renovadas / pólizas vencidas (benchmark >90%); (2) Prima Media por Cliente — suma de primas / # de clientes (mide cross-sell); (3) CAC — Costo de Adquisición de Cliente, marketing+ventas / nuevos clientes; (4) Churn Rate — % clientes que se van por mes (benchmark <2% mensual); (5) NPS — Net Promoter Score (benchmark >50); (6) Tasa de Conversión Lead-a-Póliza — # ventas / # leads (benchmark 8-15%); (7) Productividad por Asesor — primas producidas / # asesores. Estos KPIs se miden en dashboards en tiempo real en plataformas como Guro y permiten decisiones diarias en vez de reportes mensuales que llegan tarde.',
+    tags: ['KPIs', 'Gestión', 'Dueños', 'Métricas'],
+    keywords: [
+      'kpis agencia seguros',
+      'indicadores corredor seguros',
+      'metricas agencia seguros',
+      'tasa renovacion seguros',
+      'cac costo adquisicion seguros',
+      'churn seguros',
+      'productividad asesor seguros',
+      'nps corredor',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Por qué medir KPIs (y por qué la mayoría no lo hace)',
+        paragraphs: [
+          'La mayoría de dueños de agencias de seguros toman decisiones basadas en sensaciones: "este mes va bien", "veo a Pedro estancado". La sensación llega tarde. Cuando notas que la cartera bajó, ya perdiste 20%.',
+          'Los KPIs no son burocracia. Son las señales que te permiten actuar antes de que pase algo. Una agencia que mide los 7 KPIs de este artículo opera con un foco que la diferencia del 80% del mercado.',
+        ],
+      },
+      {
+        title: '1. Tasa de Renovación',
+        paragraphs: [
+          'El indicador más subestimado del sector. Si tu tasa cae 5 puntos, perdiste el 5% de tu cartera silenciosamente.',
+        ],
+        bullets: [
+          'Fórmula: pólizas renovadas en el mes / pólizas que vencían en el mes × 100.',
+          'Benchmark LATAM: >90% es bueno; >95% es excelente; <80% es alarma roja.',
+          'Frecuencia de medición: mensual.',
+          'Segmentar por: ramo, asesor, aseguradora, antigüedad del cliente.',
+          'Acción si está baja: revisar proceso de renovación (manual vs automatizado), motivos de no renovación, perfil del cliente que se va.',
+        ],
+      },
+      {
+        title: '2. Prima Media por Cliente',
+        paragraphs: [
+          'Mide cuánto vale cada cliente para tu agencia. Subir este KPI no requiere más clientes, requiere mejor cross-sell.',
+        ],
+        bullets: [
+          'Fórmula: suma de primas anuales activas / # clientes únicos.',
+          'Benchmark depende del mercado: agencia generalista CO típica $2-4M COP/cliente, especializada empresarial $15M+.',
+          'Frecuencia: mensual.',
+          'Acción para subir: cross-sell sistemático (cliente con auto → vida deudor → hogar → salud).',
+          'Tip: cada 10% que sube prima media equivale a 10% más ventas sin captar clientes nuevos.',
+        ],
+      },
+      {
+        title: '3. CAC (Costo de Adquisición de Cliente)',
+        paragraphs: [
+          'Cuánto te cuesta cada cliente nuevo. Es el límite real de tu crecimiento rentable.',
+        ],
+        bullets: [
+          'Fórmula: (gasto marketing + gasto ventas en el período) / # clientes nuevos.',
+          'Benchmark: CAC menor a 30% del primer año de prima media.',
+          'Frecuencia: mensual + trimestral.',
+          'Si CAC > 50% del primer año: estás creciendo a pérdida. Pivot urgente.',
+          'Reducir CAC: contenido orgánico (blog, SEO), referidos, mini-web por asesor, cotizadores embebidos.',
+        ],
+      },
+      {
+        title: '4. Churn Rate (Tasa de Cancelación)',
+        paragraphs: [
+          'Inverso de la retención. Mide qué % de tu cartera se va por mes.',
+        ],
+        bullets: [
+          'Fórmula: clientes que cancelan / clientes activos al inicio del período × 100.',
+          'Benchmark mensual: <1% es excelente; 1-2% es aceptable; >3% requiere acción.',
+          'Frecuencia: mensual.',
+          'Segmentar por motivo: precio, mal servicio, siniestro, cambio de aseguradora, otro corredor.',
+          'Acción: programas de salvataje, llamada del dueño a clientes premium en riesgo, predicción IA de cancelación.',
+        ],
+      },
+      {
+        title: '5. NPS (Net Promoter Score)',
+        paragraphs: [
+          'Mide la lealtad del cliente y su disposición a recomendarte. Es el predictor #1 de crecimiento orgánico.',
+        ],
+        bullets: [
+          'Fórmula: % promotores (9-10) - % detractores (0-6).',
+          'Pregunta: "Del 0 al 10, ¿qué tan probable es que recomiendes nuestra agencia a un familiar o amigo?".',
+          'Benchmark sector seguros LATAM: NPS >40 es bueno, >60 es excelente.',
+          'Frecuencia: post-evento (post-venta, post-renovación, post-siniestro).',
+          'Diferencia NPS post-siniestro vs general: revela la calidad de tu operación en el momento de verdad.',
+        ],
+      },
+      {
+        title: '6. Tasa de Conversión Lead-a-Póliza',
+        paragraphs: [
+          'De cada 100 personas que piden cotización, ¿cuántas terminan firmando? Es el termómetro de tu equipo comercial.',
+        ],
+        bullets: [
+          'Fórmula: pólizas emitidas / leads recibidos × 100.',
+          'Benchmark sector: 8-15% es típico, 20%+ es excelente.',
+          'Frecuencia: semanal y mensual.',
+          'Segmentar por: canal de lead (web, referidos, WhatsApp, Facebook Ads), por asesor, por ramo.',
+          'Acción: análisis de motivos de no cierre, capacitación de objeciones, mejora de tiempo de respuesta.',
+        ],
+      },
+      {
+        title: '7. Productividad por Asesor',
+        paragraphs: [
+          'El KPI más sensible políticamente pero más importante operativamente. Identifica top performers y asesores en riesgo.',
+        ],
+        bullets: [
+          'Fórmula primaria: primas netas producidas en el mes / asesor.',
+          'Fórmulas complementarias: pólizas nuevas/mes, % conversión personal, NPS de sus clientes, tasa renovación de su cartera.',
+          'Benchmark depende del ramo y antigüedad: asesor full-time CO típico $5-15M COP comisión personal/mes generada.',
+          'Acción: top 20% recompensa y replica buenas prácticas; bottom 20% acompaña, capacita o sale.',
+        ],
+      },
+      {
+        title: 'Dashboard ideal del dueño',
+        paragraphs: [
+          'Cómo se ve un buen dashboard mensual del dueño. Una pantalla que cuenta toda la historia.',
+        ],
+        bullets: [
+          'Header: cartera total + variación mes a mes + meta del año (gauge visual).',
+          'Bloque 1: tasa renovación + churn + NPS últimos 3 meses (líneas de tendencia).',
+          'Bloque 2: top 10 clientes por prima + alertas de vencimiento próximo.',
+          'Bloque 3: ranking de asesores por productividad + alertas asesores en bajo rendimiento.',
+          'Bloque 4: pipeline de ventas + conversión por etapa + cuellos de botella.',
+          'Bloque 5: siniestros abiertos por aseguradora + tiempo promedio + alertas SLA.',
+          'Bloque 6: estado de cartera (clientes con pagos pendientes) + recuperación.',
+        ],
+      },
+      {
+        title: 'Frecuencia de revisión recomendada',
+        paragraphs: [
+          'No mires todo todos los días. La frecuencia correcta evita parálisis por análisis.',
+        ],
+        bullets: [
+          'Diaria (2 min): ventas del día, siniestros nuevos, alertas críticas.',
+          'Semanal (15 min): pipeline, conversión, productividad por asesor.',
+          'Mensual (1 hora): los 7 KPIs en perspectiva + reunión de equipo.',
+          'Trimestral (medio día): tendencias, estrategia, ajustes de meta.',
+          'Anual (1 día): planeación, evaluación de aseguradoras, redefinición de ramos prioritarios.',
+        ],
+      },
+    ],
+    relatedSlugs: ['mejor-software-corredores-seguros-colombia', 'crm-clientes-corredor-seguros', 'renovacion-automatica-polizas-guia'],
+    cta: {
+      title: 'Mide los 7 KPIs automáticamente en Guro',
+      text: 'Dashboard en tiempo real con renovación, churn, NPS, productividad y más. Sin armar Excels ni esperar reportes mensuales.',
+      buttonLabel: 'Ver dashboard demo',
+    },
+  },
+
+  {
+    slug: 'poliza-responsabilidad-civil-colombia',
+    title: 'Póliza de Responsabilidad Civil: coberturas, exclusiones y precio en Colombia (2026)',
+    excerpt:
+      'La póliza de Responsabilidad Civil (RC) protege tu patrimonio frente a daños que causes a terceros. Te explico tipos (general, extracontractual, profesional, médica, D&O), coberturas, costos y cuándo es obligatoria.',
+    answer:
+      'La póliza de Responsabilidad Civil (RC) cubre los perjuicios económicos que el asegurado debe pagar a terceros por daños materiales, lesiones personales o pérdidas patrimoniales que cause de forma involuntaria. En Colombia se divide en varios tipos: RC General (negocios, locales, hogar), RC Extracontractual (RCE, complementaria al auto), RC Profesional (médicos, abogados, ingenieros, corredores), RC Patronal (empleadores frente a accidentes laborales), Directors & Officers (D&O) para juntas directivas y RC Productos para fabricantes. El costo va desde $200.000 año en RC hogar hasta $30M+ en D&O o RC médica. La cobertura mínima recomendada empieza en $200M para profesionales independientes y $1.000M+ para empresas medianas. Es uno de los seguros más subestimados pero más necesarios: una sola demanda puede quebrar al asegurado.',
+    tags: ['Responsabilidad Civil', 'Cliente final', 'Profesionales', 'Empresarial'],
+    keywords: [
+      'poliza de responsabilidad civil',
+      'para que sirve la poliza de responsabilidad civil',
+      'responsabilidad civil extracontractual',
+      'rc profesional seguros',
+      'rce auto colombia',
+      'd&o directors officers seguro',
+      'rc medica colombia',
+      'que cubre poliza rc',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Qué es la Responsabilidad Civil y por qué necesitas una póliza',
+        paragraphs: [
+          'La responsabilidad civil es la obligación legal de reparar el daño que causes a otra persona o a sus bienes. Está regulada en Colombia por el Código Civil (arts. 2341 y siguientes) y se activa cada vez que alguien sufre un perjuicio por una acción u omisión tuya.',
+          'Sin póliza de RC, si causas un daño grave (atropellas a alguien, tu producto enferma a un cliente, una mala práctica profesional, tu mascota muerde a un visitante), debes pagar de tu bolsillo. Y los montos en demandas civiles modernas suelen empezar en cientos de millones de pesos.',
+        ],
+      },
+      {
+        title: 'Los 6 tipos de RC más importantes',
+        paragraphs: [
+          'No existe una sola "póliza RC". Cada actividad económica o personal tiene su producto específico.',
+        ],
+        bullets: [
+          'RC General o de Hogar: cubre daños causados por el asegurado, su familia, sus mascotas o su propiedad.',
+          'RC Extracontractual (RCE): complemento del seguro de auto que cubre daños materiales y lesiones a terceros más allá del SOAT.',
+          'RC Profesional o E&O (Errors & Omissions): para médicos, abogados, contadores, arquitectos, ingenieros, corredores. Cubre errores profesionales.',
+          'RC Patronal: para empleadores frente a accidentes laborales no cubiertos totalmente por ARL.',
+          'D&O (Directors & Officers): para juntas directivas, gerencias y directivos frente a demandas por decisiones empresariales.',
+          'RC Productos: para fabricantes y comercializadores frente a daños causados por sus productos a consumidores.',
+        ],
+      },
+      {
+        title: 'RC Profesional: indispensable para corredores y agentes',
+        paragraphs: [
+          'En Colombia, los corredores de seguros están obligados por la SFC a tener póliza de RC profesional. Pero también es altamente recomendada para agentes y agencias.',
+        ],
+        bullets: [
+          'Cubre: errores u omisiones del corredor que generen perjuicio al cliente (ej: no informar exclusión clave, no renovar a tiempo, sub-asegurar).',
+          'Tope mínimo SFC para corredores: definido por norma vigente, generalmente >500M COP.',
+          'Costo: 0.5%-2% de la prima neta intermediada anualmente.',
+          'Aseguradoras que la emiten: Sura, Allianz, AXA, Mapfre, Liberty, Chubb.',
+          'Sin RC profesional: un solo error puede quebrar a la agencia.',
+        ],
+      },
+      {
+        title: 'Qué cubre la póliza RC (coberturas típicas)',
+        paragraphs: [
+          'Las coberturas exactas varían por producto. Estas son las más comunes que verás en cualquier póliza RC en Colombia.',
+        ],
+        bullets: [
+          'Daños materiales a terceros: golpe a otro vehículo, daños a bienes de terceros.',
+          'Lesiones corporales a terceros: gastos médicos, incapacidad, muerte.',
+          'Perjuicios morales y lucro cesante.',
+          'Gastos de defensa jurídica: abogados, peritos, fianzas judiciales.',
+          'Daños accidentales (no intencionales) cubiertos hasta la suma asegurada.',
+          'Cobertura geográfica: usualmente Colombia, con extensión opcional internacional.',
+          'Coberturas adicionales según producto: contaminación accidental, productos defectuosos, etc.',
+        ],
+      },
+      {
+        title: 'Exclusiones típicas (importante leer antes de firmar)',
+        paragraphs: [
+          'Estas son las exclusiones más comunes que aparecen en pólizas RC. Lo que NO cubre es tan importante como lo que sí.',
+        ],
+        bullets: [
+          'Daños intencionales o dolosos (jamás se cubren).',
+          'Multas, sanciones penales, daños punitivos.',
+          'Responsabilidad contractual (excepto en RC profesional).',
+          'Riesgos nucleares, terrorismo, guerra (a veces ampliables).',
+          'Daños conocidos previos a la vigencia de la póliza.',
+          'Actividades específicas no declaradas al contratar.',
+          'Daños a empleados (eso lo cubre RC Patronal o ARL).',
+          'Conducción bajo efectos de alcohol o drogas (RCE auto).',
+        ],
+      },
+      {
+        title: 'Cuánto cuesta una póliza RC en Colombia',
+        paragraphs: [
+          'Los precios varían enormemente según el riesgo profesional y el tope de cobertura. Estos son rangos referenciales 2026.',
+        ],
+        bullets: [
+          'RC Hogar: $200.000-500.000 año, cobertura $50-200M.',
+          'RCE Auto: $200.000-800.000 año, complemento Todo Riesgo, cobertura $100-500M.',
+          'RC Profesional Corredor: 0.5-2% de prima intermediada, cobertura desde $500M.',
+          'RC Médica: $2-15M año según especialidad y antigüedad, cobertura $500M-2.000M.',
+          'RC Profesional Abogado/Contador: $500.000-3M año, cobertura $200-800M.',
+          'RC General Pyme: $1-5M año, cobertura $500M-2.000M.',
+          'D&O empresa mediana: $5-30M año, cobertura $1.000M-10.000M+.',
+          'RC Productos manufactura: 0.1-1% de facturación, cobertura $1.000M+.',
+        ],
+      },
+      {
+        title: '¿Cuándo es obligatoria la RC?',
+        paragraphs: [
+          'Algunas RC son obligatorias por ley, otras por contratos. Estas son las situaciones donde no puedes operar sin RC.',
+        ],
+        bullets: [
+          'Corredores de seguros (Colombia, SFC).',
+          'Algunos profesionales regulados (médicos en muchas IPS, ciertos abogados).',
+          'Empresas que licitan contratos públicos (RC contractual + cumplimiento).',
+          'Operadores de transporte de pasajeros (RC contractual obligatoria).',
+          'Algunos tipos de constructoras y obras civiles.',
+          'Empresas con productos farmacéuticos, alimentos, dispositivos médicos.',
+        ],
+      },
+      {
+        title: 'Cómo elegir la suma asegurada correcta',
+        paragraphs: [
+          'El error más común es contratar RC barata con tope bajo. Si demandan más alto que el tope, pagas la diferencia. Estos son los criterios.',
+        ],
+        bullets: [
+          'Profesional independiente: mínimo $500M, ideal $1.000M.',
+          'Pyme con <50 empleados: mínimo $1.000M, ideal $2.000M.',
+          'Empresa mediana o sector regulado: $2.000-5.000M.',
+          'D&O junta empresa cotizada o grande: $5.000M+.',
+          'RCE auto: mínimo $100M, ideal $300-500M en ciudades grandes.',
+          'Regla práctica: cobertura mínima = mayor patrimonio que quieres proteger × 2.',
+        ],
+      },
+      {
+        title: 'Aseguradoras que emiten RC en Colombia',
+        paragraphs: [
+          'Las principales aseguradoras que venden los distintos tipos de RC, agrupadas por especialidad.',
+        ],
+        bullets: [
+          'RC Hogar y RCE Auto: Sura, Bolívar, Estado, Mundial, AXA, Mapfre, Liberty, Allianz, HDI.',
+          'RC Profesional (corredores, abogados, contadores): Sura, Allianz, AXA, Chubb.',
+          'RC Médica especializada: AON, Chubb, Allianz, Sura (con tablas específicas por especialidad).',
+          'D&O: Chubb, AIG, Allianz, AXA, Liberty (mercado más concentrado).',
+          'RC Productos y empresarial: Sura, Mapfre, Liberty, Chubb, AIG.',
+        ],
+      },
+      {
+        title: 'Preguntas frecuentes sobre RC',
+        paragraphs: [
+          'Las dudas más comunes que reciben los corredores sobre este producto.',
+        ],
+        bullets: [
+          '¿La RC cubre demandas que ocurran después de cancelar la póliza? Depende: hay "claims made" (vigencia al momento del reclamo) y "occurrence basis" (vigencia al momento del evento). Leer detenidamente.',
+          '¿Cubre daños causados por mis empleados? Sí, normalmente cubre RC vicaria (responsabilidad por actos de empleados).',
+          '¿Cubre daños a familiares? Generalmente NO. La RC cubre terceros, no asegurados ni convivientes.',
+          '¿La RC paga la indemnización o me reembolsa? Típicamente paga directamente al tercero perjudicado.',
+          '¿Sirve internacionalmente? Solo si se extendió expresamente la cobertura geográfica.',
+        ],
+      },
+    ],
+    relatedSlugs: ['que-es-una-poliza-de-seguro', 'poliza-de-arrendamiento-guia-2026', 'todo-riesgo-vs-soat-diferencias'],
+    cta: {
+      title: 'Cotiza tu RC con un corredor de confianza',
+      text: 'Si eres corredor: Guro te conecta con +10 aseguradoras especializadas en RC. Si buscas tu póliza: contacta un corredor profesional.',
+      buttonLabel: 'Cotizar con corredor',
+    },
+  },
+
+  {
+    slug: 'poliza-de-cumplimiento-colombia',
+    title: 'Póliza de Cumplimiento: tipos, costos y cómo emitirla rápido en Colombia (2026)',
+    excerpt:
+      'La póliza de cumplimiento garantiza el cumplimiento de un contrato. Te explico los 5 tipos (seriedad oferta, anticipo, calidad, buen manejo, pago de salarios), cómo cotizarla y cuánto cuesta.',
+    answer:
+      'La póliza de cumplimiento es un seguro que garantiza que el contratista cumplirá las obligaciones de un contrato. La aseguradora se compromete a pagar al beneficiario (típicamente entidad pública o cliente corporativo) si el contratista no cumple. Hay 5 amparos principales: (1) Seriedad de la oferta (durante licitación), (2) Cumplimiento del contrato, (3) Buen manejo del anticipo, (4) Calidad y correcto funcionamiento, (5) Pago de salarios y prestaciones sociales. El costo va de 1% a 3.5% anual del valor del contrato según riesgo, plazo y tipo de cliente. Es obligatoria para licitar con el Estado colombiano (Ley 80 de 1993 y Decreto 1082). Las aseguradoras principales: Sura, Bolívar, Estado, Mundial, Mapfre, Liberty, AXA Colpatria. Para un corredor de seguros, es uno de los ramos con mejor margen y mayor volumen.',
+    tags: ['Cumplimiento', 'Licitaciones', 'Contratistas', 'Estado'],
+    keywords: [
+      'poliza de cumplimiento',
+      'para que sirve una poliza de cumplimiento',
+      'qué es una póliza de cumplimiento de contrato',
+      'a cuanto corresponde la poliza de cumplimiento',
+      'poliza seriedad oferta',
+      'poliza anticipo',
+      'poliza estado colombia',
+      'cuanto cuesta poliza cumplimiento',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Qué es la póliza de cumplimiento',
+        paragraphs: [
+          'La póliza de cumplimiento es un contrato de seguro donde la aseguradora garantiza al beneficiario (típicamente una entidad pública o un cliente corporativo) que el contratista (tomador) cumplirá con sus obligaciones contractuales. Si el contratista incumple, la aseguradora indemniza al beneficiario hasta la suma asegurada.',
+          'En Colombia es exigida por ley para contratar con el Estado (Ley 80 de 1993 y Decreto Reglamentario 1082 de 2015). También se usa entre privados cuando un cliente quiere garantía adicional sobre un contratista.',
+        ],
+      },
+      {
+        title: 'Los 5 amparos principales',
+        paragraphs: [
+          'Una póliza de cumplimiento puede tener uno o varios amparos según las exigencias del contrato. Cada uno cubre un riesgo distinto.',
+        ],
+        bullets: [
+          '1. Seriedad de la oferta: garantiza que el proponente que gana la licitación firmará el contrato. Vigencia desde apertura de la licitación hasta firma del contrato.',
+          '2. Cumplimiento del contrato: garantiza que el contratista ejecutará las obligaciones pactadas. Vigencia desde firma hasta liquidación + 6 meses.',
+          '3. Buen manejo y correcta inversión del anticipo: cuando el contratista recibe anticipo, garantiza que lo usará para el objeto contratado.',
+          '4. Calidad y correcto funcionamiento de los bienes / calidad del servicio: para contratos de suministros, obras o servicios.',
+          '5. Pago de salarios, prestaciones sociales e indemnizaciones laborales: garantiza que el contratista pagará a sus empleados durante la ejecución.',
+        ],
+      },
+      {
+        title: '¿Cuánto cuesta una póliza de cumplimiento?',
+        paragraphs: [
+          'El costo varía entre 0.5% y 3.5% anual del valor del contrato, dependiendo del riesgo, plazo, perfil del contratista y aseguradora.',
+        ],
+        bullets: [
+          'Seriedad de oferta: 0.1%-0.5% del valor de la oferta (vigencia corta).',
+          'Cumplimiento de contrato: 1%-2.5% del valor del contrato/año.',
+          'Anticipo: 1.5%-3% del valor del anticipo.',
+          'Calidad: 1%-2% del valor del contrato.',
+          'Pago salarios y prestaciones: 0.5%-1.5%.',
+          'Factores que suben el precio: contratista sin historial, contrato complejo, plazos largos, montos altos sin colateral.',
+          'Factores que bajan el precio: contratista con historial limpio, contratos repetidos con misma aseguradora, garantías adicionales.',
+        ],
+      },
+      {
+        title: 'Cuándo es obligatoria',
+        paragraphs: [
+          'Estas son las situaciones más comunes donde la póliza de cumplimiento es requerida.',
+        ],
+        bullets: [
+          'Toda licitación pública en Colombia (Ley 80 + Decreto 1082).',
+          'Contratos con empresas industriales y comerciales del Estado.',
+          'Contratos con organismos descentralizados.',
+          'Algunos contratos privados cuando el cliente lo exige.',
+          'Concesiones, alianzas público-privadas (APP).',
+          'Contratos de obra, suministro, consultoría, interventoría con entidades públicas.',
+          'Importadores con ciertas operaciones aduaneras.',
+        ],
+      },
+      {
+        title: 'Requisitos para tomar la póliza',
+        paragraphs: [
+          'El proceso de emisión exige documentos del contratista (tomador) y del contrato. Estos son los típicos.',
+        ],
+        bullets: [
+          'Cédula del representante legal y certificado de existencia y representación.',
+          'RUT y composición societaria.',
+          'Estados financieros últimos 2-3 años (auditados ideal).',
+          'Documento del contrato (pliego de condiciones si es licitación).',
+          'Acta de adjudicación si ya ganaste la licitación.',
+          'Hoja de vida de la empresa: experiencia en contratos similares.',
+          'Score crediticio: Datacrédito empresarial.',
+        ],
+      },
+      {
+        title: 'Cómo cotizar y emitir paso a paso',
+        paragraphs: [
+          'El proceso completo desde que el cliente te pide cotización hasta la entrega de la póliza emitida.',
+        ],
+        bullets: [
+          '1. Recopila documentos del contratista y del contrato.',
+          '2. Selecciona 2-3 aseguradoras según afinidad (Sura para grandes, Estado para licitaciones públicas, Mundial para pyme).',
+          '3. Carga datos en cotizador online o portal aseguradora.',
+          '4. Recibe cotización en 4-48 horas según aseguradora.',
+          '5. Compara primas, deducibles, requisitos colaterales.',
+          '6. Cliente acepta, paga prima (anual o financiada).',
+          '7. Emisión de la póliza con numeración SECOP si es para Estado.',
+          '8. Cargue en SECOP II antes del cierre de la licitación o firma del contrato.',
+        ],
+      },
+      {
+        title: 'Aseguradoras especializadas en cumplimiento Colombia',
+        paragraphs: [
+          'Las aseguradoras tienen distintos apetitos. Esta es la guía práctica que usan los corredores.',
+        ],
+        bullets: [
+          'Seguros del Estado: especialista en licitaciones públicas, alta participación en contratos gobierno.',
+          'Seguros Sura: foco en contratos privados grandes y medianos, perfiles top.',
+          'Seguros Bolívar: cobertura amplia, buena para pyme con historial.',
+          'Mundial de Seguros: tarifas competitivas, especialmente para pyme.',
+          'Mapfre Colombia: contratos privados, buena agilidad de emisión.',
+          'AXA Colpatria: contratos medianos, buen servicio post-emisión.',
+          'Liberty Seguros: nichos específicos (energía, infraestructura).',
+          'Chubb: contratos grandes corporativos, tarifas premium.',
+        ],
+      },
+      {
+        title: 'Errores frecuentes al emitir cumplimiento',
+        paragraphs: [
+          'Estos son los errores más caros y más comunes en este ramo. Evitarlos te ahorra recotizaciones y problemas en licitaciones.',
+        ],
+        bullets: [
+          'Subestimar el plazo: emitir solo por la vigencia del contrato sin considerar liquidación + 6 meses.',
+          'No incluir todos los amparos exigidos por el pliego de licitación.',
+          'Calcular mal la suma asegurada (Decreto 1082 tiene reglas específicas).',
+          'Olvidar el cargue en SECOP II antes del cierre.',
+          'No coordinar la vigencia con la firma efectiva del contrato.',
+          'Subestimar el riesgo (perfil contratista débil) y elegir aseguradora que después no aprueba.',
+        ],
+      },
+      {
+        title: 'Preguntas frecuentes',
+        paragraphs: [
+          'Las dudas más comunes en póliza de cumplimiento.',
+        ],
+        bullets: [
+          '¿La póliza de cumplimiento devuelve la prima si el contratista cumple? No, la prima se gana por el período de cobertura. Solo se devuelve si se cancela anticipadamente y prorrata.',
+          '¿Puedo cambiar de aseguradora a mitad del contrato? Sí, pero requiere comunicación formal al beneficiario y emisión nueva sin lapso.',
+          '¿Qué pasa si el contratista incumple? El beneficiario reclama a la aseguradora con evidencias. La aseguradora indemniza y luego repite contra el contratista.',
+          '¿Hay alternativas? Sí: garantía bancaria, depósito en efectivo. Pero la póliza suele ser más barata y ágil.',
+          '¿Una sola póliza cubre todos los amparos? Sí, una póliza puede incluir varios amparos en el mismo documento.',
+        ],
+      },
+    ],
+    relatedSlugs: ['poliza-responsabilidad-civil-colombia', 'que-es-una-poliza-de-seguro', 'gestion-polizas-auto-corredor'],
+    cta: {
+      title: '¿Vendes pólizas de cumplimiento? Acelera con Guro',
+      text: 'Cotización de cumplimiento con +8 aseguradoras desde una pantalla. Cargue automático en SECOP II y gestión de renovaciones.',
+      buttonLabel: 'Ver demo Guro',
+    },
+  },
+
+  {
+    slug: 'whatsapp-business-vender-seguros-guia',
+    title: 'WhatsApp Business para vender seguros: del primer contacto al cierre (2026)',
+    excerpt:
+      'WhatsApp Business + IA convierte tu chat en máquina de ventas. Flujos desde captación de lead, cotización, manejo de objeciones, cierre, cobro y onboarding. Ejemplos y plantillas para corredores.',
+    answer:
+      'WhatsApp Business es el canal #1 de venta de seguros en LATAM en 2026, superando a email, llamadas y presencial combinados. Para usarlo profesionalmente, el corredor debe migrar de WhatsApp personal a la API oficial de Meta (a través de un Business Solution Provider como Guro), que habilita: inbox compartido del equipo, chatbots con IA, campañas masivas legales, automatizaciones, plantillas pre-aprobadas y métricas. El flujo de venta típico es: captación del lead (Facebook Ads / web / referido) → bienvenida IA → calificación + cotización por chat → propuesta personalizada → manejo de objeciones → cierre con link de pago → onboarding automático → cross-sell IA en 30/60 días. Las agencias que implementan este flujo reportan +60% tasa de respuesta y +40% conversión vs venta tradicional.',
+    tags: ['WhatsApp', 'Ventas', 'IA', 'Conversión'],
+    keywords: [
+      'whatsapp business seguros',
+      'vender seguros por whatsapp',
+      'chatbot whatsapp seguros',
+      'whatsapp api corredor',
+      'campañas whatsapp seguros',
+      'plantillas whatsapp seguros',
+      'cerrar ventas whatsapp',
+      'business solution provider whatsapp seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Por qué WhatsApp es el canal #1 de venta de seguros en LATAM',
+        paragraphs: [
+          'Más del 90% de los hispanos LATAM usa WhatsApp a diario. Es la app más abierta del día (45 veces en promedio según Meta). Mientras email tiene 20% de apertura y llamadas 30% de respuesta, WhatsApp tiene 95% de apertura y 70% de respuesta en menos de 1 hora.',
+          'Para el corredor, esto significa que cualquier comunicación que no esté en WhatsApp tiene 3-5x menos probabilidad de ser vista. Vender por email a un lead en 2026 es como mandar carta certificada en 2010: técnicamente funciona, pero pierdes la mayor parte.',
+        ],
+      },
+      {
+        title: 'WhatsApp personal vs WhatsApp Business app vs WhatsApp Business API',
+        paragraphs: [
+          'No es lo mismo y vale la pena entender cada nivel.',
+        ],
+        bullets: [
+          'WhatsApp personal: tu cuenta de siempre. Cero profesionalismo, dependes de un celular, sin métricas, riesgo alto de bloqueo si envías mensajes masivos.',
+          'WhatsApp Business app: app gratuita oficial para pequeños negocios. Mejora respuestas automáticas y catálogo, pero sigue siendo un solo dispositivo y un solo agente.',
+          'WhatsApp Business API: la plataforma profesional. Múltiples agentes en inbox compartido, chatbots con IA, campañas legales, plantillas pre-aprobadas, métricas y trazabilidad. Requiere Business Solution Provider (Guro, 360dialog, Wati, Twilio).',
+        ],
+      },
+      {
+        title: 'El flujo completo de venta por WhatsApp',
+        paragraphs: [
+          'Esta es la secuencia que usan las mejores agencias LATAM para convertir leads en clientes vía WhatsApp.',
+        ],
+        bullets: [
+          '1. Captación del lead: Facebook Ads / Google Ads / web cotizador / mini-web del asesor / referido.',
+          '2. Primer contacto IA: bienvenida automática en <30 segundos, agradece y pide datos mínimos.',
+          '3. Calificación automática: bot pregunta ramo, urgencia, presupuesto. Asigna asesor según producto.',
+          '4. Cotización por chat: bot consulta aseguradoras y devuelve 2-3 opciones con valor y diferencias.',
+          '5. Propuesta visual: tarjeta o catálogo WhatsApp con coberturas, exclusiones, valor mensual y anual.',
+          '6. Manejo de objeciones: bot responde dudas comunes; escala a humano si requiere asesoría.',
+          '7. Cierre: link de pago WhatsApp → cliente paga → póliza emitida automáticamente.',
+          '8. Onboarding: bienvenida, póliza adjunta, instrucciones de uso, datos del asesor humano.',
+          '9. Cross-sell 30/60 días: IA sugiere producto complementario según perfil.',
+        ],
+      },
+      {
+        title: 'Plantillas pre-aprobadas que funcionan',
+        paragraphs: [
+          'Meta exige aprobación previa para mensajes proactivos (cuando tú escribes al cliente fuera de la ventana 24h). Estas son plantillas que típicamente se aprueban y convierten bien.',
+        ],
+        bullets: [
+          'Bienvenida lead: "Hola {nombre} 👋 Soy {asesor} de {agencia}. Vi que pediste cotización de {ramo}. Te paso opciones en 2 minutos."',
+          'Cotización lista: "{nombre}, ya tengo tus opciones. Te paso 3 alternativas para tu {bien}: 1) {opción1} 2) {opción2} 3) {opción3}. ¿Cuál te interesa más?"',
+          'Recordatorio renovación: "{nombre}, tu póliza de {ramo} con {aseguradora} vence el {fecha}. Te preparé la renovación con la mejor tarifa este año. ¿Te paso el detalle?"',
+          'Recuperación abandono: "{nombre}, vi que ayer estabas viendo opciones de {producto} pero no terminamos. ¿Te ayudo a decidir? Cualquier duda te respondo en minutos."',
+          'Felicitación cumpleaños + oferta: "Feliz cumpleaños {nombre} 🎉 Como regalo, tienes 10% off en cualquier seguro nuevo este mes. ¿Te interesa algo?"',
+          'Post-siniestro NPS: "{nombre}, ya cerramos tu siniestro de {bien}. ¿Cómo te pareció el acompañamiento? Del 0 al 10."',
+        ],
+      },
+      {
+        title: 'Manejo de objeciones típicas (con respuesta WhatsApp)',
+        paragraphs: [
+          'Las 5 objeciones más frecuentes en venta de seguros LATAM y cómo responderlas por chat.',
+        ],
+        bullets: [
+          '"Está muy caro" → "Entiendo. ¿Quieres que te muestre 2 opciones más económicas con coberturas un poco menores? O si prefieres mantener cobertura, podemos hacer plan de cuotas."',
+          '"Lo voy a pensar" → "Claro {nombre}. Te dejo el comparativo para que decidas con calma. ¿Te llamo el {día} para resolver dudas?"',
+          '"Tengo otro corredor" → "Perfecto que ya estés asesorado. Si quieres, te hago un comparativo gratis solo para que veas si el tuyo está bien. Sin compromiso."',
+          '"No necesito seguro" → "Entiendo. Solo una pregunta: ¿qué pasaría con tu {bien} si {ejemplo siniestro real}? Si la respuesta es lo pago de mi bolsillo, el seguro tiene sentido."',
+          '"Las aseguradoras nunca pagan" → "Te entiendo, es una preocupación común. Mira nuestras métricas: {%}% de siniestros pagados últimos 12 meses. Y mi rol es acompañarte si hay problemas, no solo venderte."',
+        ],
+      },
+      {
+        title: 'Campañas masivas legales (sin que te baneen)',
+        paragraphs: [
+          'Una de las grandes ventajas de la API es enviar campañas masivas sin riesgo de bloqueo. Reglas para hacerlo bien:',
+        ],
+        bullets: [
+          'Solo a contactos con opt-in explícito (clientes activos o leads que pidieron información).',
+          'Plantillas pre-aprobadas por Meta (no texto libre).',
+          'Personalización mínima ({nombre}, {producto}, {ciudad}).',
+          'Frecuencia respetuosa: máximo 1-2 mensajes promocionales al mes por cliente.',
+          'Opt-out fácil: "STOP" o link de baja en cada mensaje.',
+          'Segmentación por valor: clientes premium tienen frecuencia menor.',
+          'Medir y ajustar: tasa de apertura, respuesta, opt-out, conversión.',
+        ],
+      },
+      {
+        title: 'Métricas que importan medir en WhatsApp Business',
+        paragraphs: [
+          'Si no mides, no escalas. Estos son los KPIs que deberían estar en el dashboard de WhatsApp del corredor.',
+        ],
+        bullets: [
+          'Tiempo de primera respuesta: meta <60 segundos.',
+          'Tasa de respuesta del cliente: meta >60%.',
+          'Conversación → cita: meta >50%.',
+          'Conversación → venta: meta 15-25%.',
+          'CAC vía WhatsApp Ads: vs otros canales.',
+          'NPS post-conversación: ¿te sentiste bien atendido?',
+          'Mensajes plantilla aprobados / rechazados.',
+          'Costo por conversación (Meta cobra por conversación iniciada).',
+        ],
+      },
+      {
+        title: 'Cómo Guro empaqueta WhatsApp Business para corredores',
+        paragraphs: [
+          'Guro es Business Solution Provider oficial de Meta y trae todo el stack listo para usar.',
+        ],
+        bullets: [
+          'Onboarding completo del número en API en menos de 48 horas.',
+          'Inbox compartido del equipo con asignación inteligente por reglas.',
+          'Chatbots IA preconfigurados con tono del sector seguros LATAM.',
+          'Voicebot ElevenLabs cuando WhatsApp no es suficiente.',
+          'Campañas masivas con plantillas legales pre-aprobadas.',
+          'Integración nativa con el CRM (cada conversación queda en el cliente).',
+          'Métricas en tiempo real en el dashboard del dueño.',
+        ],
+      },
+    ],
+    relatedSlugs: ['ia-corredores-seguros-12-casos-latam', 'renovacion-automatica-polizas-guia', 'crm-clientes-corredor-seguros'],
+    cta: {
+      title: 'Activa WhatsApp Business profesional',
+      text: 'Migra tu número personal a API oficial en 48h. Inbox compartido, IA, campañas legales, métricas. Implementación sin developers.',
+      buttonLabel: 'Agendar demo WhatsApp',
+    },
+  },
+
+  {
+    slug: 'mejores-software-corredores-seguros-latam-2026',
+    title: 'Los 7 mejores software para corredores de seguros en LATAM (review honesta 2026)',
+    excerpt:
+      'Review independiente de los 7 software para corredores más usados en LATAM: Guro, ebroker, Sumavisos, E2K, Velneo, MAC Corredor y HubSpot Insurance. Fortalezas, debilidades y para quién es cada uno.',
+    answer:
+      'Los 7 software más usados por corredores y agencias de seguros en LATAM son: Guro (insurtech moderno con IA + WhatsApp + Voice AI nativo, foco LATAM), ebroker (líder corredurías España, 20+ años), Sumavisos (tradicional Colombia, sin IA), E2K (consolidado Colombia, sin móvil nativo), Velneo (low-code generalista, requiere developer), MAC Corredor (ERP corredurías LATAM, sin IA conversacional) y HubSpot Insurance (CRM genérico adaptado, sin DIAN/CFDI). Cada uno encaja para perfiles distintos: Guro y MAC para LATAM moderno, ebroker para España, Sumavisos y E2K para corredurías tradicionales en Colombia, Velneo para empresas con dev propio, HubSpot para corredores que vienen del marketing. Esta review compara funcionalidades clave, precio, implementación y soporte.',
+    tags: ['Software', 'Review', 'Comparativa', 'LATAM'],
+    keywords: [
+      'mejores software corredores seguros',
+      'software corredor seguros latam',
+      'review software corredor',
+      'comparativa software corredor',
+      'mejor crm seguros',
+      'software corredor 2026',
+      'opciones software corredor',
+      'evaluar software corredor',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Metodología de esta review',
+        paragraphs: [
+          'Esta review se construyó analizando 16 funcionalidades clave en cada plataforma: CRM vertical, gestión de pólizas, renovaciones, comisiones, siniestros, IA nativa, WhatsApp Business API oficial, Voice AI, cotizadores embebidos, mini-web por asesor, app móvil, integraciones con aseguradoras LATAM, facturación electrónica DIAN/CFDI, cobertura geográfica, soporte y modelo de precio.',
+          'Soy parte de Guro, así que aclaro: esta review intenta ser honesta. Cada software tiene fortalezas reales y limitaciones reales. Recomendamos siempre evaluar 2-3 opciones en demo antes de decidir.',
+        ],
+      },
+      {
+        title: '1. Guro · Insurtech moderno LATAM',
+        paragraphs: [
+          'Plataforma SaaS verticalmente integrada para corredores y agencias de seguros en LATAM, con IA nativa, WhatsApp Business y Voice AI listos para usar.',
+        ],
+        bullets: [
+          'Fortalezas: IA nativa (chatbots, voicebots, predicción cancelación), WhatsApp Business API oficial, mini-web por asesor, hreflang LATAM (CO/MX/ES/AR/CL/PE), implementación 5-7 días, modelo flat por agencia.',
+          'Debilidades: trayectoria más corta que competidores tradicionales, ecosistema de partners aún creciendo, menos casos enterprise grandes.',
+          'Ideal para: corredores y agencias LATAM que priorizan IA + WhatsApp como diferenciadores y quieren implementación rápida.',
+          'No ideal para: corredurías 100% España con foco europeo (mejor ebroker).',
+        ],
+      },
+      {
+        title: '2. ebroker · Líder corredurías España',
+        paragraphs: [
+          'Software con 20+ años de trayectoria en el mercado español, dominante en corredurías de seguros tradicionales.',
+        ],
+        bullets: [
+          'Fortalezas: trayectoria consolidada, comunidad fuerte, integración profunda con aseguradoras españolas, eSchool de formación, App Mi Corredor para clientes.',
+          'Debilidades: sin cobertura LATAM, sin WhatsApp Business API nativo, IA limitada (Merlin), implementación 4-8 semanas.',
+          'Ideal para: correduría española establecida que busca trayectoria probada.',
+          'No ideal para: agencias LATAM o que priorizan WhatsApp + IA conversacional.',
+        ],
+      },
+      {
+        title: '3. Sumavisos · Tradicional Colombia',
+        paragraphs: [
+          'Software de gestión de pólizas usado por corredores colombianos consolidados.',
+        ],
+        bullets: [
+          'Fortalezas: trayectoria en Colombia, integración con principales aseguradoras locales, conocimiento del marco regulatorio SFC.',
+          'Debilidades: sin IA nativa, sin WhatsApp Business API, sin app móvil moderna, solo Colombia, cobro por usuario.',
+          'Ideal para: corredor colombiano tradicional que valora estabilidad y trayectoria local sobre innovación.',
+          'No ideal para: agencias que priorizan velocidad de innovación, WhatsApp masivo o expansión LATAM.',
+        ],
+      },
+      {
+        title: '4. E2K · Consolidado Colombia',
+        paragraphs: [
+          'Software tradicional para corredores en Colombia con varios años en mercado.',
+        ],
+        bullets: [
+          'Fortalezas: trayectoria, integración con aseguradoras colombianas, conocimiento del sector local, base de usuarios establecida.',
+          'Debilidades: arquitectura de generación previa (cliente-servidor / cloud limitada), sin app móvil nativa, sin IA conversacional, sin WhatsApp Business.',
+          'Ideal para: corredor colombiano que ya lo usa y la migración no compensa.',
+          'No ideal para: agencias jóvenes que quieren tecnología moderna o expansión multi-país.',
+        ],
+      },
+      {
+        title: '5. Velneo · Low-code generalista',
+        paragraphs: [
+          'Plataforma low-code de origen español usada por muchas industrias, con vertical para corredurías construida sobre la base genérica.',
+        ],
+        bullets: [
+          'Fortalezas: máxima flexibilidad (low-code), cobertura LATAM significativa (MX, CO, AR, CL, PE), comunidad de desarrolladores, posibilidad de combinar seguros con otras verticales.',
+          'Debilidades: no es vertical insurance puro, requiere developer dedicado, implementación 4-12 semanas, costo TCO alto (licencia + horas dev), sin IA conversacional nativa para seguros.',
+          'Ideal para: empresas con equipo de desarrollo propio y procesos muy únicos que ningún SaaS estándar modela.',
+          'No ideal para: agencia mediana sin equipo IT que quiere "listo para usar".',
+        ],
+      },
+      {
+        title: '6. MAC Corredor · ERP corredurías LATAM',
+        paragraphs: [
+          'ERP tradicional para corredurías con alcance multi-país en LATAM.',
+        ],
+        bullets: [
+          'Fortalezas: cobertura LATAM, integración con aseguradoras de varios países, facturación electrónica país por país, base de usuarios establecida.',
+          'Debilidades: sin IA nativa (predicción, recomendación), sin WhatsApp Business API, sin Voice AI, sin mini-web por asesor, cobro por usuario.',
+          'Ideal para: corredurías medianas-grandes LATAM con procesos consolidados que priorizan estabilidad.',
+          'No ideal para: agencias que quieren IA + WhatsApp + Voice AI como diferenciadores frente a la competencia.',
+        ],
+      },
+      {
+        title: '7. HubSpot Insurance · CRM genérico adaptado',
+        paragraphs: [
+          'Vertical de seguros del CRM líder mundial HubSpot, con templates y workflows para corredores construidos sobre la base genérica.',
+        ],
+        bullets: [
+          'Fortalezas: líder mundial CRM, ecosistema masivo de apps (1.000+), marketing automation muy potente, integración con todo, comunidad global.',
+          'Debilidades: pólizas son custom properties (no entidades nativas), sin integración con aseguradoras LATAM, sin facturación DIAN/CFDI, sin WhatsApp Business nativo (vía 3rd party), precio por usuario + add-ons puede dispararse.',
+          'Ideal para: agencia que ya usa HubSpot Marketing y quiere unificar, o que vende productos financieros diversos (no solo seguros).',
+          'No ideal para: agencia 100% seguros LATAM que necesita pólizas como entidades nativas y aseguradoras locales integradas.',
+        ],
+      },
+      {
+        title: 'Tabla comparativa rápida',
+        paragraphs: [
+          'Resumen visual de fortalezas y debilidades de las 7 plataformas en las 8 dimensiones más críticas.',
+        ],
+        bullets: [
+          'IA nativa: Guro sí · ebroker limitada · Sumavisos no · E2K no · Velneo construible · MAC no · HubSpot no.',
+          'WhatsApp Business API: Guro sí · ebroker no · Sumavisos no · E2K no · Velneo construible · MAC no · HubSpot 3rd party.',
+          'Voice AI: Guro sí · resto no.',
+          'Cobertura LATAM: Guro sí · ebroker solo ES · Sumavisos solo CO · E2K solo CO · Velneo sí · MAC sí · HubSpot global pero no LATAM-first.',
+          'Implementación: Guro 5-7d · ebroker 4-8 sem · Sumavisos 2-4 sem · E2K 3-6 sem · Velneo 4-12 sem · MAC 3-8 sem · HubSpot 2-6 sem.',
+          'Mini-web por asesor: Guro sí · resto no.',
+          'DIAN/CFDI: Guro sí · ebroker no · Sumavisos sí (CO) · E2K sí (CO) · Velneo construible · MAC sí · HubSpot no.',
+          'Modelo precio: Guro flat agencia · resto por usuario o licencia + dev.',
+        ],
+      },
+      {
+        title: '¿Cómo elegir el correcto para tu agencia?',
+        paragraphs: [
+          'No hay un software universal. Estos son los criterios prácticos para decidir.',
+        ],
+        bullets: [
+          'Tamaño: <10 usuarios → Guro o HubSpot. 10-50 → Guro, ebroker, MAC. 50+ → Velneo o enterprise customizado.',
+          'Geografía: solo Colombia → Guro, Sumavisos, E2K. LATAM regional → Guro, MAC, Velneo. España → ebroker, MPM. Global → HubSpot.',
+          'Prioridad IA + WhatsApp: Guro (única opción con ambas nativas).',
+          'Procesos muy únicos: Velneo (con dev propio).',
+          'Ya usas HubSpot Marketing: HubSpot Insurance (mantiene unificado).',
+          'Trayectoria consolidada España: ebroker o MPM Software.',
+        ],
+      },
+      {
+        title: 'Recomendación final',
+        paragraphs: [
+          'Si tuviéramos que recomendar UNA evaluación obligatoria para una agencia LATAM moderna en 2026:',
+        ],
+        bullets: [
+          'Agenda demo de 2-3 plataformas: Guro + tu opción tradicional preferida + opción enterprise si aplica.',
+          'Lleva un caso real: trae 10 clientes de prueba, 5 pólizas reales, una renovación pendiente y un siniestro abierto.',
+          'Pide implementación piloto de 30 días antes de migrar todo.',
+          'Negocia precio: todas las plataformas tienen margen.',
+          'Habla con 2 clientes actuales del software que evalúas (referencias).',
+        ],
+      },
+    ],
+    relatedSlugs: ['criterios-elegir-software-corredor', 'que-es-insurtech-guia-corredores-latam', 'mejor-software-corredores-seguros-colombia'],
+    cta: {
+      title: 'Compara Guro vs los demás en demo',
+      text: 'Demo de 20 minutos con casos reales de tu agencia. Sin presión de cierre, te enviamos hasta comparativa contra el software que evalúes.',
+      buttonLabel: 'Agendar demo gratis',
+    },
+  },
+
+  {
+    slug: 'conseguir-clientes-agencia-seguros-10-canales',
+    title: 'Cómo conseguir clientes nuevos para tu agencia de seguros: 10 canales que funcionan (2026)',
+    excerpt:
+      'Los 10 canales de adquisición de clientes que mejor funcionan a corredores y agencias de seguros LATAM en 2026: referidos, Facebook Ads, Google Ads, SEO, alianzas, eventos, contenido, mini-web, WhatsApp y prospección B2B.',
+    answer:
+      'Los 10 canales de adquisición de clientes que mejor funcionan a corredores y agencias de seguros LATAM en 2026 son: (1) Referidos sistematizados, (2) Facebook/Instagram Ads con cotizador embebido, (3) Google Ads en keywords transaccionales, (4) SEO con blog de larga cola, (5) Alianzas con inmobiliarias y concesionarios, (6) Eventos sectoriales y networking presencial, (7) Contenido educativo (YouTube, LinkedIn), (8) Mini-web por asesor con cotizadores embebidos, (9) WhatsApp Business con campañas y chatbots, (10) Prospección B2B a empresas y pymes. La mejor estrategia combina 3-5 canales según tu tamaño, especialización y presupuesto. Con CAC objetivo <30% del primer año de prima media, una agencia mediana puede sumar 30-80 clientes nuevos mensuales combinando bien estos canales.',
+    tags: ['Marketing', 'Adquisición', 'Crecimiento', 'Canales'],
+    keywords: [
+      'conseguir clientes seguros',
+      'como prospectar seguros',
+      'marketing agencia seguros',
+      'canales venta seguros',
+      'facebook ads seguros',
+      'referidos seguros',
+      'crecer agencia seguros',
+      'leads seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Antes de cualquier canal: define tu cliente ideal',
+        paragraphs: [
+          'El error #1 de las agencias que no crecen es vender de todo a todos. Antes de invertir en cualquier canal, define tu cliente ideal en 1 línea: "Profesionales independientes 35-55 años en Bogotá que necesitan vida + auto + salud privada".',
+          'Cuando sabes a quién le hablas, cada canal funciona 3-5x mejor: anuncios más segmentados, contenido más relevante, alianzas más estratégicas.',
+        ],
+      },
+      {
+        title: '1. Referidos sistematizados (CAC más bajo)',
+        paragraphs: [
+          'Históricamente el canal #1 del corredor. Funciona, pero sin sistema es lineal.',
+        ],
+        bullets: [
+          'Sistematiza: pide referidos en momentos específicos (post-venta, post-renovación, post-siniestro positivo).',
+          'Programa de incentivos: $50.000-200.000 al cliente que refiere, payment cuando el referido se vuelve cliente.',
+          'Tarjeta digital de referido: WhatsApp con link único trackeable para cada cliente.',
+          'CAC típico: $30.000-100.000 por cliente. El más rentable.',
+        ],
+      },
+      {
+        title: '2. Facebook/Instagram Ads + cotizador embebido',
+        paragraphs: [
+          'El canal pago más eficiente para volumen. Funciona con creatives buenos y un cotizador embebido en landing.',
+        ],
+        bullets: [
+          'Producto típico: SOAT, auto, mascota, vida deudor (productos masivos, decisión rápida).',
+          'Creatives ganadores: video corto con asesor real explicando coberturas, ahorro vs competencia.',
+          'Landing: cotizador embebido + lead-magnet (PDF guía).',
+          'Presupuesto inicial: $1.5-3M COP/mes para 100-200 leads cualificados.',
+          'CAC objetivo: $50.000-150.000 por cliente cerrado.',
+        ],
+      },
+      {
+        title: '3. Google Ads en keywords transaccionales',
+        paragraphs: [
+          'Más caro que Facebook pero captura intención de compra real. El usuario ya está buscando.',
+        ],
+        bullets: [
+          'Keywords ganadoras CO: "cotizar SOAT", "seguro todo riesgo {ciudad}", "póliza arrendamiento", "cotizar moto".',
+          'CPC típico: $0.5-3 USD (mayor en RC, vida y todo riesgo).',
+          'Configuración crítica: keywords match exacto, audiencias custom, exclusión de términos negativos.',
+          'CAC típico: $80.000-300.000 por cliente cerrado.',
+          'Tip: en LATAM combinar Google Ads + WhatsApp Business CTA aumenta conversión 2-3x.',
+        ],
+      },
+      {
+        title: '4. SEO + blog de larga cola',
+        paragraphs: [
+          'Canal de inversión a 6-12 meses pero con CAC menor a $0 una vez posiciona. Es lo que Guro recomienda como segundo pilar.',
+        ],
+        bullets: [
+          'Atacar long-tail: "póliza de arrendamiento sura", "diferencia entre todo riesgo y SOAT", "modelo carta renovación".',
+          'Volumen mínimo: 2 artículos por semana × 6 meses = 48 piezas para empezar a moverse.',
+          'Schema FAQ + Article para rich snippets en SERP.',
+          'CAC tiende a $0 con el tiempo (canal orgánico).',
+          'Tip: cada artículo termina con un CTA suave hacia cotizador o WhatsApp.',
+        ],
+      },
+      {
+        title: '5. Alianzas con inmobiliarias y concesionarios',
+        paragraphs: [
+          'El canal B2B2C más rentable: el inmobiliario te manda póliza arrendamiento, el concesionario te manda SOAT y todo riesgo.',
+        ],
+        bullets: [
+          'Modelo: comisión compartida con la inmobiliaria/concesionario (típicamente 20-30% de tu comisión).',
+          'Producto típico: arrendamiento (con inmobiliarias) y auto Todo Riesgo + SOAT (con concesionarios).',
+          'Volumen: una inmobiliaria buena puede aportar 30-80 pólizas/mes; un concesionario 50-200.',
+          'Clave: integración tecnológica con su sistema (Guro tiene API para esto).',
+          'CAC: $20.000-80.000 por cliente, comparable a referidos.',
+        ],
+      },
+      {
+        title: '6. Eventos y networking presencial',
+        paragraphs: [
+          'Bajó importancia post-pandemia pero sigue siendo crucial para venta consultiva de productos complejos (vida, RC, D&O, empresarial).',
+        ],
+        bullets: [
+          'Eventos de Cámara de Comercio, gremios sectoriales, asociaciones empresariales.',
+          'Talleres "Educa-vende": charla gratuita sobre RC profesional, vida deudor, planeación patrimonial.',
+          'Sponsors estratégicos: eventos pyme, congresos de tu nicho objetivo.',
+          'CAC alto en tiempo pero LTV muy alto: clientes empresariales valen $5-50M/año.',
+        ],
+      },
+      {
+        title: '7. Contenido educativo en YouTube y LinkedIn',
+        paragraphs: [
+          'Posicionamiento de autoridad. Funciona genial para corredores especializados que quieren ser referencia en su nicho.',
+        ],
+        bullets: [
+          'YouTube: videos respondiendo dudas comunes ("Cuánto vale el SOAT 2026", "Qué cubre el todo riesgo").',
+          'LinkedIn: contenido para el comprador B2B (RC, D&O, salud corporativa).',
+          'Frecuencia: 1-2 piezas semanales.',
+          'CAC: bajo después de los primeros 6-12 meses cuando construyes audiencia.',
+          'Bonus: contenido en YouTube alimenta tu SEO general.',
+        ],
+      },
+      {
+        title: '8. Mini-web por asesor con cotizadores',
+        paragraphs: [
+          'Multiplica la superficie de tu agencia: cada asesor tiene su propio sitio con su marca personal y cotizador.',
+        ],
+        bullets: [
+          'Beneficio: cada asesor capta leads orgánicos en su red.',
+          'Coste para la agencia: bajo (un solo software como Guro lo da nativamente).',
+          'Funciona porque: la gente confía más en una persona que en una agencia abstracta.',
+          'Multiplica leads: una agencia con 10 asesores activos genera 10x más superficie.',
+        ],
+      },
+      {
+        title: '9. WhatsApp Business con campañas y chatbots',
+        paragraphs: [
+          'No es solo para atender clientes existentes. Es canal de adquisición potente cuando combinas con WhatsApp Ads.',
+        ],
+        bullets: [
+          'WhatsApp Ads: anuncios Facebook/Instagram que abren chat directamente.',
+          'Chatbot calificador: captura datos, agenda con asesor o cotiza.',
+          'Campañas masivas legales: contactos opt-in, plantillas pre-aprobadas, periodicidad respetuosa.',
+          'Conversión típica: 2-3x mejor que email o llamada en frío.',
+        ],
+      },
+      {
+        title: '10. Prospección B2B a empresas y pymes',
+        paragraphs: [
+          'Cuando tu nicho es empresarial (RC, vida grupo, ARL, transporte de mercancía), la prospección directa es necesaria.',
+        ],
+        bullets: [
+          'LinkedIn Sales Navigator para identificar prospectos.',
+          'Email de presentación + propuesta de auditoría gratis de coberturas actuales.',
+          'Visita comercial con propuesta personalizada.',
+          'CAC alto pero LTV altísimo: clientes B2B valen $30-300M/año.',
+        ],
+      },
+      {
+        title: 'Cómo combinar canales según tu tamaño',
+        paragraphs: [
+          'Recomendaciones por tamaño de agencia para optimizar dónde invertir tiempo y dinero.',
+        ],
+        bullets: [
+          'Corredor independiente / agencia <5 personas: referidos + mini-web + WhatsApp + 1 alianza (inmobiliaria o concesionario).',
+          'Agencia mediana 5-20: añadir Facebook Ads + SEO + 2-3 alianzas + contenido LinkedIn.',
+          'Agencia grande 20+: añadir Google Ads + eventos + prospección B2B + canal partners.',
+        ],
+      },
+    ],
+    relatedSlugs: ['ia-corredores-seguros-12-casos-latam', 'whatsapp-business-vender-seguros-guia', '7-kpis-agencia-seguros'],
+    cta: {
+      title: 'Activa 3-5 canales en una sola plataforma',
+      text: 'Guro integra mini-web por asesor, cotizador embebido, WhatsApp Business, Facebook Pixel y CRM. Todo conectado, métricas claras.',
+      buttonLabel: 'Ver demo crecimiento',
+    },
+  },
+
+  {
+    slug: 'plan-90-dias-digitalizar-agencia-seguros',
+    title: 'Plan 90 días: cómo transformar tu agencia de seguros tradicional en digital',
+    excerpt:
+      'Roadmap concreto día por día para digitalizar tu agencia en 90 días: del diagnóstico, migración de Excel, WhatsApp Business, IA, automatización de renovaciones y mini-web por asesor. Con KPIs medibles cada semana.',
+    answer:
+      'Digitalizar una agencia de seguros en 90 días es totalmente factible si sigues un plan estructurado: días 1-15 diagnóstico + selección de software (Guro u otro), días 16-30 migración asistida de Excel a CRM vertical, días 31-45 activación de WhatsApp Business API + chatbots, días 46-60 automatización de renovaciones y cobranzas, días 61-75 activación de IA (predicción cancelación, cross-sell) y mini-web por asesor, días 76-90 medición de KPIs y ajustes. Las agencias que siguen este plan reportan: 50% menos tiempo operativo, 22% más renovación, 30-300% más ventas y NPS +60. El factor crítico de éxito es elegir un software vertical con migración asistida; no intentar hacerlo solo con desarrolladores genéricos. Este artículo da el plan semana a semana con acciones concretas y KPIs medibles.',
+    tags: ['Transformación digital', 'Plan', 'Roadmap', 'Digitalización'],
+    keywords: [
+      'digitalizar agencia seguros',
+      'transformación digital corredor',
+      'plan 90 dias agencia',
+      'modernizar agencia seguros',
+      'pasar de excel a software',
+      'roadmap digitalización seguros',
+      'transformación corredor 2026',
+      'agencia digital seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Por qué 90 días (y no 9 meses)',
+        paragraphs: [
+          'La transformación digital de agencias de seguros tradicionalmente tomaba 9-18 meses, con consultorías caras y resultados inciertos. En 2026, con plataformas verticales modernas como Guro, el tiempo realista es 90 días.',
+          'La clave: no estás reconstruyendo software desde cero. Estás adoptando una plataforma SaaS lista y configurándola para tu agencia. Los 90 días se reparten en migración + activación + medición.',
+        ],
+      },
+      {
+        title: 'Días 1-15 · Diagnóstico y selección de software',
+        paragraphs: [
+          'Las primeras 2 semanas son críticas. No saltes este paso.',
+        ],
+        bullets: [
+          'Día 1-3: mapea procesos actuales. Cómo entra un cliente, cómo se gestiona una póliza, una renovación, un siniestro, una comisión.',
+          'Día 4-6: identifica dolores específicos. ¿Qué te quita más tiempo? ¿Qué pierdes más cartera? ¿Qué clientes se quejan?',
+          'Día 7-10: define requisitos del software. Lista 10-15 features no negociables (CRM, WhatsApp, IA, etc.).',
+          'Día 11-14: demos comparativas (recomendado 2-3 software). Lleva un caso real (10 pólizas reales, 1 renovación pendiente, 1 siniestro abierto).',
+          'Día 15: decisión y firma de contrato. Define el equipo de implementación interno (1 lead + 1-2 power users).',
+        ],
+      },
+      {
+        title: 'Días 16-30 · Migración asistida',
+        paragraphs: [
+          'La fase técnica más crítica. Aquí se mueven los datos del sistema viejo (o Excel) al nuevo.',
+        ],
+        bullets: [
+          'Día 16-18: limpieza de datos. Eliminar duplicados, normalizar formatos, completar campos críticos faltantes.',
+          'Día 19-22: carga de clientes y pólizas en el nuevo sistema. Validación en sandbox.',
+          'Día 23-25: configuración de aseguradoras y reglas de comisión.',
+          'Día 26-28: capacitación del equipo (sesiones de 1 hora día por rol).',
+          'Día 29-30: go-live en paralelo. Sistema viejo y nuevo conviven 1 semana para validar.',
+        ],
+      },
+      {
+        title: 'Días 31-45 · WhatsApp Business + chatbots',
+        paragraphs: [
+          'Una vez los datos están en el CRM, activa el canal #1 de venta y atención.',
+        ],
+        bullets: [
+          'Día 31-33: registro del número en API oficial (Business Solution Provider lo gestiona en 48h).',
+          'Día 34-36: configuración del inbox compartido, asignación de roles.',
+          'Día 37-40: chatbot de bienvenida + calificación + agenda con asesor.',
+          'Día 41-43: plantillas pre-aprobadas (renovaciones, cobranzas, cumpleaños, post-venta).',
+          'Día 44-45: primera campaña masiva legal a base de clientes opt-in (renovaciones próximas).',
+        ],
+      },
+      {
+        title: 'Días 46-60 · Automatización de renovaciones y cobranzas',
+        paragraphs: [
+          'Las renovaciones son la mayor palanca de retención. Aquí es donde los KPIs empiezan a moverse.',
+        ],
+        bullets: [
+          'Día 46-48: configura reglas de renovación (anticipación 30/60/90 días, criterios por ramo).',
+          'Día 49-52: secuencias multicanal automatizadas (email + WhatsApp + voicebot).',
+          'Día 53-55: plantillas de comunicación personalizadas con tono de tu agencia.',
+          'Día 56-58: automatización de cobranzas (estados de cuenta, recordatorios, voicebot).',
+          'Día 59-60: medición primera quincena de renovaciones automáticas. KPI clave: tasa de respuesta.',
+        ],
+      },
+      {
+        title: 'Días 61-75 · Activación IA y mini-web por asesor',
+        paragraphs: [
+          'Con la operación estable, activamos las capacidades diferenciadoras.',
+        ],
+        bullets: [
+          'Día 61-64: predicción de cancelaciones con IA. Recibe alerta semanal de clientes en riesgo.',
+          'Día 65-68: cross-sell con IA. Lista priorizada para cada asesor de oportunidades de venta complementaria.',
+          'Día 69-71: mini-web por asesor activada. Cada vendedor con su sitio personal + cotizador embebido.',
+          'Día 72-74: Voice AI para cobranzas activado (opcional, requiere consentimiento explícito de cliente).',
+          'Día 75: primera medición de impacto IA (renovación, NPS, cross-sell).',
+        ],
+      },
+      {
+        title: 'Días 76-90 · Medición, ajustes y consolidación',
+        paragraphs: [
+          'Los últimos 15 días son de validación, ajustes y consolidación del cambio cultural.',
+        ],
+        bullets: [
+          'Día 76-78: revisión KPI completa (renovación, churn, NPS, CAC, conversión, productividad).',
+          'Día 79-82: ajustes en flujos de WhatsApp, plantillas, reglas IA según data real.',
+          'Día 83-85: capacitación de refresh al equipo + onboarding de nuevos asesores en modo digital.',
+          'Día 86-88: comunicación a base de clientes sobre la "nueva agencia" (mini-web, WhatsApp, app móvil).',
+          'Día 89-90: presentación de resultados al equipo y celebración del cambio.',
+        ],
+      },
+      {
+        title: 'KPIs a medir cada semana',
+        paragraphs: [
+          'Sin medición no hay mejora. Estos son los indicadores que debes seguir desde la semana 1 y comparar con baseline pre-digitalización.',
+        ],
+        bullets: [
+          'Tasa de respuesta WhatsApp: meta >60%.',
+          'Tasa de renovación: baseline manual vs automatizado.',
+          'Tiempo de primera respuesta lead nuevo: meta <1 minuto.',
+          'NPS post-evento (venta, renovación, siniestro).',
+          'Productividad por asesor: pólizas/mes producidas.',
+          'Tiempo operativo del dueño: % dedicado a tareas que se automatizan.',
+          'CAC por canal: identificar canales más rentables.',
+        ],
+      },
+      {
+        title: 'Errores frecuentes en la digitalización',
+        paragraphs: [
+          'Los 7 errores más caros que vemos en agencias que intentan digitalizar y fallan.',
+        ],
+        bullets: [
+          'Tratar de hacerlo solo con desarrolladores genéricos en vez de software vertical.',
+          'No limpiar datos antes de migrar (basura entra = basura sale).',
+          'No capacitar al equipo (el sistema nuevo se boicotea desde adentro).',
+          'Activar todas las features el día 1 (sobrecarga, abandono).',
+          'No medir baseline pre-cambio (no puedes demostrar mejora).',
+          'Esperar perfección antes de lanzar (90% lanzado vence al 100% perfecto pero nunca activo).',
+          'No comunicar a clientes el cambio (perciben confusión, no mejora).',
+        ],
+      },
+      {
+        title: 'Resultados esperables al día 90',
+        paragraphs: [
+          'Los rangos típicos que reportan agencias LATAM que completan el plan de 90 días.',
+        ],
+        bullets: [
+          'Tasa de renovación: de 70-75% manual → 90-95% automatizado.',
+          'Tiempo de respuesta lead: de horas → segundos.',
+          'NPS: +15-30 puntos por mejor experiencia integral.',
+          'Tiempo operativo del dueño: -40-60%.',
+          'Productividad por asesor: +25-50%.',
+          'Cross-sell por cliente: +20-40%.',
+          'CAC promedio: -20-30% por mejor conversión y mini-web.',
+        ],
+      },
+    ],
+    relatedSlugs: ['que-es-insurtech-guia-corredores-latam', 'mejores-software-corredores-seguros-latam-2026', 'mejor-software-corredores-seguros-colombia'],
+    cta: {
+      title: 'Empieza tu plan 90 días con Guro',
+      text: 'Implementación asistida, migración de datos incluida, capacitación al equipo. Te acompañamos día por día durante los 90 días.',
+      buttonLabel: 'Agendar diagnóstico gratis',
+    },
+  },
+
+  {
+    slug: 'modelo-carta-renovacion-poliza-seguro',
+    title: 'Modelo de carta de renovación de póliza de seguro (5 plantillas descargables 2026)',
+    excerpt:
+      'Plantillas listas de cartas de renovación para auto, vida, salud, hogar y RC. Modelos editables Word/PDF con tono profesional, datos personalizables y CTA al cliente. Listas para descargar.',
+    answer:
+      'Una carta de renovación de póliza es el documento que el corredor envía al cliente 30-60 días antes del vencimiento, donde le informa la cotización de renovación, las coberturas, el valor y los plazos. Debe incluir: datos del cliente, número y vigencia de la póliza actual, condiciones renovadas (mismas o cambiadas), nueva prima, formas de pago, comparativo opcional con la competencia, datos del corredor y CTA claro. En 2026 la carta se envía idealmente por WhatsApp Business + email simultáneamente. Este artículo incluye 5 plantillas descargables editables (auto, vida, salud, hogar, RC) con tono profesional adaptado al cliente final colombiano y latinoamericano.',
+    tags: ['Plantillas', 'Renovación', 'Comunicación', 'Recursos descargables'],
+    keywords: [
+      'modelo de carta de renovacion de poliza de seguro',
+      'carta renovacion poliza word',
+      'formato carta renovación seguros',
+      'carta renovacion sura',
+      'plantilla renovación seguros',
+      'aviso renovación poliza',
+      'comunicación renovación cliente',
+      'modelo carta seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Por qué la carta de renovación todavía importa en 2026',
+        paragraphs: [
+          'Con WhatsApp Business, IA conversacional y dashboards en tiempo real, podrías pensar que las cartas son obsoletas. No lo son. Una carta de renovación formal, bien redactada y enviada por múltiples canales, todavía marca diferencia frente al cliente que ya pasó por procesos digitales aburridos en otros sectores.',
+          'Lo que cambió: el formato (PDF mejor diseñado), el canal (WhatsApp + email + portal cliente, no solo correo físico) y la personalización (con IA cada carta se adapta automáticamente). Pero la carta sigue siendo el documento de respaldo formal que el cliente puede archivar y consultar.',
+        ],
+      },
+      {
+        title: 'Qué debe contener toda carta de renovación',
+        paragraphs: [
+          'Estos son los 8 elementos no negociables de una carta profesional de renovación.',
+        ],
+        bullets: [
+          '1. Encabezado con datos del cliente: nombre completo, cédula, dirección.',
+          '2. Datos de la póliza actual: número, ramo, vigencia actual, aseguradora.',
+          '3. Descripción de coberturas a renovar (mismas o con cambios destacados).',
+          '4. Valor de la nueva prima con desglose si aplica.',
+          '5. Formas de pago disponibles (contado, cuotas, financiación).',
+          '6. Fecha límite para confirmar la renovación.',
+          '7. CTA claro con varias vías (WhatsApp, link de pago, llamada).',
+          '8. Datos del corredor: nombre, teléfono, email, registro SFC.',
+        ],
+      },
+      {
+        title: 'Plantilla 1 · Renovación Todo Riesgo Auto',
+        paragraphs: [
+          'Plantilla lista para personalizar. Reemplaza los campos entre llaves con datos del cliente.',
+        ],
+        bullets: [
+          'Asunto: "Renovación de tu seguro de auto vence el {fecha}".',
+          'Apertura: "Estimado/a {nombre}, te recordamos que tu seguro Todo Riesgo de tu {marca modelo placa} con {aseguradora} vence el {fecha}."',
+          'Cuerpo: "Para tu tranquilidad, hemos preparado las opciones de renovación con coberturas iguales (o mejores) y la prima más competitiva. Tu nueva prima anual es ${valor} (vs ${valor anterior} año anterior)."',
+          'Coberturas: lista de amparos (daños propios, hurto, RCE, asistencia 24/7, conductor elegido, etc.).',
+          'Comparativo: "Cotizamos también con {aseguradora 2} y {aseguradora 3} para asegurar la mejor oferta del mercado".',
+          'Pago: "Puedes pagar al contado o en 10 cuotas sin interés. Aceptamos PSE, tarjeta o transferencia."',
+          'CTA: "Confirma tu renovación respondiendo este WhatsApp o llamando al {teléfono}. La renovación debe estar emitida antes del {fecha-3 días}."',
+          'Cierre: "Cualquier duda estoy a tu servicio. Atentamente, {nombre corredor}, Corredor matrícula {número}".',
+        ],
+      },
+      {
+        title: 'Plantilla 2 · Renovación Vida Individual',
+        paragraphs: [
+          'La renovación de vida es delicada porque a mayor edad del asegurado, mayor prima. La carta debe educar sin alarmar.',
+        ],
+        bullets: [
+          'Asunto: "Renovación de tu seguro de vida - vence el {fecha}".',
+          'Apertura: "Estimado/a {nombre}, tu seguro de vida con {aseguradora} se acerca a su renovación anual."',
+          'Cuerpo: "Como sabes, en seguros de vida la prima se ajusta cada año según edad. Tu nueva prima es ${valor} (incremento de {%} vs año anterior)."',
+          'Educación: "Este incremento es estándar del mercado y refleja el cambio de edad. La cobertura sigue siendo ${suma asegurada} con los mismos beneficiarios."',
+          'Opciones: "Si quieres revisar ajuste de cobertura, beneficiarios o agregar amparos (enfermedades graves, invalidez), agenda 15 minutos conmigo".',
+          'Pago: "Cuotas mensuales, semestrales o anual con descuento del {%}".',
+          'CTA: "Confirma renovación o agenda revisión {link calendly o WhatsApp}".',
+        ],
+      },
+      {
+        title: 'Plantilla 3 · Renovación Salud / Medicina Prepagada',
+        paragraphs: [
+          'La renovación de salud es la más sensible: el cliente teme aumento de prima o cambios en red de prestadores.',
+        ],
+        bullets: [
+          'Asunto: "Renovación de tu plan de salud - vence el {fecha}".',
+          'Apertura: "Estimado/a {nombre}, tu plan {nombre plan} con {entidad} se renueva el {fecha}."',
+          'Cuerpo: "Te confirmamos que mantienes los mismos médicos, clínicas y coberturas. La nueva prima mensual es ${valor} (incremento de {%}, en línea con el ajuste anual del sector)."',
+          'Tranquilidad: "Si tu familia tuvo cambios (nacimiento, matrimonio, etc.), podemos ajustar el plan sin penalización".',
+          'Pago: "Débito automático, tarjeta o transferencia mensual".',
+          'CTA: "Si todo está conforme, te ahorras el trámite: la renovación se hace automática. Si quieres revisar alternativas, escríbeme".',
+        ],
+      },
+      {
+        title: 'Plantilla 4 · Renovación Hogar',
+        paragraphs: [
+          'Renovación más relajada porque los cambios son mínimos año tras año.',
+        ],
+        bullets: [
+          'Asunto: "Renovación de tu seguro de hogar - vence el {fecha}".',
+          'Apertura: "Estimado/a {nombre}, tu seguro de hogar de {dirección} se renueva el {fecha}".',
+          'Cuerpo: "Mismas coberturas (incendio, terremoto, robo, RC familiar, contenido). La nueva prima anual es ${valor}".',
+          'Actualización: "¿Hiciste reformas o compraste bienes de valor este año? Avísame para ajustar la suma asegurada y evitar infraseguro".',
+          'Pago: "Anual con descuento o cuotas mensuales".',
+          'CTA: "Confirma renovación o agenda 10 minutos si quieres revisar tu cobertura".',
+        ],
+      },
+      {
+        title: 'Plantilla 5 · Renovación Responsabilidad Civil Profesional',
+        paragraphs: [
+          'Para clientes profesionales (médicos, abogados, ingenieros, corredores).',
+        ],
+        bullets: [
+          'Asunto: "Renovación RC Profesional - vence el {fecha}".',
+          'Apertura: "Doctor/a {nombre}, te recordamos que tu póliza RC profesional vence el {fecha} y conviene renovarla sin interrupción para mantener continuidad de cobertura claims-made".',
+          'Cuerpo: "Misma cobertura ${suma asegurada} con {aseguradora}. Prima anual ${valor}".',
+          'Educación: "Recuerda que las reclamaciones que ocurran fuera de vigencia de póliza no se cubren, por eso es crítico no dejar lapsos".',
+          'Cross-sell opcional: "¿Has considerado D&O o RC patrimonial complementaria? Puedo enviarte cotización".',
+          'CTA: "Confirma renovación antes del {fecha-7 días}".',
+        ],
+      },
+      {
+        title: 'Cómo enviar la carta de forma efectiva',
+        paragraphs: [
+          'La carta sirve si el cliente la lee. Estos son los canales y secuencia que mejor funcionan en LATAM 2026.',
+        ],
+        bullets: [
+          'Día -45: email con PDF adjunto + introducción amigable.',
+          'Día -30: WhatsApp con resumen + link al PDF + link de pago + botón de respuesta rápida.',
+          'Día -15: WhatsApp recordatorio si no hay respuesta.',
+          'Día -7: voicebot o llamada del asesor para casos abiertos.',
+          'Día -2: último WhatsApp con urgencia amigable.',
+          'Tip: con Guro estas plantillas se personalizan automáticamente y la secuencia se ejecuta sin intervención manual.',
+        ],
+      },
+      {
+        title: 'Errores frecuentes en cartas de renovación',
+        paragraphs: [
+          'Los errores que vemos más a menudo y que reducen drásticamente la tasa de respuesta.',
+        ],
+        bullets: [
+          'Tono burocrático ("se le informa que...") en vez de cálido.',
+          'Solo PDF adjunto sin resumen en el cuerpo del email/WhatsApp.',
+          'CTA único poco claro (solo "llámeme") sin alternativas.',
+          'No incluir fecha límite explícita.',
+          'Olvidar el comparativo con la competencia (clave para retener cliente que estaba evaluando irse).',
+          'No personalizar el nombre del bien (auto/inmueble) o el contexto.',
+          'Enviar solo por email (cliente no abre).',
+        ],
+      },
+    ],
+    relatedSlugs: ['renovacion-automatica-polizas-guia', 'ia-corredores-seguros-12-casos-latam', 'crm-clientes-corredor-seguros'],
+    cta: {
+      title: 'Descarga las 5 plantillas editables (Word + PDF)',
+      text: 'Versiones listas para personalizar con tu logo, datos y aseguradoras. Bonus: secuencia WhatsApp que las acompaña.',
+      buttonLabel: 'Descargar plantillas',
+    },
+  },
+
+  {
+    slug: 'calcular-automatizar-comisiones-equipo-ventas',
+    title: 'Cómo calcular y automatizar comisiones de tu equipo de ventas en seguros (2026)',
+    excerpt:
+      'Guía práctica para calcular comisiones de tu equipo de ventas: directa, override y contingente. Fórmulas, ejemplos numéricos, cómo importar el corte de aseguradoras y automatizar la liquidación con software vertical.',
+    answer:
+      'Calcular comisiones de un equipo de ventas en seguros requiere manejar 3 niveles: comisión directa al asesor que vendió la póliza (típicamente 50-70% de la comisión que paga la aseguradora a la agencia), override al gerente comercial o líder de equipo (5-15% adicional), y contingente o bonificación anual por cumplimiento de metas. La fórmula básica es: comisión asesor = prima neta × % comisión aseguradora × % participación asesor. Automatizar requiere software vertical (Guro, Sumavisos, E2K) que importe automáticamente el corte mensual de cada aseguradora, concilie contra tus pólizas vendidas y genere estado de cuenta por asesor con facturación electrónica DIAN. Las agencias que automatizan ahorran 36 días al año en Excel y eliminan 95% de errores de cálculo manual.',
+    tags: ['Comisiones', 'Equipo ventas', 'Automatización', 'Finanzas'],
+    keywords: [
+      'calcular comisiones seguros',
+      'automatizar comisiones equipo ventas',
+      'liquidar comisiones corredor',
+      'override comisiones seguros',
+      'software liquidacion comisiones',
+      'comision contingente seguros',
+      'comisiones equipo ventas seguros',
+      'calculo comision asesor seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Los 3 niveles de comisión en una agencia',
+        paragraphs: [
+          'Antes de calcular nada, entiende los 3 niveles que típicamente coexisten en una agencia de seguros. Cada uno se calcula sobre la prima neta vendida y se acumula.',
+        ],
+        bullets: [
+          'Nivel 1 · Comisión directa al asesor: % fijo de la comisión que paga la aseguradora a la agencia. Típicamente 50-70%.',
+          'Nivel 2 · Override del gerente o líder: 5-15% adicional sobre lo producido por su equipo, para incentivar liderazgo.',
+          'Nivel 3 · Contingente: bonificación anual variable por cumplir metas (volumen, retención, mix de productos, siniestralidad).',
+        ],
+      },
+      {
+        title: 'Cómo se calcula la comisión directa (con ejemplo)',
+        paragraphs: [
+          'La fórmula es simple pero requiere precisión. Veamos paso a paso con datos reales.',
+        ],
+        bullets: [
+          'Fórmula: comisión asesor = prima neta × % comisión aseguradora × % participación asesor.',
+          'Ejemplo: póliza Todo Riesgo vendida en $2.000.000 prima neta.',
+          'Comisión aseguradora a la agencia: 15% → $300.000.',
+          'Participación del asesor en esa comisión: 60% → $180.000 para el asesor.',
+          'Margen de la agencia: 40% → $120.000 queda en agencia.',
+          'Variantes por ramo: el % participación puede subir o bajar (vida individual nuevo año típicamente 70%, renovación 40-50%).',
+        ],
+      },
+      {
+        title: 'Cómo se calcula el override (con ejemplo)',
+        paragraphs: [
+          'El override es la comisión adicional al líder/gerente comercial sobre lo que produce su equipo. Incentiva a desarrollar al equipo.',
+        ],
+        bullets: [
+          'Fórmula: override = total comisión equipo × % override.',
+          'Ejemplo: tu equipo de 5 asesores produce $1.500.000 en comisiones a agencia en el mes.',
+          '% override del gerente: 10% → $150.000 adicional al gerente sin restar al asesor.',
+          'El override sale del margen de la agencia (no del asesor).',
+          'Estructuras típicas: 5-15% del total producido por el equipo.',
+        ],
+      },
+      {
+        title: 'Cómo se calcula el contingente (con ejemplo)',
+        paragraphs: [
+          'El contingente es la palanca de motivación anual. Bien diseñado, puede sumar 10-30% adicional a los ingresos del equipo.',
+        ],
+        bullets: [
+          'Estructuras comunes: bono por meta absoluta (alcanzas $X primas vendidas en año), bono por crecimiento (% vs año anterior), bono por mix (% de cartera en ramos premium).',
+          'Ejemplo: meta anual asesor $30M primas. Bono al alcanzar: $5M anuales o 20% comisiones del último trimestre.',
+          'Aseguradoras también pagan contingente: si tu agencia coloca >$2.000M con Sura, te pagan 5% adicional anual.',
+          'Tip: combina contingente individual + contingente de equipo para alinear motivaciones.',
+        ],
+      },
+      {
+        title: 'El problema: liquidar a mano cada mes',
+        paragraphs: [
+          'Una agencia con 500 pólizas vivas y 10 aseguradoras tiene aproximadamente 80-150 conciliaciones por mes. Hacerlo a mano:',
+        ],
+        bullets: [
+          'Descargar 10 cortes distintos (formato CSV, Excel, PDF).',
+          'Limpiar formatos y normalizar columnas.',
+          'Cruzar contra tus pólizas (busca póliza por póliza).',
+          'Detectar gaps (pólizas no pagadas por aseguradora).',
+          'Calcular comisión asesor por póliza.',
+          'Sumar por asesor y por equipo.',
+          'Generar cuenta de cobro / factura electrónica.',
+          'Tiempo total: 3-5 días por persona dedicada cada mes.',
+        ],
+      },
+      {
+        title: 'Cómo automatizar con software vertical',
+        paragraphs: [
+          'Software vertical de seguros (Guro, Sumavisos, E2K, MAC) automatiza el 95% del proceso. Pasamos de 3 días a 30 minutos al mes.',
+        ],
+        bullets: [
+          'Importación de corte: arrastras el archivo de la aseguradora, el sistema lo parsea automáticamente.',
+          'Conciliación automática: match contra tus pólizas por número de póliza, cliente o documento.',
+          'Detección de gaps: alerta sobre pólizas vendidas que no aparecen en corte (comisión perdida).',
+          'Cálculo de comisión directa, override y contingente según reglas configuradas.',
+          'Estado de cuenta por asesor: visible en su mini-web o app móvil.',
+          'Facturación electrónica DIAN: cuenta de cobro generada automáticamente.',
+          'Lote de transferencias: archivo listo para subir al banco con los pagos.',
+        ],
+      },
+      {
+        title: 'Configuración de reglas de comisión en el software',
+        paragraphs: [
+          'Las reglas se configuran una sola vez. Después corren solas.',
+        ],
+        bullets: [
+          'Por ramo: cada ramo tiene % distinto (auto 60%, vida individual nuevo 70%, renovación vida 45%).',
+          'Por aseguradora: algunas pagan más, algunas menos.',
+          'Por vigencia: nuevo negocio vs renovación pueden tener tasas diferentes.',
+          'Por asesor: senior vs junior, override por jerarquía.',
+          'Excepciones: ciertos clientes o ramos tienen acuerdos especiales.',
+        ],
+      },
+      {
+        title: 'KPIs financieros que debes vigilar',
+        paragraphs: [
+          'La automatización no es solo ahorro de tiempo. Es visibilidad para decidir mejor.',
+        ],
+        bullets: [
+          'Margen por póliza: cuánto queda en agencia tras pagar al asesor.',
+          'Productividad por asesor: comisión generada / pago salarial fijo si lo hay.',
+          'Concentración por aseguradora: % de tu cartera con cada aseguradora.',
+          'Gap recovery rate: % de comisiones reclamadas exitosamente tras detectar gap.',
+          'Tasa de retención de comisión por ramo: cuánto se mantiene en renovación.',
+        ],
+      },
+      {
+        title: 'Errores comunes que arruinan el cálculo',
+        paragraphs: [
+          'Los 7 errores más caros que vemos al auditar agencias en migración.',
+        ],
+        bullets: [
+          'Olvidar diferencia entre prima bruta y neta (la comisión va sobre neta).',
+          'No restar IVA antes de calcular comisión.',
+          'Pagar al asesor antes que el cliente pague la prima (riesgo de devolución).',
+          'No conciliar contra el corte de la aseguradora (perdiendo comisiones no pagadas).',
+          'No considerar retenciones tributarias al proyectar ingreso real del asesor.',
+          'Mezclar comisión nuevo negocio vs renovación con el mismo %.',
+          'Olvidar comisiones contingentes pagadas tarde por aseguradoras.',
+        ],
+      },
+    ],
+    relatedSlugs: ['tabla-comisiones-corredores-seguros-colombia', '7-kpis-agencia-seguros', 'mejor-software-corredores-seguros-colombia'],
+    cta: {
+      title: 'Liquida comisiones en 30 minutos al mes',
+      text: 'Guro importa el corte de cada aseguradora, concilia automático y genera estado de cuenta + factura electrónica DIAN por asesor.',
+      buttonLabel: 'Ver módulo comisiones',
+    },
+  },
+
+  {
+    slug: 'carta-reclamacion-seguro-siniestro',
+    title: 'Carta de reclamación al seguro por siniestro: 4 modelos descargables (2026)',
+    excerpt:
+      'Plantillas listas de cartas de reclamación cuando la aseguradora niega o demora un siniestro: reclamo inicial, reconsideración, queja al Defensor del Consumidor Financiero y queja Superfinanciera. Modelos editables.',
+    answer:
+      'Una carta de reclamación al seguro por siniestro es el documento formal que envía el asegurado o su corredor cuando la aseguradora niega, demora o paga parcialmente un siniestro legítimo. Hay 4 tipos según escalamiento: (1) Reclamación inicial cuando la aseguradora demora más del plazo legal de 1 mes (art. 1080 Código de Comercio CO); (2) Carta de reconsideración cuando hay negativa o pago insuficiente, presentando evidencias adicionales; (3) Queja al Defensor del Consumidor Financiero de la aseguradora, gratuita y obligatoria antes de SFC; (4) Queja ante Superintendencia Financiera de Colombia (SFC), como instancia regulatoria. Este artículo incluye los 4 modelos editables Word/PDF, listos para personalizar con datos del caso. Importante: el corredor que acompaña bien al cliente en una reclamación gana lealtad permanente.',
+    tags: ['Plantillas', 'Siniestros', 'Reclamación', 'Defensor'],
+    keywords: [
+      'carta de reclamacion de seguro por siniestro',
+      'carta de reclamo al seguro por siniestro',
+      'carta de reconsideración al seguro por siniestro',
+      'queja defensor consumidor financiero',
+      'queja superfinanciera seguros',
+      'modelo carta reclamación seguros',
+      'reclamar siniestro aseguradora',
+      'plantilla reclamación seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Cuándo escribir una carta de reclamación',
+        paragraphs: [
+          'No todas las situaciones requieren carta formal. Estas son las que sí.',
+        ],
+        bullets: [
+          'La aseguradora no responde tras 30 días de haber radicado siniestro completo.',
+          'Niegan el siniestro con argumento que no tienes claro.',
+          'Pagan menos de lo esperado y no justifican adecuadamente.',
+          'El perito subvalora el daño sin explicación técnica.',
+          'Cierran el caso sin tu firma de finiquito.',
+          'Demoras injustificadas en el peritaje.',
+        ],
+      },
+      {
+        title: 'Pasos antes de escribir la carta',
+        paragraphs: [
+          'Antes de redactar, asegúrate de tener todo el soporte. Una reclamación con evidencias gana 3-5x más que una sin ellas.',
+        ],
+        bullets: [
+          'Recopila: copia de la póliza, comprobante de pago vigente, aviso de siniestro, todas las comunicaciones con la aseguradora.',
+          'Evidencias del siniestro: fotos, videos, denuncia policial si aplica, facturas, peritaje propio si hay duda con el oficial.',
+          'Documenta cronología: cuándo avisaste, cuándo radicaste, cuándo te respondieron (o no).',
+          'Si hay testigos: datos de contacto.',
+          'Cuantifica el perjuicio: monto solicitado con justificación.',
+        ],
+      },
+      {
+        title: 'Modelo 1 · Reclamación inicial por demora',
+        paragraphs: [
+          'Cuando la aseguradora no ha respondido en el plazo legal de 1 mes desde la radicación completa.',
+        ],
+        bullets: [
+          'Encabezado: ciudad, fecha, destinatario (Director de Siniestros de la aseguradora).',
+          'Asunto: "Reclamación por demora injustificada en siniestro {número de caso}, póliza {número}".',
+          'Cuerpo 1: identificación. "Yo, {nombre} CC {cédula}, asegurado de la póliza {número} ramo {ramo}, vigente desde {fecha} hasta {fecha}, prima pagada al día..."',
+          'Cuerpo 2: hechos. "El día {fecha} ocurrió el siniestro {breve descripción}. El día {fecha} radiqué formalmente con número de caso {número}, entregando todos los documentos solicitados."',
+          'Cuerpo 3: tiempo transcurrido. "Han pasado {X días} desde la radicación completa, sin recibir comunicación oficial sobre estado o liquidación. Este plazo supera lo dispuesto en el artículo 1080 del Código de Comercio (1 mes)."',
+          'Cuerpo 4: solicitud. "Solicito formalmente: (1) respuesta en 5 días hábiles sobre el estado de mi siniestro, (2) liquidación e indemnización en máximo 10 días, (3) en caso de continuar la demora, ejerceré los derechos de reclamación ante el Defensor del Consumidor Financiero y la SFC."',
+          'Cierre: firma, datos de contacto.',
+        ],
+      },
+      {
+        title: 'Modelo 2 · Reconsideración tras negativa o pago parcial',
+        paragraphs: [
+          'Cuando la aseguradora negó el siniestro o pagó menos de lo que corresponde.',
+        ],
+        bullets: [
+          'Asunto: "Solicitud de reconsideración - siniestro {número}".',
+          'Cuerpo 1: identificación y antecedente. Igual al modelo 1.',
+          'Cuerpo 2: comunicación recibida. "Mediante comunicación del {fecha} se me informa que el siniestro fue {negado / pagado parcialmente} con el siguiente argumento: {citar textualmente lo que dice la aseguradora}".',
+          'Cuerpo 3: refutación con evidencias. "No comparto este argumento por las siguientes razones: ... (presentar evidencias técnicas, citas de la póliza, comparación con peritajes independientes, etc.)".',
+          'Cuerpo 4: solicitud. "Solicito formalmente la reconsideración del caso y la indemnización correspondiente por ${valor} dentro de los próximos 15 días hábiles".',
+          'Adjuntos: evidencias, peritaje independiente, fotos adicionales, documentos legales.',
+        ],
+      },
+      {
+        title: 'Modelo 3 · Queja al Defensor del Consumidor Financiero',
+        paragraphs: [
+          'Si tras la reconsideración no hay solución, el siguiente paso es el Defensor del Consumidor Financiero (DCF) de la aseguradora. Es gratuito, obligatorio y suele resolver más rápido que vía judicial.',
+        ],
+        bullets: [
+          'Destinatario: Defensor del Consumidor Financiero de {aseguradora}.',
+          'Asunto: "Queja por mala atención de siniestro - póliza {número}".',
+          'Cuerpo 1: identificación. Igual al modelo 1.',
+          'Cuerpo 2: hechos. Cronología detallada del siniestro y comunicaciones.',
+          'Cuerpo 3: motivos de la queja. "Considero que la aseguradora vulnera mis derechos al consumidor financiero por: (1) demora injustificada, (2) negativa sin justificación técnica suficiente, (3) ..."',
+          'Cuerpo 4: pretensión. "Solicito al DCF: (1) intervenir, (2) emitir concepto, (3) recomendar a la aseguradora reabrir el caso y pagar la indemnización correspondiente".',
+          'Plazo: el DCF tiene 30 días hábiles para resolver. Su concepto no es vinculante pero suele ser respetado por la aseguradora.',
+        ],
+      },
+      {
+        title: 'Modelo 4 · Queja ante Superintendencia Financiera (SFC)',
+        paragraphs: [
+          'Última instancia administrativa antes de vía judicial. Es gratuita y la SFC sí puede sancionar a la aseguradora.',
+        ],
+        bullets: [
+          'Canal: portal SFC (superfinanciera.gov.co) sección quejas o presencial en oficinas regionales.',
+          'Asunto: "Queja por incumplimiento normativo - {aseguradora} - siniestro {número}".',
+          'Cuerpo: cronología completa con todas las comunicaciones anteriores incluyendo respuesta del DCF.',
+          'Motivos: incumplimiento del Código de Comercio, mala atención, vulneración de derechos del consumidor financiero.',
+          'Solicitud: "Solicito a la SFC: (1) abrir investigación, (2) requerir a la aseguradora cumplir con sus obligaciones, (3) imponer las sanciones administrativas que correspondan".',
+          'Tiempo de respuesta SFC: 30-60 días.',
+        ],
+      },
+      {
+        title: 'Rol del corredor en una reclamación',
+        paragraphs: [
+          'El corredor que acompaña bien al cliente en una reclamación gana lealtad permanente. Estos son los pasos.',
+        ],
+        bullets: [
+          'No abandones al cliente: estás contractualmente obligado a representarlo.',
+          'Redacta y firma la carta junto con el cliente.',
+          'Sirve de canal de comunicación con la aseguradora.',
+          'Si fue tu error u omisión: activa tu RC profesional.',
+          'Si la aseguradora se equivocó: defiende al cliente con energía.',
+          'Tras resolver: documenta el caso como aprendizaje y reevalúa si seguir colocando en esa aseguradora.',
+        ],
+      },
+      {
+        title: 'Errores comunes en cartas de reclamación',
+        paragraphs: [
+          'Los 6 errores que reducen la efectividad de una reclamación.',
+        ],
+        bullets: [
+          'Tono emocional o agresivo (los abogados de la aseguradora encuentran fácil descalificarla).',
+          'Falta de evidencias documentales adjuntas.',
+          'No citar normas legales aplicables (Código de Comercio, Decretos Superfinanciera).',
+          'No establecer plazos claros para la respuesta solicitada.',
+          'No conservar copia firmada con sello de recibido.',
+          'No escalar al siguiente nivel cuando la respuesta es insuficiente.',
+        ],
+      },
+    ],
+    relatedSlugs: ['gestionar-siniestro-paso-a-paso-corredor', 'gestionar-siniestros-online-corredor', 'poliza-responsabilidad-civil-colombia'],
+    cta: {
+      title: 'Descarga los 4 modelos de carta (Word + PDF)',
+      text: 'Versiones listas para personalizar con tus datos. Bonus: directorio actualizado de Defensores del Consumidor Financiero de las 15 principales aseguradoras CO.',
+      buttonLabel: 'Descargar modelos',
+    },
+  },
+
+  {
+    slug: 'cross-selling-up-selling-seguros-ia',
+    title: 'Cross-selling y up-selling en seguros: la guía con IA para 2026',
+    excerpt:
+      'Vender más a clientes existentes es 5-7x más barato que captar nuevos. Guía completa con IA: detección de oportunidades, sugerencias automáticas por perfil, scripts WhatsApp y casos reales en agencias LATAM.',
+    answer:
+      'Cross-selling es venderle al cliente existente productos complementarios (cliente con auto → vida deudor → hogar → mascota → salud). Up-selling es elevar el valor del producto que ya tiene (más cobertura, menos deducible, asistencia premium). En seguros, vender a un cliente actual es 5-7x más barato que captar uno nuevo. La IA en 2026 transforma el proceso: analiza perfil, comportamiento, eventos vitales y siniestralidad de cada cliente, sugiere productos con probabilidad de cierre, y orquesta la comunicación por WhatsApp en el momento óptimo. Las agencias que implementan cross-sell sistemático con IA reportan conversión 8-15% en clientes activos (vs 1-3% en bases frías) y +30-40% en LTV (lifetime value) por cliente. Esta guía explica el método paso a paso con casos reales LATAM.',
+    tags: ['Ventas', 'Cross-sell', 'IA', 'LTV'],
+    keywords: [
+      'cross selling seguros',
+      'venta cruzada seguros',
+      'up selling seguros',
+      'cross sell ia seguros',
+      'aumentar ltv cliente seguros',
+      'vender mas clientes existentes seguros',
+      'ia recomendacion productos seguros',
+      'sugerencias automaticas seguros',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Cross-sell vs up-sell: la diferencia',
+        paragraphs: [
+          'Ambas son técnicas de aumentar el valor del cliente existente, pero atacan ángulos distintos.',
+        ],
+        bullets: [
+          'Cross-sell (venta cruzada): vender productos adicionales. Cliente con auto → ofrecer vida + hogar.',
+          'Up-sell: vender una versión mejor del mismo producto. Cliente con auto básico → upgrade a Todo Riesgo Premium.',
+          'Cross-sell típico en seguros: auto → vida deudor → hogar → mascota → salud → arrendamiento → RC profesional.',
+          'Up-sell típico: aumento de suma asegurada, menor deducible, asistencia premium, cobertura RC ampliada.',
+        ],
+      },
+      {
+        title: 'Por qué importa: la economía del cross-sell',
+        paragraphs: [
+          'Los números explican por qué cross-sell es la palanca de crecimiento más rentable en seguros.',
+        ],
+        bullets: [
+          'CAC promedio nuevo cliente seguros: $80.000-300.000 COP según canal.',
+          'Costo de cross-sell a cliente existente: $5.000-20.000 (un WhatsApp + 15 min asesor).',
+          'Conversión cross-sell bien hecho: 8-15% (vs 1-3% en bases frías).',
+          'LTV (lifetime value) cliente con 1 producto: $X. Con 3 productos: 3-5x.',
+          'Tasa de retención: clientes con múltiples productos rotan 60% menos.',
+        ],
+      },
+      {
+        title: 'Las 8 combinaciones de cross-sell más rentables',
+        paragraphs: [
+          'Productos que naturalmente se compran juntos en seguros LATAM. Probabilidad de cierre alta.',
+        ],
+        bullets: [
+          'Auto Todo Riesgo → Vida Deudor (si tiene crédito vehicular activo).',
+          'Auto → Mascota (perfil familias jóvenes con hijos).',
+          'Auto → Hogar (mismo cliente, cross natural).',
+          'Hogar → RC Familiar (lógica protección integral).',
+          'Vida → Salud Privada / Medicina Prepagada.',
+          'Salud → Vida Individual (cliente ya pensando en protección).',
+          'Empresarial → ARL + RC + Cumplimiento + D&O (paquete corporativo).',
+          'Arrendamiento → Hogar (inquilino que terminó adquiriendo casa).',
+        ],
+      },
+      {
+        title: 'Eventos de vida que disparan oportunidades',
+        paragraphs: [
+          'Los mejores momentos para cross-sell no son aleatorios. Son eventos de vida del cliente que cambian su necesidad de seguros.',
+        ],
+        bullets: [
+          'Matrimonio: revisar beneficiarios vida, ampliar hogar, RC familiar.',
+          'Nacimiento de hijo: vida individual mayor cobertura, salud privada familiar, ahorro futuro.',
+          'Compra de inmueble: hogar, RC, vida deudor hipotecario.',
+          'Compra de auto nuevo: Todo Riesgo, asistencia premium.',
+          'Adopción de mascota: seguro mascota (alta probabilidad cierre).',
+          'Cambio laboral / emprendimiento: RC profesional, salud, vida.',
+          'Cumpleaños 35-40-50: revisión coberturas vida y salud.',
+          'Hijos universitarios: vida estudiante, viaje.',
+        ],
+      },
+      {
+        title: 'Cómo funciona la IA para cross-sell',
+        paragraphs: [
+          'La IA no inventa, automatiza lo que un asesor experto haría con más volumen y consistencia.',
+        ],
+        bullets: [
+          'Análisis de perfil: edad, género, profesión, ubicación, ingreso estimado, composición familiar.',
+          'Análisis de cartera: qué productos tiene, hace cuánto, valor primas.',
+          'Análisis de comportamiento: cuándo interactúa, cómo responde, qué canales prefiere.',
+          'Detección de eventos: cumpleaños, vencimientos, siniestros recientes.',
+          'Modelo predictivo: ¿qué probabilidad tiene de comprar X producto si se le ofrece ahora?',
+          'Priorización: lista semanal de oportunidades ordenada por probabilidad × valor potencial.',
+          'Personalización del mensaje: por canal, tono, idioma local.',
+        ],
+      },
+      {
+        title: 'Scripts WhatsApp ganadores por combinación',
+        paragraphs: [
+          'Mensajes que funcionan con datos reales del mercado LATAM 2026.',
+        ],
+        bullets: [
+          'Auto → Vida Deudor: "{nombre}, vi que el {modelo} lo financiaste a {meses}. ¿Tienes seguro de vida deudor? Por solo ${valor}/mes protege tu familia si algo te pasa antes de terminar de pagar. Te mando opciones?"',
+          'Hogar → RC: "{nombre}, ya proteges la casa con el seguro de hogar. Lo que la mayoría olvida: ¿qué pasa si tu mascota muerde a un visitante o tu hijo rompe algo en casa de un amigo? Por ${valor}/mes RC familiar te cubre. ¿Te interesa?"',
+          'Vida → Salud: "Doctor/a {nombre}, ya tienes excelente seguro de vida con nosotros. Una pregunta: ¿la salud privada de tu familia está al día? Te puedo cotizar 3 opciones de medicina prepagada en lo que se demora un café."',
+          'Nacimiento hijo: "{nombre} ¡felicidades por el nuevo miembro de la familia! Sé que ahora la prioridad cambia. ¿Quieres que revisemos coberturas? Hay productos para nuevos padres con descuentos especiales este mes."',
+        ],
+      },
+      {
+        title: 'Cuándo NO hacer cross-sell',
+        paragraphs: [
+          'Empujar productos a destiempo destruye confianza. Estos son los momentos donde NO insistir.',
+        ],
+        bullets: [
+          'Recién después de un siniestro mal gestionado (cliente disgustado).',
+          'Durante negociación de cancelación (espera y reabre el tema en 30 días).',
+          'Cliente con cartera vencida (resuelve cobranza primero).',
+          'Más de 1 ofrecimiento por mes al mismo cliente (saturación).',
+          'Sin evento de vida o cambio que justifique la oferta (parece spam).',
+        ],
+      },
+      {
+        title: 'KPIs que debes medir',
+        paragraphs: [
+          'Sin métricas, el cross-sell se convierte en intuición. Estos son los indicadores clave.',
+        ],
+        bullets: [
+          'Productos por cliente: promedio actual y meta a 12 meses.',
+          'Tasa de conversión cross-sell: ofertas enviadas / cierres.',
+          'Tiempo desde último cross-sell por cliente: para evitar saturación.',
+          'LTV por cohorte: clientes con 1 vs 2 vs 3+ productos.',
+          'Churn rate por número de productos: típico baja drásticamente al pasar de 1 a 2.',
+          'Ingreso por cross-sell vs nuevo cliente: comparativo de canal.',
+        ],
+      },
+      {
+        title: 'Plan de implementación 30-60-90 días',
+        paragraphs: [
+          'Cómo activar cross-sell sistemático sin abrumar al equipo.',
+        ],
+        bullets: [
+          'Días 1-30: limpia data en CRM (verifica que sabes qué tiene cada cliente). Define top 3 combinaciones cross-sell de tu agencia.',
+          'Días 31-60: crea plantillas WhatsApp + email para cada combinación. Entrena equipo en script + manejo objeciones.',
+          'Días 61-90: activa lista semanal de oportunidades priorizada (manual o con IA). Equipo trabaja la lista. Mide conversión.',
+          'Mes 4+: si todo funciona, activa IA predictiva para sugerencias automáticas y orquestación WhatsApp.',
+        ],
+      },
+    ],
+    relatedSlugs: ['ia-corredores-seguros-12-casos-latam', 'whatsapp-business-vender-seguros-guia', '7-kpis-agencia-seguros'],
+    cta: {
+      title: 'Activa cross-sell IA en tu agencia',
+      text: 'Guro analiza perfil, eventos y comportamiento de cada cliente. Lista semanal de oportunidades priorizada por probabilidad × valor.',
+      buttonLabel: 'Ver demo cross-sell',
+    },
+  },
+
+  {
+    slug: 'guro-vs-ebroker-analisis-profundo',
+    title: 'Guro vs ebroker: análisis profundo de 16 funcionalidades para corredurías (2026)',
+    excerpt:
+      'Comparativa exhaustiva entre Guro (insurtech LATAM moderno) y ebroker (líder corredurías España): IA, WhatsApp, cobertura geográfica, integraciones, precio, implementación y soporte. Sin sesgos.',
+    answer:
+      'Guro y ebroker son las dos plataformas más visibles para corredores de seguros en mercado hispano, pero atacan perfiles muy distintos. ebroker es el líder consolidado en corredurías españolas con 20+ años, comunidad sólida (eSchool), y producto App Mi Corredor para cliente final. Guro es el insurtech moderno con IA nativa, WhatsApp Business API oficial, Voice AI (ElevenLabs), mini-web por asesor y cobertura LATAM (CO, MX, ES, AR, CL, PE). En 16 dimensiones evaluadas, Guro gana en IA, WhatsApp, cobertura LATAM, mini-web, app móvil nativa, implementación rápida (5-7 días vs 4-8 semanas), modelo flat por agencia y facturación DIAN/CFDI. ebroker gana en trayectoria consolidada en España, integraciones con compañías locales españolas y comunidad de formación. La elección depende de geografía (España vs LATAM) y prioridad estratégica (estabilidad tradicional vs innovación + IA).',
+    tags: ['Comparativa', 'Software', 'Análisis profundo', 'Decisión'],
+    keywords: [
+      'guro vs ebroker',
+      'alternativa ebroker',
+      'ebroker opiniones',
+      'comparar guro ebroker',
+      'ebroker o guro',
+      'guro ebroker latam',
+      'software corredurias comparativa',
+      'mejor que ebroker',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Por qué este análisis (y por qué es honesto)',
+        paragraphs: [
+          'Este artículo lo escribe el equipo de Guro, pero busca ser objetivo. La razón: si recomendamos Guro a alguien que debería usar ebroker, perdemos el cliente en el mes 3 (NPS bajo, cancelación). Mejor decir desde el inicio para quién es cada uno.',
+          'Comparamos en 16 dimensiones objetivas con datos públicos verificables de ambos sitios oficiales y demos. Donde hay zonas grises, lo decimos.',
+        ],
+      },
+      {
+        title: 'Tabla maestra · 16 dimensiones evaluadas',
+        paragraphs: [
+          'Resumen ejecutivo de la comparativa antes de profundizar. Para cada dimensión, el ganador relativo.',
+        ],
+        bullets: [
+          '1. IA nativa: Guro (predicción cancelación + cross-sell + voicebots). ebroker tiene Merlin más limitado.',
+          '2. WhatsApp Business API oficial: Guro tiene · ebroker no.',
+          '3. Voice AI: Guro tiene (ElevenLabs) · ebroker no.',
+          '4. Mini-web por asesor con cotizador embebido: Guro tiene · ebroker no.',
+          '5. App móvil iOS/Android nativa para asesores: Guro tiene · ebroker tiene "Mi Corredor" enfocada en cliente final.',
+          '6. Cobertura LATAM: Guro sí (CO/MX/ES/AR/CL/PE) · ebroker solo España.',
+          '7. Integración aseguradoras españolas: ebroker mucho más profunda (20+ años).',
+          '8. Integración aseguradoras LATAM: Guro sí · ebroker no.',
+          '9. Facturación electrónica DIAN/CFDI: Guro sí · ebroker no aplica (España).',
+          '10. Implementación: Guro 5-7 días · ebroker 4-8 semanas.',
+          '11. Modelo de precio: Guro flat por agencia · ebroker por usuario+módulos.',
+          '12. Soporte horario LATAM: Guro 24/7 · ebroker horario España.',
+          '13. Trayectoria mercado correduría España: ebroker 20+ años · Guro reciente.',
+          '14. Comunidad de formación (eSchool): ebroker consolidada · Guro creciendo.',
+          '15. Multi-agencia (Master Panel): Guro robusto · ebroker parcial.',
+          '16. RRHH + reclutamiento + clima laboral: Guro sí · ebroker no.',
+        ],
+      },
+      {
+        title: 'Profundizando · 1. IA nativa',
+        paragraphs: [
+          'La inteligencia artificial es la diferenciación más grande entre las dos plataformas en 2026.',
+        ],
+        bullets: [
+          'Guro · IA nativa con 5 agentes especializados: vendedora, cobradora, analista (predicción), recepcionista, tutora.',
+          'Guro · modelo de predicción de cancelación entrenado en data LATAM con 80%+ precisión.',
+          'Guro · cross-sell automatizado priorizado por probabilidad × valor.',
+          'ebroker · Merlin como asistente IA, pero más limitado a tareas específicas internas.',
+          'ebroker · sin modelos de predicción o cross-sell automatizado documentados públicamente.',
+          'Veredicto: Guro gana ampliamente. Si IA es prioridad, decisión clara.',
+        ],
+      },
+      {
+        title: 'Profundizando · 2. WhatsApp Business',
+        paragraphs: [
+          'En LATAM, WhatsApp es el canal #1 de venta y atención. En España menos crítico pero creciente.',
+        ],
+        bullets: [
+          'Guro · Business Solution Provider oficial de Meta. Inbox compartido equipo, chatbots, voicebots, campañas masivas legales.',
+          'ebroker · no tiene integración nativa con WhatsApp Business API en su producto base.',
+          'Veredicto: si tus clientes están en LATAM, Guro es decisión clara. En España con clientes corporativos también, menos urgente.',
+        ],
+      },
+      {
+        title: 'Profundizando · 3. Cobertura geográfica',
+        paragraphs: [
+          'Dónde puedes operar cada uno con confianza y soporte adecuado.',
+        ],
+        bullets: [
+          'Guro · activo en Colombia, México, Argentina, Chile, Perú y España. Hreflang correcto, soporte por región, integraciones por aseguradora local.',
+          'ebroker · 100% España. Sin oficinas LATAM, sin integraciones documentadas con compañías LATAM, sin soporte horario LATAM.',
+          'Veredicto: si operas o piensas operar fuera de España, Guro. Si España puro, ebroker.',
+        ],
+      },
+      {
+        title: 'Profundizando · 4. Implementación y migración',
+        paragraphs: [
+          'Cuánto tarda pasar del software actual al nuevo y empezar a producir.',
+        ],
+        bullets: [
+          'Guro · 5-7 días con migración asistida. Onboarding del equipo en sesiones de 1 hora día por rol.',
+          'ebroker · 4-8 semanas típicas según tamaño de correduría. Implementación más artesanal por la profundidad de integración.',
+          'Veredicto: Guro más rápido para agencias que necesitan empezar a producir ya.',
+        ],
+      },
+      {
+        title: 'Profundizando · 5. Precio y TCO',
+        paragraphs: [
+          'Modelos de cobro distintos generan TCO muy distintos.',
+        ],
+        bullets: [
+          'Guro · flat-fee por agencia con todos los módulos incluidos. Crece el equipo sin que suba el costo.',
+          'ebroker · típicamente por usuario + módulos contratados. Crecer el equipo aumenta proporcionalmente el costo.',
+          'TCO 24 meses agencia 10 usuarios: Guro suele ser 30-50% más rentable según configuración.',
+          'TCO 24 meses correduría española 5 usuarios consolidada: ebroker puede ser competitivo o más barato.',
+        ],
+      },
+      {
+        title: 'Profundizando · 6. Trayectoria y comunidad',
+        paragraphs: [
+          'Aquí ebroker tiene ventaja real que vale la pena reconocer.',
+        ],
+        bullets: [
+          'ebroker · 20+ años en el mercado español. Comunidad establecida con eventos, eSchool de formación, base de corredurías grande.',
+          'Guro · más reciente, comunidad LATAM creciendo, eventos en construcción.',
+          'Veredicto: si valoras trayectoria y comunidad probada en mediación España, ebroker gana. Si te enfocas en velocidad de innovación, Guro.',
+        ],
+      },
+      {
+        title: '¿Cuándo elegir Guro?',
+        paragraphs: [
+          'Estas son las situaciones donde Guro es clara recomendación frente a ebroker.',
+        ],
+        bullets: [
+          'Tu agencia está en LATAM (Colombia, México, Argentina, Chile, Perú) o tiene planes LATAM.',
+          'WhatsApp Business es tu canal principal de venta y atención.',
+          'Quieres IA nativa para predicción de cancelaciones y cross-sell automatizado.',
+          'Necesitas implementación en días, no en semanas.',
+          'Tu equipo crece rápido y prefieres modelo flat-fee por agencia.',
+          'Cada vendedor con mini-web propia es parte de tu estrategia comercial.',
+          'Operas o piensas operar multi-país.',
+        ],
+      },
+      {
+        title: '¿Cuándo elegir ebroker?',
+        paragraphs: [
+          'Honestamente, hay perfiles donde ebroker es mejor opción.',
+        ],
+        bullets: [
+          'Eres correduría española consolidada con foco europeo exclusivo.',
+          'Valoras trayectoria probada de 20+ años sobre innovación reciente.',
+          'Tu prioridad es integración profunda con aseguradoras españolas (Mapfre, Allianz España, Mutua Madrileña).',
+          'No usas WhatsApp Business intensivamente y tu equipo prefiere email/portal.',
+          'Tu equipo es pequeño y estable, sin crecimiento agresivo en plan.',
+          'Valoras la comunidad consolidada del sector mediación España y eSchool.',
+        ],
+      },
+      {
+        title: 'Caso: migración exitosa de ebroker a Guro',
+        paragraphs: [
+          'Una correduría española con operación creciente en México decidió migrar a Guro tras 8 años con ebroker. Estos son los datos reales del proceso.',
+        ],
+        bullets: [
+          'Motivación: expansión LATAM exigía WhatsApp Business + facturación CFDI México + integración aseguradoras MX.',
+          'Migración asistida: 7 días para 1.200 clientes activos y 1.800 pólizas vigentes.',
+          'Conservaron: data histórica completa, comisiones acumuladas, configuraciones por aseguradora.',
+          'Mes 1: tasa de respuesta WhatsApp de 22% (manual ebroker) a 78% (Guro automatizado).',
+          'Mes 3: tasa de renovación de 79% a 91%.',
+          'Mes 6: cartera LATAM creció 40% por mini-web por asesor + IA cross-sell.',
+        ],
+      },
+    ],
+    relatedSlugs: ['mejores-software-corredores-seguros-latam-2026', 'criterios-elegir-software-corredor', 'plan-90-dias-digitalizar-agencia-seguros'],
+    cta: {
+      title: '¿Vienes de ebroker? Migra a Guro en 7 días',
+      text: 'Migración asistida sin pérdida de datos. Conservas histórico, comisiones y configuraciones. Cero downtime.',
+      buttonLabel: 'Hablar con migración',
+    },
+  },
+
+  {
+    slug: 'mini-sitio-web-vendedor-seguros',
+    title: 'Mini-sitio web para vendedores de seguros: por qué cada asesor necesita el suyo (2026)',
+    excerpt:
+      'El mini-sitio web por asesor es la palanca de crecimiento más subestimada de las agencias modernas. Cómo funciona, qué debe tener, ejemplos reales y cómo Guro lo entrega listo para cada vendedor.',
+    answer:
+      'Un mini-sitio web por vendedor de seguros es un sitio personalizado (típicamente sub-dominio o página personal) con foto, biografía, cotizador embebido, productos que vende, contacto directo por WhatsApp y testimonios. Multiplica la captación de leads orgánicos de la agencia porque cada vendedor capta en su red personal (LinkedIn, Instagram, referidos, Google "mi corredor"). Una agencia con 10 asesores activos genera 10x más superficie SEO que una agencia con un solo sitio. Cada mini-web cuesta cero adicional cuando viene integrada con la plataforma (Guro lo entrega nativo). Los KPIs típicos: 30-80% del nuevo lead flow viene de mini-webs cuando se activa bien. Este artículo explica qué debe tener cada mini-web, errores frecuentes y cómo activar el canal en 30 días.',
+    tags: ['Marketing', 'Mini-web', 'Asesores', 'Crecimiento'],
+    keywords: [
+      'mini sitio web vendedor seguros',
+      'pagina web asesor seguros',
+      'landing page corredor',
+      'web personal vendedor seguros',
+      'mini web corredor',
+      'sitio personal asesor',
+      'marca personal vendedor seguros',
+      'web cotizador corredor',
+    ],
+    image: '/src/assets/images/blog/blog-img1.jpg',
+    body: [
+      {
+        title: 'Por qué la web de la agencia no es suficiente',
+        paragraphs: [
+          'La web corporativa de la agencia (con About, Productos, Contacto) es necesaria pero insuficiente. Le faltan 2 cosas que sí tiene una mini-web personal: confianza humana y capilaridad SEO.',
+          'La gente confía más en una persona que en una empresa abstracta. Un cliente que conoce a Juan Pérez por LinkedIn entra a la mini-web de Juan, ve su cara, lee su historia, y cotiza. Si solo había un sitio corporativo, ese mismo cliente nunca llega.',
+          'Y multiplicas SEO: 1 agencia con 10 vendedores activos = 11 sitios atrayendo tráfico orgánico, no solo 1.',
+        ],
+      },
+      {
+        title: 'Anatomía de una mini-web ganadora',
+        paragraphs: [
+          'Estos son los 10 elementos no negociables de una mini-web personal de vendedor de seguros.',
+        ],
+        bullets: [
+          '1. Foto profesional con expresión cálida (no foto del DNI).',
+          '2. Nombre + cargo + años en el sector + matrícula si aplica.',
+          '3. Biografía corta (3-5 líneas) con tono humano: por qué vende seguros, qué te motiva.',
+          '4. Productos que vendes con un párrafo cada uno (auto, vida, salud, etc.).',
+          '5. Cotizador embebido para los productos masivos (SOAT, auto, mascota, hogar).',
+          '6. CTA principal: WhatsApp con click-to-chat (no formulario).',
+          '7. Testimonios de clientes reales (con foto, nombre, breve historia).',
+          '8. Datos de aseguradoras con las que trabajas (logos confianza).',
+          '9. Blog personal o re-posts del blog de la agencia (refuerza autoridad).',
+          '10. Redes sociales: LinkedIn, Instagram, Facebook personal/profesional.',
+        ],
+      },
+      {
+        title: 'URL y estructura técnica',
+        paragraphs: [
+          'Cómo se monta técnicamente para que Google la indexe bien y el vendedor pueda compartir fácil.',
+        ],
+        bullets: [
+          'Opción A · Sub-dominio: juan.tuagencia.com (limpio, fácil de recordar).',
+          'Opción B · Path: tuagencia.com/asesor/juan-perez (más SEO juice al dominio principal).',
+          'Opción C · Dominio propio: juanperezseguros.co (más caro pero máxima independencia).',
+          'Recomendado: Opción B para máximo aprovechamiento SEO del dominio de la agencia, con redirect 301 desde un dominio personal opcional.',
+          'Schema.org: Person + LocalBusiness + AggregateRating para rich snippets.',
+          'Hreflang si el asesor atiende clientes en varios países.',
+        ],
+      },
+      {
+        title: 'Por qué multiplica la captación de leads',
+        paragraphs: [
+          'No es magia. Es matemática SEO y comportamiento de búsqueda humana.',
+        ],
+        bullets: [
+          'Búsquedas tipo "{nombre vendedor} corredor seguros" llegan al mini-web personal, no a la web genérica.',
+          'LinkedIn: cada asesor tiene su perfil con link al mini-web. Visitantes de LinkedIn entran al sitio personal.',
+          'Referidos por WhatsApp: el cliente envía "mira a Juan, es mi corredor" + link mini-web. Mucho más persuasivo que enlazar a empresa.',
+          'Reseñas Google My Business: cada asesor puede tener su perfil GMB asociado al mini-web.',
+          'Capilaridad SEO: 10 mini-webs = 10x más content total atrayendo long-tail.',
+        ],
+      },
+      {
+        title: 'Casos reales de impacto',
+        paragraphs: [
+          'Resultados típicos en agencias LATAM que activan mini-web por asesor.',
+        ],
+        bullets: [
+          'Agencia 12 personas Colombia: pasó de 60 leads/mes (solo web agencia) a 240 leads/mes (12 mini-webs) en 6 meses.',
+          'Corredora independiente España: 40% de sus nuevos clientes vienen búsquedas LinkedIn → mini-web propio.',
+          'Agencia mediana México: vendedor top tiene mini-web propia con blog activo. Genera 50 leads/mes solo de su sitio personal.',
+          'CAC mini-web orgánico: $0-30.000 vs $80.000-300.000 de Facebook/Google Ads.',
+        ],
+      },
+      {
+        title: 'Cómo activar mini-webs en tu agencia en 30 días',
+        paragraphs: [
+          'Plan práctico de implementación.',
+        ],
+        bullets: [
+          'Días 1-3: define estructura, URLs, plantilla visual con colores agencia.',
+          'Días 4-7: cada asesor escribe su bio, recopila foto profesional, lista productos.',
+          'Días 8-12: equipo de marketing arma las 5-10 primeras mini-webs.',
+          'Días 13-18: testimonios y casos de éxito en cada mini-web.',
+          'Días 19-22: integración con cotizador embebido y WhatsApp.',
+          'Días 23-27: optimización SEO (schema, meta tags, sitemap).',
+          'Días 28-30: capacitación a asesores en cómo compartir su mini-web (LinkedIn, WhatsApp, firma email, redes).',
+        ],
+      },
+      {
+        title: 'Errores frecuentes',
+        paragraphs: [
+          'Los errores que vemos más a menudo y que reducen drásticamente el impacto.',
+        ],
+        bullets: [
+          'Foto poco profesional (selfie, DNI, foto de hace 10 años).',
+          'Biografía robótica copiada de plantilla ("Soy un profesional comprometido con...").',
+          'Sin cotizador embebido (pierdes captura directa).',
+          'CTA solo formulario (debería ser WhatsApp click-to-chat).',
+          'Sin testimonios reales (rompe credibilidad).',
+          'Asesor no comparte su mini-web (queda creada pero sin tráfico).',
+          'No medir tráfico ni conversión (no sabes si funciona).',
+        ],
+      },
+      {
+        title: 'Cómo Guro entrega mini-web por asesor',
+        paragraphs: [
+          'Mini-webs son una feature nativa de Guro. Cómo se activan.',
+        ],
+        bullets: [
+          'Cada asesor que creas tiene su mini-web auto-generada con plantilla unificada de la agencia.',
+          'El asesor edita su contenido desde su panel: foto, bio, productos, testimonios.',
+          'Cotizador embebido y WhatsApp Business click-to-chat integrados.',
+          'SEO automático: schema, meta tags, sitemap actualizado.',
+          'Métricas en su dashboard: visitas, leads, conversión, ranking palabras clave.',
+          'Marca blanca opcional: dominio propio personalizado.',
+        ],
+      },
+    ],
+    relatedSlugs: ['conseguir-clientes-agencia-seguros-10-canales', 'cotizador-digital-corredor-seguros', 'plan-90-dias-digitalizar-agencia-seguros'],
+    cta: {
+      title: 'Activa mini-web por asesor en tu agencia',
+      text: 'Cada vendedor con su sitio personal + cotizador embebido + WhatsApp. Multiplica tu superficie SEO sin desarrolladores.',
+      buttonLabel: 'Ver demo mini-web',
     },
   },
 ];

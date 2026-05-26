@@ -33,22 +33,28 @@ export const CustomizerContext = createContext<CustomizerContextState | any>(und
 interface CustomizerContextProps {
   children: ReactNode;
 }
+
+const readInitialMode = (): 'light' | 'dark' => {
+  try {
+    const saved = localStorage.getItem('guro_active_mode');
+    if (saved === 'light' || saved === 'dark') return saved;
+    // Si Flowbite ya escribió un modo en su key, respetarlo
+    const fb = localStorage.getItem('flowbite-theme-mode');
+    if (fb === 'light' || fb === 'dark') return fb;
+  } catch {}
+  return 'dark';
+};
+
 // Create the provider component
 export const CustomizerContextProvider: React.FC<CustomizerContextProps> = ({ children }) => {
   const [selectedIconId, setSelectedIconId] = useState<number>(1);
-  
+
   // Enhanced setSelectedIconId with logging
   const enhancedSetSelectedIconId = (id: number) => {
     setSelectedIconId(id);
   };
   const [activeDir, setActiveDir] = useState<string>(config.activeDir);
-  const [activeMode, setActiveMode] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('guro_active_mode');
-      if (saved === 'light' || saved === 'dark') return saved;
-    } catch {}
-    return 'dark'; // dark by default
-  });
+  const [activeMode, setActiveMode] = useState<string>(readInitialMode);
   const [activeTheme, setActiveTheme] = useState<string>(config.activeTheme);
   const [activeLayout, setActiveLayout] = useState<string>(config.activeLayout);
   const [isCardShadow, setIsCardShadow] = useState<boolean>(config.isCardShadow);
@@ -58,20 +64,61 @@ export const CustomizerContextProvider: React.FC<CustomizerContextProps> = ({ ch
   const [isLanguage, setIsLanguage] = useState<string>(config.isLanguage);
 
 
-  // Set attributes immediately y persistir en localStorage
+  // Sincronizar SOLO la clase `dark` con el modo activo, sin borrar otras clases
+  // que pudieran existir en <html> (Flowbite, RTL, libs varias).
   useEffect(() => {
-    document.documentElement.setAttribute("class", activeMode);
+    if (typeof document === 'undefined') return;
+    const isDark = activeMode === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.classList.remove('light'); // legacy: limpiar si quedó
     try {
       localStorage.setItem('guro_active_mode', activeMode);
+      // Mantener Flowbite alineado para que su <ThemeModeInit> no nos sobreescriba al re-montar
       localStorage.setItem('flowbite-theme-mode', activeMode);
     } catch {}
-    document.documentElement.setAttribute("dir", activeDir);
-    document.documentElement.setAttribute('data-color-theme', activeTheme);
-    document.documentElement.setAttribute("data-layout", activeLayout);
-    document.documentElement.setAttribute("data-boxed-layout", isLayout);
-    document.documentElement.setAttribute("data-sidebar-type", isCollapse);
+  }, [activeMode]);
 
-  }, [activeMode, activeDir, activeTheme, activeLayout, isLayout, isCollapse]);
+  // Atributos de layout van en su propio effect (no tocan la clase `dark`)
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('dir', activeDir);
+  }, [activeDir]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-color-theme', activeTheme);
+  }, [activeTheme]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-layout', activeLayout);
+  }, [activeLayout]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-boxed-layout', isLayout);
+  }, [isLayout]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-sidebar-type', isCollapse);
+  }, [isCollapse]);
+
+  // Sincronizar entre pestañas: si otra pestaña cambia el tema (vía nuestra key
+  // o vía la key interna de Flowbite), actualizar el estado de React para que
+  // no haya divergencia (estado dice "dark" pero el DOM ya fue puesto en "light").
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== 'guro_active_mode' && e.key !== 'flowbite-theme-mode') return;
+      const v = e.newValue;
+      if (v === 'light' || v === 'dark') {
+        setActiveMode((prev) => (prev === v ? prev : v));
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   return (
     <CustomizerContext.Provider

@@ -127,7 +127,8 @@ export type NodeTypeId =
   | 'media'
   | 'webhook'
   | 'interactive'
-  | 'set_variable';
+  | 'set_variable'
+  | 'consent';
 
 // Icon background tint per node type — dark-mode friendly (accent on dark bg)
 // For dark mode we use a muted version of the accent as tint so the colored
@@ -151,6 +152,7 @@ export const nodeTypePalette: Record<NodeTypeId, { tint: string; accent: string;
   webhook:       { tint: '#062A40', accent: '#38BDF8', minimap: '#38BDF8', typeLabel: 'Webhook' },
   interactive:   { tint: '#1E1B4B', accent: '#818CF8', minimap: '#818CF8', typeLabel: 'Interactivo' },
   set_variable:  { tint: '#1C1917', accent: '#A8A29E', minimap: '#A8A29E', typeLabel: 'Variable' },
+  consent:       { tint: '#052033', accent: '#38BDF8', minimap: '#38BDF8', typeLabel: 'Consentimiento' },
 };
 
 // SVG icon paths (20x20 viewBox) — extracted/simplified so JointJS can render them without external assets
@@ -173,4 +175,5 @@ export const nodeTypeIconPath: Record<NodeTypeId, string> = {
   webhook:       'M6 2a4 4 0 0 1 8 0c0 1.7-1.1 3.1-2.5 3.7l2 4.3H18v4a4 4 0 1 1-4-4h4l-3-6-1 2-2-4a2 2 0 1 0 0 0z',
   interactive:   'M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z',
   set_variable:  'M4 4h6v2H4V4zm0 5h12v2H4V9zm0 5h8v2H4v-2z',
+  consent:       'M9 12l2 2 4-4m-7 8a9 9 0 1 1 0-18 9 9 0 0 1 0 18z',
 };

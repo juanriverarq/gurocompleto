@@ -24,6 +24,7 @@ interface WhatsAppContact {
   open_conversations: number;
   conversation_window_open: boolean;
   display_name: string;
+  data_consent_at: string | null;
 }
 
 interface ContactStats {
@@ -291,6 +292,7 @@ const WhatsAppContactos: React.FC = () => {
                   <th>Conversaciones</th>
                   <th>Mensajes</th>
                   <th>Última interacción</th>
+                  <th>Consentimiento</th>
                   <th className="sticky-right">Acciones</th>
                 </tr>
               </thead>
@@ -350,6 +352,21 @@ const WhatsAppContactos: React.FC = () => {
                     </td>
                     <td>
                       <span className="text-sm text-gray-500">{formatRelativeTime(contact.last_interaction_at)}</span>
+                    </td>
+                    <td>
+                      {contact.data_consent_at ? (
+                        <Tooltip content={`Aceptó el ${new Date(contact.data_consent_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}`} trigger="hover">
+                          <Badge color="success" size="sm">
+                            <Icon icon="solar:shield-check-bold" width={12} className="mr-1" />
+                            Aceptado
+                          </Badge>
+                        </Tooltip>
+                      ) : (
+                        <Badge color="gray" size="sm">
+                          <Icon icon="solar:shield-bold" width={12} className="mr-1" />
+                          Pendiente
+                        </Badge>
+                      )}
                     </td>
                     <td className="sticky-right">
                       <div className="flex justify-center gap-1.5">

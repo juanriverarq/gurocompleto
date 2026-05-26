@@ -18,6 +18,7 @@ export interface RenovacionFilters {
   page?: number;
   sort_field?: string;
   sort_direction?: 'asc' | 'desc';
+  columnas?: string;
 }
 
 export interface Renovacion {

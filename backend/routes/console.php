@@ -286,3 +286,14 @@ Schedule::command('queue:work --queue=default --stop-when-empty --timeout=600 --
     ->withoutOverlapping(15)   // expiración del lock = 15 min (mayor que timeout del job)
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/queue-worker.log'));
+
+/**
+ * Envía notificaciones email a vendedores: cartera pendiente + vencimientos.
+ * Corre cada hora; el comando internamente revisa cada config y decide si toca
+ * enviar según frecuencia (daily/weekly/monthly), día y hora configurados.
+ */
+Schedule::command('vendedor-notif:dispatch')
+    ->hourly()
+    ->timezone('America/Bogota')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/vendedor-notifications.log'));

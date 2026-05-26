@@ -976,6 +976,7 @@ class SoftSegurosImportController extends Controller
                     'product_name'       => $ramoGlobalNombre ?: ($ramoNombre ?: 'General'),
                     'ramo_id'            => $ramoId,
                     'description'        => $row['codio_objeto_asegurado'] ?? null,
+                    'vehicle_plates'     => ($type === 'autos' && !empty($row['codio_objeto_asegurado'])) ? json_encode([$row['codio_objeto_asegurado']]) : null,
                     'client_id'          => $clienteId,
                     'client_name'        => $clienteName ?: null,
                     'client_document'    => $cedulaCliente ?: null,

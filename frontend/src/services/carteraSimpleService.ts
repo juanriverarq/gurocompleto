@@ -42,6 +42,7 @@ export type GroupKey =
   | 'hoy'
   | 'proximos_7'
   | 'proximos_30'
+  | 'futuras'
   | 'sin_fecha'
   | 'por_pagar_aseguradora'
   | 'comision_por_cobrar'
@@ -53,6 +54,7 @@ export interface TimelineStats {
   hoy_count: number;
   proximos_7_count: number;
   proximos_30_count: number;
+  futuras_count?: number;
   por_pagar_aseguradora_count: number;
   por_pagar_aseguradora_monto: number;
   comision_por_cobrar_count: number;

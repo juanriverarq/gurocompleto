@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { Icon } from '@iconify/react';
 import { useWhatsAppSocket, InboxMessageEvent, ConversationAssignedEvent } from 'src/hooks/useWhatsAppSocket';
+import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import whatsappInboxService from 'src/services/whatsappInboxService';
 
 export interface WhatsAppNotification {
@@ -25,6 +27,8 @@ interface WhatsAppNotificationContextType {
   desktopNotificationsEnabled: boolean;
   setDesktopNotificationsEnabled: (enabled: boolean) => void;
   requestDesktopPermission: () => Promise<boolean>;
+  assignmentAlert: ConversationAssignedEvent | null;
+  dismissAssignmentAlert: () => void;
 }
 
 const WhatsAppNotificationContext = createContext<WhatsAppNotificationContextType | null>(null);
@@ -42,6 +46,8 @@ const defaultContextValue: WhatsAppNotificationContextType = {
   desktopNotificationsEnabled: false,
   setDesktopNotificationsEnabled: () => {},
   requestDesktopPermission: async () => false,
+  assignmentAlert: null,
+  dismissAssignmentAlert: () => {},
 };
 
 export const useWhatsAppNotifications = () => {
@@ -58,7 +64,9 @@ interface Props {
 }
 
 export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
+  const { usuarioSaas, empleado } = useUnifiedAuth();
   const [notifications, setNotifications] = useState<WhatsAppNotification[]>([]);
+  const [assignmentAlert, setAssignmentAlert] = useState<ConversationAssignedEvent | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(() => {
     const saved = localStorage.getItem('whatsapp_sound_enabled');
     return saved !== null ? saved === 'true' : true; // Activado por defecto
@@ -272,6 +280,8 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
     }
   }, [addNotification]);
 
+  const dismissAssignmentAlert = useCallback(() => setAssignmentAlert(null), []);
+
   // Handler para asignación de conversación via WebSocket
   const handleConversationAssigned = useCallback((data: ConversationAssignedEvent) => {
     const fromChatbot = data.fromChatbot ? ' (Chatbot)' : '';
@@ -282,7 +292,13 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
       phone: data.phone || 'Desconocido',
       conversationId: data.conversationId,
     });
-  }, [addNotification]);
+
+    // Mostrar modal centrado solo al usuario al que le asignaron
+    const currentUserId = Number(usuarioSaas?.id ?? empleado?.id ?? 0);
+    if (currentUserId && data.assignedTo === currentUserId) {
+      setAssignmentAlert(data);
+    }
+  }, [addNotification, usuarioSaas, empleado]);
 
   // Conectar al WebSocket para recibir notificaciones (Baileys)
   useWhatsAppSocket({
@@ -407,9 +423,85 @@ export const WhatsAppNotificationProvider: React.FC<Props> = ({ children }) => {
         desktopNotificationsEnabled,
         setDesktopNotificationsEnabled,
         requestDesktopPermission,
+        assignmentAlert,
+        dismissAssignmentAlert,
       }}
     >
       {children}
+
+      {/* Modal global de asignación — visible desde cualquier página */}
+      {assignmentAlert && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
+          onClick={dismissAssignmentAlert}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Franja verde superior */}
+            <div className="h-1.5 w-full" style={{ background: 'linear-gradient(90deg, #22c55e, #16a34a)' }} />
+
+            <div className="p-6">
+              {/* Icono + título */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                  <Icon icon="solar:chat-round-dots-bold" className="text-green-400" width={26} />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-green-400 uppercase tracking-wider">Nueva conversación asignada</p>
+                  <h3 className="text-lg font-bold text-white leading-tight">
+                    {assignmentAlert.contactName || assignmentAlert.phone}
+                  </h3>
+                </div>
+              </div>
+
+              {/* Info */}
+              <div className="space-y-2 mb-5">
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <Icon icon="solar:phone-bold" width={14} className="text-slate-500" />
+                  <span className="font-mono">{assignmentAlert.phone}</span>
+                </div>
+                {assignmentAlert.assignedByName && assignmentAlert.assignedByName !== assignmentAlert.assignedToName && (
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <Icon icon="solar:user-bold" width={14} className="text-slate-500" />
+                    <span>Asignado por <strong className="text-slate-300">{assignmentAlert.assignedByName}</strong></span>
+                  </div>
+                )}
+                {assignmentAlert.fromChatbot && (
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <Icon icon="solar:robot-bold" width={14} className="text-slate-500" />
+                    <span>Viene del chatbot</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Botones */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    dismissAssignmentAlert();
+                    window.location.href = `/apps/whatsapp/inbox?conversation=${assignmentAlert.conversationId}`;
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-semibold text-sm text-white transition-all"
+                  style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}
+                >
+                  <Icon icon="solar:chat-round-bold" width={16} />
+                  Ver conversación
+                </button>
+                <button
+                  onClick={dismissAssignmentAlert}
+                  className="py-2.5 px-4 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </WhatsAppNotificationContext.Provider>
   );
 };

@@ -109,6 +109,35 @@ class ChatbotProcessorService
             return ['processed' => false, 'reason' => 'No active chatbot for instance', 'conversation_id' => $conversation->id];
         }
 
+        // Human Takeover Guard: bloquear bot cuando un asesor está manejando la conversación.
+        // El bot se reactiva automáticamente si pasan 2h sin respuesta del asesor.
+        // También se reactiva cuando el asesor marca como resuelta (status → closed via resolveConversation).
+        if (in_array($conversation->status, ['assigned', 'in_progress'])) {
+            $hoursSinceAssignment = $conversation->assigned_at
+                ? $conversation->assigned_at->diffInHours(now())
+                : 0;
+
+            if ($hoursSinceAssignment < 2) {
+                Log::info("🚫 [CHATBOT] Bot bloqueado: asesor humano activo", [
+                    'conversation_id' => $conversation->id,
+                    'status' => $conversation->status,
+                    'hours_since_assignment' => $hoursSinceAssignment,
+                ]);
+                return ['processed' => false, 'reason' => 'Human agent handling conversation', 'conversation_id' => $conversation->id];
+            }
+
+            // Han pasado 2h sin actividad del asesor → reactivar bot y resetear asignación
+            Log::info("⏰ [CHATBOT] 2h sin respuesta del asesor, reactivando bot", [
+                'conversation_id' => $conversation->id,
+                'hours_since_assignment' => $hoursSinceAssignment,
+            ]);
+            $conversation->update([
+                'status' => 'pending',
+                'assigned_to' => null,
+                'assigned_at' => null,
+            ]);
+        }
+
         // Verificar horario de atención
         if ($chatbot->business_hours_enabled && !$chatbot->isWithinBusinessHours()) {
             $outOfHoursMsg = $chatbot->out_of_hours_message;
@@ -453,6 +482,12 @@ class ChatbotProcessorService
             'input_contact_field' => $vars['_input_contact_field'] ?? null,
             'options_node_id' => $vars['_options_node_id'] ?? null,
             'options_error_message' => $vars['_options_error_message'] ?? null,
+            // Campos para nodo de consentimiento de datos
+            'waiting_for_consent' => $vars['_waiting_for_consent'] ?? false,
+            'consent_node_id' => $vars['_consent_node_id'] ?? null,
+            'consent_next_node_id' => $vars['_consent_next_node_id'] ?? null,
+            'consent_reject_node_id' => $vars['_consent_reject_node_id'] ?? null,
+            'consent_reject_message' => $vars['_consent_reject_message'] ?? null,
             'created_at' => $dbSession->started_at?->timestamp ?? now()->timestamp,
             'last_activity' => $dbSession->last_activity_at?->timestamp ?? now()->timestamp,
         ];
@@ -513,6 +548,21 @@ class ChatbotProcessorService
             unset($variables['_input_validation']);
             unset($variables['_input_node_id']);
             unset($variables['_input_contact_field']);
+        }
+
+        // Campos para nodo de consentimiento de datos
+        if (!empty($session['waiting_for_consent'])) {
+            $variables['_waiting_for_consent'] = true;
+            $variables['_consent_node_id'] = $session['consent_node_id'] ?? null;
+            $variables['_consent_next_node_id'] = $session['consent_next_node_id'] ?? null;
+            $variables['_consent_reject_node_id'] = $session['consent_reject_node_id'] ?? null;
+            $variables['_consent_reject_message'] = $session['consent_reject_message'] ?? null;
+        } else {
+            unset($variables['_waiting_for_consent']);
+            unset($variables['_consent_node_id']);
+            unset($variables['_consent_next_node_id']);
+            unset($variables['_consent_reject_node_id']);
+            unset($variables['_consent_reject_message']);
         }
 
         $status = ($session['waiting_for_response'] ?? false) 
@@ -944,6 +994,42 @@ class ChatbotProcessorService
                 $response = $result['response'];
                 $stop = $result['stop'];
                 break;
+
+            case 'consent':
+                // Nodo de consentimiento de datos: solicita autorización al cliente
+                $baseText = $config['message'] ?? "Para continuar necesitamos tu autorización para el tratamiento de tus datos personales según nuestra política de privacidad.";
+                $acceptLabel = $config['accept_label'] ?? 'Sí, acepto';
+                $rejectLabel = $config['reject_label'] ?? 'No, no acepto';
+                $consentText = $this->replaceVariables($baseText, $session['variables'])
+                    . "\n\n✅ 1. {$acceptLabel}\n❌ 2. {$rejectLabel}";
+                $consentText = $this->replaceVariables($consentText, $session['variables']);
+                $result = $this->bridge->sendMessage($instanceId, $phone, $consentText);
+                if ($result['success']) {
+                    $conversation->addMessage([
+                        'message_id' => $result['messageId'] ?? null,
+                        'direction' => 'outgoing',
+                        'sender_type' => 'bot',
+                        'message_type' => 'text',
+                        'content' => $consentText,
+                        'status' => 'sent',
+                    ]);
+                    $response = $consentText;
+
+                    // Limpiar estado de opciones/input previas
+                    $session['expected_options'] = null;
+                    $session['waiting_for_input'] = false;
+                    $session['options_node_id'] = null;
+
+                    // Marcar que esperamos confirmación de consentimiento
+                    $session['waiting_for_response'] = true;
+                    $session['waiting_for_consent'] = true;
+                    $session['consent_node_id'] = $node->id;
+                    $session['consent_next_node_id'] = $node->next_node_id;
+                    $session['consent_reject_node_id'] = $config['reject_node_id'] ?? null;
+                    $session['consent_reject_message'] = $config['reject_message'] ?? null;
+                }
+                $stop = true;
+                break;
         }
 
         return ['response' => $response, 'stop' => $stop];
@@ -1356,6 +1442,11 @@ class ChatbotProcessorService
             }
         }
 
+        // Si estamos esperando confirmación de consentimiento de datos
+        if (!empty($session['waiting_for_consent'])) {
+            return $this->processConsentResponse($session, $message, $instanceId, $phone, $conversation);
+        }
+
         // PRIMERO: Si hay opciones esperando respuesta, procesarlas (tiene prioridad sobre input)
         if (!empty($session['expected_options'])) {
             return $this->processOptionsResponse($session, $message, $instanceId, $phone, $conversation);
@@ -1664,6 +1755,105 @@ class ChatbotProcessorService
     /**
      * Ejecutar flujo desde un nodo específico
      */
+    /**
+     * Procesar respuesta al nodo de consentimiento de datos
+     */
+    protected function processConsentResponse(array &$session, string $message, string $instanceId, string $phone, WhatsAppConversation $conversation): array
+    {
+        $msgLower = strtolower(trim($message));
+        $acceptTerms = ['1', 'si', 'sí', 'yes', 'acepto', 'ok', 'okay', 'claro', 'dale', 'de acuerdo', 'conforme'];
+        $rejectTerms = ['2', 'no', 'nop', 'nope', 'rechazar', 'no acepto', 'no autorizo'];
+
+        $accepted = in_array($msgLower, $acceptTerms);
+        $rejected = in_array($msgLower, $rejectTerms);
+
+        if ($accepted) {
+            $conversation->update(['data_consent_at' => now()]);
+
+            $session['waiting_for_consent'] = false;
+            $session['waiting_for_response'] = false;
+            $session['variables']['_data_consent'] = 'accepted';
+
+            Log::info('✅ [CHATBOT] Consentimiento aceptado', ['phone' => $phone, 'conversation_id' => $conversation->id]);
+
+            $nextNodeId = $session['consent_next_node_id'] ?? null;
+            if ($nextNodeId) {
+                // El nodo siguiente (ej: menú) actúa como confirmación — no enviar mensaje extra
+                return $this->executeFlowFromNode($session, $nextNodeId, $instanceId, $phone, $conversation);
+            }
+
+            // Sin nodo siguiente: enviar confirmación genérica y terminar
+            $confirmMsg = '✅ ¡Gracias! Tu autorización ha sido registrada.';
+            $result = $this->bridge->sendMessage($instanceId, $phone, $confirmMsg);
+            if ($result['success']) {
+                $conversation->addMessage([
+                    'message_id' => $result['messageId'] ?? null,
+                    'direction' => 'outgoing',
+                    'sender_type' => 'bot',
+                    'message_type' => 'text',
+                    'content' => $confirmMsg,
+                    'status' => 'sent',
+                ]);
+            }
+            $this->deleteSession($instanceId, $phone);
+            return ['processed' => true, 'reason' => 'Consent accepted, flow complete'];
+        }
+
+        if ($rejected) {
+            $session['waiting_for_consent'] = false;
+            $session['variables']['_data_consent'] = 'rejected';
+
+            Log::info('❌ [CHATBOT] Consentimiento rechazado', ['phone' => $phone, 'conversation_id' => $conversation->id]);
+
+            // Resetear conversación a pending para que el bot pueda reiniciarse si el cliente escribe de nuevo
+            $conversation->update([
+                'status' => 'pending',
+                'assigned_to' => null,
+                'assigned_at' => null,
+            ]);
+
+            $rejectNodeId = $session['consent_reject_node_id'] ?? null;
+            if ($rejectNodeId) {
+                // El nodo de rechazo (ej: despedida) envía el mensaje — no duplicar aquí
+                $session['waiting_for_response'] = false;
+                return $this->executeFlowFromNode($session, (int) $rejectNodeId, $instanceId, $phone, $conversation);
+            }
+
+            // Sin nodo de rechazo configurado: enviar mensaje genérico y terminar
+            $rejectMsg = $session['consent_reject_message']
+                ?? '❌ Entendido. Sin tu autorización no podemos continuar. Si cambias de opinión, escríbenos nuevamente.';
+            $result = $this->bridge->sendMessage($instanceId, $phone, $rejectMsg);
+            if ($result['success']) {
+                $conversation->addMessage([
+                    'message_id' => $result['messageId'] ?? null,
+                    'direction' => 'outgoing',
+                    'sender_type' => 'bot',
+                    'message_type' => 'text',
+                    'content' => $rejectMsg,
+                    'status' => 'sent',
+                ]);
+            }
+            $this->deleteSession($instanceId, $phone);
+            return ['processed' => true, 'reason' => 'Consent rejected, flow ended'];
+        }
+
+        // Respuesta no reconocida — volver a pedir
+        $retryMsg = 'Por favor responde *1* para aceptar o *2* para no aceptar.';
+        $result = $this->bridge->sendMessage($instanceId, $phone, $retryMsg);
+        if ($result['success']) {
+            $conversation->addMessage([
+                'message_id' => $result['messageId'] ?? null,
+                'direction' => 'outgoing',
+                'sender_type' => 'bot',
+                'message_type' => 'text',
+                'content' => $retryMsg,
+                'status' => 'sent',
+            ]);
+        }
+        $this->saveSession($session, $instanceId, $phone);
+        return ['processed' => true, 'reason' => 'Consent response not recognized, waiting'];
+    }
+
     protected function executeFlowFromNode(array $session, int $nodeId, string $instanceId, string $phone, WhatsAppConversation $conversation): array
     {
         $flow = ChatbotFlow::find($session['flow_id']);

@@ -1351,6 +1351,15 @@ class MasterDashboardController extends Controller
 
             $trialDays = $request->input('trial_days', 7);
 
+            // Default de operatividad: si el master no marcó ningún modo en el
+            // formulario, el broker nace en "Agencia Automática".
+            $featuresInput = $request->input('features', []);
+            $featuresToSave = is_array($featuresInput) ? $featuresInput : [];
+            if (!in_array('operativa_manual', $featuresToSave, true)
+                && !in_array('operativa_automatica', $featuresToSave, true)) {
+                $featuresToSave[] = 'operativa_automatica';
+            }
+
             $broker = Broker::create([
                 'name' => $request->input('name'),
                 'legal_name' => $request->input('legal_name', $request->input('name')),
@@ -1367,7 +1376,7 @@ class MasterDashboardController extends Controller
                 'max_users' => $request->input('max_users', 5),
                 'max_clients' => 999999,
                 'max_policies' => 999999,
-                'features' => $request->input('features', []),
+                'features' => $featuresToSave,
                 'status' => $request->input('status', 'trial'),
                 'trial_ends_at' => \Carbon\Carbon::now()->addDays($trialDays),
                 'settings' => [

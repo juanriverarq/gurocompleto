@@ -1,9 +1,8 @@
 import { motion, useInView } from 'framer-motion';
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState } from 'react';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router';
-import { ModuleKey, BillingPeriod, MODULES, calculateTotals, BASE_PLATFORM_FEE, getMonthlyPricePerUser, numberFormat } from '../pricing-calculator/modules';
-import CalendlyModal from './CalendlyModal';
+import { ModuleKey, BillingPeriod, MODULES, calculateTotals, numberFormat } from '../pricing-calculator/modules';
 
 /* ── Feature items matching /comenzar (modules.ts) exactly ── */
 
@@ -17,80 +16,67 @@ type FeatureItem = {
 const allFeatureNames = [
   'Clientes',
   'Pólizas',
-  'Siniestros',
-  'Renovaciones',
-  'Automóviles',
-  'Seguimiento',
-  'Documentos',
-  'WhatsApp Marketing',
-  'Email Marketing',
-  'IA Call Center',
-  'Negocios (CRM)',
+  'Seguimientos',
+  'Autos',
+  'Negocios',
   'Cartera',
   'Comisiones',
-  'Reportes Avanzados',
-  'Mini Web',
-  'Asistente IA',
+  'Tareas',
+  'Chatbot IA',
+  'Negocios (CRM)',
   'Lector PDF con IA',
-  'Chatbot WhatsApp',
-  'Marca Blanca',
-  'App Móvil',
-  'Sitio Web',
-  'Facturación electrónica',
+  'IA de venta cruzada',
+  'App móvil',
+  'Facturación',
   'Nómina electrónica',
-  'IA Predicciones',
-  'IA Ventas Cruzadas',
+  'IA para llamadas',
+  'App Móvil',
 ];
 
 /* Per-plan: which features are included and with what note */
 const starterFeatures: FeatureItem[] = [
   { name: 'Clientes' },
   { name: 'Pólizas' },
-  { name: 'Siniestros' },
-  { name: 'Renovaciones' },
-  { name: 'Automóviles' },
-  { name: 'Seguimiento' },
-  { name: 'Documentos' },
-  { name: 'Negocios (CRM)' },
+  { name: 'Seguimientos' },
+  { name: 'Autos' },
+  { name: 'Negocios' },
   { name: 'Cartera' },
+  { name: 'Comisiones' },
+  { name: 'Tareas' },
 ];
 const starterSet = new Set(starterFeatures.map(f => f.name));
 
 const professionalFeatures: FeatureItem[] = [
   ...starterFeatures,
-  { name: 'WhatsApp Marketing', note: 'Envíos masivos · $70/envío' },
-  { name: 'Email Marketing', note: '$80/email enviado' },
-  { name: 'IA Call Center', note: '$1,200/min · baja según consumo' },
-  { name: 'Comisiones' },
-  { name: 'Reportes Avanzados' },
-  { name: 'Mini Web' },
-  { name: 'Asistente IA' },
+  { name: 'Chatbot IA' },
   { name: 'Lector PDF con IA' },
+  { name: 'IA de venta cruzada' },
 ];
 const professionalSet = new Set(professionalFeatures.map(f => f.name));
 
 const businessFeatures: FeatureItem[] = [
   ...professionalFeatures,
-  { name: 'Chatbot WhatsApp' },
-  { name: 'Marca Blanca' },
-  { name: 'Sitio Web' },
-  { name: 'IA Predicciones' },
-  { name: 'IA Ventas Cruzadas' },
+  { name: 'App móvil' },
+  { name: 'Facturación' },
+  { name: 'Nómina electrónica' },
+  { name: 'IA para llamadas', note: 'cobro por consumo' },
 ];
 const businessSet = new Set(businessFeatures.map(f => f.name));
 
-const customExtras: FeatureItem[] = [
-  { name: 'App Móvil' },
-  { name: 'Facturación electrónica' },
-  { name: 'Nómina electrónica' },
-];
-const customFeatures: FeatureItem[] = [
-  ...businessFeatures,
-  ...customExtras,
-];
-const customSet = new Set(customFeatures.map(f => f.name));
+const ANNUAL_DISCOUNT = 0.12;
 
-const ANNUAL_DISCOUNT = 0.12; // 12%
+// Precio del usuario adicional sobre el incluido del plan
+const EXTRA_USER_MONTHLY = 30000;
+const EXTRA_USER_PACK5_MONTHLY = 25000; // si extra >= 5
+const PACK_THRESHOLD = 5;
+
+/** Costo mensual extra por usuarios sobre los incluidos. Pack >=5 baja a $25k. */
+const extraUsersMonthly = (planUsers: number, totalUsers: number): number => {
+  const extra = Math.max(0, totalUsers - planUsers);
+  if (extra === 0) return 0;
+  const perUser = extra >= PACK_THRESHOLD ? EXTRA_USER_PACK5_MONTHLY : EXTRA_USER_MONTHLY;
+  return extra * perUser;
+};
 
 /* Mandatory module keys (always included) */
 const mandatoryKeys: ModuleKey[] = MODULES.filter(m => m.mandatory).map(m => m.key);
@@ -114,54 +100,49 @@ const businessModules: ModuleKey[] = [
 
 const plans = [
   {
-    name: 'Starter',
-    description: 'Para agentes independientes que quieren empezar.',
+    name: 'START',
+    description: 'Ideal para asesores independientes.',
     popular: false,
     features: starterFeatures,
     includedSet: starterSet,
     cta: 'Comenzar',
     minUsers: 1,
+    includedUsers: '1 usuario incluido',
+    fixedMonthlyPrice: 249000,
     presetStorageGB: 10,
     presetModules: starterModules,
   },
   {
-    name: 'Professional',
-    description: 'Para agencias en crecimiento que necesitan más.',
+    name: 'BUSINESS',
+    description: 'Ideal para equipos comerciales.',
     popular: true,
     features: professionalFeatures,
     includedSet: professionalSet,
     cta: 'Comenzar',
     minUsers: 3,
+    includedUsers: '3 usuarios incluidos',
+    fixedMonthlyPrice: 480000,
     presetStorageGB: 30,
     presetModules: professionalModules,
   },
   {
-    name: 'Business',
-    description: 'Para agencias consolidadas con operación completa.',
+    name: 'ENTERPRISE',
+    description: 'Ideal para empresas y operaciones avanzadas.',
     popular: false,
     features: businessFeatures,
     includedSet: businessSet,
     cta: 'Comenzar',
     minUsers: 5,
+    includedUsers: '5 usuarios incluidos',
+    fixedMonthlyPrice: 870000,
     presetStorageGB: 50,
-    presetModules: businessModules,
-  },
-  {
-    name: 'A tu medida',
-    description: 'Arma tu plan con las apps que necesites.',
-    popular: false,
-    features: customExtras,
-    includedSet: customSet,
-    isEnterprise: true,
-    cta: 'Armar mi plan',
-    minUsers: 1,
-    presetStorageGB: 10,
     presetModules: businessModules,
   },
 ];
 
 /** Compute monthly price for a plan given user count */
 function computePlanPrice(plan: typeof plans[number], users: number): number {
+  if ('fixedMonthlyPrice' in plan) return plan.fixedMonthlyPrice;
   const selected = new Set<ModuleKey>(plan.presetModules);
   const totals = calculateTotals(selected, users, 'monthly');
   const extraGB = Math.max(plan.presetStorageGB - 10, 0);
@@ -171,7 +152,7 @@ function computePlanPrice(plan: typeof plans[number], users: number): number {
 
 const formatPrice = numberFormat;
 
-const VISIBLE_COUNT = 5;
+const VISIBLE_COUNT = 20;
 
 const PlanFeatures = ({ plan }: { plan: typeof plans[number] }) => {
   const [expanded, setExpanded] = useState(false);
@@ -236,26 +217,22 @@ const PlanFeatures = ({ plan }: { plan: typeof plans[number] }) => {
 const Pricing = () => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-100px' });
-  const [isAnnual, setIsAnnual] = useState(true);
-  const [showCalendly, setShowCalendly] = useState(false);
+  const [isAnnual, setIsAnnual] = useState(false);
   const navigate = useNavigate();
 
-  // Per-plan user counts (initialized to each plan's minimum)
+  // Usuarios por plan: arranca con `minUsers` (los incluidos).
   const [planUsers, setPlanUsers] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {};
-    plans.forEach(p => { init[p.name] = p.minUsers; });
-    return init;
+    const m: Record<string, number> = {};
+    plans.forEach((p) => { m[p.name] = p.minUsers; });
+    return m;
   });
 
-  const setUsersForPlan = (planName: string, min: number, delta: number) => {
-    setPlanUsers(prev => ({
-      ...prev,
-      [planName]: Math.max(min, (prev[planName] || min) + delta),
-    }));
+  const setUsersFor = (planName: string, value: number, planMin: number) => {
+    setPlanUsers((prev) => ({ ...prev, [planName]: Math.max(planMin, Math.floor(value || planMin)) }));
   };
 
   const handlePlanClick = (plan: typeof plans[number]) => {
-    const users = planUsers[plan.name] || plan.minUsers;
+    const users = planUsers[plan.name] ?? plan.minUsers;
     const period: BillingPeriod = isAnnual ? 'annual' : 'monthly';
     const selected = new Set<ModuleKey>(plan.presetModules);
     const totals = calculateTotals(selected, users, period);
@@ -265,6 +242,7 @@ const Pricing = () => {
       totals,
       storageGB: plan.presetStorageGB,
       period,
+      planName: plan.name,
     };
     localStorage.setItem('guro_pricing_selection', JSON.stringify(payload));
     localStorage.setItem('guro_selected_apps', JSON.stringify(plan.presetModules));
@@ -298,57 +276,56 @@ const Pricing = () => {
           </p>
         </motion.div>
 
-        {/* Toggle */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={isInView ? { opacity: 1 } : {}}
           transition={{ delay: 0.2 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 mb-10 sm:mb-14"
+          className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10 sm:mb-14"
         >
           <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full p-1">
             <button
+              type="button"
               onClick={() => setIsAnnual(false)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                !isAnnual ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-white/50'
+                !isAnnual ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-white/50 hover:text-white'
               }`}
             >
               Mensual
             </button>
             <button
+              type="button"
               onClick={() => setIsAnnual(true)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                isAnnual ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-white/50'
+                isAnnual ? 'bg-white text-[#0d0d0d] shadow-sm' : 'text-white/50 hover:text-white'
               }`}
             >
               Anual
             </button>
           </div>
-          {isAnnual && (
-            <motion.span
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-1 text-[11px] font-bold text-[#573CFF] uppercase tracking-wider"
-            >
-              <Icon icon="solar:tag-price-bold" className="w-3.5 h-3.5" />
-              Ahorra 12% en el plan anual
-            </motion.span>
-          )}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-emerald-200">
+              Anual con 12% de descuento
+            </span>
+            <span className="rounded-full border border-[#573CFF]/35 bg-[#573CFF]/15 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-white">
+              Usuario adicional: $30.000
+            </span>
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-emerald-200">
+              Pack +5 usuarios: $25.000 por usuario
+            </span>
+          </div>
         </motion.div>
 
         {/* Cards */}
-        <div className="grid lg:grid-cols-4 gap-0 border border-white/10 rounded-2xl overflow-hidden bg-white/[0.02]">
+        <div className="grid lg:grid-cols-3 gap-0 border border-white/10 rounded-3xl overflow-hidden bg-white/[0.02] shadow-[0_30px_90px_rgba(0,0,0,0.35)]">
           {plans.map((plan, index) => {
             const isCustom = 'isEnterprise' in plan && plan.isEnterprise;
-            const users = planUsers[plan.name] || plan.minUsers;
-            const monthlyPrice = isCustom ? null : computePlanPrice(plan, users);
-            const monthlyDisplay = monthlyPrice
-              ? isAnnual
-                ? Math.round(monthlyPrice * (1 - ANNUAL_DISCOUNT))
-                : monthlyPrice
-              : null;
-            const annualTotal = monthlyPrice
-              ? Math.round(monthlyPrice * 12 * (1 - ANNUAL_DISCOUNT))
-              : null;
+            const users = planUsers[plan.name] ?? plan.minUsers;
+            const extraMonthly = extraUsersMonthly(plan.minUsers, users);
+            const basePrice = isCustom ? null : computePlanPrice(plan, plan.minUsers);
+            const monthlyPrice = basePrice !== null ? basePrice + extraMonthly : null;
+            const monthlyDisplay = monthlyPrice ? Math.round(monthlyPrice) : null;
+            const annualTotal = monthlyPrice ? Math.round(monthlyPrice * 12 * (1 - ANNUAL_DISCOUNT)) : null;
+            const extraCount = Math.max(0, users - plan.minUsers);
 
             return (
               <motion.div
@@ -357,7 +334,9 @@ const Pricing = () => {
                 animate={isInView ? { opacity: 1, y: 0, scale: 1 } : {}}
                 transition={{ duration: 0.6, delay: 0.1 + index * 0.12, ease: [0.22, 1, 0.36, 1] }}
                 whileHover={{ y: -6, transition: { duration: 0.3 } }}
-                className={`p-7 sm:p-8 flex flex-col transition-all duration-300 hover:bg-white/[0.04] ${
+                className={`relative p-7 sm:p-8 flex flex-col transition-all duration-300 hover:bg-white/[0.04] ${
+                  plan.popular ? 'bg-[#573CFF]/10 ring-1 ring-[#573CFF]/40' : ''
+                } ${
                   index < plans.length - 1 ? 'lg:border-r border-b lg:border-b-0 border-white/10' : ''
                 }`}
               >
@@ -379,30 +358,58 @@ const Pricing = () => {
                 {/* Description */}
                 <p className="text-sm text-white/50 mb-1 leading-relaxed">{plan.description}</p>
 
-                {/* User selector */}
+                <div className="mb-5 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80">
+                    <Icon icon="solar:user-check-rounded-bold-duotone" className="h-4 w-4 text-[#573CFF]" />
+                    {'includedUsers' in plan ? plan.includedUsers : `${plan.minUsers} usuarios incluidos`}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/60">
+                    <Icon icon="solar:database-bold-duotone" className="h-4 w-4 text-white/40" />
+                    {plan.presetStorageGB} GB
+                  </span>
+                </div>
+
+                {/* Selector de usuarios (solo planes con precio definido) */}
                 {!isCustom && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <button
-                      onClick={() => setUsersForPlan(plan.name, plan.minUsers, -1)}
-                      disabled={users <= plan.minUsers}
-                      className="w-7 h-7 rounded-lg border border-white/15 flex items-center justify-center text-white/60 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition"
-                    >
-                      <Icon icon="solar:minus-circle-linear" className="text-sm" />
-                    </button>
-                    <span className="text-sm font-semibold text-white min-w-[60px] text-center">
-                      {users} {users === 1 ? 'usuario' : 'usuarios'}
-                    </span>
-                    <button
-                      onClick={() => setUsersForPlan(plan.name, plan.minUsers, 1)}
-                      className="w-7 h-7 rounded-lg border border-white/15 flex items-center justify-center text-white/60 hover:bg-white/10 transition"
-                    >
-                      <Icon icon="solar:add-circle-linear" className="text-sm" />
-                    </button>
-                    <span className="text-[10px] text-white/40 ml-1">· {plan.presetStorageGB} GB</span>
+                  <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-white/70">Usuarios</label>
+                      <span className="text-[10px] text-white/40">
+                        {extraCount > 0
+                          ? `+${extraCount} extra · ${formatPrice(extraMonthly)}/mes`
+                          : 'Solo incluidos'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setUsersFor(plan.name, Math.max(plan.minUsers, users - 1), plan.minUsers)}
+                        className="w-9 h-9 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition"
+                        aria-label="Quitar usuario"
+                      >
+                        <Icon icon="solar:minus-circle-linear" className="text-lg" />
+                      </button>
+                      <input
+                        type="number"
+                        min={plan.minUsers}
+                        value={users}
+                        onChange={(e) => setUsersFor(plan.name, Number(e.target.value) || plan.minUsers, plan.minUsers)}
+                        className="w-full text-center border border-white/15 rounded-xl py-2 text-sm bg-white/5 text-white font-semibold focus:border-[#573CFF] focus:ring-2 focus:ring-[#573CFF]/20 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setUsersFor(plan.name, users + 1, plan.minUsers)}
+                        className="w-9 h-9 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition"
+                        aria-label="Agregar usuario"
+                      >
+                        <Icon icon="solar:add-circle-linear" className="text-lg" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-white/40 mt-1.5">
+                      Mínimo {plan.minUsers}. Cada adicional: {formatPrice(EXTRA_USER_MONTHLY)}/mes
+                      {extraCount >= PACK_THRESHOLD && ` (pack +5: ${formatPrice(EXTRA_USER_PACK5_MONTHLY)}/mes c/u)`}
+                    </p>
                   </div>
-                )}
-                {isCustom && (
-                  <p className="text-xs text-white/50 mb-4">Usuarios y almacenamiento a tu medida</p>
                 )}
 
                 {/* Price */}
@@ -414,24 +421,19 @@ const Pricing = () => {
                           className="text-3xl sm:text-4xl font-bold text-white tracking-tight"
                           style={{ fontFamily: "'Plus Jakarta Sans', 'Plus Jakarta Sans Fallback', sans-serif" }}
                         >
-                          {formatPrice(monthlyDisplay)}
+                          {isAnnual && annualTotal ? formatPrice(annualTotal) : formatPrice(monthlyDisplay)}
                         </span>
-                        <span className="text-sm text-white/50 font-medium">/mes</span>
+                        <span className="text-sm text-white/50 font-medium">{isAnnual ? '/año' : '/mes'}</span>
                       </div>
                       {isAnnual && annualTotal && (
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
                           <p className="text-xs text-white/50">
-                            {formatPrice(annualTotal)}/año
+                            Equivale a {formatPrice(Math.round(annualTotal / 12))}/mes
                           </p>
-                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded">
-                            -12%
+                          <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold text-emerald-200">
+                            Ahorras {formatPrice((monthlyPrice ?? 0) * 12 - annualTotal)}
                           </span>
                         </div>
-                      )}
-                      {!isAnnual && monthlyPrice && (
-                        <p className="text-xs text-white/50 mt-1">
-                          {formatPrice(monthlyPrice * 12)}/año sin descuento
-                        </p>
                       )}
                     </>
                   ) : (
@@ -471,26 +473,7 @@ const Pricing = () => {
           })}
         </div>
 
-        {/* Bottom link */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={isInView ? { opacity: 1 } : {}}
-          transition={{ delay: 0.5 }}
-          className="text-center mt-10"
-        >
-          <button
-            onClick={() => setShowCalendly(true)}
-            className="inline-flex items-center gap-2 text-sm font-medium text-[#573CFF] hover:gap-3 transition-all"
-          >
-            <Icon icon="solar:calendar-bold-duotone" className="w-4 h-4" />
-            ¿Necesitas algo personalizado? Habla con ventas
-            <Icon icon="solar:arrow-right-linear" className="w-4 h-4" />
-          </button>
-        </motion.div>
       </div>
-
-      {/* Calendly Modal */}
-      <CalendlyModal isOpen={showCalendly} onClose={() => setShowCalendly(false)} />
     </section>
   );
 };

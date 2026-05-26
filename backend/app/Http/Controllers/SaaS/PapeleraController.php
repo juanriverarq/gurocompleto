@@ -251,22 +251,28 @@ class PapeleraController extends Controller
         $brokerId = $this->getBrokerId($request);
         if (!$brokerId) return response()->json(['success' => false, 'message' => 'Broker no identificado'], 403);
 
+        $deleteAll = $request->boolean('delete_all', false);
         $ids = $request->input('ids', []);
-        if (!is_array($ids) || empty($ids)) {
-            return response()->json(['success' => false, 'message' => 'Se requiere al menos un id'], 422);
-        }
-        $ids = array_filter(array_map('intval', $ids));
 
-        $affected = DB::table($cfg['table'])
+        if (!$deleteAll && (!is_array($ids) || empty($ids))) {
+            return response()->json(['success' => false, 'message' => 'Se requiere delete_all o al menos un id'], 422);
+        }
+
+        $q = DB::table($cfg['table'])
             ->where('broker_id', $brokerId)
-            ->whereIn('id', $ids)
-            ->whereNotNull('deleted_at')  // sólo borra los que ya están en papelera
-            ->delete();
+            ->whereNotNull('deleted_at');
+
+        if (!$deleteAll) {
+            $ids = array_filter(array_map('intval', $ids));
+            $q->whereIn('id', $ids);
+        }
+
+        $affected = $q->delete();
 
         return response()->json([
             'success' => true,
             'message' => "Se eliminaron definitivamente $affected registros",
-            'data' => ['deleted' => $affected, 'ids' => $ids],
+            'data' => ['deleted' => $affected],
         ]);
     }
 

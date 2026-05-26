@@ -99,7 +99,8 @@ export type NodeType =
   | 'end'
   | 'policy_lookup'
   | 'add_tag'
-  | 'remove_tag';
+  | 'remove_tag'
+  | 'consent';
 
 export interface NodeConfig {
   // Común

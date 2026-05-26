@@ -9,6 +9,7 @@ const statusLabel: Record<string, string> = {
   completed: 'Actualizado',
   partial: 'Parcial',
   failed: 'Error',
+  not_applicable: 'No aplica',
 };
 
 function statusColor(
@@ -23,6 +24,8 @@ function statusColor(
       return 'failure';
     case 'processing':
       return 'info';
+    case 'not_applicable':
+      return 'gray';
     default:
       return 'gray';
   }
@@ -37,7 +40,7 @@ const CoberturasPolizaTab: React.FC<Props> = ({ poliza, onRefresh }) => {
   const { toast } = useToast();
   const [syncing, setSyncing] = useState(false);
 
-  const canResync = Boolean(poliza.sync_source);
+  const canResync = Boolean(poliza.sync_source) && poliza.detail_sync_status !== 'not_applicable';
   const coverages = poliza.coverages ?? [];
 
   const handleResync = async () => {
@@ -110,7 +113,13 @@ const CoberturasPolizaTab: React.FC<Props> = ({ poliza, onRefresh }) => {
         </Button>
       </div>
 
-      {!canResync && (
+      {poliza.detail_sync_status === 'not_applicable' && (
+        <p className="text-sm text-gray-500">
+          Esta aseguradora no expone un endpoint de detalle — las coberturas se gestionan directamente en el portal.
+        </p>
+      )}
+
+      {!canResync && poliza.detail_sync_status !== 'not_applicable' && (
         <p className="text-sm text-gray-600">
           Solo las pólizas traídas por el sincronizador de aseguradoras pueden pedir detalle y coberturas
           desde el portal.

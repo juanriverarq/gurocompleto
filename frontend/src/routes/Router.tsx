@@ -25,6 +25,7 @@ const TrabajaConNosotros = Loadable(lazyRetry(() => import('../views/pages/Traba
 const CombinedDashboard = Loadable(lazyRetry(() => import('../views/combined/CombinedDashboard')));
 const Inicio = Loadable(lazyRetry(() => import('../views/inicio/Inicio')));
 const GuroHub = Loadable(lazyRetry(() => import('../views/hub/GuroHub')));
+const GuiameLive = Loadable(lazyRetry(() => import('../views/apps/guiame/GuiameLive')));
 
 // authentication
 const Login = Loadable(lazyRetry(() => import('../views/authentication/auth1/Login')));
@@ -75,9 +76,6 @@ const ConfiguracionMasiva = Loadable(
 // Calendar
 const CalendarPage = Loadable(lazyRetry(() => import('../views/apps/calendar/CalendarPage')));
 
-// Pricing page
-const PricingCalculatorPage = Loadable(lazyRetry(() => import('../views/pages/PricingCalculatorPage')));
-
 // Checkout (Frontend)
 const Checkout = Loadable(lazyRetry(() => import('../views/pages/frontend-pages/Checkout')));
 
@@ -88,6 +86,54 @@ const SignupFlow = Loadable(lazyRetry(() => import('../views/pages/onboarding/Si
 // Landing Page
 const LandingPages = Loadable(lazyRetry(() => import('../views/pages/landingpages/LandingPages')));
 const FramerLandingPage = Loadable(lazyRetry(() => import('../views/pages/landingpages/FramerLandingPage')));
+const CrmCorredoresSeguros = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/CrmCorredoresSeguros')),
+);
+const SoftwareCorredoresSeguros = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/SoftwareCorredoresSeguros')),
+);
+const GuroVsEbroker = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/GuroVsEbroker')),
+);
+const GuroVsSumavisos = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/GuroVsSumavisos')),
+);
+const GuroVsVelneo = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/GuroVsVelneo')),
+);
+const GuroVsE2K = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/GuroVsE2K')),
+);
+const GuroVsMacCorredor = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/GuroVsMacCorredor')),
+);
+const GuroVsHubspot = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/GuroVsHubspot')),
+);
+const ComparativasHub = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/ComparativasHub')),
+);
+const SoftwareAgenciasSeguros = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/SoftwareAgenciasSeguros')),
+);
+const AutomatizacionRenovaciones = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/AutomatizacionRenovaciones')),
+);
+const WhatsappBusiness = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/WhatsappBusiness')),
+);
+const IaParaCorredores = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/IaParaCorredores')),
+);
+const GestionComisiones = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/GestionComisiones')),
+);
+const CotizadorEmbebido = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/CotizadorEmbebido')),
+);
+const GestionSiniestros = Loadable(
+  lazyRetry(() => import('../views/pages/landings-b2b/GestionSiniestros')),
+);
 
 const Error = Loadable(lazyRetry(() => import('../views/authentication/Error')));
 const BlogSegurosSEO = Loadable(
@@ -252,10 +298,14 @@ const BasesDatos = Loadable(
 const ServiciosTerceros = Loadable(
   lazyRetry(() => import('../views/apps/integraciones/servicios-terceros/ServiciosTerceros')),
 );
+const SincronizacionHistorico = Loadable(
+  lazyRetry(() => import('../views/apps/integraciones/sincronizacion-historico/SincronizacionHistorico')),
+);
 
 // Mobile Auth
 const MobileAuthPage = Loadable(lazyRetry(() => import('../pages/MobileAuth')));
 const EmpleadoLogin = Loadable(lazyRetry(() => import('../views/auth/EmpleadoLogin')));
+const AsesoresPortal = Loadable(lazyRetry(() => import('../views/asesores/AsesoresPortal')));
 
 // WhatsApp Apps
 const WhatsAppDashboard = Loadable(lazyRetry(() => import('../views/apps/whatsapp/WhatsAppDashboard')));
@@ -298,6 +348,22 @@ const Router = [
       { path: '/blog', element: <BlogIndex /> },
       { path: '/blog/software-seguros-colombia', element: <BlogSegurosSEO /> },
       { path: '/blog/:slug', element: <BlogArticle /> },
+      { path: '/crm-corredores-seguros', element: <CrmCorredoresSeguros /> },
+      { path: '/software-corredores-seguros', element: <SoftwareCorredoresSeguros /> },
+      { path: '/comparar/guro-vs-ebroker', element: <GuroVsEbroker /> },
+      { path: '/comparar/guro-vs-sumavisos', element: <GuroVsSumavisos /> },
+      { path: '/comparar/guro-vs-velneo', element: <GuroVsVelneo /> },
+      { path: '/comparar/guro-vs-e2k', element: <GuroVsE2K /> },
+      { path: '/comparar/guro-vs-mac-corredor', element: <GuroVsMacCorredor /> },
+      { path: '/comparar/guro-vs-hubspot-insurance', element: <GuroVsHubspot /> },
+      { path: '/comparar', element: <ComparativasHub /> },
+      { path: '/software-agencias-seguros', element: <SoftwareAgenciasSeguros /> },
+      { path: '/automatizacion-renovaciones-polizas', element: <AutomatizacionRenovaciones /> },
+      { path: '/whatsapp-business-corredores-seguros', element: <WhatsappBusiness /> },
+      { path: '/ia-para-corredores-seguros', element: <IaParaCorredores /> },
+      { path: '/gestion-comisiones-corredores-seguros', element: <GestionComisiones /> },
+      { path: '/cotizador-embebido-seguros', element: <CotizadorEmbebido /> },
+      { path: '/gestion-siniestros-corredor', element: <GestionSiniestros /> },
       { path: '/regalo', element: <Regalo /> },
       { path: '/trabaja-con-nosotros', element: <ForceLightMode><TrabajaConNosotros /></ForceLightMode> },
       { path: '/terminos-condiciones', element: <TerminosCondiciones /> },
@@ -305,6 +371,7 @@ const Router = [
       // Transitional route while SaaS contexto/tenant se termina de resolver
       { path: '/dashboard-building', element: <ForceLightMode><DashboardBuilding /></ForceLightMode> },
       { path: '/empleados/login', element: <EmpleadoLogin /> },
+      { path: '/asesores', element: <AsesoresPortal /> },
       { path: '/auth/login', element: <Login /> },
     ],
   },
@@ -315,6 +382,7 @@ const Router = [
     children: [
       { path: '/apps/', exact: true, element: <Inicio /> },
       { path: '/apps/inicio', element: <Inicio /> },
+      { path: '/apps/guiame', element: <GuiameLive /> },
       { path: '/apps/hub', element: <GuroHub /> },
       { path: '/apps/dashboard', element: <CombinedDashboard /> },
 
@@ -428,6 +496,7 @@ const Router = [
 
       // Integraciones Routes
       { path: '/apps/integraciones/apis-aseguradoras', element: <ApisAseguradoras /> },
+      { path: '/apps/integraciones/apis-aseguradoras/historial', element: <SincronizacionHistorico /> },
       { path: '/apps/integraciones/webhooks', element: <Webhooks /> },
       { path: '/apps/integraciones/bases-datos', element: <BasesDatos /> },
       { path: '/apps/integraciones/servicios-terceros', element: <ServiciosTerceros /> },
@@ -487,7 +556,7 @@ const Router = [
       { path: '/ayuda/faq', element: <Navigate to="/apps/ayuda/faq" /> },
       {
         path: '/precios',
-        element: <Navigate to="/comenzar" />,
+        element: <FramerLandingPage />,
       },
       {
         path: '/checkout',

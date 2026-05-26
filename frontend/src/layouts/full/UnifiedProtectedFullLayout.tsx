@@ -14,6 +14,7 @@ import GuroLoader from 'src/components/GuroLoader';
 import { GuroTourProvider } from 'src/components/GuroTour/GuroTour';
 import { GuroToastContainer } from 'src/components/GuroToast/GuroToast';
 import ModuleGate from 'src/components/ModuleGate';
+import GuiameMiniOverlay from 'src/components/GuiameBeta/GuiameMiniOverlay';
 
 const UnifiedProtectedFullLayout: React.FC = () => {
   const { activeLayout, activeMode, setActiveMode } = useContext(CustomizerContext);
@@ -31,19 +32,8 @@ const UnifiedProtectedFullLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Sincronizar la clase `.dark` del <html> con el modo activo del Customizer.
-  // El modo se persiste en localStorage.guro_active_mode y puede alternarse
-  // desde el toggle de tema en el top bar (ver Header.tsx).
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const mode = activeMode === 'light' ? 'light' : 'dark';
-    document.documentElement.classList.remove(mode === 'dark' ? 'light' : 'dark');
-    document.documentElement.classList.add(mode);
-    try {
-      localStorage.setItem('guro_active_mode', mode);
-      localStorage.setItem('flowbite-theme-mode', mode);
-    } catch {}
-  }, [activeMode]);
+  // NOTA: la sincronización de la clase `dark` en <html> vive en CustomizerContext
+  // (single source of truth). No la dupliquemos acá para evitar carreras.
 
   // Debug mínimo para inspeccionar estados y evitar "pantallas muertas"
   useEffect(() => {
@@ -392,6 +382,7 @@ const UnifiedProtectedFullLayout: React.FC = () => {
         </div>
       </div>
       <GuroToastContainer />
+      <GuiameMiniOverlay />
     </GuroTourProvider>
   );
 };

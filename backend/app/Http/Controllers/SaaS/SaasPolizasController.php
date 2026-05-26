@@ -326,6 +326,28 @@ class SaasPolizasController extends Controller
                 });
             }
 
+            // Filtrar pólizas SIN vendedor asignado (ninguno de los campos poblado)
+            if ($request->boolean('sin_vendedor')) {
+                $query->where(function($q) {
+                    $q->whereNull('seller_id')
+                      ->whereNull('seller_id_2')
+                      ->where(function($qq) {
+                          $qq->whereNull('seller_name')->orWhere('seller_name', '');
+                      })
+                      ->whereDoesntHave('assignedUser');
+                });
+            }
+
+            // Filtrar por origen (manual o {insurer}_sync en custom_fields._sync_source)
+            if ($request->filled('origen')) {
+                $origen = (string) $request->input('origen');
+                if ($origen === 'manual') {
+                    $query->whereRaw("JSON_EXTRACT(custom_fields, '\\$._sync_source') IS NULL");
+                } else {
+                    $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(custom_fields, '\\$._sync_source')) = ?", [$origen . '_sync']);
+                }
+            }
+
             // Nuevos filtros adicionales
             if ($request->has('renovable') && $request->renovable !== null && $request->renovable !== '') {
                 $renovable = filter_var($request->renovable, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -506,6 +528,28 @@ class SaasPolizasController extends Controller
                           $qu->where('name', 'like', "%{$vendedor}%");
                       });
                 });
+            }
+
+            // Filtrar pólizas SIN vendedor asignado
+            if ($request->boolean('sin_vendedor')) {
+                $query->where(function($q) {
+                    $q->whereNull('seller_id')
+                      ->whereNull('seller_id_2')
+                      ->where(function($qq) {
+                          $qq->whereNull('seller_name')->orWhere('seller_name', '');
+                      })
+                      ->whereDoesntHave('assignedUser');
+                });
+            }
+
+            // Filtrar por origen (manual o {insurer}_sync en custom_fields._sync_source)
+            if ($request->filled('origen')) {
+                $origen = (string) $request->input('origen');
+                if ($origen === 'manual') {
+                    $query->whereRaw("JSON_EXTRACT(custom_fields, '\\$._sync_source') IS NULL");
+                } else {
+                    $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(custom_fields, '\\$._sync_source')) = ?", [$origen . '_sync']);
+                }
             }
 
             // Filtrar por vendedor del catálogo (seller_id)
@@ -1308,6 +1352,10 @@ class SaasPolizasController extends Controller
             // Origen: sync vs manual
             'sync_source' => $poliza->custom_fields['_sync_source'] ?? null,
             'sync_at' => $poliza->custom_fields['_sync_at'] ?? null,
+            // Desglose de costos (Mundial y otras aseguradoras que lo reporten)
+            'valor_iva_aseguradora'           => (float) ($poliza->custom_fields['valor_iva']            ?? 0),
+            'valor_gastos_emision_aseguradora'=> (float) ($poliza->custom_fields['valor_gastos_emision'] ?? 0),
+            'valor_tasa_runt_aseguradora'     => (float) ($poliza->custom_fields['valor_tasa_runt']      ?? 0),
             // Impuestos
             'porcentaje_impuesto_bomberos' => $poliza->porcentaje_impuesto_bomberos,
             'impuesto_bomberos' => $poliza->impuesto_bomberos,
@@ -1960,7 +2008,8 @@ class SaasPolizasController extends Controller
     }
 
     /**
-     * Descarga la carátula PDF de una póliza desde HDI.
+     * Descarga la carátula PDF de una póliza desde la aseguradora origen.
+     * Soporta HDI (microservicio /hdi/polizas/{n}/pdf) y SURA (P8 vía /sura/polizas/{n}/caratula).
      */
     public function downloadCaratulaPdf(Request $request, $id)
     {
@@ -1969,41 +2018,72 @@ class SaasPolizasController extends Controller
             $poliza = Poliza::where('broker_id', $brokerId)->where('id', $id)->firstOrFail();
 
             $cf = $poliza->custom_fields ?? [];
-            $detail = $cf['_detail'] ?? [];
-            $sseguro = $detail['sseguro'] ?? null;
-            $productCode = $detail['product_code'] ?? null;
-
-            if (! $sseguro || ! $productCode) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No hay datos de sincronización (sseguro/product_code). Resincroniza la póliza primero.',
-                ], 422);
-            }
+            // El sync_source se guarda con sufijo '_sync' (ej: 'sura_sync', 'hdi_sync').
+            $syncSource = (string) ($cf['_sync_source'] ?? '');
+            $insurer = preg_replace('/_sync$/', '', strtolower($syncSource));
 
             $conn = $this->resolveInsurerConnectionForPoliza($poliza, (int) $brokerId, null);
             if (! $conn || ! $conn->microservice_session_id) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No hay sesión activa con HDI. Reconecta la aseguradora.',
+                    'message' => 'No hay sesión activa con la aseguradora. Reconéctala.',
                 ], 422);
             }
 
-            $url = rtrim((string) config('services.microservicio.base_url'), '/')
-                . '/hdi/polizas/' . urlencode($poliza->numero_poliza) . '/pdf'
-                . '?sseguro=' . $sseguro . '&product_code=' . $productCode;
+            $microBase = rtrim((string) config('services.microservicio.base_url'), '/');
 
+            if ($insurer === 'sura') {
+                // SURA P8: requiere documento + tipo del TOMADOR para abrir el árbol del cliente.
+                $clienteDoc  = trim((string) ($poliza->policy_holder_document ?? $poliza->client_document ?? ''));
+                $clienteTipo = trim((string) ($poliza->policy_holder_doc_type ?? ''));
+                if ($clienteTipo === '') {
+                    $clienteTipo = 'NIT';
+                }
+                if ($clienteDoc === '') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'La póliza no tiene documento del tomador. Resincroniza para poblar ese dato.',
+                    ], 422);
+                }
+                $url = $microBase
+                    . '/sura/polizas/' . urlencode($poliza->policy_number) . '/caratula'
+                    . '?cliente_doc=' . urlencode($clienteDoc)
+                    . '&cliente_tipo=' . urlencode($clienteTipo);
+            } else {
+                // Default: HDI (comportamiento original).
+                $detail      = $cf['_detail'] ?? [];
+                $sseguro     = $detail['sseguro'] ?? null;
+                $productCode = $detail['product_code'] ?? null;
+                if (! $sseguro || ! $productCode) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No hay datos de sincronización (sseguro/product_code). Resincroniza la póliza primero.',
+                    ], 422);
+                }
+                $url = $microBase
+                    . '/hdi/polizas/' . urlencode($poliza->policy_number) . '/pdf'
+                    . '?sseguro=' . urlencode($sseguro) . '&product_code=' . urlencode($productCode);
+            }
+
+            // Timeout amplio: el flujo SURA P8 puede tomar 30-60s (Playwright + dojo init).
             $response = \Illuminate\Support\Facades\Http::withHeaders([
                 'X-Session-Id' => $conn->microservice_session_id,
-            ])->timeout(90)->get($url);
+            ])->timeout(180)->get($url);
 
             if (! $response->successful()) {
+                $msg = substr($response->body(), 0, 300);
+                // El microservicio devuelve JSON con detail; intentamos mostrar eso.
+                $decoded = json_decode($response->body(), true);
+                if (is_array($decoded) && ! empty($decoded['detail'])) {
+                    $msg = is_string($decoded['detail']) ? $decoded['detail'] : json_encode($decoded['detail']);
+                }
                 return response()->json([
                     'success' => false,
-                    'message' => 'Error al obtener el PDF: ' . substr($response->body(), 0, 300),
+                    'message' => 'Error al obtener el PDF: ' . $msg,
                 ], 502);
             }
 
-            $filename = 'caratula_' . $poliza->numero_poliza . '.pdf';
+            $filename = 'caratula_' . $poliza->policy_number . '.pdf';
             return response($response->body(), 200, [
                 'Content-Type'        => 'application/pdf',
                 'Content-Disposition' => 'attachment; filename="' . $filename . '"',
@@ -2128,13 +2208,20 @@ class SaasPolizasController extends Controller
                 return response()->json(['success' => true, 'data' => ['total' => 0, 'synced' => 0, 'failed' => 0, 'cancelled' => 0, 'pending' => 0, 'by_source' => []]]);
             }
 
-            $base      = $this->polizasWithSyncSource($brokerId);
-            $total     = (clone $base)->count();
-            $done      = (clone $base)->whereIn('detail_sync_status', ['completed', 'partial'])->count();
-            $failed    = (clone $base)->where('detail_sync_status', 'failed')->count();
-            $cancelled = (clone $base)->where('detail_sync_status', 'cancelled')->count();
-            $pending   = $total - $done - $failed - $cancelled;
-            $synced    = $done;
+            $base         = $this->polizasWithSyncSource($brokerId);
+            $total        = (clone $base)->count();
+            $done         = (clone $base)->whereIn('detail_sync_status', ['completed', 'partial'])->count();
+            $failed       = (clone $base)->where('detail_sync_status', 'failed')->count();
+            $cancelled    = (clone $base)->where('detail_sync_status', 'cancelled')->count();
+            // Diferenciar nunca-sincronizado (null) de en-cola (pending/processing)
+            $neverSynced  = (clone $base)->whereNull('detail_sync_status')->count();
+            $inProgress   = (clone $base)->whereIn('detail_sync_status', ['pending', 'processing'])->count();
+            $pending      = $neverSynced + $inProgress;
+            $synced       = $done;
+            // Fecha de última sincronización exitosa (cualquier póliza del broker)
+            $lastSyncAt   = (clone $base)->whereIn('detail_sync_status', ['completed', 'partial'])->max('detail_sync_at');
+            // Cuántas se procesarán si "solo pendientes" (no completed/partial)
+            $toResyncPending = $total - $done;
 
             // Desglose por fuente (aseguradora)
             $sources = DB::table('polizas')
@@ -2179,7 +2266,11 @@ class SaasPolizasController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => compact('total', 'synced', 'failed', 'cancelled', 'pending', 'bySource'),
+                'data' => compact(
+                    'total', 'synced', 'failed', 'cancelled', 'pending',
+                    'neverSynced', 'inProgress', 'toResyncPending',
+                    'lastSyncAt', 'bySource'
+                ),
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
@@ -3159,12 +3250,18 @@ class SaasPolizasController extends Controller
             if (isset($validated['vendedor'])) {
                 $updateData['seller_name'] = $validated['vendedor'];
             }
-            // Si viene vendedor_id del catálogo, mapear a seller_name y seller_id
-            if (isset($validated['vendedor_id'])) {
-                $vend = Vendedor::forBroker($brokerId)->find((int)$validated['vendedor_id']);
-                if ($vend) {
-                    $updateData['seller_id'] = $vend->id;
-                    $updateData['seller_name'] = $vend->nombres;
+            // Si viene vendedor_id del catálogo. Si viene vacío/null = "sin asignar" → limpiar.
+            if (array_key_exists('vendedor_id', $validated)) {
+                if (!empty($validated['vendedor_id'])) {
+                    $vend = Vendedor::forBroker($brokerId)->find((int)$validated['vendedor_id']);
+                    if ($vend) {
+                        $updateData['seller_id'] = $vend->id;
+                        $updateData['seller_name'] = $vend->nombres;
+                    }
+                } else {
+                    // Si se envía vacío, limpiar el vendedor principal
+                    $updateData['seller_id'] = null;
+                    $updateData['seller_name'] = null;
                 }
             }
             // Si viene vendedor_id_2 (segundo vendedor opcional)
@@ -3353,15 +3450,36 @@ class SaasPolizasController extends Controller
                 // Si se quisiera limpiar placas explícitamente, podríamos respetar null via una bandera específica.
             }
 
+            // Capturar valores originales ANTES del update para detectar cambios reales en
+            // la estructura de cuotas. Sin esto, cualquier PUT con forma_pago/periodicidad
+            // (que el frontend envía siempre) dispararía un regen y borraría las cuotas
+            // existentes — corrompiendo enlaces con pagos_polizas.
+            $originalFormaPago = $poliza->forma_pago;
+            $originalPaymentFrequency = $poliza->payment_frequency;
+            $originalInstallmentsCount = $poliza->installments_count;
+            $originalPaymentMethod = $poliza->payment_method;
+
             $poliza->update($updateData);
 
             // ── Detección de cambio en estructura de cuotas ──
-            // Regenera cartera_items si:
-            //  a) Cambia forma_pago/payment_frequency/installments_count, O
+            // Regenera cartera_items SOLO si:
+            //  a) forma_pago/payment_frequency/installments_count/payment_method CAMBIARON
+            //     de verdad (comparado contra valor original), O
             //  b) No hay items válidos (no anulados) en la renovación actual
             $cuotasFields = ['payment_frequency', 'installments_count', 'payment_method'];
-            $formaPagoCambio = isset($validated['forma_pago']);
-            $cuotasFieldsChanged = $formaPagoCambio || !empty(array_intersect($cuotasFields, array_keys($updateData)));
+            $newFormaPago = $validated['forma_pago'] ?? $originalFormaPago;
+            $formaPagoCambio = isset($validated['forma_pago']) && $newFormaPago !== $originalFormaPago;
+            $structuralChanged = false;
+            if (array_key_exists('payment_frequency', $updateData) && $updateData['payment_frequency'] !== $originalPaymentFrequency) {
+                $structuralChanged = true;
+            }
+            if (array_key_exists('installments_count', $updateData) && (int)$updateData['installments_count'] !== (int)$originalInstallmentsCount) {
+                $structuralChanged = true;
+            }
+            if (array_key_exists('payment_method', $updateData) && $updateData['payment_method'] !== $originalPaymentMethod) {
+                $structuralChanged = true;
+            }
+            $cuotasFieldsChanged = $formaPagoCambio || $structuralChanged;
 
             $renovacionActual = (int) ($poliza->numero_renovacion ?? 0);
             $itemsValidos = DB::table('cartera_items')
@@ -3881,6 +3999,91 @@ class SaasPolizasController extends Controller
     }
 
     /**
+     * Asignar vendedor a múltiples pólizas en una sola request.
+     * Body: { assignments: [{poliza_id: int, vendedor_id: int}, ...] }
+     * También acepta seller_id_2 opcional por póliza.
+     */
+    public function bulkAssignSeller(Request $request)
+    {
+        $brokerId = $this->getBrokerId($request);
+        $assignments = $request->input('assignments', []);
+        if (!is_array($assignments) || empty($assignments)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debe enviar al menos una asignación (assignments[]).',
+            ], 422);
+        }
+
+        // Resolver vendedores up-front (1 query) para evitar N+1.
+        $vendedorIds = collect($assignments)
+            ->flatMap(fn ($a) => array_filter([$a['vendedor_id'] ?? null, $a['vendedor_id_2'] ?? null]))
+            ->unique()
+            ->values()
+            ->all();
+        $vendedoresById = \App\Models\Vendedor::forBroker($brokerId)
+            ->whereIn('id', $vendedorIds)
+            ->get()
+            ->keyBy('id');
+
+        $updated = 0;
+        $errors = [];
+        DB::beginTransaction();
+        try {
+            foreach ($assignments as $a) {
+                $polizaId = (int) ($a['poliza_id'] ?? 0);
+                $vendedorId = isset($a['vendedor_id']) ? (int) $a['vendedor_id'] : null;
+                if (!$polizaId || !$vendedorId) {
+                    $errors[] = ['poliza_id' => $polizaId, 'reason' => 'poliza_id y vendedor_id requeridos'];
+                    continue;
+                }
+                $vendedor = $vendedoresById->get($vendedorId);
+                if (!$vendedor) {
+                    $errors[] = ['poliza_id' => $polizaId, 'reason' => 'vendedor no encontrado para este broker'];
+                    continue;
+                }
+                $poliza = Poliza::where('broker_id', $brokerId)->where('id', $polizaId)->first();
+                if (!$poliza) {
+                    $errors[] = ['poliza_id' => $polizaId, 'reason' => 'póliza no encontrada'];
+                    continue;
+                }
+                $updateData = [
+                    'seller_id'   => $vendedor->id,
+                    'seller_name' => $vendedor->nombres,
+                ];
+                if (array_key_exists('vendedor_id_2', $a)) {
+                    if (!empty($a['vendedor_id_2'])) {
+                        $v2 = $vendedoresById->get((int) $a['vendedor_id_2']);
+                        if ($v2) {
+                            $updateData['seller_id_2']   = $v2->id;
+                            $updateData['seller_name_2'] = $v2->nombres;
+                        }
+                    } else {
+                        $updateData['seller_id_2']   = null;
+                        $updateData['seller_name_2'] = null;
+                    }
+                }
+                $poliza->update($updateData);
+                $updated++;
+            }
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('[POLIZAS BULK ASSIGN] Falló', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error procesando asignaciones: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'updated' => $updated,
+            'errors'  => $errors,
+            'message' => "Se asignó vendedor a {$updated} pólizas" . (count($errors) ? " ({" . count($errors) . "} con error)" : ''),
+        ]);
+    }
+
+    /**
      * Delete a poliza (Development version - works with or without auth)
      */
     public function destroy(Request $request, $id)
@@ -4197,21 +4400,37 @@ class SaasPolizasController extends Controller
         $brokerId = $poliza->broker_id;
         $renovacion = (int) ($poliza->numero_renovacion ?? 0);
 
-        // Verificar que no haya pagos ACTIVOS (no anulados)
+        // Verificar que no haya pagos ACTIVOS (no anulados) en cartera_items
         $hayPagosActivos = DB::table('cartera_items')
             ->where('poliza_id', $poliza->id)
             ->where('broker_id', $brokerId)
             ->where('numero_renovacion', $renovacion)
-            ->where('recibo_anulado', false)  // ← clave: ignorar anulados
+            ->where('recibo_anulado', false)
             ->where(function ($q) {
                 $q->where('recaudado_en_oficina', true)
                   ->orWhere('recaudado_aseguradora', true)
                   ->orWhere('comisionada', true)
-                  ->orWhere('valor_recaudado_oficina', '>', 0);
+                  ->orWhere('valor_recaudado_oficina', '>', 0)
+                  ->orWhere('valor_pagado_aseguradora', '>', 0)
+                  ->orWhere('comision_recibida', '>', 0);
             })->exists();
 
+        // SEGUNDA verificación: también chequear pagos_polizas (no solo flags en cartera_items).
+        // Sin esto, si el pago se hizo vía el flujo de pagos_polizas SIN sincronizar los flags
+        // en cartera_items, regenerar borraría las cuotas y dejaría los pagos huérfanos.
+        if (!$hayPagosActivos && \Schema::hasTable('pagos_polizas')) {
+            $hayPagosActivos = DB::table('pagos_polizas')
+                ->where('poliza_id', $poliza->id)
+                ->where('numero_renovacion', $renovacion)
+                ->where(function ($q) {
+                    $q->whereNull('estado')->orWhereNotIn('estado', ['anulado', 'cancelado']);
+                })
+                ->where('monto_pagado', '>', 0)
+                ->exists();
+        }
+
         if ($hayPagosActivos) {
-            \Log::info("regenerateCarteraItemsForPoliza skip: hay pagos activos", ['poliza_id' => $poliza->id]);
+            \Log::info("regenerateCarteraItemsForPoliza skip: hay pagos activos", ['poliza_id' => $poliza->id, 'renovacion' => $renovacion]);
             return -1;
         }
 
@@ -5733,100 +5952,40 @@ class SaasPolizasController extends Controller
             }
             
             $renovaciones = $query->get();
-            
-            // Generar CSV
-            $csvData = [];
-            $csvData[] = [
-                'Número Póliza',
-                'Cliente',
-                'Documento',
-                'Aseguradora',
-                'Ramo',
-                'Placa',
-                'Póliza de riesgo',
-                'Fecha Vencimiento',
-                'Días para Vencimiento',
-                'Valor Prima',
-                'Estado',
-                'Prioridad',
-                'Vendedor',
-                'Observaciones'
-            ];
-            
-            foreach ($renovaciones as $poliza) {
-                $today = Carbon::now();
-                $endDate = Carbon::parse($poliza->end_date);
-                $diasVencimiento = (int) round($today->diffInDays($endDate, false));
-                
-                $estado = 'PENDIENTE';
-                if ($diasVencimiento < 0) {
-                    $estado = 'VENCIDO';
-                } elseif ($diasVencimiento <= 7) {
-                    $estado = 'CRITICO';
-                }
-                
-                // Aplicar la misma lógica mejorada de prioridades
-                // 1. URGENCIA TEMPORAL (base de la prioridad)
-                $prioridad = 'MEDIA'; // Default
-                
-                if ($diasVencimiento < 0) {
-                    // Vencidas: siempre críticas
-                    $prioridad = 'CRITICA';
-                } elseif ($diasVencimiento <= 7) {
-                    // Vencen en 7 días o menos: críticas
-                    $prioridad = 'CRITICA';
-                } elseif ($diasVencimiento <= 15) {
-                    // Vencen en 8-15 días: altas
-                    $prioridad = 'ALTA';
-                } elseif ($diasVencimiento <= 30) {
-                    // Vencen en 16-30 días: media
-                    $prioridad = 'MEDIA';
-                } else {
-                    // Vencen en más de 30 días: baja
-                    $prioridad = 'BAJA';
-                }
-                
-                // 2. AJUSTE POR VALOR ECONÓMICO (puede elevar la prioridad, nunca bajarla)
-                if ($poliza->premium_amount >= 5000000) {
-                    // Primas muy altas (≥$5M): siempre críticas
-                    $prioridad = 'CRITICA';
-                } elseif ($poliza->premium_amount >= 2000000 && $prioridad !== 'CRITICA') {
-                    // Primas altas (≥$2M): mínimo alta (si no es ya crítica por tiempo)
-                    if ($prioridad === 'MEDIA' || $prioridad === 'BAJA') {
-                        $prioridad = 'ALTA';
-                    }
-                } elseif ($poliza->premium_amount >= 1000000 && $prioridad === 'BAJA') {
-                    // Primas medias-altas (≥$1M): mínimo media (si era baja por tiempo)
-                    $prioridad = 'MEDIA';
-                }
-                
-                // Obtener ramo correcto
-                $ramoNombre = $poliza->ramo?->nombre ?? ($poliza->type ?: 'Sin ramo');
-                
-                // Obtener placa del primer automóvil vinculado
-                $placa = '';
-                if ($poliza->automoviles && $poliza->automoviles->count() > 0) {
-                    $placa = $poliza->automoviles->first()->placa ?? '';
-                }
-                
-                $csvData[] = [
-                    $poliza->policy_number,
-                    $poliza->client_name,
-                    $poliza->client_document,
-                    $poliza->insurance_company,
-                    $ramoNombre,
-                    $placa,
-                    $poliza->description ?? '',
-                    $poliza->end_date->format('Y-m-d'),
-                    $diasVencimiento,
-                    number_format($poliza->premium_amount, 2),
-                    $estado,
-                    $prioridad,
-                    ($poliza->vendedor?->nombres ?? ($poliza->seller_name ?? ($poliza->assignedUser?->name ?? 'Sin asignar'))),
-                    $poliza->notes ? strip_tags($poliza->notes) : 'Sin observaciones'
-                ];
+
+            // Columnas seleccionables (mapa completo)
+            $allColumns = $this->getRenovacionExportColumns();
+
+            // Columnas solicitadas (CSV en query param)
+            $solicitadas = $request->input('columnas');
+            if (is_string($solicitadas) && $solicitadas !== '') {
+                $columnas = array_values(array_filter(array_map('trim', explode(',', $solicitadas)), fn($c) => isset($allColumns[$c])));
+            } else {
+                // Defaults: las mismas 14 columnas históricas para preservar compatibilidad
+                $columnas = ['numero_poliza', 'cliente', 'documento_cliente', 'aseguradora', 'ramo', 'placa', 'poliza_riesgo', 'fecha_fin', 'dias_vencimiento', 'prima_neta', 'estado_renovacion', 'prioridad', 'vendedor', 'observaciones'];
             }
-            
+
+            // Headers
+            $headers = [];
+            foreach ($columnas as $col) {
+                $headers[] = $allColumns[$col]['header'];
+            }
+
+            $csvData = [$headers];
+
+            foreach ($renovaciones as $poliza) {
+                $row = [];
+                foreach ($columnas as $col) {
+                    $value = $allColumns[$col]['getter']($poliza);
+                    if (isset($allColumns[$col]['format']) && $allColumns[$col]['format'] === 'number') {
+                        $row[] = number_format((float)($value ?? 0), 2, ',', '');
+                    } else {
+                        $row[] = $value;
+                    }
+                }
+                $csvData[] = $row;
+            }
+
             // Convertir a CSV
             $output = fopen('php://temp', 'r+');
             foreach ($csvData as $row) {
@@ -5835,10 +5994,10 @@ class SaasPolizasController extends Controller
             rewind($output);
             $csvContent = stream_get_contents($output);
             fclose($output);
-            
+
             // Agregar BOM para UTF-8
             $csvContent = "\xEF\xBB\xBF" . $csvContent;
-            
+
             return response($csvContent, 200, [
                 'Content-Type' => 'text/csv; charset=UTF-8',
                 'Content-Disposition' => 'attachment; filename="renovaciones_' . date('Y-m-d_H-i-s') . '.csv"',
@@ -5846,13 +6005,128 @@ class SaasPolizasController extends Controller
                 'Pragma' => 'no-cache',
                 'Expires' => '0'
             ]);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error al exportar renovaciones: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Calcular días para vencimiento y estado/prioridad de renovación.
+     * Devuelve [diasVencimiento, estado, prioridad].
+     */
+    private function calcularRenovacionMeta($poliza): array
+    {
+        $today = Carbon::now();
+        if (!$poliza->end_date) {
+            return [null, 'PENDIENTE', 'MEDIA'];
+        }
+        $endDate = Carbon::parse($poliza->end_date);
+        $dias = (int) round($today->diffInDays($endDate, false));
+
+        $estado = 'PENDIENTE';
+        if ($dias < 0) {
+            $estado = 'VENCIDO';
+        } elseif ($dias <= 7) {
+            $estado = 'CRITICO';
+        }
+
+        $prioridad = 'MEDIA';
+        if ($dias < 0 || $dias <= 7) {
+            $prioridad = 'CRITICA';
+        } elseif ($dias <= 15) {
+            $prioridad = 'ALTA';
+        } elseif ($dias <= 30) {
+            $prioridad = 'MEDIA';
+        } else {
+            $prioridad = 'BAJA';
+        }
+
+        $prima = (float)($poliza->premium_amount ?? 0);
+        if ($prima >= 5000000) {
+            $prioridad = 'CRITICA';
+        } elseif ($prima >= 2000000 && $prioridad !== 'CRITICA') {
+            if ($prioridad === 'MEDIA' || $prioridad === 'BAJA') {
+                $prioridad = 'ALTA';
+            }
+        } elseif ($prima >= 1000000 && $prioridad === 'BAJA') {
+            $prioridad = 'MEDIA';
+        }
+
+        return [$dias, $estado, $prioridad];
+    }
+
+    /**
+     * Mapa de columnas exportables para renovaciones.
+     * Solo incluye campos con datos reales en BD (>5% fill rate) y campos calculados.
+     */
+    private function getRenovacionExportColumns(): array
+    {
+        $fmtDate = fn($d) => $d ? (is_string($d) ? $d : $d->format('Y-m-d')) : '';
+
+        return [
+            // === Póliza - identificación ===
+            'numero_poliza'      => ['header' => 'Número Póliza',      'getter' => fn($p) => $p->policy_number],
+            'internal_number'    => ['header' => 'Número Interno',     'getter' => fn($p) => $p->internal_number ?? ''],
+            'poliza_riesgo'      => ['header' => 'Póliza de Riesgo',   'getter' => fn($p) => $p->description ?? ''],
+            'aseguradora'        => ['header' => 'Aseguradora',        'getter' => fn($p) => $p->insurance_company],
+            'ramo'               => ['header' => 'Ramo',               'getter' => fn($p) => $p->product_name ?: ($p->ramo?->nombre ?? ($p->type ?: 'Sin ramo'))],
+            'subramo'            => ['header' => 'Subramo',            'getter' => fn($p) => $p->ramo ? (is_array($p->ramo->subramo) ? implode(', ', $p->ramo->subramo) : ($p->ramo->subramo ?? '')) : ''],
+            'estado_poliza'      => ['header' => 'Estado Póliza',      'getter' => fn($p) => $this->mapStatusToFrontend($p->status)],
+            'placa'              => ['header' => 'Placa',              'getter' => fn($p) => $p->automoviles && $p->automoviles->count() > 0 ? ($p->automoviles->first()->placa ?? '') : ''],
+
+            // === Cliente ===
+            'cliente'                  => ['header' => 'Cliente',                  'getter' => fn($p) => $p->client_name],
+            'cliente_nombres'          => ['header' => 'Nombres Cliente',          'getter' => fn($p) => $p->client?->first_name ?? ''],
+            'cliente_apellidos'        => ['header' => 'Apellidos Cliente',        'getter' => fn($p) => $p->client?->last_name ?? ''],
+            'documento_cliente'        => ['header' => 'Documento Cliente',        'getter' => fn($p) => $p->client_document],
+            'tipo_documento_cliente'   => ['header' => 'Tipo Documento Cliente',   'getter' => fn($p) => $p->client?->document_type ?? ''],
+            'cliente_tipo'             => ['header' => 'Tipo Cliente',             'getter' => fn($p) => $p->client?->client_type ?? ''],
+            'cliente_fecha_nacimiento' => ['header' => 'Fecha Nacimiento Cliente', 'getter' => fn($p) => $fmtDate($p->client?->birth_date)],
+            'cliente_genero'           => ['header' => 'Género Cliente',           'getter' => fn($p) => $p->client?->gender ?? ''],
+            'cliente_empresa'          => ['header' => 'Empresa Cliente',          'getter' => fn($p) => $p->client?->company ?? ''],
+            'cliente_email'            => ['header' => 'Email Cliente',            'getter' => fn($p) => $p->client?->email ?? ''],
+            'cliente_celular'          => ['header' => 'Celular Cliente',          'getter' => fn($p) => $p->client?->mobile_phone ?? ''],
+            'cliente_direccion'        => ['header' => 'Dirección Cliente',        'getter' => fn($p) => $p->client?->address ?? ''],
+            'cliente_ciudad'           => ['header' => 'Ciudad Cliente',           'getter' => fn($p) => $p->client?->city ?? ''],
+            'cliente_departamento'     => ['header' => 'Departamento Cliente',     'getter' => fn($p) => $p->client?->department ?? ''],
+
+            // === Póliza - fechas ===
+            'fecha_expedicion'   => ['header' => 'Fecha Expedición',   'getter' => fn($p) => $fmtDate($p->issue_date)],
+            'fecha_inicio'       => ['header' => 'Fecha Inicio',       'getter' => fn($p) => $fmtDate($p->start_date)],
+            'fecha_fin'          => ['header' => 'Fecha Vencimiento',  'getter' => fn($p) => $fmtDate($p->end_date)],
+            'dias_vencimiento'   => ['header' => 'Días Vencimiento',   'getter' => fn($p) => $this->calcularRenovacionMeta($p)[0]],
+
+            // === Póliza - valores ===
+            'prima_neta'         => ['header' => 'Prima Neta',         'getter' => fn($p) => $p->premium_amount ?? 0, 'format' => 'number'],
+            'valor_asegurado'    => ['header' => 'Valor Asegurado',    'getter' => fn($p) => $p->insured_amount ?? 0, 'format' => 'number'],
+            'iva'                => ['header' => 'IVA',                'getter' => fn($p) => $p->vat_amount ?? 0, 'format' => 'number'],
+            'porcentaje_iva'     => ['header' => '% IVA',              'getter' => fn($p) => $p->vat_percentage ?? 0],
+            'total'              => ['header' => 'Total',              'getter' => fn($p) => $p->total_amount ?? 0, 'format' => 'number'],
+
+            // === Comisiones ===
+            'comision'             => ['header' => 'Comisión',          'getter' => fn($p) => $p->commission_amount ?? 0, 'format' => 'number'],
+            'porcentaje_comision'  => ['header' => '% Comisión',        'getter' => fn($p) => $p->commission_percentage ?? 0],
+
+            // === Pago ===
+            'forma_pago'         => ['header' => 'Forma de Pago',      'getter' => fn($p) => $p->payment_method ?? ''],
+            'periodicidad_pago'  => ['header' => 'Periodicidad Pago',  'getter' => fn($p) => $p->payment_frequency ?? ''],
+            'estado_pago'        => ['header' => 'Estado Pago',        'getter' => fn($p) => $this->mapStatusToFrontend($p->payment_status ?? 'pending')],
+
+            // === Vendedor / Asesor ===
+            'vendedor'           => ['header' => 'Vendedor',           'getter' => fn($p) => $p->vendedor?->nombres ?? ($p->seller_name ?? ($p->assignedUser?->name ?? 'Sin asignar'))],
+
+            // === Renovación (campos calculados) ===
+            'estado_renovacion'  => ['header' => 'Estado Renovación',  'getter' => fn($p) => $this->calcularRenovacionMeta($p)[1]],
+            'prioridad'          => ['header' => 'Prioridad',          'getter' => fn($p) => $this->calcularRenovacionMeta($p)[2]],
+            'auto_renovacion'    => ['header' => 'Auto Renovación',    'getter' => fn($p) => $p->auto_renewal ? 'Sí' : 'No'],
+
+            // === Notas ===
+            'observaciones'      => ['header' => 'Observaciones',      'getter' => fn($p) => $p->notes ? strip_tags($p->notes) : ''],
+        ];
     }
     
     /**

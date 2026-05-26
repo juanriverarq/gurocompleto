@@ -638,73 +638,82 @@ class WhatsAppChatbotController extends Controller
 
             DB::beginTransaction();
 
-            // Eliminar nodos existentes y recrear (sincronización completa)
-            ChatbotNode::where('flow_id', $flow->id)->delete();
+            // Eliminar nodos existentes
+            DB::table('chatbot_nodes')->where('flow_id', $flow->id)->delete();
 
-            $createdNodes = [];
-            foreach ($request->nodes as $index => $nodeData) {
-                $node = ChatbotNode::create([
-                    'flow_id' => $flow->id,
-                    'node_type' => $nodeData['node_type'],
-                    'name' => $nodeData['name'] ?? null,
+            $now = now();
+            $insertRows = [];
+            foreach ($request->nodes as $nodeData) {
+                $insertRows[] = [
+                    'flow_id'    => $flow->id,
+                    'node_type'  => $nodeData['node_type'],
+                    'name'       => $nodeData['name'] ?? null,
                     'position_x' => $nodeData['position_x'],
                     'position_y' => $nodeData['position_y'],
-                    'config' => $nodeData['config'] ?? [],
+                    'config'     => json_encode($nodeData['config'] ?? []),
                     'next_node_id' => null,
-                ]);
-                $createdNodes[$index] = $node;
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
             }
 
-            // Actualizar conexiones (next_node_id) basándose en next_node_index
-            foreach ($request->nodes as $index => $nodeData) {
-                $updates = [];
-                $configUpdated = false;
-                $config = $createdNodes[$index]->config ?? [];
+            // Inserción masiva: 1 query en lugar de N
+            DB::table('chatbot_nodes')->insert($insertRows);
 
-                // 1) Linear connection: next_node_index → next_node_id
-                if (isset($nodeData['next_node_index']) && isset($createdNodes[$nodeData['next_node_index']])) {
-                    $updates['next_node_id'] = $createdNodes[$nodeData['next_node_index']]->id;
+            // Recuperar IDs insertados en el mismo orden (orden de inserción = orden de ID en transacción)
+            $insertedIds = DB::table('chatbot_nodes')
+                ->where('flow_id', $flow->id)
+                ->orderBy('id')
+                ->pluck('id')
+                ->toArray();
+
+            // Remap conexiones: solo actualizar nodos que tienen conexiones
+            $nodeUpdates = [];
+            foreach ($request->nodes as $index => $nodeData) {
+                $nextNodeId = null;
+                $config = $nodeData['config'] ?? [];
+                $configUpdated = false;
+
+                if (isset($nodeData['next_node_index']) && isset($insertedIds[$nodeData['next_node_index']])) {
+                    $nextNodeId = $insertedIds[$nodeData['next_node_index']];
                 }
 
-                // 2) Options: remap options[].next_node_index → options[].next_node_id
                 if (!empty($config['options']) && is_array($config['options'])) {
-                    foreach ($config['options'] as $optIdx => &$opt) {
-                        if (isset($opt['next_node_index']) && isset($createdNodes[$opt['next_node_index']])) {
-                            $opt['next_node_id'] = (string) $createdNodes[$opt['next_node_index']]->id;
+                    foreach ($config['options'] as &$opt) {
+                        if (isset($opt['next_node_index']) && isset($insertedIds[$opt['next_node_index']])) {
+                            $opt['next_node_id'] = (string) $insertedIds[$opt['next_node_index']];
                             $configUpdated = true;
                         }
-                        // Clean up temp field
                         unset($opt['next_node_index']);
                     }
                     unset($opt);
                 }
 
-                // 3) Conditions: remap true_node_index/false_node_index → true_node_id/false_node_id
-                if (isset($config['true_node_index']) && isset($createdNodes[$config['true_node_index']])) {
-                    $config['true_node_id'] = (string) $createdNodes[$config['true_node_index']]->id;
+                if (isset($config['true_node_index']) && isset($insertedIds[$config['true_node_index']])) {
+                    $config['true_node_id'] = (string) $insertedIds[$config['true_node_index']];
                     unset($config['true_node_index']);
                     $configUpdated = true;
                 }
-                if (isset($config['false_node_index']) && isset($createdNodes[$config['false_node_index']])) {
-                    $config['false_node_id'] = (string) $createdNodes[$config['false_node_index']]->id;
+                if (isset($config['false_node_index']) && isset($insertedIds[$config['false_node_index']])) {
+                    $config['false_node_id'] = (string) $insertedIds[$config['false_node_index']];
                     unset($config['false_node_index']);
                     $configUpdated = true;
                 }
 
-                if ($configUpdated) {
-                    $updates['config'] = $config;
+                if ($nextNodeId !== null || $configUpdated) {
+                    $nodeUpdates[$insertedIds[$index]] = [
+                        'next_node_id' => $nextNodeId,
+                        'config'       => $configUpdated ? json_encode($config) : null,
+                    ];
                 }
+            }
 
-                if (!empty($updates)) {
-                    $createdNodes[$index]->update($updates);
-                    Log::info("🔗 [CHATBOT] Conexiones guardadas", [
-                        'node_id' => $createdNodes[$index]->id,
-                        'node_type' => $createdNodes[$index]->node_type,
-                        'next_node_id' => $updates['next_node_id'] ?? null,
-                        'options_remapped' => !empty($config['options']),
-                        'conditions_remapped' => isset($updates['config']['true_node_id']) || isset($updates['config']['false_node_id']),
-                    ]);
-                }
+            // Actualizar conexiones solo para nodos que las tienen
+            foreach ($nodeUpdates as $nodeId => $upd) {
+                $row = ['updated_at' => $now];
+                if ($upd['next_node_id'] !== null) $row['next_node_id'] = $upd['next_node_id'];
+                if ($upd['config'] !== null)       $row['config']       = $upd['config'];
+                DB::table('chatbot_nodes')->where('id', $nodeId)->update($row);
             }
 
             DB::commit();
@@ -712,7 +721,7 @@ class WhatsAppChatbotController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Nodos sincronizados correctamente',
-                'data' => $flow->fresh()->nodes
+                'data' => ChatbotNode::where('flow_id', $flow->id)->get(),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

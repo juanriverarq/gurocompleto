@@ -213,6 +213,9 @@ Route::post('/freepik/{path}', [\App\Http\Controllers\Api\FreepikProxyController
 // (Anteriormente públicas - ahora requieren Firebase token)
 // =============================================================================
 Route::middleware(['unified.auth', 'global.broker.auth'])->prefix('saas')->group(function () {
+    Route::post('/guiame/chat', [App\Http\Controllers\SaaS\GuiameController::class, 'chat']);
+    Route::post('/guiame/tts', [App\Http\Controllers\SaaS\GuiameController::class, 'tts']);
+
     // Mensajeros
     Route::prefix('mensajeros')->group(function () {
         Route::get('/vehiculos', [App\Http\Controllers\SaaS\MensajerosController::class, 'vehiculos']);
@@ -400,6 +403,15 @@ Route::prefix('empleado-auth')->group(function () {
         Route::get('/contexto', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'contexto']);
         Route::get('/version', [App\Http\Controllers\SaaS\EmpleadoAuthController::class, 'version']);
     });
+});
+
+Route::prefix('asesores')->group(function () {
+    Route::post('/login', [App\Http\Controllers\SaaS\AsesorPortalController::class, 'login']);
+    Route::get('/me', [App\Http\Controllers\SaaS\AsesorPortalController::class, 'me']);
+    Route::post('/logout', [App\Http\Controllers\SaaS\AsesorPortalController::class, 'logout']);
+    Route::get('/clientes', [App\Http\Controllers\SaaS\AsesorPortalController::class, 'clientes']);
+    Route::get('/polizas', [App\Http\Controllers\SaaS\AsesorPortalController::class, 'polizas']);
+    Route::get('/cartera', [App\Http\Controllers\SaaS\AsesorPortalController::class, 'cartera']);
 });
 
 // Rutas temporales de catálogos solo en modo DEBUG y con autenticación unificada
@@ -1014,17 +1026,9 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
     Route::prefix('wallet')->group(function () {
         Route::get('/balance', [WalletController::class, 'getBalance']);
         Route::get('/transactions', [WalletController::class, 'getTransactionHistory']);
-        Route::post('/checkout/wompi', [WalletController::class, 'wompiCheckout']);
-        Route::post('/signature/wompi', [WalletController::class, 'wompiSignature']);
-        Route::post('/confirm/wompi', [WalletController::class, 'wompiConfirm']);
     });
-    
-    // Rutas protegidas SaaS con Autenticación Unificada + verificación de permisos
-    Route::middleware(['saas.auth'])->group(function () {
-        
-        // Pólizas SaaS con aislamiento multi-tenant
+
         Route::prefix('polizas')->group(function () {
-            Route::get('/', [SaasPolizasController::class, 'indexDev']);
             Route::get('/estadisticas', [SaasPolizasController::class, 'estadisticasDev']);
             Route::get('/activas-para-siniestros', [SaasPolizasController::class, 'activasParaSiniestrosDev']);
             Route::get('/exportar', [SaasPolizasController::class, 'exportar']);
@@ -1247,6 +1251,7 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::post('/{insurer}/conectar-auto', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'connectAuto']);
             Route::post('/{insurer}/reconectar', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'reconnect']);
             Route::post('/{insurer}/health-check', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'healthCheck']);
+            Route::post('/{insurer}/ping', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'ping']);
             Route::get('/{insurer}/session-status', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'sessionStatus']);
             Route::get('/{insurer}/connect-status', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'connectStatus']);
             Route::post('/{insurer}/desconectar', [App\Http\Controllers\SaaS\InsurerConnectionController::class, 'disconnect']);
@@ -1257,6 +1262,24 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'index']);
             Route::get('/stats', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'stats']);
             Route::get('/cuotas/{policyNumber}', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'cuotas']);
+            Route::get('/export', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'export']);
+            Route::post('/import/preview', [App\Http\Controllers\SaaS\CarteraImportController::class, 'preview']);
+            Route::post('/import', [App\Http\Controllers\SaaS\CarteraImportController::class, 'import']);
+            Route::delete('/data', [App\Http\Controllers\SaaS\CarteraConsolidadaController::class, 'destroyData']);
+        });
+
+        // Configuración SMTP del broker
+        Route::prefix('email-settings')->group(function () {
+            Route::get('/', [App\Http\Controllers\SaaS\BrokerEmailSettingsController::class, 'show']);
+            Route::put('/', [App\Http\Controllers\SaaS\BrokerEmailSettingsController::class, 'update']);
+            Route::post('/test', [App\Http\Controllers\SaaS\BrokerEmailSettingsController::class, 'test']);
+        });
+
+        // Notificaciones email a vendedores (config GLOBAL del broker, aplica a todos)
+        Route::prefix('vendedor-notifications')->group(function () {
+            Route::get('/', [App\Http\Controllers\SaaS\VendedorNotificationController::class, 'show']);
+            Route::put('/', [App\Http\Controllers\SaaS\VendedorNotificationController::class, 'update']);
+            Route::post('/test', [App\Http\Controllers\SaaS\VendedorNotificationController::class, 'sendTest']);
         });
 
         // Papelera (registros soft-deleted) — listar / restaurar / eliminar definitivo / exportar
@@ -1274,6 +1297,7 @@ Route::middleware(['unified.auth', 'global.broker.auth', 'saas.auth'])->prefix('
             Route::get('/stats', [App\Http\Controllers\SaaS\RecibosComisionesController::class, 'stats']);
             Route::post('/sync', [App\Http\Controllers\SaaS\RecibosComisionesController::class, 'sync']);
             Route::get('/by-policy/{policyNumber}', [App\Http\Controllers\SaaS\RecibosComisionesController::class, 'byPolicy']);
+            Route::delete('/data', [App\Http\Controllers\SaaS\RecibosComisionesController::class, 'destroyData']);
         });
         
         // Vendedores
@@ -1350,7 +1374,6 @@ Route::delete('/{id}', [App\Http\Controllers\SaaS\RamosController::class, 'destr
         
         
     });
-});
 
 // =============================================================================
 // RUTAS SAAS - SISTEMA MULTI-TENANT (SISTEMA ANTERIOR) - COMENTADO TEMPORALMENTE
@@ -1596,6 +1619,7 @@ Route::middleware('unified.auth')->get('/saas/me-simple', function(Request $requ
     Route::put('/polizas/{id}/estado', [SaasPolizasController::class, 'cambiarEstado'])->whereNumber('id');
     Route::delete('/polizas/{id}', [SaasPolizasController::class, 'destroy'])->whereNumber('id');
     Route::post('/polizas/bulk-delete', [SaasPolizasController::class, 'bulkDelete']);
+    Route::post('/polizas/bulk-assign-seller', [SaasPolizasController::class, 'bulkAssignSeller']);
 
     // =============================
     // Documentos de siniestros (fuera del grupo prefix por rutas duplicadas dev)
@@ -2602,6 +2626,8 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
     // PDF Poliza Extractor (IA)
     Route::post('/pdf-poliza-extract', [\App\Http\Controllers\SaaS\PdfPolizaExtractorController::class, 'extract']);
     Route::post('/pdf-poliza-extract-vision', [\App\Http\Controllers\SaaS\PdfPolizaExtractorController::class, 'extractVision']);
+    Route::post('/pdf-poliza-extract-advanced', [\App\Http\Controllers\SaaS\PdfPolizaExtractorController::class, 'extractAdvanced']);
+    Route::post('/pdf-extract-corrections', [\App\Http\Controllers\SaaS\PdfPolizaExtractorController::class, 'saveCorrections']);
 
     // Broker Website (Mi Página Web)
     Route::get('/website', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'show']);
@@ -2612,6 +2638,10 @@ Route::middleware(['unified.auth','global.broker.auth','saas.auth'])->prefix('sa
     Route::post('/website/publish', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'publish']);
     Route::post('/website/unpublish', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'unpublish']);
     Route::post('/website/check-slug', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'checkSlug']);
+    Route::post('/website/ai/personalize', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'aiPersonalize']);
+    Route::post('/website/ai/seo', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'aiSeo']);
+    Route::post('/website/ai/suggest-pages', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'aiSuggestPages']);
+    Route::post('/website/ai/edit', [\App\Http\Controllers\SaaS\BrokerWebsiteController::class, 'aiEdit']);
 
     // Ventas Cruzadas
     Route::prefix('ventas-cruzadas')->group(function () {

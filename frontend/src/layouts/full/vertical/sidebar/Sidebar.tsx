@@ -11,18 +11,20 @@ import FullLogo from '../../shared/logo/FullLogo';
 import React from 'react';
 import { useUnifiedAuth } from '../../../../context/UnifiedAuthContext';
 import { useTerminologia } from '../../../../context/TerminologiaContext';
+import useOperativaMode from '../../../../hooks/useOperativaMode';
 
 const SidebarLayout = () => {
   const { selectedIconId, setSelectedIconId } = useContext(CustomizerContext) || {};
   const { hasPermission, canAccessModule, isModuleInPlan } = useUnifiedAuth();
   const { terminologia } = useTerminologia();
+  const operativa = useOperativaMode();
 
   const location = useLocation();
   const pathname = location.pathname;
 
   // Obtener elementos del menú filtrados por permisos (visibilidad exige permiso "ver")
   // isModuleInPlan mantiene visibles los items de módulos no contratados (ModuleGate los bloquea)
-const filteredMenuitems = getFilteredMenuItems(hasPermission, canAccessModule, terminologia, isModuleInPlan);
+const filteredMenuitems = getFilteredMenuItems(hasPermission, canAccessModule, terminologia, isModuleInPlan, operativa);
 
   function findActiveUrl(narray: any, targetUrl: any) {
     for (const item of narray) {

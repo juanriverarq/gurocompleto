@@ -31,6 +31,8 @@ class InsurerConnectionController extends Controller
                 'seguros-del-estado' => 'Seguros del Estado',
                 'la-equidad' => 'La Equidad',
                 'allianz' => 'Allianz',
+                'qualitas' => 'Quálitas',
+                'mundial' => 'Seguros Mundial',
             ];
 
             $rows = [];
@@ -275,6 +277,71 @@ class InsurerConnectionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'No fue posible desconectar',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Ping puro: verifica si la sesión actual sigue válida contra el microservicio.
+     * A diferencia de healthCheck() no auto-reconecta — solo refleja el estado real.
+     * Útil para que el usuario revise la conexión sin disparar reintentos pesados.
+     */
+    public function ping(Request $request, string $insurer)
+    {
+        try {
+            $brokerId = $this->resolveBrokerId($request);
+            $connection = InsurerConnection::forBroker($brokerId)
+                ->where('insurer_code', $insurer)
+                ->first();
+
+            if (!$connection) {
+                return response()->json([
+                    'success' => false,
+                    'connected' => false,
+                    'message' => 'No existe conexión para esta aseguradora',
+                ], 404);
+            }
+
+            if (!$connection->microservice_session_id) {
+                return response()->json([
+                    'success' => false,
+                    'connected' => false,
+                    'message' => 'Sin sesión activa',
+                    'data' => ['status' => $connection->status],
+                ]);
+            }
+
+            $health = $this->microservice->checkHealth($connection);
+            $connection->last_healthcheck_at = now();
+
+            if ($health['success']) {
+                $connection->status = 'connected';
+                $connection->last_error = null;
+            } else {
+                // Marcar reconnect_required pero NO reconectar automáticamente — el usuario decide.
+                $connection->status = 'reconnect_required';
+                $connection->last_error = $health['error'] ?? ($health['message'] ?? 'Sesión inválida');
+            }
+            $connection->save();
+
+            return response()->json([
+                'success' => $health['success'],
+                'connected' => $health['success'],
+                'message' => $health['success']
+                    ? 'Sesión válida'
+                    : ($health['message'] ?? 'Sesión expirada — reconecta desde aquí'),
+                'data' => [
+                    'insurer_code' => $connection->insurer_code,
+                    'status' => $connection->status,
+                    'http_status' => $health['status_code'] ?? null,
+                    'last_healthcheck_at' => $connection->last_healthcheck_at?->toISOString(),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al verificar la conexión',
                 'error' => $e->getMessage(),
             ], 500);
         }

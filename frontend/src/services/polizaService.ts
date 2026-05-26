@@ -114,11 +114,16 @@ export interface Poliza {
   updated_at?: string;
 
   /** Sincronización detalle (microservicio aseguradoras) */
-  detail_sync_status?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed' | string | null;
+  detail_sync_status?: 'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'not_applicable' | string | null;
   detail_sync_at?: string | null;
   detail_sync_error?: string | null;
   coverages?: PolizaCoverageRow[];
-  
+
+  // Desglose de costos reportado por aseguradora (Mundial y otras que lo incluyan)
+  valor_iva_aseguradora?: number;
+  valor_gastos_emision_aseguradora?: number;
+  valor_tasa_runt_aseguradora?: number;
+
   // Campos calculados
   nombre_completo_cliente?: string;
   dias_para_vencimiento?: number;
@@ -882,6 +887,20 @@ export const polizaService = {
       });
       throw error;
     }
+  },
+
+  /**
+   * Asignar vendedor a múltiples pólizas en una sola request.
+   */
+  async bulkAssignSeller(
+    assignments: Array<{ poliza_id: number; vendedor_id: number; vendedor_id_2?: number | null }>
+  ): Promise<ApiResponse<{ updated: number; errors: Array<{ poliza_id: number; reason: string }> }>> {
+    const endpoint = `${API_PREFIX}/bulk-assign-seller`;
+    return makeRequest<any>(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignments }),
+    });
   },
 
   /**

@@ -1,4 +1,5 @@
 import  { useState, useContext } from "react";
+import { usePWAInstall } from 'src/hooks/usePWAInstall';
 import { Navbar, Tooltip } from "flowbite-react";
 import { useUnifiedAuth } from "src/context/UnifiedAuthContext";
 import Search from "./Search";
@@ -36,6 +37,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
 
   const [mobileMenu, setMobileMenu] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  const { canInstall, install } = usePWAInstall();
   const { tenant, trialEndsAt } = useUnifiedAuth();
 
   const isTrialActive = () => {
@@ -289,6 +291,21 @@ const Header = ({ layoutType }: HeaderPropsType) => {
                       <Icon icon="solar:video-library-bold-duotone" width={18} className="text-orange-500" />
                       Tutoriales
                     </a>
+                    {canInstall && (
+                      <>
+                        <div className="border-t border-gray-100 dark:border-neutral-800 mx-3" />
+                        <button
+                          type="button"
+                          onClick={() => { setHelpOpen(false); install(); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-neutral-800"
+                        >
+                          <Icon icon="solar:monitor-smartphone-bold-duotone" width={18} className="text-[#573CFF]" />
+                          <span>
+                            Instalar app en escritorio
+                          </span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

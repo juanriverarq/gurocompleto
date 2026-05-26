@@ -156,6 +156,17 @@ class CarteraSimpleController extends Controller
                 ->get($columns);
         }
 
+        // ─── Futuras (> 30 días): sin esto las cuotas de pólizas contado de 1 año
+        // (que vencen en ~30+ días) caen en un agujero entre proximos_30 y sin_fecha
+        // y nunca llegan al frontend.
+        if (!$group || $group === 'futuras') {
+            $groups['futuras'] = $pendientesBase()
+                ->whereDate('fecha_limite_pago', '>', $today->copy()->addDays(30))
+                ->orderBy('fecha_limite_pago', 'asc')
+                ->limit($limit)
+                ->get($columns);
+        }
+
         if (!$group || $group === 'sin_fecha') {
             $groups['sin_fecha'] = $pendientesBase()
                 ->whereNull('fecha_limite_pago')
@@ -209,6 +220,8 @@ class CarteraSimpleController extends Controller
             'proximos_30_count' => $pendientesBase()
                 ->whereDate('fecha_limite_pago', '>', $today->copy()->addDays(7))
                 ->whereDate('fecha_limite_pago', '<=', $today->copy()->addDays(30))->count(),
+            'futuras_count' => $pendientesBase()
+                ->whereDate('fecha_limite_pago', '>', $today->copy()->addDays(30))->count(),
             'por_pagar_aseguradora_count' => $base()
                 ->where('recaudado_en_oficina', true)
                 ->where('recaudado_aseguradora', false)

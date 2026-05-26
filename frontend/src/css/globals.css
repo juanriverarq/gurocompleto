@@ -641,65 +641,65 @@ html.dark option,
   color: #ffffff !important;
 }
 
-/* Estilos para modo claro */
-html:not(.dark) form select,
-html:not(.dark) form select:focus,
-html:not(.dark) form select:hover,
-html:not(.dark) form select:active,
-html:not(.dark) select,
-html:not(.dark) select:focus,
-html:not(.dark) select:hover,
-html:not(.dark) select:active,
-form select,
-form select:focus,
-form select:hover,
-form select:active,
-select,
-select:focus,
-select:hover,
-select:active {
+/* Estilos para modo claro — scoped a .page-wrapper para NO afectar auth pages */
+html:not(.dark) .page-wrapper form select,
+html:not(.dark) .page-wrapper form select:focus,
+html:not(.dark) .page-wrapper form select:hover,
+html:not(.dark) .page-wrapper form select:active,
+html:not(.dark) .page-wrapper select,
+html:not(.dark) .page-wrapper select:focus,
+html:not(.dark) .page-wrapper select:hover,
+html:not(.dark) .page-wrapper select:active,
+.page-wrapper form select,
+.page-wrapper form select:focus,
+.page-wrapper form select:hover,
+.page-wrapper form select:active,
+.page-wrapper select,
+.page-wrapper select:focus,
+.page-wrapper select:hover,
+.page-wrapper select:active {
   background-color: #ffffff !important;
   color: #111827 !important;
   border-color: #d1d5db !important;
 }
 
-html:not(.dark) form textarea,
-html:not(.dark) form textarea:focus,
-html:not(.dark) form textarea:hover,
-html:not(.dark) form textarea:active,
-html:not(.dark) textarea,
-html:not(.dark) textarea:focus,
-html:not(.dark) textarea:hover,
-html:not(.dark) textarea:active,
-form textarea,
-form textarea:focus,
-form textarea:hover,
-form textarea:active,
-textarea,
-textarea:focus,
-textarea:hover,
-textarea:active {
+html:not(.dark) .page-wrapper form textarea,
+html:not(.dark) .page-wrapper form textarea:focus,
+html:not(.dark) .page-wrapper form textarea:hover,
+html:not(.dark) .page-wrapper form textarea:active,
+html:not(.dark) .page-wrapper textarea,
+html:not(.dark) .page-wrapper textarea:focus,
+html:not(.dark) .page-wrapper textarea:hover,
+html:not(.dark) .page-wrapper textarea:active,
+.page-wrapper form textarea,
+.page-wrapper form textarea:focus,
+.page-wrapper form textarea:hover,
+.page-wrapper form textarea:active,
+.page-wrapper textarea,
+.page-wrapper textarea:focus,
+.page-wrapper textarea:hover,
+.page-wrapper textarea:active {
   background-color: #ffffff !important;
   color: #111827 !important;
   border-color: #d1d5db !important;
 }
 
-html:not(.dark) form input:not([data-plate-input]),
-html:not(.dark) form input:not([data-plate-input]):focus,
-html:not(.dark) form input:not([data-plate-input]):hover,
-html:not(.dark) form input:not([data-plate-input]):active,
-html:not(.dark) input:not([data-plate-input]),
-html:not(.dark) input:not([data-plate-input]):focus,
-html:not(.dark) input:not([data-plate-input]):hover,
-html:not(.dark) input:not([data-plate-input]):active,
-form input:not([data-plate-input]),
-form input:not([data-plate-input]):focus,
-form input:not([data-plate-input]):hover,
-form input:not([data-plate-input]):active,
-input:not([data-plate-input]),
-input:not([data-plate-input]):focus,
-input:not([data-plate-input]):hover,
-input:not([data-plate-input]):active {
+html:not(.dark) .page-wrapper form input:not([data-plate-input]),
+html:not(.dark) .page-wrapper form input:not([data-plate-input]):focus,
+html:not(.dark) .page-wrapper form input:not([data-plate-input]):hover,
+html:not(.dark) .page-wrapper form input:not([data-plate-input]):active,
+html:not(.dark) .page-wrapper input:not([data-plate-input]),
+html:not(.dark) .page-wrapper input:not([data-plate-input]):focus,
+html:not(.dark) .page-wrapper input:not([data-plate-input]):hover,
+html:not(.dark) .page-wrapper input:not([data-plate-input]):active,
+.page-wrapper form input:not([data-plate-input]),
+.page-wrapper form input:not([data-plate-input]):focus,
+.page-wrapper form input:not([data-plate-input]):hover,
+.page-wrapper form input:not([data-plate-input]):active,
+.page-wrapper input:not([data-plate-input]),
+.page-wrapper input:not([data-plate-input]):focus,
+.page-wrapper input:not([data-plate-input]):hover,
+.page-wrapper input:not([data-plate-input]):active {
   background-color: #ffffff !important;
   color: #111827 !important;
   border-color: #d1d5db !important;

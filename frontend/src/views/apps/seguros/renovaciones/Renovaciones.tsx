@@ -11,6 +11,7 @@ import renovacionesService, {
 import DetalleRenovacion from 'src/components/renovaciones/DetalleRenovacion';
 import { polizaService } from 'src/services/polizaService';
 import { useAseguradoras, useVendedores, useRamos } from 'src/hooks/useAdminCrudApi';
+import RenovacionesExportModal from './RenovacionesExportModal';
 
 const Renovaciones: React.FC = () => {
   const [renovaciones, setRenovaciones] = useState<Renovacion[]>([]);
@@ -37,6 +38,7 @@ const Renovaciones: React.FC = () => {
 
   // Estados para filtros y columnas
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const { toast } = useToast();
   useNavigate();
@@ -283,40 +285,6 @@ const Renovaciones: React.FC = () => {
       // silencioso
     } finally {
       setRenPdfProcessing(false);
-    }
-  };
-
-  const handleExportRenovaciones = async () => {
-    try {
-      // Mostrar indicador de carga
-      toast({
-        title: "Exportando...",
-        description: "Generando archivo de renovaciones",
-        variant: "default",
-      });
-
-      const blob = await renovacionesService.exportarRenovaciones(filters);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `renovaciones_${new Date().toISOString().split('T')[0]}_${Date.now()}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-
-      toast({
-        title: "Éxito",
-        description: "Renovaciones exportadas exitosamente",
-        variant: "default",
-      });
-    } catch (error) {
-      console.error('Error exportando renovaciones:', error);
-      toast({
-        title: "Error",
-        description: "Error al exportar renovaciones. Intente nuevamente.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -757,9 +725,9 @@ const Renovaciones: React.FC = () => {
 
               <Button
                 color="light"
-                onClick={handleExportRenovaciones}
+                onClick={() => setShowExportModal(true)}
                 className="h-10 px-3 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-[10px] flex items-center justify-center gap-2"
-                title="Exportar a CSV"
+                title="Exportar renovaciones (columnas personalizables)"
               >
                 <Icon icon="solar:export-bold-duotone" className="w-4 h-4" />
                 <span className="text-xs hidden sm:inline">Exportar</span>
@@ -1560,6 +1528,15 @@ const Renovaciones: React.FC = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Modal de Exportación de Renovaciones */}
+      <RenovacionesExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        initialFilters={filters}
+        aseguradorasList={(aseguradorasList as any[]).map((a: any) => ({ id: a.id, nombre: a.nombre || a.name || '' }))}
+        ramosList={(ramosList as any[]).map((r: any) => ({ id: r.id, nombre: r.nombre || r.name || '' }))}
+      />
     </div>
   );
 };

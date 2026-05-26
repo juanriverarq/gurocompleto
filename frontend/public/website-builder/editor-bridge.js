@@ -298,6 +298,14 @@
       case 'DUPLICATE_SECTION': sectionAction(e.data.sectionId,'duplicate'); break;
       case 'REORDER_SECTION': reorderSection(e.data.sectionId, e.data.toIndex); break;
       case 'TOGGLE_VISIBILITY': toggleSectionVisibility(e.data.sectionId); break;
+      case 'REPLACE_HTML': {
+        var root=document.querySelector('.main-page-wrapper')||document.body;
+        if(selectedElement){try{selectedElement.classList.remove('eb-editable-selected','eb-img-selected');selectedElement.removeAttribute('contenteditable');}catch(_){}selectedElement=null;notify('ELEMENT_DESELECTED',{});}
+        try{ root.innerHTML = e.data.html || ''; }catch(_){}
+        sections=[]; discoverSections(); addOverlays(); setupEditable(); saveUndo();
+        notify('SECTIONS_UPDATED',getSections());
+        break;
+      }
     }
   });
 

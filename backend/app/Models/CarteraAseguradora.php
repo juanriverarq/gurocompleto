@@ -10,9 +10,9 @@ class CarteraAseguradora extends Model
 
     protected $fillable = [
         'broker_id', 'insurer_code', 'insurer_name',
-        'policy_number', 'client_name', 'client_document', 'client_doc_type',
+        'policy_number', 'matched_poliza_id', 'client_name', 'client_document', 'client_doc_type',
         'ramo', 'product_name',
-        'prima_total', 'valor_pendiente', 'valor_pagado', 'bonificacion', 'moneda',
+        'prima_total', 'valor_pendiente', 'valor_pagado', 'valor_iva', 'valor_gastos_emision', 'valor_tasa_runt', 'bonificacion', 'moneda',
         'dias_mora', 'rango_mora',
         'fecha_inicio_vigencia', 'fecha_expedicion', 'fecha_vencimiento',
         'numero_recibo', 'numero_pagare',
@@ -25,6 +25,9 @@ class CarteraAseguradora extends Model
         'prima_total' => 'decimal:2',
         'valor_pendiente' => 'decimal:2',
         'valor_pagado' => 'decimal:2',
+        'valor_iva' => 'decimal:2',
+        'valor_gastos_emision' => 'decimal:2',
+        'valor_tasa_runt' => 'decimal:2',
         'bonificacion' => 'decimal:2',
         'fecha_inicio_vigencia' => 'date',
         'fecha_expedicion' => 'date',

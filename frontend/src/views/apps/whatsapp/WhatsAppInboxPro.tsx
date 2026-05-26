@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import { Badge, Button, Spinner, Alert, Textarea, Modal } from 'flowbite-react';
 import { Icon } from '@iconify/react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import whatsappInboxService, { 
-  WhatsAppConversation, 
-  WhatsAppMessage, 
+import whatsappInboxService, {
+  WhatsAppConversation,
+  WhatsAppMessage,
   WhatsAppDepartment,
   InboxStats,
-  WhatsAppTag 
+  WhatsAppTag
 } from 'src/services/whatsappInboxService';
+import { commercialTasksService } from 'src/services/commercialTasksService';
 import MessageContent from 'src/components/whatsapp/MessageContent';
 import { ConversationUpdateEvent } from 'src/hooks/useWhatsAppSocket';
 import { auth } from 'src/config/firebase';
@@ -58,7 +59,14 @@ const WhatsAppInboxPro: React.FC = () => {
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [selectedTransferAgent, setSelectedTransferAgent] = useState<number | null>(null);
-  const [brokerAgents, setBrokerAgents] = useState<{ id: number; name: string; email: string; role: string }[]>([]);
+  const [brokerAgents, setBrokerAgents] = useState<{ id: number; name: string; email: string; role: string; cargo?: string; departamento?: string }[]>([]);
+  const [agentDeptFilter, setAgentDeptFilter] = useState<string>('all');
+  const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [taskForm, setTaskForm] = useState<{ title: string; type: string; priority: string; description: string; due_date: string; contact_method: string }>({
+    title: '', type: 'seguimiento_cliente', priority: 'media', description: '', due_date: '', contact_method: 'whatsapp',
+  });
+  const [taskSuccessId, setTaskSuccessId] = useState<number | null>(null);
   const [showTagMenu, setShowTagMenu] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
   const [conversationNotes, setConversationNotes] = useState<any[]>([]);
@@ -723,6 +731,47 @@ const WhatsAppInboxPro: React.FC = () => {
     }
   };
 
+  const openCreateTaskModal = () => {
+    if (!selectedConversation) return;
+    const contactName = [selectedConversation.contact_first_name, selectedConversation.contact_last_name].filter(Boolean).join(' ')
+      || selectedConversation.contact_push_name || selectedConversation.contact_name || selectedConversation.phone;
+    setTaskForm({
+      title: `Seguimiento: ${contactName}`,
+      type: 'seguimiento_cliente',
+      priority: 'media',
+      description: '',
+      due_date: '',
+      contact_method: 'whatsapp',
+    });
+    setTaskSuccessId(null);
+    setShowCreateTaskModal(true);
+    setShowActionsMenu(false);
+  };
+
+  const handleCreateTask = async () => {
+    if (!selectedConversation || !taskForm.title.trim()) return;
+    setCreatingTask(true);
+    try {
+      const created = await commercialTasksService.createTask({
+        title: taskForm.title,
+        type: taskForm.type as any,
+        priority: taskForm.priority as any,
+        description: taskForm.description || undefined,
+        due_date: taskForm.due_date || undefined,
+        contact_method: taskForm.contact_method as any,
+        contact_phone: selectedConversation.phone,
+        contact_email: selectedConversation.contact_email || undefined,
+        client_id: selectedConversation.client_id || undefined,
+      });
+      setTaskSuccessId(created.id);
+    } catch (err: any) {
+      setError(err.message);
+      setShowCreateTaskModal(false);
+    } finally {
+      setCreatingTask(false);
+    }
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedConversation) return;
@@ -1365,6 +1414,10 @@ const WhatsAppInboxPro: React.FC = () => {
                         <button onClick={() => { setShowNoteModal(true); setShowActionsMenu(false); }} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
                           <Icon icon="solar:document-add-bold" className="mr-2" width={16} />
                           Agregar nota
+                        </button>
+                        <button onClick={openCreateTaskModal} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                          <Icon icon="solar:checklist-minimalistic-bold" className="mr-2 text-primary" width={16} />
+                          Crear tarea
                         </button>
                         {/* Etiquetas sub-menu */}
                         <button onClick={() => setShowTagMenu(!showTagMenu)} className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
@@ -2363,40 +2416,74 @@ const WhatsAppInboxPro: React.FC = () => {
       </div>
 
       {/* Modal de transferencia a agente */}
-      <Modal show={showAssignModal} onClose={() => { setShowAssignModal(false); setSelectedTransferAgent(null); }} size="md">
+      <Modal show={showAssignModal} onClose={() => { setShowAssignModal(false); setSelectedTransferAgent(null); setAgentDeptFilter('all'); }} size="md">
         <Modal.Header>Transferir conversación</Modal.Header>
         <Modal.Body>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-500">Selecciona el usuario al que deseas transferir esta conversación:</p>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {brokerAgents.map(agent => (
+          <div className="space-y-3">
+            {/* Filtro por departamento */}
+            {(() => {
+              const depts = Array.from(new Set(brokerAgents.map(a => a.cargo).filter(Boolean))) as string[];
+              if (depts.length === 0) return null;
+              return (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">Filtrar por departamento:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => setAgentDeptFilter('all')}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-all ${agentDeptFilter === 'all' ? 'bg-primary text-white border-primary' : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-primary/50'}`}
+                    >
+                      Todos
+                    </button>
+                    {depts.map(dept => (
+                      <button
+                        key={dept}
+                        onClick={() => setAgentDeptFilter(dept)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-all ${agentDeptFilter === dept ? 'bg-primary text-white border-primary' : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-primary/50'}`}
+                      >
+                        {dept}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+            <p className="text-sm text-gray-500">Selecciona el agente al que deseas transferir esta conversación:</p>
+            <div className="space-y-2 max-h-[280px] overflow-y-auto">
+              {brokerAgents
+                .filter(a => agentDeptFilter === 'all' || a.cargo === agentDeptFilter)
+                .map(agent => (
                 <button
                   key={agent.id}
                   onClick={() => setSelectedTransferAgent(agent.id)}
                   className={`w-full p-3 rounded-xl text-left transition-all flex items-center gap-3 ${
-                    selectedTransferAgent === agent.id 
-                      ? 'bg-primary/10 border-2 border-primary' 
+                    selectedTransferAgent === agent.id
+                      ? 'bg-primary/10 border-2 border-primary'
                       : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border-2 border-transparent'
                   }`}
                 >
-                  <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm">
+                  <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm shrink-0">
                     {agent.name?.charAt(0).toUpperCase() || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{agent.name}</div>
                     <div className="text-xs text-gray-500 truncate">{agent.email}</div>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">{agent.role}</span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {agent.cargo && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{agent.cargo}</span>
+                    )}
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">{agent.role}</span>
+                  </div>
                 </button>
               ))}
-              {brokerAgents.length === 0 && (
+              {brokerAgents.filter(a => agentDeptFilter === 'all' || a.cargo === agentDeptFilter).length === 0 && (
                 <p className="text-sm text-gray-400 text-center py-4">No hay agentes disponibles</p>
               )}
             </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button color="gray" onClick={() => { setShowAssignModal(false); setSelectedTransferAgent(null); }}>Cancelar</Button>
+          <Button color="gray" onClick={() => { setShowAssignModal(false); setSelectedTransferAgent(null); setAgentDeptFilter('all'); }}>Cancelar</Button>
           <Button color="primary" onClick={handleTransferToAgent} disabled={!selectedTransferAgent}>
             Transferir
           </Button>
@@ -2423,6 +2510,125 @@ const WhatsAppInboxPro: React.FC = () => {
             Guardar nota
           </Button>
         </Modal.Footer>
+      </Modal>
+
+      {/* Modal crear tarea */}
+      <Modal show={showCreateTaskModal} onClose={() => setShowCreateTaskModal(false)} size="md">
+        <Modal.Header>Crear tarea de seguimiento</Modal.Header>
+        <Modal.Body>
+          {taskSuccessId ? (
+            <div className="text-center py-6 space-y-4">
+              <div className="w-14 h-14 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto">
+                <Icon icon="solar:check-circle-bold" width={32} className="text-green-500" />
+              </div>
+              <p className="font-semibold text-gray-800 dark:text-white">¡Tarea creada exitosamente!</p>
+              <p className="text-sm text-gray-500">La tarea fue creada y quedó disponible en seguimiento.</p>
+              <div className="flex gap-2 justify-center">
+                <Button color="gray" size="sm" onClick={() => setShowCreateTaskModal(false)}>Cerrar</Button>
+                <Button color="primary" size="sm" onClick={() => { setShowCreateTaskModal(false); navigate('/apps/seguros/seguimiento'); }}>
+                  <Icon icon="solar:arrow-right-bold" className="mr-1.5" width={14} />
+                  Ver en seguimiento
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Título *</label>
+                <input
+                  type="text"
+                  value={taskForm.title}
+                  onChange={(e) => setTaskForm(p => ({ ...p, title: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-primary focus:border-primary"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Tipo</label>
+                  <select
+                    value={taskForm.type}
+                    onChange={(e) => setTaskForm(p => ({ ...p, type: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-primary focus:border-primary"
+                  >
+                    <option value="seguimiento_cliente">Seguimiento cliente</option>
+                    <option value="llamada">Llamada</option>
+                    <option value="cotizacion">Cotización</option>
+                    <option value="renovacion">Renovación</option>
+                    <option value="documentacion">Documentación</option>
+                    <option value="siniestro">Siniestro</option>
+                    <option value="reunion">Reunión</option>
+                    <option value="email">Email</option>
+                    <option value="visita">Visita</option>
+                    <option value="inspeccion">Inspección</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Prioridad</label>
+                  <select
+                    value={taskForm.priority}
+                    onChange={(e) => setTaskForm(p => ({ ...p, priority: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-primary focus:border-primary"
+                  >
+                    <option value="baja">Baja</option>
+                    <option value="media">Media</option>
+                    <option value="alta">Alta</option>
+                    <option value="critica">Crítica</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Fecha límite</label>
+                  <input
+                    type="datetime-local"
+                    value={taskForm.due_date}
+                    onChange={(e) => setTaskForm(p => ({ ...p, due_date: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-primary focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Método contacto</label>
+                  <select
+                    value={taskForm.contact_method}
+                    onChange={(e) => setTaskForm(p => ({ ...p, contact_method: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-primary focus:border-primary"
+                  >
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="phone">Teléfono</option>
+                    <option value="email">Email</option>
+                    <option value="in_person">Presencial</option>
+                    <option value="video_call">Videollamada</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Descripción</label>
+                <Textarea
+                  value={taskForm.description}
+                  onChange={(e) => setTaskForm(p => ({ ...p, description: e.target.value }))}
+                  placeholder="Contexto adicional de la tarea..."
+                  rows={3}
+                />
+              </div>
+              {selectedConversation?.phone && (
+                <p className="text-xs text-gray-400 flex items-center gap-1">
+                  <Icon icon="solar:phone-bold" width={12} />
+                  Teléfono: {selectedConversation.phone}
+                  {selectedConversation.client_id && <span className="ml-2 text-green-600 dark:text-green-400 flex items-center gap-0.5"><Icon icon="solar:user-check-rounded-bold" width={12} /> Cliente vinculado</span>}
+                </p>
+              )}
+            </div>
+          )}
+        </Modal.Body>
+        {!taskSuccessId && (
+          <Modal.Footer>
+            <Button color="gray" onClick={() => setShowCreateTaskModal(false)}>Cancelar</Button>
+            <Button color="primary" onClick={handleCreateTask} disabled={!taskForm.title.trim() || creatingTask}>
+              {creatingTask ? <Spinner size="sm" className="mr-2" /> : <Icon icon="solar:add-circle-bold" className="mr-2" width={16} />}
+              Crear tarea
+            </Button>
+          </Modal.Footer>
+        )}
       </Modal>
 
       {/* Modal de crear/editar respuesta rápida */}

@@ -8,19 +8,21 @@ import { Link } from 'react-router';
 import { CustomizerContext } from 'src/context/CustomizerContext';
 import { useUnifiedAuth } from 'src/context/UnifiedAuthContext';
 import { useTerminologia } from 'src/context/TerminologiaContext';
+import useOperativaMode from 'src/hooks/useOperativaMode';
 
 export const IconSidebar = () => {
   const { selectedIconId, setSelectedIconId, setIsCollapse, isCollapse } =
     useContext(CustomizerContext) || {};
   const { hasPermission, canAccessModule, isEmpleado, isModuleInPlan } = useUnifiedAuth();
   const { terminologia } = useTerminologia();
+  const operativa = useOperativaMode();
 
   // For employees: hide mini-sidebar icons for sections with zero visible pages.
   // For owners/admins: show all icons so they can see ModuleGate blur+modal.
   const visibleIcons = useMemo(() => {
     if (!isEmpleado) return Miniicons;
 
-    const filteredMenu = getFilteredMenuItems(hasPermission, canAccessModule, terminologia, isModuleInPlan);
+    const filteredMenu = getFilteredMenuItems(hasPermission, canAccessModule, terminologia, isModuleInPlan, operativa);
 
     // Map section names to mini-sidebar icon IDs
     const sectionMap: Record<string, number> = {
@@ -48,7 +50,7 @@ export const IconSidebar = () => {
     }
 
     return Miniicons.filter((icon) => sectionsWithContent.has(icon.id));
-  }, [isEmpleado, hasPermission, canAccessModule, terminologia, isModuleInPlan]);
+  }, [isEmpleado, hasPermission, canAccessModule, terminologia, isModuleInPlan, operativa]);
 
   // Handle icon click
   const handleClick = (id: any) => {

@@ -25,6 +25,7 @@ import saasApi from 'src/services/saasApi';
 import { useToast } from 'src/hooks/use-toast';
 import { Input } from 'src/components/shadcn-ui/Default-Ui/input';
 import PolizasFilterModal from './components/PolizasFilterModal';
+import AsignarAsesoresMasivoModal from './components/AsignarAsesoresMasivoModal';
 import ColumnsCustomizationModal from './components/ColumnsCustomizationModal';
 import PolizasExportModal from './components/PolizasExportModal';
 import PolicyNotificationsModal from './components/PolicyNotificationsModalV2';
@@ -42,6 +43,7 @@ import equidadLogo from 'src/assets/images/logoscompanias/equidad.png';
 import axaLogo from 'src/assets/images/logoscompanias/axa.png';
 import mapfreLogo from 'src/assets/images/logoscompanias/mapfre.png';
 import allianzLogo from 'src/assets/images/logoscompanias/allianz.png';
+import mundialLogo from 'src/assets/images/logoscompanias/mundial.svg';
 
 const INSURER_LOGOS: Record<string, string> = {
   sura: suraLogo,
@@ -57,6 +59,8 @@ const INSURER_LOGOS: Record<string, string> = {
   'axa-colpatria': axaLogo,
   mapfre: mapfreLogo,
   allianz: allianzLogo,
+  mundial: mundialLogo,
+  'seguros mundial': mundialLogo,
 };
 
 const getInsurerLogo = (nombre: string): string | null => {
@@ -84,6 +88,7 @@ const Polizas: React.FC = () => {
   const [polizaToDelete, setPolizaToDelete] = useState<Poliza | null>(null);
   const [activeTab, setActiveTab] = useState('general');
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [showAssignSellersModal, setShowAssignSellersModal] = useState(false);
   const [showColumnsModal, setShowColumnsModal] = useState(false);
   const [showCreateTypeModal, setShowCreateTypeModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -239,7 +244,10 @@ const Polizas: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed.length <= 6) {
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed.length <= 8) {
+          // Si el usuario tenía columnas guardadas y no incluye origen, la agregamos
+          // (la introducimos como cambio default igual que en clientes).
+          if (!parsed.includes('origen')) parsed.push('origen');
           return parsed;
         }
       } catch (e) {
@@ -253,6 +261,7 @@ const Polizas: React.FC = () => {
       'ramo',
       'estado',
       'prima_neta',
+      'origen',
     ];
   });
 
@@ -344,7 +353,14 @@ const Polizas: React.FC = () => {
       setLoading(true);
       console.log('🔄 Iniciando carga de pólizas con filtros:', filters);
 
-      const response = await polizaService.getPolizas(filters);
+      // Transformar filtro sentinel "__none__" del vendedor → param sin_vendedor.
+      // (El backend lo mapea a whereNull en seller_id/seller_id_2/seller_name.)
+      const filtersToSend: any = { ...filters };
+      if (filtersToSend.vendedor === '__none__') {
+        delete filtersToSend.vendedor;
+        filtersToSend.sin_vendedor = '1';
+      }
+      const response = await polizaService.getPolizas(filtersToSend);
       console.log('📄 Respuesta completa del servicio:', response);
 
       if (response && response.data) {
@@ -817,22 +833,21 @@ const Polizas: React.FC = () => {
 
   const handleBulkDeletePolizas = async () => {
     if (selectedIds.size === 0) return;
-    if (
-      !confirm(
-        `¿Eliminar ${selectedIds.size} póliza(s) seleccionadas? Esta acción no se puede deshacer.`,
-      )
-    )
-      return;
+    const isTrash = filters.trashed === 'only';
+    if (!confirm(`¿${isTrash ? 'Eliminar PERMANENTEMENTE' : 'Eliminar'} ${selectedIds.size} póliza(s) seleccionadas? Esta acción no se puede deshacer.`)) return;
     try {
       setLoading(true);
-      const ids = Array.from(selectedIds);
-      const results = await Promise.allSettled(ids.map((id) => polizaService.deletePoliza(id)));
-      const ok = results.filter((r) => r.status === 'fulfilled').length;
-      const fail = results.length - ok;
-      toast({
-        title: 'Eliminación masiva',
-        description: `Eliminadas: ${ok}. Fallidas: ${fail}.`,
-      });
+      if (isTrash) {
+        const ids = Array.from(selectedIds).map(Number);
+        const res = await saasApi.eliminarDefinitivoPapelera('polizas', ids);
+        toast({ title: 'Eliminación permanente', description: `Eliminadas definitivamente: ${(res.data as any)?.deleted ?? ids.length}.` });
+      } else {
+        const ids = Array.from(selectedIds);
+        const results = await Promise.allSettled(ids.map((id) => polizaService.deletePoliza(id)));
+        const ok = results.filter((r) => r.status === 'fulfilled').length;
+        const fail = results.length - ok;
+        toast({ title: 'Eliminación masiva', description: `Eliminadas: ${ok}. Fallidas: ${fail}.` });
+      }
       clearSelection();
       await loadPolizas();
       await loadEstadisticas();
@@ -847,12 +862,15 @@ const Polizas: React.FC = () => {
     if (bulkDeleteConfirmText !== 'ELIMINAR TODAS') return;
     try {
       setLoading(true);
-      const response = await saasApi.bulkDeletePolizas({ delete_all: true });
+      const isTrash = filters.trashed === 'only';
+      const response = isTrash
+        ? await saasApi.eliminarDefinitivoPapelera('polizas', [], true)
+        : await saasApi.bulkDeletePolizas({ delete_all: true });
       if (response.success) {
         const data = response.data as any;
         toast({
           title: 'Borrado masivo completado',
-          description: response.message || `Se eliminaron ${data?.deleted_count || 0} pólizas.`,
+          description: response.message || `Se eliminaron ${data?.deleted_count ?? data?.deleted ?? 0} pólizas.`,
         });
         setShowBulkDeleteAllModal(false);
         setBulkDeleteConfirmText('');
@@ -1038,6 +1056,9 @@ const Polizas: React.FC = () => {
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{getActiveFiltersCount()}</span>
                 )}
               </button>
+              <button onClick={() => setShowAssignSellersModal(true)} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors" title="Asignar vendedores a pólizas sin asignar">
+                <Icon icon="solar:user-plus-rounded-bold-duotone" width={18} />
+              </button>
               <button onClick={() => setShowExportModal(true)} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-2 text-neutral-400 transition-colors" title="Exportar">
                 <Icon icon="solar:download-bold-duotone" width={18} />
               </button>
@@ -1137,13 +1158,21 @@ const Polizas: React.FC = () => {
                           <p className="text-[12px] font-medium text-neutral-300 mb-0.5">
                             {isRunning ? 'Sincronizando detalles' : hasErrors ? 'Sincronización finalizada con errores' : 'Sincronización completa'}
                           </p>
-                          <p className="text-[11px] text-neutral-500 mb-3">
+                          <p className="text-[11px] text-neutral-500 mb-1">
                             {done} de {total} procesadas · {pct}%
                             {synced > 0 && ` · ${synced} ok`}
                             {failed > 0 && ` · ${failed} fallidas`}
                             {pending > 0 && ` · ${pending} pendientes`}
                             {cancelled > 0 && ` · ${cancelled} canceladas`}
                           </p>
+                          {(detailSyncProgress as any)?.lastSyncAt && (
+                            <p className="text-[10px] text-neutral-600 mb-3">
+                              Última sincronización: {new Date((detailSyncProgress as any).lastSyncAt).toLocaleString('es-CO', {
+                                day: '2-digit', month: 'short', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit'
+                              })}
+                            </p>
+                          )}
 
                           {/* Progress bar */}
                           <div className="w-full h-0.5 rounded-full bg-neutral-800 overflow-hidden mb-3">
@@ -1216,26 +1245,33 @@ const Polizas: React.FC = () => {
                           className="relative w-80 rounded-lg border border-neutral-800 bg-neutral-950 p-5 shadow-2xl"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <p className="text-[13px] font-medium text-neutral-200 mb-1">¿Qué deseas resincronizar?</p>
-                          <p className="text-[11px] text-neutral-500 mb-4">Solo las fallidas es más rápido. Si necesitas actualizar una póliza en particular, hazlo desde el editor de la póliza.</p>
+                          <p className="text-[13px] font-medium text-neutral-200 mb-1">¿Qué deseas sincronizar?</p>
+                          <p className="text-[11px] text-neutral-500 mb-4">Las exitosas no se vuelven a procesar a menos que elijas "Forzar todas".</p>
                           <div className="space-y-2">
-                            {failed > 0 && (
-                              <button
-                                onClick={() => { setShowResyncDialog(false); void handleSyncAllDetails(false); }}
-                                disabled={detailSyncBusy}
-                                className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors disabled:opacity-40"
-                              >
-                                Solo las fallidas
-                                <span className="block text-[10px] text-neutral-600 mt-0.5">{failed} póliza{failed !== 1 ? 's' : ''} con error</span>
-                              </button>
-                            )}
+                            {(() => {
+                              const toResync = (detailSyncProgress as any)?.toResyncPending ?? (failed + pending + cancelled);
+                              if (toResync <= 0) return null;
+                              return (
+                                <button
+                                  onClick={() => { setShowResyncDialog(false); void handleSyncAllDetails(false); }}
+                                  disabled={detailSyncBusy}
+                                  className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors disabled:opacity-40"
+                                >
+                                  Solo pendientes y fallidas
+                                  <span className="block text-[10px] text-neutral-600 mt-0.5">
+                                    {toResync} póliza{toResync !== 1 ? 's' : ''} sin sincronizar OK
+                                    {failed > 0 && ` · ${failed} fallidas`}
+                                  </span>
+                                </button>
+                              );
+                            })()}
                             <button
                               onClick={() => { setShowResyncDialog(false); void handleSyncAllDetails(true); }}
                               disabled={detailSyncBusy}
                               className="w-full rounded border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 px-3 py-2 text-left text-[12px] text-neutral-300 transition-colors disabled:opacity-40"
                             >
-                              Todas ({total} pólizas)
-                              <span className="block text-[10px] text-neutral-600 mt-0.5">Proceso largo — puede tardar varios minutos</span>
+                              Forzar todas ({total} pólizas)
+                              <span className="block text-[10px] text-neutral-600 mt-0.5">Re-procesa también las ya sincronizadas. Más lento.</span>
                             </button>
                             <button
                               onClick={() => setShowResyncDialog(false)}
@@ -1293,12 +1329,16 @@ const Polizas: React.FC = () => {
                           <Icon icon="solar:trash-bin-minimalistic-bold-duotone" width={14} />
                           Eliminar
                         </button>
-                        {estadisticas && estadisticas.total_polizas > 0 && (
-                          <button onClick={() => setShowBulkDeleteAllModal(true)} className="flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/20 hover:bg-red-500/30 px-3 py-1.5 text-xs text-red-300 transition-colors">
-                            <Icon icon="solar:trash-bin-trash-bold-duotone" width={14} />
-                            Eliminar TODAS ({estadisticas.total_polizas})
-                          </button>
-                        )}
+                        {(() => {
+                          const isTrash = filters.trashed === 'only';
+                          const count = isTrash ? (pagination?.total ?? 0) : (estadisticas?.total_polizas ?? 0);
+                          return count > 0 ? (
+                            <button onClick={() => setShowBulkDeleteAllModal(true)} className="flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/20 hover:bg-red-500/30 px-3 py-1.5 text-xs text-red-300 transition-colors">
+                              <Icon icon="solar:trash-bin-trash-bold-duotone" width={14} />
+                              {isTrash ? `Vaciar papelera (${count})` : `Eliminar TODAS (${count})`}
+                            </button>
+                          ) : null;
+                        })()}
                         <button onClick={handleOpenBulkStateModal} className="flex items-center gap-1.5 rounded-lg border border-[#573CFF]/40 bg-[#573CFF]/10 hover:bg-[#573CFF]/20 px-3 py-1.5 text-xs text-[#573CFF] dark:text-[#a78bfa] transition-colors">
                           <Icon icon="solar:settings-bold-duotone" width={14} />
                           Cambiar estado
@@ -1881,6 +1921,13 @@ const Polizas: React.FC = () => {
             onFiltersChange={handleFiltersChange}
           />
 
+          {/* Modal: asignar vendedores masivamente a pólizas sin asignar */}
+          <AsignarAsesoresMasivoModal
+            open={showAssignSellersModal}
+            onClose={() => setShowAssignSellersModal(false)}
+            onAssigned={() => void loadPolizas()}
+          />
+
           {/* Modal de personalización de columnas */}
           <ColumnsCustomizationModal
             isOpen={showColumnsModal}
@@ -1917,18 +1964,21 @@ const Polizas: React.FC = () => {
             <Modal.Header>
               <div className="flex items-center gap-2 text-red-600">
                 <Icon icon="solar:danger-triangle-bold-duotone" className="w-5 h-5" />
-                <span>Eliminar TODAS las pólizas</span>
+                <span>{filters.trashed === 'only' ? 'Vaciar papelera de pólizas' : 'Eliminar TODAS las pólizas'}</span>
               </div>
             </Modal.Header>
             <Modal.Body>
               <div className="space-y-4">
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                   <p className="text-sm text-red-800 dark:text-red-200 font-medium">
-                    ⚠️ Esta acción eliminará TODAS las pólizas ({estadisticas?.total_polizas || 0}) de tu cuenta.
+                    {filters.trashed === 'only'
+                      ? `⚠️ Esta acción eliminará DEFINITIVAMENTE todas las pólizas en la papelera (${pagination?.total || 0}) de tu cuenta.`
+                      : `⚠️ Esta acción eliminará TODAS las pólizas (${estadisticas?.total_polizas || 0}) de tu cuenta.`}
                   </p>
                   <p className="text-xs text-red-600 dark:text-red-300 mt-1">
-                    También se eliminarán los pagos, recibos de caja y registros de cartera asociados.
-                    Esta acción NO se puede deshacer.
+                    {filters.trashed === 'only'
+                      ? 'Los registros eliminados de la papelera no se pueden recuperar.'
+                      : 'También se eliminarán los pagos, recibos de caja y registros de cartera asociados. Esta acción NO se puede deshacer.'}
                   </p>
                 </div>
                 <div>

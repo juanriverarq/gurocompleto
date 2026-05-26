@@ -18,6 +18,7 @@ import equidadLogo from '../../assets/images/logoscompanias/equidad.png';
 import axaLogo from '../../assets/images/logoscompanias/axa.png';
 import mapfreLogo from '../../assets/images/logoscompanias/mapfre.png';
 import allianzLogo from '../../assets/images/logoscompanias/allianz.png';
+import mundialLogo from '../../assets/images/logoscompanias/mundial.svg';
 
 const INSURER_META: Record<string, { name: string; logo?: string }> = {
   sura: { name: 'Sura', logo: suraLogo },
@@ -28,6 +29,7 @@ const INSURER_META: Record<string, { name: string; logo?: string }> = {
   'axa-colpatria': { name: 'Axa Colpatria', logo: axaLogo },
   mapfre: { name: 'Mapfre', logo: mapfreLogo },
   allianz: { name: 'Allianz', logo: allianzLogo },
+  mundial: { name: 'Seguros Mundial', logo: mundialLogo },
 };
 
 const DATA_TYPES = [
@@ -67,6 +69,9 @@ const Inicio = () => {
   const [cancellingSync, setCancellingSync] = useState(false);
   const [insurerStatuses, setInsurerStatuses] = useState<Record<string, { status: string; progress?: any; error?: string }>>({});
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [setupCompleted, setSetupCompleted] = useState(() => localStorage.getItem('guro_setup_steps_completed') === '1');
+  const [syncStepCompleted, setSyncStepCompleted] = useState(() => localStorage.getItem('guro_setup_sync_completed') === '1');
+  const [carteraStepCompleted, setCarteraStepCompleted] = useState(() => localStorage.getItem('guro_setup_cartera_completed') === '1');
 
   const firstName = useMemo(() => {
     if (usuarioSaas?.nombre) return usuarioSaas.nombre.split(' ')[0] || usuarioSaas.nombre;
@@ -94,6 +99,21 @@ const Inicio = () => {
   useEffect(() => {
     loadConnections();
   }, [loadConnections]);
+
+  const markSetupCompleted = () => {
+    localStorage.setItem('guro_setup_steps_completed', '1');
+    setSetupCompleted(true);
+  };
+
+  const markCarteraStepCompleted = () => {
+    localStorage.setItem('guro_setup_cartera_completed', '1');
+    setCarteraStepCompleted(true);
+  };
+
+  const reopenSetupSteps = () => {
+    localStorage.removeItem('guro_setup_steps_completed');
+    setSetupCompleted(false);
+  };
 
   const openSyncModal = () => {
     setSelectedInsurers([...connectedInsurers]);
@@ -199,6 +219,8 @@ const Inicio = () => {
           setSyncStage('success');
 
           if (overall_status === 'completed') {
+            localStorage.setItem('guro_setup_sync_completed', '1');
+            setSyncStepCompleted(true);
             const duration = 1300;
             const end = Date.now() + duration;
             const colors = ['#573CFF', '#7B61FF', '#A78BFA', '#ffffff'];
@@ -457,9 +479,21 @@ const Inicio = () => {
             const progressSummary: string[] = [];
             if (st.progress) {
               for (const [type, data] of Object.entries(st.progress) as [string, any][]) {
+                const fetched = data?.total_fetched ?? 0;
                 const c = data?.created ?? 0;
                 const u = data?.updated ?? 0;
-                if (c + u > 0) progressSummary.push(`${c + u} ${type}`);
+                const un = data?.unchanged ?? 0;
+                const sm = data?.skipped_manual ?? 0;
+                const er = data?.errors ?? 0;
+                if (fetched + c + u + un + sm + er === 0) continue;
+                const parts: string[] = [];
+                if (fetched > 0) parts.push(`${fetched.toLocaleString('es-CO')} recibidos`);
+                if (c > 0) parts.push(`${c.toLocaleString('es-CO')} nuevos`);
+                if (u > 0) parts.push(`${u.toLocaleString('es-CO')} actualizados`);
+                if (un > 0) parts.push(`${un.toLocaleString('es-CO')} sin cambios`);
+                if (sm > 0) parts.push(`${sm.toLocaleString('es-CO')} manual (saltados)`);
+                if (er > 0) parts.push(`${er.toLocaleString('es-CO')} con error`);
+                progressSummary.push(`${type}: ${parts.join(' · ')}`);
               }
             }
 
@@ -519,9 +553,13 @@ const Inicio = () => {
     const cc = t.clientes_created ?? 0;
     const cu = t.clientes_updated ?? 0;
     const cs = t.clientes_unchanged ?? 0;
+    const csm = t.clientes_skipped_manual ?? 0;
+    const cf = t.clientes_fetched ?? 0;
     const pc = t.polizas_created ?? 0;
     const pu = t.polizas_updated ?? 0;
     const ps = t.polizas_unchanged ?? 0;
+    const psm = t.polizas_skipped_manual ?? 0;
+    const pf = t.polizas_fetched ?? 0;
     const kc = t.cartera_created ?? 0;
     const ku = t.cartera_updated ?? 0;
     const ks = t.cartera_unchanged ?? 0;
@@ -534,6 +572,10 @@ const Inicio = () => {
       : false;
     const allFailed = syncResult?.details
       ? Object.values(syncResult.details).every((d: any) => d?.status === 'failed')
+      : false;
+    const polizasSynced = syncResult?.details
+      ? Object.values(syncResult.details as Record<string, any>)
+        .some((d: any) => (d?.progress?.polizas?.created ?? 0) + (d?.progress?.polizas?.updated ?? 0) > 0)
       : false;
 
     return (
@@ -559,48 +601,72 @@ const Inicio = () => {
               : 'La información fue importada exitosamente a tu cuenta de GURO.'}
         </p>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-w-2xl mx-auto mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-3xl mx-auto mb-4">
           <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-            <p className="text-2xl font-bold text-white">{cc}</p>
+            <p className="text-2xl font-bold text-white">{cf.toLocaleString('es-CO')}</p>
+            <p className="text-[10px] text-neutral-500 leading-tight">Clientes recibidos</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <p className="text-2xl font-bold text-white">{cc.toLocaleString('es-CO')}</p>
             <p className="text-[10px] text-neutral-500 leading-tight">Clientes nuevos</p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-            <p className="text-2xl font-bold text-[#573CFF]">{cu}</p>
+            <p className="text-2xl font-bold text-[#573CFF]">{cu.toLocaleString('es-CO')}</p>
             <p className="text-[10px] text-neutral-500 leading-tight">Clientes actualizados</p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-            <p className="text-2xl font-bold text-neutral-500">{cs}</p>
+            <p className="text-2xl font-bold text-neutral-500">{cs.toLocaleString('es-CO')}</p>
             <p className="text-[10px] text-neutral-500 leading-tight">Sin cambios</p>
           </div>
+          {csm > 0 && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+              <p className="text-2xl font-bold text-amber-300">{csm.toLocaleString('es-CO')}</p>
+              <p className="text-[10px] text-neutral-400 leading-tight">Manual (saltados)</p>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-3xl mx-auto mb-8">
           <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-            <p className="text-2xl font-bold text-white">{pc}</p>
+            <p className="text-2xl font-bold text-white">{pf.toLocaleString('es-CO')}</p>
+            <p className="text-[10px] text-neutral-500 leading-tight">Pólizas recibidas</p>
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+            <p className="text-2xl font-bold text-white">{pc.toLocaleString('es-CO')}</p>
             <p className="text-[10px] text-neutral-500 leading-tight">Pólizas nuevas</p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-            <p className="text-2xl font-bold text-[#573CFF]">{pu}</p>
+            <p className="text-2xl font-bold text-[#573CFF]">{pu.toLocaleString('es-CO')}</p>
             <p className="text-[10px] text-neutral-500 leading-tight">Pólizas actualizadas</p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-            <p className="text-2xl font-bold text-neutral-500">{ps}</p>
+            <p className="text-2xl font-bold text-neutral-500">{ps.toLocaleString('es-CO')}</p>
             <p className="text-[10px] text-neutral-500 leading-tight">Sin cambios</p>
           </div>
-          {hasCartera && (
-            <>
-              <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-                <p className="text-2xl font-bold text-white">{kc}</p>
-                <p className="text-[10px] text-neutral-500 leading-tight">Cartera nueva</p>
-              </div>
-              <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-                <p className="text-2xl font-bold text-[#573CFF]">{ku}</p>
-                <p className="text-[10px] text-neutral-500 leading-tight">Cartera actualizada</p>
-              </div>
-              <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
-                <p className="text-2xl font-bold text-neutral-500">{ks}</p>
-                <p className="text-[10px] text-neutral-500 leading-tight">Sin cambios</p>
-              </div>
-            </>
+          {psm > 0 && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+              <p className="text-2xl font-bold text-amber-300">{psm.toLocaleString('es-CO')}</p>
+              <p className="text-[10px] text-neutral-400 leading-tight">Manual (saltados)</p>
+            </div>
           )}
         </div>
+
+        {hasCartera && (
+          <div className="grid grid-cols-3 gap-2 max-w-3xl mx-auto mb-8">
+            <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+              <p className="text-2xl font-bold text-white">{kc.toLocaleString('es-CO')}</p>
+              <p className="text-[10px] text-neutral-500 leading-tight">Cartera nueva</p>
+            </div>
+            <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+              <p className="text-2xl font-bold text-[#573CFF]">{ku.toLocaleString('es-CO')}</p>
+              <p className="text-[10px] text-neutral-500 leading-tight">Cartera actualizada</p>
+            </div>
+            <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3">
+              <p className="text-2xl font-bold text-neutral-500">{ks.toLocaleString('es-CO')}</p>
+              <p className="text-[10px] text-neutral-500 leading-tight">Sin cambios</p>
+            </div>
+          </div>
+        )}
 
         {/* Per-insurer detail */}
         {syncResult?.details && (
@@ -615,29 +681,31 @@ const Inicio = () => {
               const hasProgress = Object.keys(p).length > 0;
               const partialError = hasError && hasProgress;
 
-              const cliCreated = p?.clientes?.created ?? 0;
-              const cliUpdated = p?.clientes?.updated ?? 0;
-              const cliUnchanged = p?.clientes?.unchanged ?? 0;
-              const cliFetched = p?.clientes?.total_fetched ?? 0;
-              const polCreated = p?.polizas?.created ?? 0;
-              const polUpdated = p?.polizas?.updated ?? 0;
-              const polUnchanged = p?.polizas?.unchanged ?? 0;
-              const polFetched = p?.polizas?.total_fetched ?? 0;
-              const carCreated = p?.cartera?.created ?? 0;
-              const carUpdated = p?.cartera?.updated ?? 0;
-              const anyData = cliCreated + cliUpdated + polCreated + polUpdated + carCreated + carUpdated > 0;
-              const insurerCliMsg =
-                cliFetched > 0
-                  ? `${cliFetched} clientes recibidos${cliUnchanged > 0 ? ` · ${cliUnchanged} sin cambios` : ''}${cliCreated || cliUpdated ? ` · ${cliCreated} nuevos, ${cliUpdated} actualizados` : ''}`
-                  : cliUnchanged > 0
-                    ? `${cliUnchanged} clientes sin cambios`
-                    : '';
-              const insurerPolMsg =
-                polFetched > 0
-                  ? `${polFetched} pólizas recibidas${polUnchanged > 0 ? ` · ${polUnchanged} sin cambios` : ''}${polCreated || polUpdated ? ` · ${polCreated} nuevas, ${polUpdated} actualizadas` : ''}`
-                  : polUnchanged > 0
-                    ? `${polUnchanged} pólizas sin cambios`
-                    : '';
+              const fmt = (n: number) => n.toLocaleString('es-CO');
+              const buildLine = (label: string, data: any): string => {
+                if (!data) return '';
+                const c = data?.created ?? 0;
+                const u = data?.updated ?? 0;
+                const un = data?.unchanged ?? 0;
+                const sm = data?.skipped_manual ?? 0;
+                const er = data?.errors ?? 0;
+                const fetched = data?.total_fetched ?? 0;
+                const total = c + u + un + sm + er + fetched;
+                if (total === 0) return '';
+                const parts: string[] = [];
+                if (fetched > 0) parts.push(`${fmt(fetched)} recibidos`);
+                if (c > 0) parts.push(`${fmt(c)} nuevos`);
+                if (u > 0) parts.push(`${fmt(u)} actualizados`);
+                if (un > 0) parts.push(`${fmt(un)} sin cambios`);
+                if (sm > 0) parts.push(`${fmt(sm)} manual saltados`);
+                if (er > 0) parts.push(`${fmt(er)} con error`);
+                return `${label}: ${parts.join(' · ')}`;
+              };
+              const insurerCliMsg = buildLine('Clientes', p?.clientes);
+              const insurerPolMsg = buildLine('Pólizas', p?.polizas);
+              const insurerCarMsg = buildLine('Cartera', p?.cartera);
+              const insurerComMsg = buildLine('Comisiones', p?.comisiones);
+              const anyData = !!(insurerCliMsg || insurerPolMsg || insurerCarMsg || insurerComMsg);
 
               return (
                 <div key={code} className={`rounded-xl border px-4 py-3 ${isRowCancelled ? 'border-amber-500/30 bg-amber-500/5' : hasError && !partialError ? 'border-red-500/30 bg-red-500/5' : partialError ? 'border-amber-500/30 bg-amber-500/5' : 'border-neutral-800 bg-neutral-950/60'}`}>
@@ -652,20 +720,14 @@ const Inicio = () => {
                     <div className="flex-1 text-left">
                       <p className="text-sm text-white font-medium">{meta?.name || code}</p>
                       {anyData && (
-                        <p className="text-[11px] text-neutral-500">
-                          {cliCreated + cliUpdated > 0 && <span>{cliCreated} clientes nuevos, {cliUpdated} actualizados</span>}
-                          {cliCreated + cliUpdated > 0 && (polCreated + polUpdated > 0 || carCreated + carUpdated > 0) && <span> · </span>}
-                          {polCreated + polUpdated > 0 && <span>{polCreated} pólizas nuevas, {polUpdated} actualizadas</span>}
-                          {polCreated + polUpdated > 0 && carCreated + carUpdated > 0 && <span> · </span>}
-                          {carCreated + carUpdated > 0 && <span>{carCreated} cartera nueva, {carUpdated} actualizada</span>}
-                        </p>
+                        <div className="text-[11px] text-neutral-400 space-y-0.5 mt-0.5">
+                          {insurerCliMsg && <p>{insurerCliMsg}</p>}
+                          {insurerPolMsg && <p>{insurerPolMsg}</p>}
+                          {insurerCarMsg && <p>{insurerCarMsg}</p>}
+                          {insurerComMsg && <p>{insurerComMsg}</p>}
+                        </div>
                       )}
-                      {!anyData && !hasError && (insurerCliMsg || insurerPolMsg) && (
-                        <p className="text-[11px] text-neutral-500">
-                          {[insurerCliMsg, insurerPolMsg].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                      {!anyData && !hasError && !insurerCliMsg && !insurerPolMsg && (
+                      {!anyData && !hasError && (
                         <p className="text-[11px] text-neutral-500">Todo al día, sin cambios</p>
                       )}
                     </div>
@@ -705,7 +767,7 @@ const Inicio = () => {
           </div>
         )}
 
-        {!isCancelled && !allFailed && (
+        {!isCancelled && !allFailed && polizasSynced && (
           <div className="max-w-md mx-auto mb-6 rounded-xl border border-[#573CFF]/30 bg-[#573CFF]/8 px-4 py-3 flex items-start gap-3">
             <Icon icon="solar:layers-minimalistic-bold" width={18} className="text-[#a78bfa] mt-0.5 shrink-0" />
             <div className="text-left">
@@ -868,12 +930,41 @@ const Inicio = () => {
             Configura tu cuenta de seguros
           </h1>
           <p className="text-neutral-400 text-[15px] leading-snug mb-8">
-            Sigue estos pasos para sincronizar tu operación en un solo lugar.
+            Sigue estos pasos para centralizar pólizas, clientes, cartera y comisiones según lo que tenga disponible cada compañía.
           </p>
 
+          {setupCompleted ? (
+            <div className="rounded-3xl border border-emerald-500/25 bg-emerald-500/10 px-5 py-5 md:px-6 md:py-6">
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                  <Icon icon="solar:check-circle-bold" width={22} className="text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-semibold text-white mb-1">Implementación inicial completada</h2>
+                  <p className="text-sm text-neutral-400 leading-relaxed mb-4">
+                    Ya puedes operar desde tus módulos principales: sincronizar compañías, importar cartera, revisar comisiones y gestionar pólizas/clientes.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => nav('/apps/integraciones/apis-aseguradoras')} className="rounded-lg bg-[#573CFF] hover:bg-[#4b31e6] text-white text-sm font-medium px-4 py-2 transition-colors">
+                      Integraciones
+                    </button>
+                    <button type="button" onClick={() => nav('/apps/cartera/aseguradoras')} className="rounded-lg border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-medium px-4 py-2 transition-colors">
+                      Cartera
+                    </button>
+                    <button type="button" onClick={() => nav('/apps/comisiones/aseguradoras')} className="rounded-lg border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 text-white text-sm font-medium px-4 py-2 transition-colors">
+                      Comisiones
+                    </button>
+                    <button type="button" onClick={reopenSetupSteps} className="rounded-lg text-neutral-400 hover:text-white text-sm font-medium px-3 py-2 transition-colors">
+                      Ver pasos de nuevo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="flex flex-col gap-3">
             {/* Paso 1 — Conectar aseguradoras */}
-            <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center">
+            <div className="relative rounded-2xl border border-neutral-800 bg-neutral-950/80 px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center">
               {hasConnectedInsurer ? (
                 <div className="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
                   <Icon icon="solar:check-read-linear" width={18} className="text-emerald-400" />
@@ -893,27 +984,36 @@ const Inicio = () => {
                 <p className="text-sm text-neutral-500 leading-relaxed">
                   {hasConnectedInsurer
                     ? `${connectedInsurers.length} aseguradora${connectedInsurers.length > 1 ? 's' : ''} conectada${connectedInsurers.length > 1 ? 's' : ''}`
-                    : 'Vincula tus credenciales de aseguradoras para empezar a importar datos.'}
+                    : 'Vincula tus credenciales de aseguradoras y revisa qué sincroniza cada una: clientes, pólizas, cartera o comisiones.'}
                 </p>
       </div>
 
               {hasConnectedInsurer ? (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {connectedInsurers.slice(0, 4).map((code) => {
-                    const meta = INSURER_META[code];
-                    return (
-                      <div key={code} className="w-8 h-8 rounded-full bg-white flex items-center justify-center overflow-hidden border border-gray-200 dark:border-neutral-700 shrink-0">
-                        {meta?.logo ? (
-                          <img src={meta.logo} alt={meta.name} className="w-5 h-5 object-contain" />
-                        ) : (
-                          <span className="text-[7px] font-bold text-[#111]">{(meta?.name || code).slice(0, 3).toUpperCase()}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center ml-1">
-                    <Icon icon="solar:check-read-bold" width={14} className="text-emerald-400" />
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    {connectedInsurers.slice(0, 4).map((code) => {
+                      const meta = INSURER_META[code];
+                      return (
+                        <div key={code} className="w-8 h-8 rounded-full bg-white flex items-center justify-center overflow-hidden border border-gray-200 dark:border-neutral-700 shrink-0">
+                          {meta?.logo ? (
+                            <img src={meta.logo} alt={meta.name} className="w-5 h-5 object-contain" />
+                          ) : (
+                            <span className="text-[7px] font-bold text-[#111]">{(meta?.name || code).slice(0, 3).toUpperCase()}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center ml-1">
+                      <Icon icon="solar:check-read-bold" width={14} className="text-emerald-400" />
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => nav('/apps/integraciones/apis-aseguradoras')}
+                    className="text-xs font-medium text-neutral-400 hover:text-white transition-colors underline underline-offset-4 decoration-neutral-700 hover:decoration-white/70"
+                  >
+                    Añadir más
+                  </button>
                 </div>
               ) : (
                 <span className="inicio-sync-shell">
@@ -933,7 +1033,7 @@ const Inicio = () => {
 
             {/* Paso 2 — Sincronizar información */}
             <div
-              className={`rounded-2xl border px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center transition-colors ${
+              className={`relative rounded-2xl border px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center transition-colors ${
                 hasConnectedInsurer
                   ? 'border-neutral-800 bg-neutral-950/80'
                   : 'border-neutral-800/90 opacity-80'
@@ -953,7 +1053,7 @@ const Inicio = () => {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 gap-y-1 mb-1">
                   <h2 className={`text-[15px] font-semibold ${hasConnectedInsurer ? 'text-white' : 'text-neutral-500'}`}>
-                    Sincroniza tu información
+                    Sincroniza lo disponible
                   </h2>
                   {hasConnectedInsurer && (
                     <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
@@ -963,7 +1063,7 @@ const Inicio = () => {
                   )}
                 </div>
                 <p className={`text-sm leading-relaxed ${hasConnectedInsurer ? 'text-neutral-500' : 'text-neutral-600'}`}>
-                  Importa clientes, pólizas y cartera de tus aseguradoras conectadas.
+                  Ejecuta la sincronización automática de clientes, pólizas y cartera según las capacidades de cada aseguradora.
                 </p>
               </div>
               {hasConnectedInsurer ? (
@@ -985,43 +1085,106 @@ const Inicio = () => {
             </div>
 
             {/* Paso 3 — bloqueado */}
-            <div className="rounded-2xl border border-neutral-800/90 px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center opacity-80">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-sm font-medium text-neutral-500">
-                3
+            <div className={`relative rounded-2xl border px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center transition-colors ${
+              syncStepCompleted ? 'border-neutral-800 bg-neutral-950/80' : 'border-neutral-800/90 opacity-80'
+            }`}>
+              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${
+                syncStepCompleted ? 'bg-[#573CFF] text-white' : 'bg-neutral-800 text-neutral-500'
+              }`}>
+                {syncStepCompleted ? <Icon icon="solar:upload-linear" width={18} /> : 3}
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-[15px] font-semibold text-neutral-500 mb-1">Sincroniza cartera</h2>
-                <p className="text-sm text-neutral-600 leading-relaxed">
-                  Organiza tus renovaciones y estados de cuenta actuales.
+                <h2 className={`text-[15px] font-semibold mb-1 ${syncStepCompleted ? 'text-white' : 'text-neutral-500'}`}>Importa cartera desde Excel</h2>
+                <p className={`text-sm leading-relaxed ${syncStepCompleted ? 'text-neutral-500' : 'text-neutral-600'}`}>
+                  Para compañías sin endpoint de cartera o archivos históricos, sube Excel/CSV con automapeo y reemplazo por aseguradora.
                 </p>
               </div>
-              <Icon
-                icon="solar:lock-keyhole-minimalistic-linear"
-                width={22}
-                className="text-neutral-500 flex-shrink-0"
-              />
+              {syncStepCompleted ? (
+                <span className="inicio-sync-shell">
+                  <span className="inicio-sync-spin-track" aria-hidden />
+                  <span className="inicio-sync-halo" aria-hidden />
+                  <span className="inicio-sync-spark" aria-hidden />
+                  <button type="button" onClick={() => { markCarteraStepCompleted(); nav('/apps/cartera/aseguradoras'); }} className="inicio-sync-inner">
+                    Ir a cartera
+                  </button>
+                </span>
+              ) : (
+                <Icon icon="solar:lock-keyhole-minimalistic-linear" width={22} className="text-neutral-500 flex-shrink-0" />
+              )}
             </div>
 
             {/* Paso 4 — bloqueado */}
-            <div className="rounded-2xl border border-neutral-800/90 px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center opacity-80">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-sm font-medium text-neutral-500">
-                4
+            <div className={`relative rounded-2xl border px-4 py-4 md:px-5 md:py-5 flex gap-4 items-center transition-colors ${
+              carteraStepCompleted ? 'border-neutral-800 bg-neutral-950/80' : 'border-neutral-800/90 opacity-80'
+            }`}>
+              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${
+                carteraStepCompleted ? 'bg-[#573CFF] text-white' : 'bg-neutral-800 text-neutral-500'
+              }`}>
+                {carteraStepCompleted ? <Icon icon="solar:chart-2-linear" width={18} /> : 4}
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-[15px] font-semibold text-neutral-500 mb-1">
-                  Comisiones y reportes financieros
+                <h2 className={`text-[15px] font-semibold mb-1 ${carteraStepCompleted ? 'text-white' : 'text-neutral-500'}`}>
+                  Revisa cartera y comisiones
                 </h2>
-                <p className="text-sm text-neutral-600 leading-relaxed">
-                  Concilia comisiones con tu cartera y visualiza rentabilidad por ramo y compañía.
+                <p className={`text-sm leading-relaxed ${carteraStepCompleted ? 'text-neutral-500' : 'text-neutral-600'}`}>
+                  Consulta saldos pendientes, comisiones recibidas, recibos por compañía y seguimiento de pagos.
                 </p>
               </div>
-              <Icon
-                icon="solar:lock-keyhole-minimalistic-linear"
-                width={22}
-                className="text-neutral-500 flex-shrink-0"
-              />
+              {carteraStepCompleted ? (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="inicio-sync-shell">
+                    <span className="inicio-sync-spin-track" aria-hidden />
+                    <span className="inicio-sync-halo" aria-hidden />
+                    <span className="inicio-sync-spark" aria-hidden />
+                    <button type="button" onClick={() => nav('/apps/cartera/aseguradoras')} className="inicio-sync-inner">Cartera</button>
+                  </span>
+                  <span className="inicio-sync-shell">
+                    <span className="inicio-sync-spin-track" aria-hidden />
+                    <span className="inicio-sync-halo" aria-hidden />
+                    <span className="inicio-sync-spark" aria-hidden />
+                    <button type="button" onClick={() => nav('/apps/comisiones/aseguradoras')} className="inicio-sync-inner">Comisiones</button>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={markSetupCompleted}
+                    title="Marcar implementación como completada"
+                    aria-label="Marcar implementación como completada"
+                    className="rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 p-2 transition-colors"
+                  >
+                    <Icon icon="solar:check-circle-bold" width={18} />
+                  </button>
+                </div>
+              ) : (
+                <Icon icon="solar:lock-keyhole-minimalistic-linear" width={22} className="text-neutral-500 flex-shrink-0" />
+              )}
             </div>
+
+            {false && (
+            <div className="relative rounded-2xl border border-[#573CFF]/20 bg-[#573CFF]/10 px-4 py-4 md:px-5 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#573CFF]/20 border border-[#573CFF]/30 flex items-center justify-center shrink-0">
+                <Icon icon="solar:question-circle-linear" width={18} className="text-[#a78bfa]" />
+              </div>
+              <div className="flex-1 min-w-0 pr-32">
+                <h2 className="text-[15px] font-semibold text-white mb-1">¿Tienes dudas de implementación?</h2>
+                <p className="text-sm text-neutral-400 leading-relaxed">
+                  Contáctanos y te ayudamos a configurar integraciones, importaciones, asesores, cartera y comisiones según tu operación.
+                </p>
+              </div>
+              <div className="absolute right-4 top-4">
+                <button
+                  type="button"
+                  onClick={() => nav('/apps/guiame')}
+                  className="inline-flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-900/80 hover:bg-neutral-800 px-3 py-1.5 text-xs font-medium text-white transition-colors"
+                >
+                  <Icon icon="solar:magic-stick-3-bold" width={14} className="text-[#a78bfa]" />
+                  Guíame
+                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">BETA</span>
+                </button>
+              </div>
+            </div>
+            )}
           </div>
+          )}
         </div>
       </div>
 

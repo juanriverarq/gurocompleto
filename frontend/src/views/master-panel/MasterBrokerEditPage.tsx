@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/shadc
 import { Icon as IconifyIcon } from '@iconify/react';
 import masterPanelService from '../../services/masterPanelService';
 import { MODULES } from '../../components/landingpage/pricing-calculator/modules';
+import { OPERATIVA_MANUAL_KEY, OPERATIVA_AUTOMATICA_KEY } from '../../hooks/useOperativaMode';
 
 interface BrokerDetail {
   id: number;
@@ -404,6 +405,105 @@ const MasterBrokerEditPage: React.FC = () => {
                     <Input id="max_policies" name="max_policies" type="number" value={formData.max_policies} onChange={handleChange} />
                   </div>
                 </div>
+
+                {/* Operatividad */}
+                {(() => {
+                  const hasManual = selectedFeatures.has(OPERATIVA_MANUAL_KEY);
+                  const hasAuto = selectedFeatures.has(OPERATIVA_AUTOMATICA_KEY);
+                  // Si ninguna está marcada explícitamente, se considera "ambas" (legacy).
+                  const isManualOnly = hasManual && !hasAuto;
+                  const isAutoOnly = hasAuto && !hasManual;
+                  const isBoth = (hasManual && hasAuto) || (!hasManual && !hasAuto);
+
+                  const apply = (mode: 'manual' | 'automatica' | 'ambas') => {
+                    setSelectedFeatures((prev) => {
+                      const next = new Set(prev);
+                      next.delete(OPERATIVA_MANUAL_KEY);
+                      next.delete(OPERATIVA_AUTOMATICA_KEY);
+                      if (mode === 'manual' || mode === 'ambas') next.add(OPERATIVA_MANUAL_KEY);
+                      if (mode === 'automatica' || mode === 'ambas') next.add(OPERATIVA_AUTOMATICA_KEY);
+                      return next;
+                    });
+                  };
+
+                  const options: Array<{
+                    key: 'manual' | 'automatica' | 'ambas';
+                    label: string;
+                    description: string;
+                    icon: string;
+                    active: boolean;
+                  }> = [
+                    {
+                      key: 'manual',
+                      label: 'Agencia Manual',
+                      description: 'Cartera y comisiones cargadas a mano. Oculta vistas y tabs de sincronización con aseguradoras.',
+                      icon: 'solar:pen-2-bold-duotone',
+                      active: isManualOnly,
+                    },
+                    {
+                      key: 'automatica',
+                      label: 'Agencia Automática',
+                      description: 'Cartera y comisiones sincronizadas desde aseguradoras. Oculta tabs y vistas manuales.',
+                      icon: 'solar:refresh-circle-bold-duotone',
+                      active: isAutoOnly,
+                    },
+                    {
+                      key: 'ambas',
+                      label: 'Ambas',
+                      description: 'Muestra tanto las vistas manuales como las sincronizadas. Útil durante migración o cobertura mixta.',
+                      icon: 'solar:layers-bold-duotone',
+                      active: isBoth,
+                    },
+                  ];
+
+                  return (
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-semibold flex items-center gap-2">
+                          <IconifyIcon icon="solar:settings-bold-duotone" className="w-5 h-5 text-purple-600" />
+                          Operatividad
+                        </h3>
+                        <p className="text-[11px] text-gray-500">
+                          Define cómo trabaja este broker la cartera y las comisiones.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {options.map((opt) => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => apply(opt.key)}
+                            className={`flex flex-col items-start gap-2 p-3 rounded-lg border text-left transition-all ${
+                              opt.active
+                                ? 'border-purple-400 bg-purple-50 dark:bg-purple-900/20 dark:border-purple-600 ring-2 ring-purple-200 dark:ring-purple-900/40'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <div
+                                className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 border ${
+                                  opt.active ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900'
+                                }`}
+                              >
+                                {opt.active && <IconifyIcon icon="solar:check-read-linear" className="w-3 h-3" />}
+                              </div>
+                              <IconifyIcon
+                                icon={opt.icon}
+                                className={`w-5 h-5 ${opt.active ? 'text-purple-600' : 'text-gray-400'}`}
+                              />
+                              <p className={`text-sm font-semibold ${opt.active ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}`}>
+                                {opt.label}
+                              </p>
+                            </div>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+                              {opt.description}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Módulos / Features */}
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">

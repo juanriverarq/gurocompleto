@@ -37,6 +37,19 @@ const SectionHeader: React.FC<{ title: string; icon?: string }> = ({ title, icon
   </div>
 );
 
+const ConfidenceDot: React.FC<{ confidence?: number }> = ({ confidence }) => {
+  if (confidence === undefined || confidence === null) return null;
+  const isHigh = confidence >= 85;
+  const isMid = confidence >= 60;
+  const color = isHigh ? 'text-green-500' : isMid ? 'text-yellow-500' : 'text-red-400';
+  const icon = isHigh ? 'solar:check-circle-bold' : isMid ? 'solar:danger-triangle-bold' : 'solar:close-circle-bold';
+  return (
+    <span title={`IA: ${confidence}%`} className={`absolute top-0 right-0 z-10 ${color}`}>
+      <Icon icon={icon} className="w-3 h-3" />
+    </span>
+  );
+};
+
 const PdfPreview: React.FC<{
   file: File | null;
   processing: boolean;
@@ -270,32 +283,32 @@ const PdfPreview: React.FC<{
                 <span>Excelente</span>
               </div>
               
-              {/* Nota explicativa */}
+              {/* Nota explicativa — basada en campos CRÍTICOS (póliza, aseg, ramo, fechas, cliente), no en cantidad de campos */}
               <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                {confidence.overall >= 90 ? (
+                {confidence.overall >= 85 ? (
                   <div className="flex items-center gap-1">
                     <Icon icon="solar:check-circle-bold" className="w-3 h-3 text-green-500" />
-                    <span>Extracción excelente. Los datos son muy confiables.</span>
-                  </div>
-                ) : confidence.overall >= 80 ? (
-                  <div className="flex items-center gap-1">
-                    <Icon icon="solar:info-circle-bold" className="w-3 h-3 text-blue-500" />
-                    <span>Extracción buena. Revise los campos principales.</span>
+                    <span>Campos principales detectados correctamente. Revise antes de guardar.</span>
                   </div>
                 ) : confidence.overall >= 70 ? (
                   <div className="flex items-center gap-1">
-                    <Icon icon="solar:danger-triangle-bold" className="w-3 h-3 text-yellow-500" />
-                    <span>Extracción aceptable. Verifique los datos extraídos.</span>
+                    <Icon icon="solar:info-circle-bold" className="w-3 h-3 text-blue-500" />
+                    <span>La mayoría de campos detectados. Verifique póliza, fechas y cliente.</span>
                   </div>
                 ) : confidence.overall >= 50 ? (
                   <div className="flex items-center gap-1">
+                    <Icon icon="solar:danger-triangle-bold" className="w-3 h-3 text-yellow-500" />
+                    <span>Algunos campos críticos faltan o tienen formato incorrecto. Revise con cuidado.</span>
+                  </div>
+                ) : confidence.overall >= 30 ? (
+                  <div className="flex items-center gap-1">
                     <Icon icon="solar:shield-warning-bold" className="w-3 h-3 text-orange-500" />
-                    <span>Extracción con advertencias. Revise cuidadosamente.</span>
+                    <span>Extracción parcial. Complete manualmente número de póliza, fechas y datos del cliente.</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1">
                     <Icon icon="solar:close-circle-bold" className="w-3 h-3 text-red-500" />
-                    <span>Baja confianza. Considere procesamiento manual.</span>
+                    <span>No se detectaron campos clave. Complete el formulario manualmente.</span>
                   </div>
                 )}
               </div>
@@ -393,7 +406,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     iva: '',
     total: '',
     gastosAdicionales: '',
-    gastosAdicionalesAplicaIva: false,
+    gastosAdicionalesAplicaIva: true,
     porcentajeComision: '',
     comision: '',
     formaPago: '',
@@ -745,6 +758,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
   const [pdfProcessing, setPdfProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [pdfConfidence, setPdfConfidence] = useState<any>(null);
+  const [fieldConfidence, setFieldConfidence] = useState<Record<string, number> | null>(null);
+  const [originalAiValues, setOriginalAiValues] = useState<Record<string, string> | null>(null);
   const [showImporter, setShowImporter] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   
@@ -922,20 +937,47 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     })));
   }, [ramosHook]);
 
-  // Alinear select de ramos cuando estamos editando y ya hay valor cargado
+  // Alinear select de ramos cuando estamos editando y ya hay valor cargado.
+  // Prioriza ramo_id (FK estable) sobre el nombre (puede no coincidir literal con el catálogo,
+  // ej. "AUTOMOVILES" en sync vs "Autos Livianos" en catálogo).
   useEffect(() => {
     if (isEditMode && polizaToEdit && ramos.length > 0) {
-      const src = (((polizaToEdit as any).ramo_nombre || polizaToEdit.ramo_principal) || '').toString().toLowerCase();
-      if (src) {
-        const match = ramos.find(r => r.nombre.toLowerCase() === src)
-          || ramos.find(r => src.includes(r.nombre.toLowerCase()))
-          || ramos.find(r => r.nombre.toLowerCase().includes(src));
-        if (match) {
-          setFormData(prev => ({ ...prev, ramoPrincipal: match.nombre }));
+      const rid = (polizaToEdit as any).ramo_id;
+      let match = rid ? ramos.find(r => String(r.id) === String(rid)) : undefined;
+      if (!match) {
+        const src = (((polizaToEdit as any).ramo_nombre || polizaToEdit.ramo_principal) || '').toString().toLowerCase();
+        if (src) {
+          match = ramos.find(r => r.nombre.toLowerCase() === src)
+            || ramos.find(r => src.includes(r.nombre.toLowerCase()))
+            || ramos.find(r => r.nombre.toLowerCase().includes(src));
         }
+      }
+      if (match) {
+        setFormData(prev => prev.ramoPrincipal === match!.nombre ? prev : ({ ...prev, ramoPrincipal: match!.nombre }));
       }
     }
   }, [isEditMode, polizaToEdit, ramos]);
+
+  // Alinear select de aseguradoras cuando estamos editando.
+  // Mismo problema: el sync puede traer "ARL SURA" o variaciones que no matchean
+  // el catálogo. Resolver por aseguradora_id (FK) primero, fallback a nombre.
+  useEffect(() => {
+    if (isEditMode && polizaToEdit && aseguradoras.length > 0) {
+      const aid = (polizaToEdit as any).aseguradora_id;
+      let match = aid ? aseguradoras.find(a => String(a.id) === String(aid)) : undefined;
+      if (!match) {
+        const src = (((polizaToEdit as any).aseguradora_nombre || polizaToEdit.aseguradora) || '').toString().toLowerCase();
+        if (src) {
+          match = aseguradoras.find(a => a.nombre.toLowerCase() === src)
+            || aseguradoras.find(a => src.includes(a.nombre.toLowerCase()))
+            || aseguradoras.find(a => a.nombre.toLowerCase().includes(src));
+        }
+      }
+      if (match) {
+        setFormData(prev => prev.aseguradora === match!.nombre ? prev : ({ ...prev, aseguradora: match!.nombre }));
+      }
+    }
+  }, [isEditMode, polizaToEdit, aseguradoras]);
 
   useEffect(() => {
     setSedes((sedesHook || []).map((s: any) => ({ id: String(s.id), nombre: s.nombre || s.name })));
@@ -1265,6 +1307,18 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
       
       // Guardar métricas de confianza para mostrar en la barra
       setPdfConfidence(result.confidence);
+      setFieldConfidence((result as any).fieldConfidence || null);
+      // Snapshot de los valores que la IA extrajo → para detectar correcciones al guardar
+      setOriginalAiValues({
+        primaNeta:        result.primaNeta        || '',
+        gastosExpedicion: result.gastosExpedicion || '',
+        iva:              result.iva              || '',
+        total:            result.total            || '',
+        aseguradora:      result.aseguradora      || '',
+        fechaInicio:      result.fechaInicio      || '',
+        fechaFin:         result.fechaFin         || '',
+        numeroPoliza:     result.numeroPoliza     || '',
+      });
 
       // Usar nombres del backend (ya matched contra catálogos reales) o fuzzy match local
       const mapAseguradora = (r: typeof result) => {
@@ -1312,6 +1366,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         
         // Información financiera
         primaNeta: result.primaNeta || prev.primaNeta,
+        gastosAdicionales: result.gastosExpedicion || prev.gastosAdicionales,
+        gastosAdicionalesAplicaIva: true,
         iva: result.iva || prev.iva,
         total: result.total || prev.total,
         formaPago: result.periodicidadPago || result.formaPago || prev.formaPago,
@@ -1425,6 +1481,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
     setPdfProcessing(false);
     setProcessingProgress(0);
     setPdfConfidence(null);
+    setFieldConfidence(null);
+    setOriginalAiValues(null);
   };
 
   // useToast declarado arriba para soportar autocompletado de placas
@@ -1636,6 +1694,39 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         }
         
         if (response.success) {
+          // Feedback loop: si la IA extrajo valores y el usuario los corrigió, guardarlos
+          // para mejorar futuras extracciones de la misma aseguradora (fire-and-forget)
+          if (originalAiValues && !isEditMode) {
+            const fieldsToTrack: Record<string, string> = {
+              primaNeta:        formData.primaNeta           || '',
+              gastosExpedicion: formData.gastosAdicionales   || '',
+              aseguradora:      formData.aseguradoraNombre   || '',
+              fechaInicio:      formData.fechaInicio         || '',
+              fechaFin:         formData.fechaVencimiento    || '',
+              numeroPoliza:     formData.numeroPoliza        || '',
+            };
+            const corrections = Object.entries(fieldsToTrack)
+              .filter(([field, current]) => {
+                const aiVal = originalAiValues[field] || '';
+                return aiVal !== '' && current !== aiVal;
+              })
+              .map(([field, current]) => ({
+                field,
+                ai_value:        originalAiValues[field] || '',
+                corrected_value: current,
+              }));
+            if (corrections.length > 0) {
+              const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
+              saasApi.getAuthHeaders().then(headers => {
+                fetch(`${apiUrl}/saas/pdf-extract-corrections`, {
+                  method:  'POST',
+                  headers: { ...headers, 'Content-Type': 'application/json' },
+                  body:    JSON.stringify({ corrections, aseguradora: originalAiValues.aseguradora }),
+                }).catch(() => {});
+              });
+            }
+          }
+
           // Guardar el PDF usado para el lector IA como carátula de la póliza
           if (pdfFile) {
             try {
@@ -1711,7 +1802,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
               iva: '',
               total: '',
               gastosAdicionales: '',
-              gastosAdicionalesAplicaIva: false,
+              gastosAdicionalesAplicaIva: true,
               porcentajeComision: '',
               comision: '',
               formaPago: '',
@@ -1821,6 +1912,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
           <SectionHeader title="Información principal de la póliza" icon="solar:document-bold" />
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.numeroPoliza} />
               <FormField id="numeroPoliza" name="numeroPoliza" label="Número Póliza *" value={formData.numeroPoliza} onChange={handleInputChange} error={errors.numeroPoliza} placeholder="POL-2024-XXX" />
               {checkingPoliza && <div className="absolute right-2 top-8"><Spinner size="sm" /></div>}
               {!checkingPoliza && polizaError && !isEditMode && (
@@ -1897,14 +1989,16 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
               </label>
             </div>
 
-            <FormField id="aseguradora" name="aseguradora" label="Aseguradora *" value={formData.aseguradora} onChange={(e: any) => {
-              handleInputChange(e);
-              const newAseg = e.target.value;
-              // Limpiar ramo y subramo si la aseguradora cambia
-              if (newAseg !== formData.aseguradora) {
-                setFormData(prev => ({ ...prev, aseguradora: newAseg, ramoPrincipal: '', subramo: '' }));
-              }
-            }} error={errors.aseguradora} type="select" options={[{ value: '', label: 'Seleccionar' }, ...aseguradoras.map(a => ({ value: a.nombre, label: a.nombre }))]} />
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.aseguradora} />
+              <FormField id="aseguradora" name="aseguradora" label="Aseguradora *" value={formData.aseguradora} onChange={(e: any) => {
+                handleInputChange(e);
+                const newAseg = e.target.value;
+                if (newAseg !== formData.aseguradora) {
+                  setFormData(prev => ({ ...prev, aseguradora: newAseg, ramoPrincipal: '', subramo: '' }));
+                }
+              }} error={errors.aseguradora} type="select" options={[{ value: '', label: 'Seleccionar' }, ...aseguradoras.map(a => ({ value: a.nombre, label: a.nombre }))]} />
+            </div>
 
             {(() => {
               // Filtrar ramos: si hay aseguradora seleccionada, mostrar solo ramos que tengan comisión con esa aseguradora
@@ -1914,7 +2008,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                 : ramos;
               // Si no hay ramos filtrados por aseguradora pero hay ramos en general, mostrar todos
               const ramosToShow = ramosDisponibles.length > 0 ? ramosDisponibles : ramos;
-              return <FormField id="ramoPrincipal" name="ramoPrincipal" label="Ramo *" value={formData.ramoPrincipal} onChange={(e: any) => {
+              return <div className="relative"><ConfidenceDot confidence={fieldConfidence?.ramo} /><FormField id="ramoPrincipal" name="ramoPrincipal" label="Ramo *" value={formData.ramoPrincipal} onChange={(e: any) => {
                 handleInputChange(e);
                 const newRamo = e.target.value;
                 if (newRamo !== formData.ramoPrincipal) {
@@ -1936,7 +2030,7 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                     }
                   }
                 }
-              }} error={errors.ramoPrincipal} type="select" options={[{ value: '', label: 'Seleccionar' }, ...ramosToShow.map(r => ({ value: r.nombre, label: r.nombre }))]} />;
+              }} error={errors.ramoPrincipal} type="select" options={[{ value: '', label: 'Seleccionar' }, ...ramosToShow.map(r => ({ value: r.nombre, label: r.nombre }))]} /></div>;
             })()}
 
             {(() => {
@@ -2058,9 +2152,16 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Vigencia" icon="solar:calendar-bold" />
           <div className="grid grid-cols-3 gap-3">
-            <FormField id="fechaExpedicion" name="fechaExpedicion" label="Expedición *" type="date" value={formData.fechaExpedicion} onChange={handleInputChange} error={errors.fechaExpedicion} />
-            <FormField id="fechaInicio" name="fechaInicio" label="Inicio *" type="date" value={formData.fechaInicio} onChange={handleInputChange} error={errors.fechaInicio} />
-            <div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.fechaExpedicion} />
+              <FormField id="fechaExpedicion" name="fechaExpedicion" label="Expedición *" type="date" value={formData.fechaExpedicion} onChange={handleInputChange} error={errors.fechaExpedicion} />
+            </div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.fechaInicio} />
+              <FormField id="fechaInicio" name="fechaInicio" label="Inicio *" type="date" value={formData.fechaInicio} onChange={handleInputChange} error={errors.fechaInicio} />
+            </div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.fechaFin} />
               <Label htmlFor="fechaFin" className="text-xs font-medium text-gray-900 dark:text-white">Fin *</Label>
               <Input id="fechaFin" name="fechaFin" type="date" value={formData.fechaFin} onChange={handleInputChange} className={`mt-1 ${errors.fechaFin ? 'border-red-500' : ''}`} />
               {errors.fechaFin && <p className="text-red-500 text-[10px] mt-0.5">{errors.fechaFin}</p>}
@@ -2072,10 +2173,22 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Tomador / Asegurado" icon="solar:users-group-rounded-bold" />
           <div className="grid grid-cols-2 gap-3">
-            <FormField id="policy_holder_name" name="policy_holder_name" label="Tomador" value={(formData as any).policy_holder_name || ''} onChange={handleInputChange} />
-            <FormField id="policy_holder_document" name="policy_holder_document" label="Doc. Tomador" value={(formData as any).policy_holder_document || ''} onChange={handleInputChange} />
-            <FormField id="insured_name" name="insured_name" label="Asegurado" value={(formData as any).insured_name || ''} onChange={handleInputChange} />
-            <FormField id="insured_document" name="insured_document" label="Doc. Asegurado" value={(formData as any).insured_document || ''} onChange={handleInputChange} />
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.tomadorNombre} />
+              <FormField id="policy_holder_name" name="policy_holder_name" label="Tomador" value={(formData as any).policy_holder_name || ''} onChange={handleInputChange} />
+            </div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.tomadorDocumento} />
+              <FormField id="policy_holder_document" name="policy_holder_document" label="Doc. Tomador" value={(formData as any).policy_holder_document || ''} onChange={handleInputChange} />
+            </div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.aseguradoNombre} />
+              <FormField id="insured_name" name="insured_name" label="Asegurado" value={(formData as any).insured_name || ''} onChange={handleInputChange} />
+            </div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.aseguradoDocumento} />
+              <FormField id="insured_document" name="insured_document" label="Doc. Asegurado" value={(formData as any).insured_document || ''} onChange={handleInputChange} />
+            </div>
           </div>
         </div>
 
@@ -2151,7 +2264,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <SectionHeader title="Información Financiera" icon="solar:wallet-bold" />
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.primaNeta} />
               <Label htmlFor="primaNeta" className="text-xs font-medium text-gray-900 dark:text-white">Prima Neta *</Label>
               <Input id="primaNeta" name="primaNeta" value={formatCurrencyDisplay(formData.primaNeta)} onChange={handleCurrencyChange('primaNeta')} placeholder="0" className={`mt-1 ${errors.primaNeta ? 'border-red-500' : ''}`} />
               {errors.primaNeta && <p className="text-red-500 text-[10px] mt-0.5">{errors.primaNeta}</p>}
@@ -2164,7 +2278,8 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
               <Label htmlFor="iva" className="text-xs font-medium text-gray-900 dark:text-white">IVA</Label>
               <Input id="iva" name="iva" value={formatCurrencyDisplay(formData.iva)} readOnly className="mt-1 bg-gray-50 dark:bg-gray-800" />
             </div>
-            <div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.gastosExpedicion} />
               <Label htmlFor="gastosAdicionales" className="text-xs font-medium text-gray-900 dark:text-white">Gastos Adic.</Label>
               <Input id="gastosAdicionales" name="gastosAdicionales" value={formatCurrencyDisplay(formData.gastosAdicionales)} onChange={handleCurrencyChange('gastosAdicionales')} placeholder="0" className="mt-1" />
               <div className="flex items-center gap-1 mt-1">
@@ -2172,11 +2287,13 @@ const NuevaPoliza: React.FC<NuevaPolizaProps> = ({
                 <Label htmlFor="gastosAdicionalesAplicaIva" className="text-[10px] text-gray-500 cursor-pointer">+IVA</Label>
               </div>
             </div>
-            <div>
+            <div className="relative">
+              <ConfidenceDot confidence={fieldConfidence?.total} />
               <Label htmlFor="total" className="text-xs font-medium text-gray-900 dark:text-white">Total</Label>
               <Input id="total" name="total" value={formatCurrencyDisplay(formData.total)} readOnly className="mt-1 font-semibold bg-gray-50 dark:bg-gray-800" />
             </div>
           </div>
+
         </div>
 
         {/* === FORMA DE PAGO === */}

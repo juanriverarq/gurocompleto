@@ -13,6 +13,7 @@ import type { Vendedor as VendedorType, VendedorCreate } from 'src/types/admin';
 import ReportesVendedores from './ReportesVendedores';
 import ReporteLiquidaciones from './ReporteLiquidaciones';
 import ReporteProduccion from './ReporteProduccion';
+import NotificacionesEmailModal from './NotificacionesEmailModal';
 
 const tiposDocumento = [
   { value: 'CC', label: 'Cédula de Ciudadanía' },
@@ -103,6 +104,7 @@ const Vendedores = () => {
   
   // Estados para búsqueda y paginación
   const [searchTerm, setSearchTerm] = useState('');
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   
@@ -446,7 +448,17 @@ const Vendedores = () => {
             </p>
           </div>
           {activeTab === 'lista' && (
-            <HeroButton icon="solar:user-plus-bold" onClick={handleCreate}>Nuevo {terminologia.vendedor}</HeroButton>
+            <div className="flex items-center gap-2">
+              <Button
+                color="purple"
+                onClick={() => setNotifPanelOpen(true)}
+                title="Configurar envío automático de cartera pendiente y vencimientos a vendedores"
+              >
+                <Icon icon="solar:mailbox-bold-duotone" className="w-5 h-5 mr-2" />
+                Notificaciones Email
+              </Button>
+              <HeroButton icon="solar:user-plus-bold" onClick={handleCreate}>Nuevo {terminologia.vendedor}</HeroButton>
+            </div>
           )}
         </div>
         
@@ -1128,8 +1140,14 @@ const Vendedores = () => {
       </Modal>
         </>
       )}
+
+      {/* Modal global de notificaciones email — config única que aplica a todos */}
+      <NotificacionesEmailModal
+        open={notifPanelOpen}
+        onClose={() => setNotifPanelOpen(false)}
+      />
     </>
   );
 };
 
-export default Vendedores; 
+export default Vendedores;

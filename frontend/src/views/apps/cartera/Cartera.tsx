@@ -60,7 +60,7 @@ const moraColor = (dias: number | null) => {
 type TabKey = 'todos' | 'vencidas' | 'hoy' | 'proximos_7' | 'por_pagar' | 'comision' | 'cerradas';
 
 const TABS: { key: TabKey; label: string; icon: string; color?: string; groups: GroupKey[] }[] = [
-  { key: 'todos', label: 'Todos', icon: 'solar:list-bold-duotone', groups: ['vencidas', 'hoy', 'proximos_7', 'proximos_30', 'sin_fecha'] },
+  { key: 'todos', label: 'Todos', icon: 'solar:list-bold-duotone', groups: ['vencidas', 'hoy', 'proximos_7', 'proximos_30', 'futuras', 'sin_fecha'] },
   { key: 'vencidas', label: 'Vencidas', icon: 'solar:danger-triangle-bold-duotone', color: '#ef4444', groups: ['vencidas'] },
   { key: 'hoy', label: 'Hoy', icon: 'solar:bell-bing-bold-duotone', color: '#f97316', groups: ['hoy'] },
   { key: 'proximos_7', label: 'Próximos 7d', icon: 'solar:calendar-bold-duotone', color: '#eab308', groups: ['proximos_7'] },

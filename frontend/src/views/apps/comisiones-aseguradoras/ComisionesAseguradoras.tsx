@@ -13,6 +13,7 @@ import equidadLogo from '../../../assets/images/logoscompanias/equidad.png';
 import mapfreLogo from '../../../assets/images/logoscompanias/mapfre.png';
 import qualitasLogo from '../../../assets/images/logoscompanias/qualitas.svg';
 import allianzLogo from '../../../assets/images/logoscompanias/allianz.png';
+import mundialLogo from '../../../assets/images/logoscompanias/mundial.svg';
 
 // ─── Types ───────────────────────────────────────────────────────
 interface ComisionRow {
@@ -69,6 +70,7 @@ const INSURER_LOGOS: Record<string, string> = {
   mapfre: mapfreLogo,
   qualitas: qualitasLogo,
   allianz: allianzLogo,
+  mundial: mundialLogo,
 };
 
 const fmt = (n: number | string) => {
@@ -201,6 +203,24 @@ const ComisionesAseguradoras: React.FC = () => {
     }
   };
 
+  const clearData = async () => {
+    const scope = `${insurerFilter || 'todas las aseguradoras'} · ${mes}/${anio}`;
+    if (!window.confirm(`¿Eliminar comisiones sincronizadas de ${scope}? Luego podrás resincronizar.`)) return;
+    setSyncing(true);
+    setSyncMsg('Eliminando datos de comisiones...');
+    try {
+      const res = await saasApi.deleteRecibosComisionesData({ insurer: insurerFilter || undefined, anio, mes });
+      setSyncMsg(res.message || `Eliminados ${res.data?.deleted ?? 0} registros`);
+      setPage(1);
+      await loadStats();
+      await loadItems();
+    } catch (e: any) {
+      setSyncMsg(e?.message || 'Error eliminando datos');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const availableInsurers = useMemo(() => stats?.by_insurer || [], [stats]);
   const availableRamos = useMemo(() => stats?.by_ramo || [], [stats]);
 
@@ -215,6 +235,7 @@ const ComisionesAseguradoras: React.FC = () => {
     if (!detailRow) return null;
     const r = detailRow;
     const valorComision = typeof r.valor_comision === 'string' ? parseFloat(r.valor_comision) : r.valor_comision;
+    const isSummary = r.producto === 'RESUMEN_PERIODO' || r.concepto?.toLowerCase().includes('total periodo');
     const mc = '#22c55e'; // verde para comisiones
 
     const Field = ({ label, value, mono }: { label: string; value: string | number | null | undefined; mono?: boolean }) => (
@@ -267,7 +288,7 @@ const ComisionesAseguradoras: React.FC = () => {
               <div className="rounded-xl border p-3 text-center" style={{ borderColor: `${mc}40`, backgroundColor: `${mc}08` }}>
                 <p className="text-[10px] text-gray-400 dark:text-neutral-500 uppercase mb-1">Comisión</p>
                 <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{fmt(valorComision)}</p>
-                <p className="text-[10px] text-gray-500 dark:text-neutral-500 mt-0.5">{Number(r.porcentaje_comision).toFixed(2)}%</p>
+                <p className="text-[10px] text-gray-500 dark:text-neutral-500 mt-0.5">{isSummary ? 'Total período' : `${Number(r.porcentaje_comision).toFixed(2)}%`}</p>
               </div>
             </div>
 
@@ -276,12 +297,14 @@ const ComisionesAseguradoras: React.FC = () => {
               <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                 <Field label="Nº Recibo" value={r.numero_recibo} mono />
                 <Field label="Nº Póliza" value={r.policy_number} mono />
+                <Field label="Tipo" value={isSummary ? 'Resumen total del período' : 'Recibo individual'} />
                 <Field label="Ramo" value={r.ramo_codigo ? `${getRamoLabel(r.ramo_codigo, r.insurer_code)} (${r.ramo_codigo})` : null} />
                 <Field label="Producto" value={r.producto} />
                 <Field label="Fecha de recaudo" value={fmtDate(r.fecha_recaudo)} />
                 <Field label="Fecha pago asesor" value={fmtDate(r.fecha_pago_asesor)} />
                 <Field label="Período" value={`${r.mes}/${r.anio}`} />
                 <Field label="Oficina" value={r.oficina} />
+                <Field label="Concepto" value={r.concepto} />
               </div>
             </div>
 
@@ -352,6 +375,14 @@ const ComisionesAseguradoras: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={clearData}
+            disabled={syncing}
+            className="flex items-center gap-2 rounded-lg border border-red-300 dark:border-red-900/60 bg-white dark:bg-neutral-900 hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-60 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 transition-colors"
+          >
+            <Icon icon="solar:trash-bin-trash-bold-duotone" width={18} />
+            Limpiar datos
+          </button>
           <button
             onClick={startSync}
             disabled={syncing}
@@ -523,10 +554,13 @@ const ComisionesAseguradoras: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-neutral-800/60">
                 {items.map((row) => (
+                  (() => {
+                    const isSummary = row.producto === 'RESUMEN_PERIODO' || row.concepto?.toLowerCase().includes('total periodo');
+                    return (
                   <tr
                     key={row.id}
                     onClick={() => setDetailRow(row)}
-                    className="hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors cursor-pointer"
+                    className={`${isSummary ? 'bg-emerald-500/5 dark:bg-emerald-500/10' : ''} hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors cursor-pointer`}
                   >
                     <td className="px-4 py-3">
                       <div className="flex min-w-0 items-center gap-2">
@@ -541,7 +575,14 @@ const ComisionesAseguradoras: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                      <div className="truncate" title={row.client_name || undefined}>{row.client_name || '—'}</div>
+                      <div className="truncate" title={row.client_name || undefined}>
+                        {row.client_name || '—'}
+                        {isSummary && (
+                          <span className="ml-2 inline-flex rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            Total período
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-neutral-500">
                       <div className="truncate" title={row.client_document || undefined}>{row.client_document || '—'}</div>
@@ -556,10 +597,12 @@ const ComisionesAseguradoras: React.FC = () => {
                       <div className="truncate" title={row.ramo_codigo || undefined}>{getRamoLabel(row.ramo_codigo, row.insurer_code)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500 dark:text-neutral-500 whitespace-nowrap">{fmtDate(row.fecha_recaudo)}</td>
-                    <td className="px-4 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-neutral-300">{fmt(row.valor_pagado_tomador)}</td>
-                    <td className="px-4 py-3 text-xs text-right tabular-nums text-gray-500 dark:text-neutral-500">{Number(row.porcentaje_comision).toFixed(1)}%</td>
+                    <td className="px-4 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-neutral-300">{isSummary ? fmt(row.prima_neta) : fmt(row.valor_pagado_tomador)}</td>
+                    <td className="px-4 py-3 text-xs text-right tabular-nums text-gray-500 dark:text-neutral-500">{isSummary ? '—' : `${Number(row.porcentaje_comision).toFixed(1)}%`}</td>
                     <td className="px-4 py-3 text-sm text-right tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">{fmt(row.valor_comision)}</td>
                   </tr>
+                    );
+                  })()
                 ))}
               </tbody>
             </table>

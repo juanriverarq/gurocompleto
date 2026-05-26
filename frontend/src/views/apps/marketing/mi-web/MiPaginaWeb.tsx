@@ -5,7 +5,7 @@ import { janoTemplates, templateCategories } from './templatePresets';
 import type { JanoTemplate } from './templatePresets';
 import { widgets, widgetCategories } from './widgetCatalog';
 import { websiteService } from '../../../../services/websiteService';
-import type { WebsiteData, WebsitePage } from '../../../../services/websiteService';
+import type { WebsiteData, WebsitePage, AIProfile, AIPageSuggestion } from '../../../../services/websiteService';
 
 const IFRAME_BASE = '/website-builder';
 
@@ -72,7 +72,26 @@ const MiPaginaWeb: React.FC = () => {
   const [dragWidgetHtml, setDragWidgetHtml] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [savedHtml, setSavedHtml] = useState<string | null>(null);
+  const [webStatus, setWebStatus] = useState<'draft' | 'published' | null>(null);
+  const [publishedAt, setPublishedAt] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
   const saveResolverRef = useRef<((html: string) => void) | null>(null);
+
+  // AI state
+  const [showAIWizard, setShowAIWizard] = useState(false);
+  const [aiWizardStep, setAIWizardStep] = useState<'profile' | 'generating' | 'done'>('profile');
+  const [aiProfile, setAIProfile] = useState<AIProfile>({ tone: 'profesional cercano' });
+  const [aiSuggestions, setAISuggestions] = useState<AIPageSuggestion[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [pageDeleting, setPageDeleting] = useState<number | null>(null);
+  const [seoPageId, setSeoPageId] = useState<number | null>(null);
+  const [generatingSeo, setGeneratingSeo] = useState(false);
+  const [savingPage, setSavingPage] = useState(false);
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [aiChatMessages, setAIChatMessages] = useState<{ role: 'user' | 'assistant' | 'system'; text: string }[]>([]);
+  const [aiChatInput, setAIChatInput] = useState('');
+  const [aiChatSending, setAIChatSending] = useState(false);
 
   // Load saved website on mount
   useEffect(() => {
@@ -86,6 +105,14 @@ const MiPaginaWeb: React.FC = () => {
             google_analytics_id: data.google_analytics_id || '', custom_domain: data.custom_domain || '',
             favicon_url: data.favicon_url || '', og_image_url: data.og_image_url || '',
           });
+          if (data.html_content) setSavedHtml(data.html_content);
+          if (data.status) setWebStatus(data.status);
+          if (data.published_at) setPublishedAt(data.published_at);
+          if (data.updated_at) setLastSaved(data.updated_at);
+          if (data.template_id) {
+            const tpl = janoTemplates.find(t => t.id === data.template_id);
+            if (tpl) setSelectedTemplate(tpl);
+          }
         }
       } catch (e) { console.warn('[Web] Error loading:', e); }
       setLoadingWeb(false);
@@ -169,6 +196,14 @@ const MiPaginaWeb: React.FC = () => {
     });
   }, [sendToIframe]);
 
+  const refreshWebsite = useCallback(async () => {
+    try {
+      const data = await websiteService.get();
+      if (data) setWebsite(data);
+      return data;
+    } catch { return null; }
+  }, []);
+
   const handleSave = useCallback(async () => {
     if (!selectedTemplate || saving) return;
     setSaving(true);
@@ -178,16 +213,18 @@ const MiPaginaWeb: React.FC = () => {
         template_id: selectedTemplate.id,
         template_route: selectedTemplate.route,
         html_content: html,
+        ...(activePage?.id ? { page_id: activePage.id } : {}),
       });
       setSavedHtml(html);
       setWebStatus(result.status as any);
       setLastSaved(result.updated_at);
+      await refreshWebsite();
       setToastMsg({ type: 'success', text: 'Cambios guardados' });
     } catch (e: any) {
       setToastMsg({ type: 'error', text: e.message || 'Error al guardar' });
     }
     setSaving(false);
-  }, [selectedTemplate, saving, getHtmlFromIframe]);
+  }, [selectedTemplate, saving, getHtmlFromIframe, activePage, refreshWebsite]);
 
   const handlePublish = useCallback(async () => {
     if (!selectedTemplate || publishing) return;
@@ -198,17 +235,171 @@ const MiPaginaWeb: React.FC = () => {
         template_id: selectedTemplate.id,
         template_route: selectedTemplate.route,
         html_content: html,
+        ...(activePage?.id ? { page_id: activePage.id } : {}),
       });
       setSavedHtml(html);
       setWebStatus('published');
       setPublishedAt(result.published_at);
       setLastSaved(result.updated_at);
+      await refreshWebsite();
       setToastMsg({ type: 'success', text: 'Página web publicada exitosamente' });
     } catch (e: any) {
       setToastMsg({ type: 'error', text: e.message || 'Error al publicar' });
     }
     setPublishing(false);
-  }, [selectedTemplate, publishing, getHtmlFromIframe]);
+  }, [selectedTemplate, publishing, getHtmlFromIframe, activePage, refreshWebsite]);
+
+  // ─── Page CRUD ────────────────────────────────────────
+  const handleSavePage = useCallback(async (data: Partial<WebsitePage> & { page_id?: number }) => {
+    setSavingPage(true);
+    try {
+      await websiteService.savePage(data);
+      await refreshWebsite();
+      setToastMsg({ type: 'success', text: 'Página guardada' });
+    } catch (e: any) {
+      setToastMsg({ type: 'error', text: e.message || 'Error guardando página' });
+    }
+    setSavingPage(false);
+  }, [refreshWebsite]);
+
+  const handleDeletePage = useCallback(async (pageId: number) => {
+    if (!confirm('¿Eliminar esta página? Esta acción no se puede deshacer.')) return;
+    setPageDeleting(pageId);
+    try {
+      await websiteService.deletePage(pageId);
+      await refreshWebsite();
+      setToastMsg({ type: 'success', text: 'Página eliminada' });
+    } catch (e: any) {
+      setToastMsg({ type: 'error', text: e.message || 'Error eliminando página' });
+    }
+    setPageDeleting(null);
+  }, [refreshWebsite]);
+
+  const handleOpenPageInEditor = useCallback((page: WebsitePage) => {
+    setActivePage(page);
+    if (page.template_id) {
+      const tpl = janoTemplates.find(t => t.id === page.template_id);
+      if (tpl) {
+        setSelectedTemplate(tpl);
+        setSavedHtml(page.html_content || null);
+        setViewMode('editor');
+        return;
+      }
+    }
+    // No template yet → send to gallery to pick one for this page
+    setPendingPageForTemplate(page);
+    setSelectedTemplate(null);
+    setSavedHtml(null);
+    setViewMode('gallery');
+  }, []);
+
+  // ─── AI helpers ───────────────────────────────────────
+  const fetchAISuggestions = useCallback(async () => {
+    if (loadingSuggestions) return;
+    setLoadingSuggestions(true);
+    try {
+      const existing = (website?.pages || []).map(p => p.slug);
+      const res = await websiteService.ai.suggestPages({ profile: aiProfile, existing_slugs: existing });
+      setAISuggestions(res.suggestions || []);
+    } catch (e: any) {
+      setToastMsg({ type: 'error', text: e.message || 'Error sugiriendo páginas' });
+    }
+    setLoadingSuggestions(false);
+  }, [aiProfile, website, loadingSuggestions]);
+
+  const handleGenerateSeo = useCallback(async (page: WebsitePage) => {
+    if (!page.html_content) {
+      setToastMsg({ type: 'error', text: 'La página no tiene contenido aún' });
+      return;
+    }
+    setGeneratingSeo(true);
+    try {
+      const res = await websiteService.ai.seo({
+        html: page.html_content,
+        page_title: page.title,
+        business_name: aiProfile.business_name || settingsForm.site_title,
+        city: aiProfile.city,
+      });
+      await websiteService.savePage({
+        page_id: page.id,
+        slug: page.slug,
+        title: page.title,
+        seo_title: res.seo_title,
+        seo_description: res.seo_description,
+        seo_keywords: res.seo_keywords,
+      });
+      await refreshWebsite();
+      setToastMsg({ type: 'success', text: 'SEO generado con IA' });
+    } catch (e: any) {
+      setToastMsg({ type: 'error', text: e.message || 'Error generando SEO' });
+    }
+    setGeneratingSeo(false);
+  }, [aiProfile, settingsForm.site_title, refreshWebsite]);
+
+  const handleRunAIWizard = useCallback(async (targetTemplate: JanoTemplate, targetPage: WebsitePage | null) => {
+    setAIWizardStep('generating');
+    try {
+      // Fetch the original template HTML
+      const res = await fetch(`${IFRAME_BASE}${targetTemplate.route}`);
+      const fullDoc = await res.text();
+      // Extract main page wrapper content
+      const match = fullDoc.match(/<div[^>]*class="[^"]*main-page-wrapper[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/body>/i);
+      const sourceHtml = match ? match[1] : fullDoc;
+
+      const personalized = await websiteService.ai.personalize({ html: sourceHtml, profile: aiProfile });
+
+      // Save to the active page (or website if no page)
+      if (targetPage?.id) {
+        await websiteService.savePage({
+          page_id: targetPage.id,
+          slug: targetPage.slug,
+          title: targetPage.title,
+          template_id: targetTemplate.id,
+          template_route: targetTemplate.route,
+          html_content: personalized.html,
+        });
+      } else {
+        await websiteService.save({
+          template_id: targetTemplate.id,
+          template_route: targetTemplate.route,
+          html_content: personalized.html,
+        });
+      }
+
+      setSelectedTemplate(targetTemplate);
+      setSavedHtml(personalized.html);
+      setActivePage(targetPage);
+      await refreshWebsite();
+      setAIWizardStep('done');
+      setTimeout(() => {
+        setShowAIWizard(false);
+        setAIWizardStep('profile');
+        setPendingPageForTemplate(null);
+        setViewMode('editor');
+      }, 800);
+    } catch (e: any) {
+      setToastMsg({ type: 'error', text: e.message || 'Error generando con IA' });
+      setAIWizardStep('profile');
+    }
+  }, [aiProfile, refreshWebsite]);
+
+  const handleAIChatSend = useCallback(async () => {
+    const instruction = aiChatInput.trim();
+    if (!instruction || aiChatSending) return;
+    setAIChatMessages(m => [...m, { role: 'user', text: instruction }]);
+    setAIChatInput('');
+    setAIChatSending(true);
+    try {
+      const html = await getHtmlFromIframe();
+      const res = await websiteService.ai.edit({ html, instruction });
+      sendToIframe('REPLACE_HTML', { html: res.html });
+      setSavedHtml(res.html);
+      setAIChatMessages(m => [...m, { role: 'assistant', text: 'Listo. Apliqué los cambios al lienzo.' }]);
+    } catch (e: any) {
+      setAIChatMessages(m => [...m, { role: 'assistant', text: `Error: ${e.message || 'no pude aplicar el cambio'}` }]);
+    }
+    setAIChatSending(false);
+  }, [aiChatInput, aiChatSending, getHtmlFromIframe, sendToIframe]);
 
   const iframeWidth = responsiveMode === 'desktop' ? '100%' : responsiveMode === 'tablet' ? '768px' : '375px';
 
@@ -252,11 +443,20 @@ const MiPaginaWeb: React.FC = () => {
         )}
 
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Mi Página Web</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{savedHtml ? 'Cambia de plantilla o sigue editando' : 'Elige una plantilla para tu sitio web'}</p>
+          <div className="flex items-center gap-3">
+            <button onClick={() => { setPendingPageForTemplate(null); setViewMode('dashboard'); }} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-white">
+              <Icon icon="solar:arrow-left-bold" width={18} />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+                {pendingPageForTemplate ? `Plantilla para "${pendingPageForTemplate.title}"` : 'Mi Página Web'}
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {pendingPageForTemplate ? 'Elige una plantilla para esta página' : (savedHtml ? 'Cambia de plantilla o sigue editando' : 'Elige una plantilla para tu sitio web')}
+              </p>
+            </div>
           </div>
-          {selectedTemplate && !savedHtml && (
+          {selectedTemplate && !savedHtml && !pendingPageForTemplate && (
             <button onClick={() => setViewMode('editor')} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors">
               <Icon icon="solar:pen-new-square-bold" width={18} />Editar Sitio
             </button>
@@ -291,8 +491,17 @@ const MiPaginaWeb: React.FC = () => {
                     <button onClick={(e) => { e.stopPropagation(); setSelectedTemplate(t); setViewMode('preview'); }} className="px-3 py-1.5 bg-white text-gray-800 rounded-lg text-xs font-medium shadow-lg">
                       <Icon icon="solar:eye-bold" width={14} className="inline mr-1" />Vista Previa
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); if (selectedTemplate?.id !== t.id) setSavedHtml(null); setSelectedTemplate(t); setViewMode('editor'); }} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium shadow-lg">
-                      <Icon icon="solar:pen-new-square-bold" width={14} className="inline mr-1" />Usar
+                    <button onClick={(e) => { e.stopPropagation(); setSelectedTemplate(t); setShowAIWizard(true); setAIWizardStep('profile'); }} className="px-3 py-1.5 bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white rounded-lg text-xs font-medium shadow-lg">
+                      <Icon icon="solar:magic-stick-3-bold" width={14} className="inline mr-1" />Crear con IA
+                    </button>
+                    <button onClick={(e) => {
+                      e.stopPropagation();
+                      if (selectedTemplate?.id !== t.id) setSavedHtml(null);
+                      setSelectedTemplate(t);
+                      if (pendingPageForTemplate) setActivePage(pendingPageForTemplate);
+                      setViewMode('editor');
+                    }} className="px-3 py-1.5 bg-white/90 text-gray-800 rounded-lg text-xs font-medium shadow-lg">
+                      <Icon icon="solar:pen-new-square-bold" width={14} className="inline mr-1" />En blanco
                     </button>
                   </div>
                 </div>
@@ -332,9 +541,11 @@ const MiPaginaWeb: React.FC = () => {
         {/* Toolbar */}
         <div className="h-11 bg-[#141414] border-b border-white/5 flex items-center justify-between px-3 shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setBridgeReady(false); setSelectedEl(null); setIframeSections([]); setViewMode('gallery'); }} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white"><Icon icon="solar:arrow-left-bold" width={14} /> Volver</button>
+            <button onClick={() => { setBridgeReady(false); setSelectedEl(null); setIframeSections([]); setActivePage(null); setShowAIChat(false); setViewMode('dashboard'); }} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white"><Icon icon="solar:arrow-left-bold" width={14} /> Volver</button>
             <div className="w-px h-5 bg-white/10" />
-            <span className="text-xs text-gray-500 font-medium">{selectedTemplate.name}</span>
+            <span className="text-xs text-gray-500 font-medium">
+              {selectedTemplate.name}{activePage ? ` · ${activePage.title}` : ''}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => sendToIframe('UNDO')} disabled={!canUndo} className={`p-1.5 rounded ${canUndo ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-700 cursor-not-allowed'}`} title="Deshacer"><Icon icon="solar:undo-left-bold" width={16} /></button>
@@ -352,6 +563,9 @@ const MiPaginaWeb: React.FC = () => {
                 {webStatus === 'published' ? 'Publicada' : 'Borrador'}
               </span>
             )}
+            <button onClick={() => setShowAIChat(s => !s)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${showAIChat ? 'bg-fuchsia-600/20 text-fuchsia-300 border border-fuchsia-500/30' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`} title="Chat con IA">
+              <Icon icon="solar:magic-stick-3-bold" width={14} />IA
+            </button>
             <button onClick={handleSave} disabled={saving} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${saving ? 'bg-white/5 text-gray-600 cursor-wait' : 'bg-white/5 hover:bg-white/10 text-gray-300'}`}>
               {saving ? <Icon icon="solar:refresh-bold" width={14} className="animate-spin" /> : <Icon icon="solar:diskette-bold" width={14} />}
               {saving ? 'Guardando...' : 'Guardar'}
@@ -614,6 +828,75 @@ const MiPaginaWeb: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* AI Chat drawer */}
+          {showAIChat && (
+            <div className="w-[320px] bg-[#141414] border-l border-fuchsia-500/20 flex flex-col shrink-0">
+              <div className="p-3 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-fuchsia-500 to-indigo-500 flex items-center justify-center">
+                    <Icon icon="solar:magic-stick-3-bold" width={12} className="text-white" />
+                  </div>
+                  <p className="text-[12px] font-semibold text-gray-200">Asistente IA</p>
+                </div>
+                <button onClick={() => setShowAIChat(false)} className="text-gray-500 hover:text-white p-1">
+                  <Icon icon="solar:close-circle-bold" width={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {aiChatMessages.length === 0 && (
+                  <div className="text-center py-6">
+                    <Icon icon="solar:chat-square-call-bold-duotone" width={32} className="text-gray-700 mx-auto mb-2" />
+                    <p className="text-[11px] text-gray-500 mb-3">Pídele cambios en lenguaje natural</p>
+                    <div className="space-y-1.5 text-left">
+                      {[
+                        'Cambia el hero a fondo azul oscuro',
+                        'Reescribe los servicios con un tono más cercano',
+                        'Añade un CTA grande al final',
+                        'Haz los textos más cortos',
+                      ].map(s => (
+                        <button key={s} onClick={() => setAIChatInput(s)} className="w-full text-left px-2.5 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/5 text-[10.5px] text-gray-300">
+                          "{s}"
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {aiChatMessages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] px-3 py-2 rounded-lg text-[11px] ${m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-gray-200 border border-white/5'}`}>
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+                {aiChatSending && (
+                  <div className="flex justify-start">
+                    <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5 flex items-center gap-2">
+                      <Icon icon="solar:refresh-bold" width={12} className="animate-spin text-fuchsia-400" />
+                      <span className="text-[11px] text-gray-400">Aplicando cambios...</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="p-3 border-t border-white/5">
+                <div className="flex gap-1.5">
+                  <textarea
+                    value={aiChatInput}
+                    onChange={e => setAIChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAIChatSend(); } }}
+                    placeholder="Describe el cambio..."
+                    rows={2}
+                    disabled={aiChatSending}
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg p-2 text-[11px] text-gray-200 resize-none focus:border-fuchsia-500 focus:outline-none"
+                  />
+                  <button onClick={handleAIChatSend} disabled={aiChatSending || !aiChatInput.trim()} className={`px-2.5 rounded-lg text-white text-xs font-medium ${aiChatSending || !aiChatInput.trim() ? 'bg-fuchsia-800/40 cursor-not-allowed' : 'bg-gradient-to-br from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500'}`}>
+                    <Icon icon="solar:plain-2-bold" width={14} />
+                  </button>
+                </div>
+                <p className="text-[9px] text-gray-600 mt-1.5">Enter para enviar · Shift+Enter para salto de línea</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Toast notification */}
@@ -629,7 +912,489 @@ const MiPaginaWeb: React.FC = () => {
     );
   }
 
-  return null;
+  // ── DASHBOARD ──
+  const pages = website?.pages || [];
+  const homepage = pages.find(p => p.is_homepage) || pages[0];
+  const publicUrl = website?.public_url || (website?.slug ? `https://guro.co/sitio/${website.slug}` : null);
+  const selectedSeoPage = pages.find(p => p.id === seoPageId) || homepage;
+
+  return (
+    <>
+      <div className="p-6 max-w-6xl mx-auto">
+        {loadingWeb ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <Icon icon="solar:globe-bold-duotone" width={40} className="text-indigo-400 mx-auto mb-3 animate-pulse" />
+              <p className="text-sm text-gray-500">Cargando tu página web...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Mi Página Web</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Diseña tu sitio con IA y plantillas profesionales</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {webStatus && (
+                  <span className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium ${webStatus === 'published' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                    <Icon icon={webStatus === 'published' ? 'solar:check-circle-bold' : 'solar:pen-new-square-bold'} width={12} />
+                    {webStatus === 'published' ? 'Publicada' : 'Borrador'}
+                  </span>
+                )}
+                {publicUrl && webStatus === 'published' && (
+                  <a href={publicUrl} target="_blank" rel="noreferrer" className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
+                    <Icon icon="solar:external-link-bold" width={12} /> Ver pública
+                  </a>
+                )}
+                <button onClick={() => { setShowAIWizard(true); setAIWizardStep('profile'); if (!selectedTemplate && homepage?.template_id) {const tpl = janoTemplates.find(t => t.id === homepage.template_id); if (tpl) setSelectedTemplate(tpl);} }}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-indigo-500/20">
+                  <Icon icon="solar:magic-stick-3-bold" width={16} />Crear con IA
+                </button>
+              </div>
+            </div>
+
+            {/* No-template empty state */}
+            {pages.length === 0 && (
+              <div className="bg-gradient-to-br from-indigo-500/5 to-fuchsia-500/5 border-2 border-dashed border-indigo-300 dark:border-indigo-500/30 rounded-2xl p-8 text-center mb-6">
+                <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                  <Icon icon="solar:magic-stick-3-bold" width={28} className="text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-1">Empieza tu sitio web</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">Elige una plantilla y deja que la IA personalice los textos con la información de tu negocio.</p>
+                <div className="flex items-center justify-center gap-2">
+                  <button onClick={() => setViewMode('gallery')} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">Ver plantillas</button>
+                </div>
+              </div>
+            )}
+
+            {/* Tabs */}
+            <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700 mb-5">
+              {([
+                { id: 'pages', label: 'Páginas', icon: 'solar:notebook-bold-duotone' },
+                { id: 'settings', label: 'Ajustes', icon: 'solar:settings-bold-duotone' },
+                { id: 'seo', label: 'SEO', icon: 'solar:magnifer-bold-duotone' },
+                { id: 'domain', label: 'Dominio', icon: 'solar:global-bold-duotone' },
+              ] as const).map(tab => (
+                <button key={tab.id} onClick={() => setDashTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${dashTab === tab.id ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+                  <Icon icon={tab.icon} width={16} />{tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* TAB: Pages */}
+            {dashTab === 'pages' && (
+              <div className="space-y-4">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+                  <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Páginas del sitio</h3>
+                    <button onClick={() => { setEditingPage({ slug: '', title: '', is_homepage: false, sort_order: pages.length, show_in_nav: true, status: 'draft' } as WebsitePage); setNewPageSlug(''); setNewPageTitle(''); }}
+                      className="text-xs px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium flex items-center gap-1">
+                      <Icon icon="solar:add-circle-bold" width={14} />Añadir página
+                    </button>
+                  </div>
+                  {pages.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-gray-500">Aún no hay páginas. Crea una para comenzar.</div>
+                  ) : (
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {pages.map(p => (
+                        <div key={p.id || p.slug} className="p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${p.is_homepage ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                            <Icon icon={p.is_homepage ? 'solar:home-bold' : 'solar:document-bold'} width={16} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-gray-800 dark:text-white truncate">{p.title}</p>
+                              {p.is_homepage && <span className="text-[9px] uppercase font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">Inicio</span>}
+                              <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${p.status === 'published' ? 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'}`}>{p.status === 'published' ? 'Pub' : 'Bor'}</span>
+                              {!p.html_content && <span className="text-[9px] uppercase font-bold text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">Sin plantilla</span>}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">/{p.slug}{p.html_content ? ` · ${Math.round((p.html_content.length || 0)/1024)} KB` : ''}</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => setEditingPage(p)} className="p-1.5 rounded text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Editar metadatos">
+                              <Icon icon="solar:settings-bold" width={14} />
+                            </button>
+                            <button onClick={() => handleOpenPageInEditor(p)} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-medium flex items-center gap-1">
+                              <Icon icon={p.html_content ? 'solar:pen-new-square-bold' : 'solar:gallery-add-bold'} width={12} />
+                              {p.html_content ? 'Editar' : 'Elegir plantilla'}
+                            </button>
+                            {!p.is_homepage && p.id && (
+                              <button onClick={() => handleDeletePage(p.id!)} disabled={pageDeleting === p.id}
+                                className="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50" title="Eliminar">
+                                <Icon icon={pageDeleting === p.id ? 'solar:refresh-bold' : 'solar:trash-bin-trash-bold'} width={14} className={pageDeleting === p.id ? 'animate-spin' : ''} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Suggestions */}
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Sugerencias rápidas</h3>
+                    <button onClick={fetchAISuggestions} disabled={loadingSuggestions}
+                      className="text-xs px-2.5 py-1 rounded-md bg-fuchsia-600/10 text-fuchsia-600 dark:text-fuchsia-400 hover:bg-fuchsia-600/20 font-medium flex items-center gap-1 disabled:opacity-50">
+                      <Icon icon={loadingSuggestions ? 'solar:refresh-bold' : 'solar:magic-stick-3-bold'} width={12} className={loadingSuggestions ? 'animate-spin' : ''} />
+                      {loadingSuggestions ? 'Pensando...' : 'Sugerir con IA'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                    {(aiSuggestions.length > 0 ? aiSuggestions : PAGE_SUGGESTIONS.filter(s => !pages.some(p => p.slug === s.slug)).map(s => ({ ...s, description: '' }))).map((s) => (
+                      <button key={s.slug}
+                        onClick={() => handleSavePage({ slug: s.slug, title: s.title, is_homepage: false, sort_order: pages.length, show_in_nav: true })}
+                        disabled={savingPage || pages.some(p => p.slug === s.slug)}
+                        className="text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-500/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 disabled:cursor-not-allowed group transition-colors">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Icon icon={s.icon} width={16} className="text-indigo-500" />
+                          <span className="text-sm font-medium text-gray-800 dark:text-white">{s.title}</span>
+                        </div>
+                        {(s as any).description && <p className="text-[11px] text-gray-500 line-clamp-2">{(s as any).description}</p>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: Settings */}
+            {dashTab === 'settings' && (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 max-w-2xl">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-white mb-4">Ajustes generales</h3>
+                <div className="space-y-3">
+                  {[
+                    { k: 'site_title', label: 'Título del sitio', placeholder: 'Ej. Seguros Pérez' },
+                    { k: 'site_description', label: 'Descripción', placeholder: 'Una línea sobre tu negocio', textarea: true },
+                    { k: 'favicon_url', label: 'Favicon (URL)', placeholder: 'https://.../favicon.ico' },
+                    { k: 'og_image_url', label: 'Imagen de previsualización (OG)', placeholder: 'https://.../og.jpg' },
+                    { k: 'google_analytics_id', label: 'Google Analytics ID', placeholder: 'G-XXXXXXXXXX' },
+                  ].map(f => (
+                    <div key={f.k}>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{f.label}</label>
+                      {f.textarea ? (
+                        <textarea value={(settingsForm as any)[f.k] || ''} onChange={e => setSettingsForm({ ...settingsForm, [f.k]: e.target.value })}
+                          rows={2} placeholder={f.placeholder}
+                          className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                      ) : (
+                        <input type="text" value={(settingsForm as any)[f.k] || ''} onChange={e => setSettingsForm({ ...settingsForm, [f.k]: e.target.value })}
+                          placeholder={f.placeholder}
+                          className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={async () => {
+                  setSavingSettings(true);
+                  try {
+                    await websiteService.saveSettings(settingsForm);
+                    await refreshWebsite();
+                    setToastMsg({ type: 'success', text: 'Ajustes guardados' });
+                  } catch (e: any) { setToastMsg({ type: 'error', text: e.message || 'Error guardando' }); }
+                  setSavingSettings(false);
+                }} disabled={savingSettings}
+                  className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2">
+                  {savingSettings && <Icon icon="solar:refresh-bold" width={14} className="animate-spin" />}
+                  {savingSettings ? 'Guardando...' : 'Guardar ajustes'}
+                </button>
+              </div>
+            )}
+
+            {/* TAB: SEO */}
+            {dashTab === 'seo' && (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-white mb-4">SEO por página</h3>
+                {pages.length === 0 ? (
+                  <p className="text-sm text-gray-500">Crea primero una página para configurar su SEO.</p>
+                ) : (
+                  <>
+                    <div className="mb-4">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Página</label>
+                      <select value={selectedSeoPage?.id || ''} onChange={e => setSeoPageId(Number(e.target.value))}
+                        className="w-full max-w-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none">
+                        {pages.map(p => <option key={p.id} value={p.id}>{p.title} (/{p.slug})</option>)}
+                      </select>
+                    </div>
+                    {selectedSeoPage && (
+                      <div className="grid md:grid-cols-2 gap-5">
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Título SEO (max 60)</label>
+                            <input type="text" maxLength={70} defaultValue={selectedSeoPage.seo_title || ''}
+                              onBlur={e => handleSavePage({ page_id: selectedSeoPage.id, slug: selectedSeoPage.slug, title: selectedSeoPage.title, seo_title: e.target.value })}
+                              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Meta descripción (max 155)</label>
+                            <textarea maxLength={200} rows={3} defaultValue={selectedSeoPage.seo_description || ''}
+                              onBlur={e => handleSavePage({ page_id: selectedSeoPage.id, slug: selectedSeoPage.slug, title: selectedSeoPage.title, seo_description: e.target.value })}
+                              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Keywords (separadas por coma)</label>
+                            <input type="text" defaultValue={selectedSeoPage.seo_keywords || ''}
+                              onBlur={e => handleSavePage({ page_id: selectedSeoPage.id, slug: selectedSeoPage.slug, title: selectedSeoPage.title, seo_keywords: e.target.value })}
+                              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                          </div>
+                          <button onClick={() => selectedSeoPage && handleGenerateSeo(selectedSeoPage)} disabled={generatingSeo || !selectedSeoPage?.html_content}
+                            className="px-3 py-1.5 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center gap-1.5">
+                            <Icon icon={generatingSeo ? 'solar:refresh-bold' : 'solar:magic-stick-3-bold'} width={12} className={generatingSeo ? 'animate-spin' : ''} />
+                            {generatingSeo ? 'Generando...' : 'Generar SEO con IA'}
+                          </button>
+                          {!selectedSeoPage.html_content && <p className="text-[11px] text-amber-600">Necesitas contenido en la página antes de generar SEO.</p>}
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                          <p className="text-[10px] uppercase text-gray-500 font-semibold mb-2">Vista previa en Google</p>
+                          <div className="bg-white dark:bg-gray-800 rounded p-3 border border-gray-200 dark:border-gray-700">
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400 truncate">guro.co › sitio › {website?.slug || 'mi-sitio'} › {selectedSeoPage.slug}</p>
+                            <p className="text-base text-blue-700 dark:text-blue-400 leading-tight mt-1">{selectedSeoPage.seo_title || selectedSeoPage.title}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">{selectedSeoPage.seo_description || 'Añade una descripción para mejorar tu posicionamiento.'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* TAB: Domain */}
+            {dashTab === 'domain' && (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 max-w-2xl">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-white mb-4">Dominio</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Subdominio en Guro</label>
+                    <div className="flex items-stretch border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden focus-within:border-indigo-500">
+                      <span className="px-3 flex items-center text-xs text-gray-500 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">guro.co/sitio/</span>
+                      <input type="text" value={settingsForm.slug} onChange={e => setSettingsForm({ ...settingsForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                        placeholder="mi-corredor" className="flex-1 bg-transparent p-2 text-sm focus:outline-none" />
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">URL pública: {publicUrl || `https://guro.co/sitio/${settingsForm.slug || 'mi-sitio'}`}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Dominio personalizado (opcional)</label>
+                    <input type="text" value={settingsForm.custom_domain} onChange={e => setSettingsForm({ ...settingsForm, custom_domain: e.target.value.toLowerCase() })}
+                      placeholder="www.miempresa.com" className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                    {settingsForm.custom_domain && (
+                      <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                        <p className="text-xs text-amber-700 dark:text-amber-400 font-medium mb-1">Configura tu DNS:</p>
+                        <code className="text-[11px] text-amber-800 dark:text-amber-300 block">CNAME {settingsForm.custom_domain} → sitios.guro.co</code>
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">Los cambios DNS pueden tardar hasta 24h en propagarse.</p>
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={async () => {
+                    setSavingSettings(true);
+                    try {
+                      await websiteService.saveSettings(settingsForm);
+                      await refreshWebsite();
+                      setToastMsg({ type: 'success', text: 'Dominio guardado' });
+                    } catch (e: any) { setToastMsg({ type: 'error', text: e.message || 'Error guardando' }); }
+                    setSavingSettings(false);
+                  }} disabled={savingSettings} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+                    {savingSettings ? 'Guardando...' : 'Guardar dominio'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* AI Wizard Modal */}
+      {showAIWizard && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[2147483646] flex items-center justify-center p-4" onClick={() => aiWizardStep === 'profile' && setShowAIWizard(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                <Icon icon="solar:magic-stick-3-bold" width={20} className="text-white" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-gray-800 dark:text-white">Crear sitio con IA</h2>
+                <p className="text-xs text-gray-500">Cuéntale a la IA sobre tu negocio y te personaliza la plantilla en segundos.</p>
+              </div>
+              {aiWizardStep === 'profile' && (
+                <button onClick={() => setShowAIWizard(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white p-1">
+                  <Icon icon="solar:close-circle-bold" width={20} />
+                </button>
+              )}
+            </div>
+
+            {aiWizardStep === 'profile' && (
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                {!selectedTemplate && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                    <Icon icon="solar:info-circle-bold" width={14} />
+                    Primero elige una plantilla en la galería.
+                  </div>
+                )}
+                {selectedTemplate && (
+                  <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+                    <Icon icon="solar:gallery-bold" width={14} />
+                    Plantilla: <span className="font-semibold">{selectedTemplate.name}</span>
+                    {pendingPageForTemplate && <>· Página: <span className="font-semibold">{pendingPageForTemplate.title}</span></>}
+                  </div>
+                )}
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Nombre del negocio</label>
+                    <input type="text" value={aiProfile.business_name || ''} onChange={e => setAIProfile({ ...aiProfile, business_name: e.target.value })}
+                      placeholder="Seguros Pérez" className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Especialidad</label>
+                    <input type="text" value={aiProfile.specialty || ''} onChange={e => setAIProfile({ ...aiProfile, specialty: e.target.value })}
+                      placeholder="Vehículos y vida" className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Ciudad</label>
+                    <input type="text" value={aiProfile.city || ''} onChange={e => setAIProfile({ ...aiProfile, city: e.target.value })}
+                      placeholder="Medellín" className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Tono</label>
+                    <select value={aiProfile.tone || ''} onChange={e => setAIProfile({ ...aiProfile, tone: e.target.value })}
+                      className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none">
+                      <option value="profesional cercano">Profesional cercano</option>
+                      <option value="formal corporativo">Formal corporativo</option>
+                      <option value="cálido y humano">Cálido y humano</option>
+                      <option value="moderno y directo">Moderno y directo</option>
+                      <option value="técnico experto">Técnico experto</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Teléfono</label>
+                    <input type="text" value={aiProfile.phone || ''} onChange={e => setAIProfile({ ...aiProfile, phone: e.target.value })}
+                      placeholder="+57 300 000 0000" className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Email</label>
+                    <input type="email" value={aiProfile.email || ''} onChange={e => setAIProfile({ ...aiProfile, email: e.target.value })}
+                      placeholder="contacto@misitio.com" className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Propuesta de valor</label>
+                  <textarea value={aiProfile.value_proposition || ''} onChange={e => setAIProfile({ ...aiProfile, value_proposition: e.target.value })}
+                    rows={2} placeholder="Por qué los clientes te elegirían..." className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Notas extra (opcional)</label>
+                  <textarea value={aiProfile.extra || ''} onChange={e => setAIProfile({ ...aiProfile, extra: e.target.value })}
+                    rows={2} placeholder="Productos específicos, alianzas, certificaciones..." className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+                </div>
+              </div>
+            )}
+
+            {aiWizardStep === 'generating' && (
+              <div className="flex-1 flex items-center justify-center p-10">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 flex items-center justify-center shadow-lg animate-pulse">
+                    <Icon icon="solar:magic-stick-3-bold" width={32} className="text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-1">Personalizando tu sitio...</h3>
+                  <p className="text-sm text-gray-500">La IA está reescribiendo los textos con la información de tu negocio. Esto puede tardar 20-40 segundos.</p>
+                </div>
+              </div>
+            )}
+
+            {aiWizardStep === 'done' && (
+              <div className="flex-1 flex items-center justify-center p-10">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
+                    <Icon icon="solar:check-circle-bold" width={32} className="text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-1">¡Listo!</h3>
+                  <p className="text-sm text-gray-500">Abriendo el editor...</p>
+                </div>
+              </div>
+            )}
+
+            {aiWizardStep === 'profile' && (
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
+                <button onClick={() => setViewMode('gallery')} className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                  {selectedTemplate ? `Cambiar plantilla (${selectedTemplate.name})` : 'Elegir plantilla'}
+                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowAIWizard(false)} className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white">
+                    Cancelar
+                  </button>
+                  <button onClick={() => selectedTemplate && handleRunAIWizard(selectedTemplate, pendingPageForTemplate)} disabled={!selectedTemplate || !aiProfile.business_name}
+                    className="px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium flex items-center gap-2">
+                    <Icon icon="solar:magic-stick-3-bold" width={16} />Generar con IA
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>, document.body
+      )}
+
+      {/* Edit-page modal */}
+      {editingPage && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[2147483646] flex items-center justify-center p-4" onClick={() => setEditingPage(null)}>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-base font-semibold text-gray-800 dark:text-white">{editingPage.id ? 'Editar página' : 'Nueva página'}</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Título</label>
+                <input type="text" value={editingPage.id ? editingPage.title : newPageTitle}
+                  onChange={e => editingPage.id ? setEditingPage({ ...editingPage, title: e.target.value }) : (setNewPageTitle(e.target.value), setNewPageSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')))}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Slug (URL)</label>
+                <input type="text" value={editingPage.id ? editingPage.slug : newPageSlug}
+                  onChange={e => editingPage.id ? setEditingPage({ ...editingPage, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }) : setNewPageSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  disabled={editingPage.is_homepage}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none disabled:opacity-60" />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input type="checkbox" checked={editingPage.show_in_nav} onChange={e => setEditingPage({ ...editingPage, show_in_nav: e.target.checked })} />
+                Mostrar en navegación
+              </label>
+              {!editingPage.is_homepage && (
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input type="checkbox" checked={editingPage.is_homepage} onChange={e => setEditingPage({ ...editingPage, is_homepage: e.target.checked })} />
+                  Marcar como página principal
+                </label>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+              <button onClick={() => setEditingPage(null)} className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white">Cancelar</button>
+              <button disabled={savingPage} onClick={async () => {
+                const payload: any = editingPage.id
+                  ? { page_id: editingPage.id, slug: editingPage.slug, title: editingPage.title, is_homepage: editingPage.is_homepage, show_in_nav: editingPage.show_in_nav, sort_order: editingPage.sort_order }
+                  : { slug: newPageSlug, title: newPageTitle, is_homepage: false, show_in_nav: editingPage.show_in_nav, sort_order: pages.length };
+                if (!payload.title || !payload.slug) { setToastMsg({ type: 'error', text: 'Título y slug son obligatorios' }); return; }
+                await handleSavePage(payload);
+                setEditingPage(null);
+              }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+                {savingPage ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
+
+      {/* Toast notification (dashboard scope) */}
+      {toastMsg && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2.5 rounded-lg shadow-2xl border text-sm font-medium flex items-center gap-2 ${
+          toastMsg.type === 'success' ? 'bg-green-600 border-green-500 text-white' : 'bg-red-600 border-red-500 text-white'
+        }`}>
+          <Icon icon={toastMsg.type === 'success' ? 'solar:check-circle-bold' : 'solar:danger-triangle-bold'} width={16} />
+          {toastMsg.text}
+        </div>
+      )}
+    </>
+  );
 };
 
 function rgbToHex(color: string): string {

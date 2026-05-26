@@ -58,6 +58,25 @@ class MicroservicioInsurerService
             'ttl_hours' => 1,
             'required_fields' => ['username', 'password'],
         ],
+        'qualitas' => [
+            'slug' => 'qualitas',
+            'login' => '/qualitas/login',
+            'health' => '/qualitas/health',
+            'ttl_hours' => 4,
+            // agent_code (clave de intermediario, ej "20152") es requerido — el portal lo
+            // necesita en cada llamada DWR como primer parámetro. El broker lo encuentra
+            // en su perfil del portal.
+            'required_fields' => ['user_name', 'password', 'agent_code'],
+        ],
+        'mundial' => [
+            'slug' => 'mundial',
+            'login' => '/mundial/login',
+            'health' => '/mundial/cartera',
+            'ttl_hours' => 12,
+            // nro_doc: NIT del intermediario (sin dígito de verificación)
+            // contrasena: contraseña del portal de recaudos
+            'required_fields' => ['nro_doc', 'contrasena'],
+        ],
     ];
 
     public function supportedInsurers(): array
@@ -96,7 +115,7 @@ class MicroservicioInsurerService
         return ['ok' => true, 'message' => 'Credenciales válidas'];
     }
 
-    public function connect(string $insurerCode, array $credentials): array
+    public function connect(string $insurerCode, array $credentials, ?int $brokerId = null): array
     {
         // Evita fatal error de 30s en logins lentos (HDI/AXA vía Playwright).
         if (function_exists('set_time_limit')) {
@@ -112,7 +131,7 @@ class MicroservicioInsurerService
         }
 
         $conf = self::INSURERS[$insurerCode];
-        $payload = $this->buildLoginPayload($insurerCode, $credentials);
+        $payload = $this->buildLoginPayload($insurerCode, $credentials, $brokerId);
         $safePayload = $this->maskSensitivePayload($payload);
 
         Log::info('[INSURER CONNECT] Intento de conexión', [
@@ -425,11 +444,22 @@ class MicroservicioInsurerService
         }
     }
 
-    private function buildLoginPayload(string $insurerCode, array $credentials): array
+    private function buildLoginPayload(string $insurerCode, array $credentials, ?int $brokerId = null): array
     {
         if ($insurerCode === 'sura') {
             return [
                 'cookies' => $this->normalizeSuraCookies((string) ($credentials['cookies'] ?? '')),
+            ];
+        }
+
+        if ($insurerCode === 'seguros-del-estado') {
+            // broker_id activa el perfil persistente en el microservicio — el portal
+            // recuerda el navegador entre conexiones y deja de pedir reCAPTCHA tras
+            // el primer login exitoso.
+            return [
+                'user_name' => (string) ($credentials['user_name'] ?? ''),
+                'password'  => (string) ($credentials['password'] ?? ''),
+                'broker_id' => $brokerId,
             ];
         }
 
@@ -462,6 +492,23 @@ class MicroservicioInsurerService
                 'username' => $credentials['username'],
                 'password' => $credentials['password'],
                 'save_credentials' => true,
+            ];
+        }
+
+        if ($insurerCode === 'qualitas') {
+            return [
+                'user_name'  => (string) ($credentials['user_name'] ?? ''),
+                'password'   => (string) ($credentials['password'] ?? ''),
+                'agent_code' => (string) ($credentials['agent_code'] ?? ''),
+                'broker_id'  => $brokerId,
+            ];
+        }
+
+        if ($insurerCode === 'mundial') {
+            return [
+                'nro_doc'    => (string) ($credentials['nro_doc'] ?? ''),
+                'contrasena' => (string) ($credentials['contrasena'] ?? ''),
+                'cod_tipo_doc' => (int) ($credentials['cod_tipo_doc'] ?? 3),
             ];
         }
 

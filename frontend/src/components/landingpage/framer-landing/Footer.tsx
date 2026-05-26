@@ -9,38 +9,54 @@ const Footer = () => {
     {
       title: 'Producto',
       links: [
-        { name: 'Gestión de Pólizas', href: '#caracteristicas' },
-        { name: 'Asistente IA', href: '#caracteristicas' },
-        { name: 'CRM de Ventas', href: '#caracteristicas' },
-        { name: 'Reportes', href: '#resultados' },
-        { name: 'Herramientas', href: '#herramientas' },
+        { name: 'CRM para Corredores', href: '/crm-corredores-seguros' },
+        { name: 'Software para Corredores', href: '/software-corredores-seguros' },
+        { name: 'Software para Agencias', href: '/software-agencias-seguros' },
+        { name: 'IA para Corredores', href: '/ia-para-corredores-seguros' },
+        { name: 'WhatsApp Business', href: '/whatsapp-business-corredores-seguros' },
+        { name: 'Precios', href: '/precios' },
       ],
     },
     {
-      title: 'Soluciones',
+      title: 'Por módulo',
       links: [
-        { name: 'Agentes independientes', href: '#precios' },
-        { name: 'Agencias', href: '#precios' },
-        { name: 'Corredores', href: '#precios' },
-        { name: 'Aseguradoras', href: 'https://wa.me/573105360658' },
+        { name: 'Renovaciones Automáticas', href: '/automatizacion-renovaciones-polizas' },
+        { name: 'Liquidación de Comisiones', href: '/gestion-comisiones-corredores-seguros' },
+        { name: 'Cotizador Embebido', href: '/cotizador-embebido-seguros' },
+        { name: 'Gestión de Siniestros', href: '/gestion-siniestros-corredor' },
+      ],
+    },
+    {
+      title: 'Comparativas',
+      links: [
+        { name: 'Ver todas', href: '/comparar' },
+        { name: 'Guro vs ebroker', href: '/comparar/guro-vs-ebroker' },
+        { name: 'Guro vs Sumavisos', href: '/comparar/guro-vs-sumavisos' },
+        { name: 'Guro vs Velneo', href: '/comparar/guro-vs-velneo' },
+        { name: 'Guro vs E2K', href: '/comparar/guro-vs-e2k' },
+        { name: 'Guro vs MAC Corredor', href: '/comparar/guro-vs-mac-corredor' },
+        { name: 'Guro vs HubSpot Insurance', href: '/comparar/guro-vs-hubspot-insurance' },
       ],
     },
     {
       title: 'Recursos',
       links: [
-        { name: 'Centro de ayuda', href: 'mailto:soporte@guro.co' },
         { name: 'Blog', href: '/blog' },
-        { name: 'Comenzar', href: '/comenzar' },
-        { name: 'Iniciar sesión', href: '/auth/login' },
+        { name: 'Guía Insurtech LATAM', href: '/blog/que-es-insurtech-guia-corredores-latam' },
+        { name: 'Plan 90 días digitalización', href: '/blog/plan-90-dias-digitalizar-agencia-seguros' },
+        { name: 'Glosario seguros', href: '/blog/glosario-seguros-corredores-80-terminos' },
+        { name: 'Cómo ser corredor', href: '/blog/como-ser-corredor-de-seguros-colombia' },
+        { name: 'Centro de ayuda', href: 'mailto:soporte@guro.co' },
       ],
     },
     {
       title: 'Empresa',
       links: [
-        { name: 'Sobre nosotros', href: '#resultados' },
-        { name: 'Contacto', href: 'https://wa.me/573105360658' },
-        { name: 'Testimonios', href: '#testimonios' },
-        { name: 'Precios', href: '#precios' },
+        { name: 'Sobre nosotros', href: '/#resultados' },
+        { name: 'Contacto WhatsApp', href: 'https://wa.me/573105360658' },
+        { name: 'Trabaja con nosotros', href: '/trabaja-con-nosotros' },
+        { name: 'Iniciar sesión', href: '/auth/login' },
+        { name: 'Comenzar gratis', href: '/comenzar' },
       ],
     },
   ];
@@ -78,7 +94,7 @@ const Footer = () => {
         </div>
 
         {/* Link columns */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-14">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8 mb-14">
           {columns.map((col) => (
             <div key={col.title}>
               <h4 className="text-[11px] font-bold text-white/90 uppercase tracking-[0.15em] mb-5">{col.title}</h4>

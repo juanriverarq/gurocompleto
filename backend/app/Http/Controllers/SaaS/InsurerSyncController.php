@@ -24,7 +24,7 @@ class InsurerSyncController extends Controller
                 'insurers' => 'required|array|min:1',
                 'insurers.*' => 'string',
                 'types' => 'required|array|min:1',
-                'types.*' => 'string|in:clientes,polizas,cartera',
+                'types.*' => 'string|in:clientes,polizas,cartera,comisiones',
             ]);
 
             $brokerId = $this->resolveBrokerId($request);
@@ -83,22 +83,41 @@ class InsurerSyncController extends Controller
 
         $details = [];
         $totals = [
-            'clientes_created' => 0, 'clientes_updated' => 0, 'clientes_unchanged' => 0,
-            'polizas_created' => 0, 'polizas_updated' => 0, 'polizas_unchanged' => 0,
-            'cartera_created' => 0, 'cartera_updated' => 0, 'cartera_unchanged' => 0,
+            'clientes_created' => 0, 'clientes_updated' => 0, 'clientes_unchanged' => 0, 'clientes_skipped_manual' => 0, 'clientes_fetched' => 0, 'clientes_errors' => 0,
+            'polizas_created' => 0, 'polizas_updated' => 0, 'polizas_unchanged' => 0, 'polizas_skipped_manual' => 0, 'polizas_fetched' => 0, 'polizas_errors' => 0,
+            'cartera_created' => 0, 'cartera_updated' => 0, 'cartera_unchanged' => 0, 'cartera_skipped_manual' => 0, 'cartera_fetched' => 0, 'cartera_errors' => 0,
+            'comisiones_created' => 0, 'comisiones_updated' => 0, 'comisiones_unchanged' => 0, 'comisiones_skipped_manual' => 0, 'comisiones_fetched' => 0, 'comisiones_errors' => 0,
         ];
 
         foreach ($jobs as $job) {
             $progress = $job->progress ?? [];
 
-            if (in_array($job->status, ['completed', 'failed', 'cancelled'], true) && !empty($progress)) {
-                foreach (['clientes', 'polizas', 'cartera'] as $type) {
+            // Acumular siempre que haya progress (también durante processing) para
+            // que la UI muestre avance en vivo, no solo al terminar.
+            if (!empty($progress)) {
+                foreach (['clientes', 'polizas', 'cartera', 'comisiones'] as $type) {
                     if (isset($progress[$type])) {
                         $totals["{$type}_created"] += $progress[$type]['created'] ?? 0;
                         $totals["{$type}_updated"] += $progress[$type]['updated'] ?? 0;
                         $totals["{$type}_unchanged"] += $progress[$type]['unchanged'] ?? 0;
+                        $totals["{$type}_skipped_manual"] += $progress[$type]['skipped_manual'] ?? 0;
+                        $totals["{$type}_fetched"] += $progress[$type]['total_fetched'] ?? 0;
+                        $totals["{$type}_errors"] += $progress[$type]['errors'] ?? 0;
                     }
                 }
+                // Insurers that derive clients/polizas from cartera (e.g. Mundial):
+                // their counts live inside progress['cartera'], not progress['clientes'/'polizas'].
+                $carteraProgress = $progress['cartera'] ?? [];
+                $derivedCC = (int) ($carteraProgress['clientes_created'] ?? 0);
+                $derivedCU = (int) ($carteraProgress['clientes_updated'] ?? 0);
+                $derivedPC = (int) ($carteraProgress['polizas_created'] ?? 0);
+                $derivedPU = (int) ($carteraProgress['polizas_updated'] ?? 0);
+                $totals['clientes_created'] += $derivedCC;
+                $totals['clientes_updated'] += $derivedCU;
+                $totals['clientes_fetched'] += $derivedCC + $derivedCU;
+                $totals['polizas_created']  += $derivedPC;
+                $totals['polizas_updated']  += $derivedPU;
+                $totals['polizas_fetched']  += $derivedPC + $derivedPU;
             }
 
             $details[$job->insurer_code] = [

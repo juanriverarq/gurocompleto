@@ -105,6 +105,7 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
     if (localFilters.fecha_inicio) count++;
     if (localFilters.fecha_fin) count++;
     if (localFilters.renovable !== undefined && localFilters.renovable !== '') count++;
+    if (localFilters.origen) count++;
     if (localFilters.fecha_recepcion_desde) count++;
     if (localFilters.fecha_recepcion_hasta) count++;
     if (localFilters.cancelled_desde) count++;
@@ -134,6 +135,7 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
       cancelled_desde: '',
       cancelled_hasta: '',
       renovable: '',
+      origen: '',
       sort_field: 'created_at',
       sort_direction: 'desc',
       page: 1,
@@ -231,6 +233,7 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
                 <SelectTrigger className="w-full"><SelectValue placeholder={`Todos los ${terminologia.vendedorPlural.toLowerCase()}`} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="__none__">Sin {terminologia.vendedor.toLowerCase()} asignado</SelectItem>
                   {vendedoresList.map(v => (
                     <SelectItem key={String(v.id)} value={v.nombre}>{v.nombre}</SelectItem>
                   ))}
@@ -249,6 +252,24 @@ const PolizasFilterModal: React.FC<Props> = ({ isOpen, onClose, filters, onFilte
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="true">Sí</SelectItem>
                   <SelectItem value="false">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm">Origen de la póliza</Label>
+              <Select value={(localFilters.origen as string) || 'all'} onValueChange={(v) => set('origen', v === 'all' ? '' : v)}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Todos los orígenes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="sura">SURA</SelectItem>
+                  <SelectItem value="hdi">HDI</SelectItem>
+                  <SelectItem value="bolivar">Bolívar</SelectItem>
+                  <SelectItem value="allianz">Allianz</SelectItem>
+                  <SelectItem value="axa-colpatria">AXA Colpatria</SelectItem>
+                  <SelectItem value="la-equidad">La Equidad</SelectItem>
+                  <SelectItem value="seguros-del-estado">Seguros del Estado</SelectItem>
+                  <SelectItem value="qualitas">Qualitas</SelectItem>
                 </SelectContent>
               </Select>
             </div>

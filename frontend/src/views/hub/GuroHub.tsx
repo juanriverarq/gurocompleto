@@ -11,6 +11,7 @@ import logoEstado from '../../assets/images/logoscompanias/estado.png';
 import logoHdi from '../../assets/images/logoscompanias/hdi.png';
 import logoEquidad from '../../assets/images/logoscompanias/equidad.png';
 import logoAxa from '../../assets/images/logoscompanias/axa.png';
+import logoMundial from '../../assets/images/logoscompanias/mundial.svg';
 import logoGuroFull from '../../assets/images/logos/Logo.svg';
 
 const getGreeting = () => {
@@ -28,6 +29,7 @@ const INSURERS_ISO = [
   { logo: logoHdi, name: 'HDI' },
   { logo: logoEquidad, name: 'Equidad' },
   { logo: logoAxa, name: 'AXA' },
+  { logo: logoMundial, name: 'Mundial' },
 ];
 
 const STREAMS = [

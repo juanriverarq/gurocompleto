@@ -116,4 +116,37 @@ export const websiteService = {
   async checkSlug(slug: string): Promise<boolean> {
     return (await apiPost('/check-slug', { slug })).available;
   },
+
+  ai: {
+    async personalize(data: { html: string; profile: AIProfile }): Promise<{ html: string }> {
+      return (await apiPost('/ai/personalize', data)).data;
+    },
+    async seo(data: { html: string; page_title?: string; business_name?: string; city?: string }): Promise<{ seo_title: string; seo_description: string; seo_keywords: string }> {
+      return (await apiPost('/ai/seo', data)).data;
+    },
+    async suggestPages(data: { profile?: AIProfile; existing_slugs?: string[] }): Promise<{ suggestions: AIPageSuggestion[] }> {
+      return (await apiPost('/ai/suggest-pages', data)).data;
+    },
+    async edit(data: { html: string; instruction: string }): Promise<{ html: string }> {
+      return (await apiPost('/ai/edit', data)).data;
+    },
+  },
 };
+
+export interface AIProfile {
+  business_name?: string;
+  specialty?: string;
+  city?: string;
+  tone?: string;
+  value_proposition?: string;
+  phone?: string;
+  email?: string;
+  extra?: string;
+}
+
+export interface AIPageSuggestion {
+  slug: string;
+  title: string;
+  description: string;
+  icon: string;
+}
